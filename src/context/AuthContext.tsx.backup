@@ -1,0 +1,459 @@
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../utils/supabase';
+
+export type UserProfile = {
+  id: string;
+  email: string;
+  username?: string;
+  full_name?: string;
+  avatar_url?: string;
+  university?: string;
+  major?: string;
+  business?: string;
+  profession?: string;
+  state?: string;
+  display_name_preference?: string;
+  [key: string]: any;
+};
+
+export type OnboardingPreferences = {
+  id: string;
+  user_id: string;
+  learning_environment?: string;
+  user_goal?: string;
+  work_style?: string;
+  sound_preference?: string;
+  weekly_focus_goal?: number;
+  is_onboarding_complete?: boolean;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: any;
+};
+
+export type LeaderboardStats = {
+  id: string;
+  user_id: string;
+  total_focus_time?: number;
+  weekly_focus_time?: number;
+  monthly_focus_time?: number;
+  current_streak?: number;
+  longest_streak?: number;
+  total_sessions?: number;
+  level?: number;
+  points?: number;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: any;
+};
+
+export type AuthContextType = {
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  hasSeenLanding: boolean;
+  setHasSeenLanding: (seen: boolean) => void;
+  hasCompletedOnboarding: boolean;
+  setHasCompletedOnboarding: (completed: boolean) => void;
+  user: UserProfile | null;
+  onboarding: OnboardingPreferences | null;
+  leaderboard: LeaderboardStats | null;
+  signUp: (email: string, password: string, username?: string, full_name?: string) => Promise<{ error?: string }>;
+  signIn: (email: string, password: string) => Promise<{ error?: string }>;
+  signOut: () => Promise<void>;
+  refreshUserData: () => Promise<void>;
+  updateProfile: (updates: Partial<UserProfile>) => Promise<{ error?: string } | void>;
+  updateOnboarding: (updates: Partial<OnboardingPreferences>) => Promise<{ error?: string } | void>;
+};
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasSeenLanding, setHasSeenLanding] = useState(false);
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [onboarding, setOnboarding] = useState<OnboardingPreferences | null>(null);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardStats | null>(null);
+
+  // Helper functions to create default data
+  const createDefaultOnboardingData = async (userId: string): Promise<OnboardingPreferences | null> => {
+    try {
+      const defaultData: Partial<OnboardingPreferences> = {
+        user_id: userId,
+        is_onboarding_complete: false,
+        weekly_focus_goal: 5,
+      };
+      
+      const { data, error } = await supabase
+        .from('onboarding_preferences')
+        .insert(defaultData)
+        .select()
+        .single();
+        
+      if (error) {
+        console.error('Failed to create default onboarding data:', error);
+        return null;
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error creating default onboarding data:', error);
+      return null;
+    }
+  };
+
+  const createDefaultLeaderboardData = async (userId: string): Promise<LeaderboardStats | null> => {
+    try {
+      const defaultData: Partial<LeaderboardStats> = {
+        user_id: userId,
+        total_focus_time: 0,
+        weekly_focus_time: 0,
+        monthly_focus_time: 0,
+        current_streak: 0,
+        longest_streak: 0,
+        total_sessions: 0,
+        level: 1,
+        points: 0,
+      };
+      
+      const { data, error } = await supabase
+        .from('leaderboard_stats')
+        .insert(defaultData)
+        .select()
+        .single();
+        
+      if (error) {
+        console.error('Failed to create default leaderboard data:', error);
+        return null;
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error creating default leaderboard data:', error);
+      return null;
+    }
+  };
+
+  // Load hasSeenLanding from AsyncStorage on mount
+  useEffect(() => {
+    const loadLandingState = async () => {
+      try {
+        const value = await AsyncStorage.getItem('hasSeenLanding');
+        if (value !== null) {
+          const hasSeenLandingStored = JSON.parse(value);
+          console.log(`AuthContext [${Platform.OS}]: Loaded hasSeenLanding from storage:`, hasSeenLandingStored);
+          setHasSeenLanding(hasSeenLandingStored);
+        }
+      } catch (error) {
+        console.error(`AuthContext [${Platform.OS}]: Error loading hasSeenLanding:`, error);
+      }
+    };
+    loadLandingState();
+  }, []);
+
+  // Function to update hasSeenLanding and persist to AsyncStorage
+  const updateHasSeenLanding = async (seen: boolean) => {
+    try {
+      await AsyncStorage.setItem('hasSeenLanding', JSON.stringify(seen));
+      setHasSeenLanding(seen);
+      console.log(`AuthContext [${Platform.OS}]: Updated and stored hasSeenLanding:`, seen);
+    } catch (error) {
+      console.error(`AuthContext [${Platform.OS}]: Error storing hasSeenLanding:`, error);
+      setHasSeenLanding(seen); // Still update state even if storage fails
+    }
+  };
+
+  // Helper: ensure leaderboard data exists for user
+  const ensureLeaderboardData = async (userId: string) => {
+    try {
+      const { data: existing } = await supabase.from('leaderboard_stats').select('*').eq('user_id', userId).single();
+      if (!existing) {
+        console.log(`AuthContext: Creating missing leaderboard data for user ${userId}`);
+        const { error } = await supabase.from('leaderboard_stats').insert({
+          user_id: userId,
+          total_focus_time: 0,
+          weekly_focus_time: 0,
+          monthly_focus_time: 0,
+          current_streak: 0,
+          longest_streak: 0,
+          total_sessions: 0,
+          level: 1,
+          points: 0
+        });
+        if (error) console.error('Error creating leaderboard data:', error);
+      }
+    } catch (error) {
+      console.error('Error checking/creating leaderboard data:', error);
+    }
+  };
+
+  // Helper: ensure onboarding data exists for user
+  const ensureOnboardingData = async (userId: string) => {
+    try {
+      const { data: existing } = await supabase.from('onboarding_preferences').select('*').eq('user_id', userId).single();
+      if (!existing) {
+        console.log(`AuthContext: Creating missing onboarding data for user ${userId}`);
+        const { error } = await supabase.from('onboarding_preferences').insert({
+          user_id: userId,
+          is_onboarding_complete: false
+        });
+        if (error) console.error('Error creating onboarding data:', error);
+      }
+    } catch (error) {
+      console.error('Error checking/creating onboarding data:', error);
+    }
+  };
+    const platform = Platform.OS;
+    console.log(`AuthContext [${platform}]: fetchUserData called for userId:`, userId);
+    setIsLoading(true);
+    
+    try {
+      // Fetch profile
+      const { data: profile, error: profileError } = await supabase.from('profiles').select('*').eq('id', userId).single();
+      if (profileError) console.error(`AuthContext [${platform}]: Profile fetch error:`, profileError);
+      setUser(profile || null);
+      console.log(`AuthContext [${platform}]: Profile fetched:`, profile);
+      
+      // Fetch onboarding
+      const { data: onboardingData, error: onboardingError } = await supabase.from('onboarding_preferences').select('*').eq('user_id', userId).single();
+      
+      let finalOnboardingData = onboardingData;
+      if (onboardingError?.code === 'PGRST116') {
+        console.log(`AuthContext [${platform}]: No onboarding data found, creating default data`);
+        finalOnboardingData = await createDefaultOnboardingData(userId);
+      } else if (onboardingError) {
+        console.error(`AuthContext [${platform}]: Onboarding fetch error:`, onboardingError);
+      }
+      
+      setOnboarding(finalOnboardingData || null);
+      setHasCompletedOnboarding(finalOnboardingData?.is_onboarding_complete || false);
+      console.log(`AuthContext [${platform}]: Onboarding data:`, finalOnboardingData);
+      console.log(`AuthContext [${platform}]: hasCompletedOnboarding set to:`, finalOnboardingData?.is_onboarding_complete || false);
+      
+      // Fetch leaderboard
+      const { data: leaderboardData, error: leaderboardError } = await supabase.from('leaderboard_stats').select('*').eq('user_id', userId).single();
+      
+      let finalLeaderboardData = leaderboardData;
+      if (leaderboardError?.code === 'PGRST116') {
+        console.log(`AuthContext [${platform}]: No leaderboard data found, creating default data`);
+        finalLeaderboardData = await createDefaultLeaderboardData(userId);
+      } else if (leaderboardError) {
+        console.error(`AuthContext [${platform}]: Leaderboard fetch error:`, leaderboardError);
+      }
+      
+      setLeaderboard(finalLeaderboardData || null);
+      
+    } catch (error) {
+      console.error(`AuthContext [${platform}]: fetchUserData error:`, error);
+    } finally {
+      setIsLoading(false);
+      console.log(`AuthContext [${platform}]: fetchUserData completed, isLoading set to false`);
+    }
+  }, []);
+
+  // On mount: check session and fetch user data
+  useEffect(() => {
+    const platform = Platform.OS;
+    console.log(`AuthContext: Initial auth check starting on ${platform}...`);
+    
+    // Add a small delay for mobile to ensure proper initialization
+    const initializeAuth = async () => {
+      if (Platform.OS !== 'web') {
+        await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay for mobile
+      }
+      
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        console.log(`AuthContext [${platform}]: Initial session check result:`, session ? 'User authenticated' : 'No authenticated user');
+        
+        if (session?.user) {
+          console.log(`AuthContext [${platform}]: User found in session:`, session.user.id);
+          await fetchUserData(session.user.id);
+          setIsAuthenticated(true);
+        } else {
+          console.log(`AuthContext [${platform}]: No user in session, setting unauthenticated state`);
+          setUser(null);
+          setOnboarding(null);
+          setLeaderboard(null);
+          setIsAuthenticated(false);
+          setIsLoading(false);
+          console.log(`AuthContext [${platform}]: isLoading set to false (no user)`);
+        }
+      } catch (error) {
+        console.error(`AuthContext [${platform}]: Error during initial session check:`, error);
+        setIsLoading(false);
+      }
+    };
+    
+    initializeAuth();
+    
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log(`AuthContext [${platform}]: Auth state change event:`, _event, session ? 'User authenticated' : 'No user');
+      if (session?.user) {
+        console.log(`AuthContext [${platform}]: User authenticated via state change:`, session.user.id);
+        fetchUserData(session.user.id);
+        setIsAuthenticated(true);
+      } else {
+        console.log(`AuthContext [${platform}]: User unauthenticated via state change`);
+        setUser(null);
+        setOnboarding(null);
+        setLeaderboard(null);
+        setIsAuthenticated(false);
+        setIsLoading(false);
+        console.log(`AuthContext [${platform}]: isLoading set to false (auth state change)`);
+      }
+    });
+    return () => { subscription?.unsubscribe(); };
+  }, [fetchUserData]);
+
+  // Sign up: create user, then insert profile, onboarding, leaderboard
+  const signUp = async (email: string, password: string, username?: string, full_name?: string) => {
+    const { data: { user: authUser }, error } = await supabase.auth.signUp({ email, password });
+    if (error) return { error: error.message };
+    if (authUser) {
+      try {
+        // Insert profile
+        const { error: profileError } = await supabase.from('profiles').upsert({ 
+          id: authUser.id, 
+          email, 
+          username, 
+          full_name 
+        });
+        if (profileError) console.error('Profile creation error:', profileError);
+
+        // Insert onboarding_preferences
+        const { error: onboardingError } = await supabase.from('onboarding_preferences').upsert({ 
+          user_id: authUser.id,
+          is_onboarding_complete: false 
+        });
+        if (onboardingError) console.error('Onboarding creation error:', onboardingError);
+
+        // Insert leaderboard_stats
+        const { error: leaderboardError } = await supabase.from('leaderboard_stats').upsert({ 
+          user_id: authUser.id,
+          total_focus_time: 0,
+          weekly_focus_time: 0,
+          monthly_focus_time: 0,
+          current_streak: 0,
+          longest_streak: 0,
+          total_sessions: 0,
+          level: 1,
+          points: 0
+        });
+        if (leaderboardError) console.error('Leaderboard creation error:', leaderboardError);
+
+        await fetchUserData(authUser.id);
+        setIsAuthenticated(true);
+      } catch (error) {
+        console.error('Sign up data creation error:', error);
+      }
+    }
+    return {};
+  };
+
+  // Sign in: fetch all user data
+  const signIn = async (email: string, password: string) => {
+    const { data: { user: authUser }, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return { error: error.message };
+    if (authUser) {
+      await fetchUserData(authUser.id);
+      setIsAuthenticated(true);
+    }
+    return {};
+  };
+
+  // Sign out
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setOnboarding(null);
+    setLeaderboard(null);
+    setIsAuthenticated(false);
+  };
+
+  // Manual refresh
+  const refreshUserData = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      console.log('Sending user_id to edge function:', session.user.id);
+      await fetchUserData(session.user.id);
+    }
+  };
+
+  // Update profile
+  const updateProfile = async (updates: Partial<UserProfile>) => {
+    if (!user) return { error: 'No user' };
+    const { error } = await supabase.from('profiles').update(updates).eq('id', user.id);
+    if (error) return { error: error.message };
+    await fetchUserData(user.id);
+  };
+
+  // Update onboarding
+  const updateOnboarding = async (updates: Partial<OnboardingPreferences>) => {
+    if (!user) return { error: 'No user' };
+    
+    // If updating onboarding completion, immediately update local state
+    if (updates.is_onboarding_complete !== undefined) {
+      setHasCompletedOnboarding(updates.is_onboarding_complete);
+    }
+    
+    // First check if onboarding data exists
+    const { data: existingData } = await supabase
+      .from('onboarding_preferences')
+      .select('id')
+      .eq('user_id', user.id)
+      .single();
+    
+    if (!existingData) {
+      // Create new onboarding record
+      const newData = { user_id: user.id, ...updates };
+      const { error } = await supabase
+        .from('onboarding_preferences')
+        .insert(newData);
+      if (error) return { error: error.message };
+    } else {
+      // Update existing record
+      const { error } = await supabase
+        .from('onboarding_preferences')
+        .update(updates)
+        .eq('user_id', user.id);
+      if (error) return { error: error.message };
+    }
+    
+    await fetchUserData(user.id);
+    return { success: true };
+  };
+
+  return (
+    <AuthContext.Provider
+      value={{
+        isAuthenticated,
+        isLoading,
+        hasSeenLanding,
+        setHasSeenLanding: updateHasSeenLanding,
+        hasCompletedOnboarding,
+        setHasCompletedOnboarding,
+        user,
+        onboarding,
+        leaderboard,
+        signUp,
+        signIn,
+        signOut,
+        refreshUserData,
+        updateProfile,
+        updateOnboarding,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
+  return context;
+};
