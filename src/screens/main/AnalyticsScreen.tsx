@@ -3,8 +3,8 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
-import { supabase } from '../../utils/supabase';
 import { useTheme } from '../../context/ThemeContext';
+const { useUserAppData } = require('../../utils/userAppData');
 
 interface StudyData {
   totalHours: number;
@@ -28,10 +28,13 @@ interface SubjectDataPoint {
 
 const AnalyticsScreen = () => {
   const { user, isLoading: authLoading } = useAuth();
+  const { theme } = useTheme();
   const [timeRange, setTimeRange] = useState('week');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { theme } = useTheme();
+  
+  // Use our comprehensive data hook
+  const { data: userData, isLoading: userDataLoading, error: userDataError, refreshData } = useUserAppData();
   
   // Analytics Data
   const [studyData, setStudyData] = useState<StudyData>({
@@ -45,191 +48,118 @@ const AnalyticsScreen = () => {
   const [weeklyData, setWeeklyData] = useState<WeeklyDataPoint[]>([]);
   const [subjectData, setSubjectData] = useState<SubjectDataPoint[]>([]);
 
+  // Update data when userData changes
   useEffect(() => {
-    if (user && !authLoading) {
-      fetchAnalyticsData();
+    if (userData && !userDataLoading) {
+      processUserAppData(userData);
     }
-  }, [user, timeRange, authLoading]);
-
-  const getTimeRangeFilter = () => {
-    const now = new Date();
-    let startDate: Date;
-    
-    switch (timeRange) {
-      case 'day':
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        break;
-      case 'week':
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        break;
-      case 'month':
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        break;
-      case 'year':
-        startDate = new Date(now.getFullYear(), 0, 1);
-        break;
-      default:
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    }
-    
-    return startDate.toISOString();
-  };
-
-  const fetchAnalyticsData = async () => {
-    if (!user?.id) return;
-    
-    setLoading(true);
-    setError(null);
-    
+  }, [userData, userDataLoading, timeRange]);
+  // Process userData to extract analytics information
+  const processUserAppData = (userData: any) => {
     try {
-      const startDate = getTimeRangeFilter();
-      
-      // Fetch focus sessions data
-      const { data: sessions, error: sessionsError } = await supabase
-        .from('focus_sessions')
-        .select('*')
-        .eq('user_id', user.id)
-        .gte('created_at', startDate)
-        .order('created_at', { ascending: true });
-
-      if (sessionsError) throw sessionsError;
-
-      // Fetch tasks data for subject analysis
-      const { data: tasks, error: tasksError } = await supabase
-        .from('tasks')
-        .select(`
-          *,
-          focus_session_id,
-          focus_sessions!inner(duration, environment, created_at)
-        `)
-        .eq('user_id', user.id)
-        .gte('created_at', startDate);
-
-      if (tasksError) throw tasksError;
-
-      // Fetch leaderboard stats for additional metrics
-      const { data: leaderboardStats, error: leaderboardError } = await supabase
-        .from('leaderboard_stats')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
-
-      if (leaderboardError && leaderboardError.code !== 'PGRST116') {
-        throw leaderboardError;
+      if (!userData) {
+        console.error('No user data available');
+        return;
       }
 
-      // Process the data
-      await processAnalyticsData(sessions || [], tasks || [], leaderboardStats);
+      const { sessions, metrics, tasks } = userData;
+
+      // Calculate total hours
+      const totalHours = (metrics?.total_focus_time ?? 0) / 60;
+
+      // Get completed sessions
+      const completedSessions = sessions?.filter((session: any) => 
+        session.completed && session.duration_minutes
+      ) || [];
+
+      // Calculate average session length
+      const averageSessionLength = completedSessions.length > 0 
+        ? completedSessions.reduce((sum: number, session: any) => sum + (session.duration_minutes || 0), 0) / completedSessions.length
+        : 0;
+
+      // Find most productive time based on session start times
+      const hourCounts: { [key: number]: number } = {};
+      completedSessions.forEach((session: any) => {
+        if (session.created_at) {
+          const hour = new Date(session.created_at).getHours();
+          hourCounts[hour] = (hourCounts[hour] || 0) + 1;
+        }
+      });
+
+      const mostProductiveHour = Object.entries(hourCounts)
+        .sort((a, b) => b[1] - a[1])[0]?.[0];
+      const mostProductiveTime = mostProductiveHour 
+        ? `${mostProductiveHour}:00 - ${parseInt(mostProductiveHour) + 1}:00`
+        : 'Not available';
+
+      // Find most studied subject from tasks or sessions
+      const subjectCountMap: { [key: string]: number } = {};
       
-    } catch (err) {
-      console.error('Error fetching analytics data:', err);
-      setError('Failed to load analytics data');
-    } finally {
+      // If we have tasks with subjects/categories
+      if (tasks?.length > 0) {
+        tasks.forEach((task: any) => {
+          if (task.title) {
+            // Extract subject from task title (basic approach)
+            const subject = task.title.split(' ')[0] || 'General';
+            subjectCountMap[subject] = (subjectCountMap[subject] || 0) + 1;
+          }
+        });
+      }
+
+      const mostStudiedSubject = Object.entries(subjectCountMap).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Not enough data';
+
+      // Calculate study days (unique days with sessions)
+      const studyDaysSet = new Set(
+        completedSessions
+          .filter((session: any) => session.created_at)
+          .map((session: any) => new Date(session.created_at).toDateString())
+      );
+      const studyDays = studyDaysSet.size;
+
+      // Calculate consistency score
+      const daysInRange = timeRange === 'week' ? 7 : timeRange === 'month' ? 30 : 90;
+      const consistencyScore = Math.min(100, Math.round((studyDays / daysInRange) * 100));
+
+      // Generate weekly data for chart
+      const weeklyChartData = generateWeeklyDataFromSessions(sessions || []);
+
+      // Generate subject data for chart
+      const subjectChartData = generateSubjectData(subjectCountMap);
+
+      // Update state with processed data
+      setStudyData({
+        totalHours: Math.round(totalHours * 10) / 10,
+        averageSessionLength: Math.round(averageSessionLength),
+        mostProductiveTime,
+        mostStudiedSubject,
+        studyDays,
+        consistencyScore
+      });
+
+      setWeeklyData(weeklyChartData);
+      setSubjectData(subjectChartData);
+      setError(null);
+      setLoading(false);
+
+    } catch (err: any) {
+      console.error('Error processing user app data:', err);
+      setError(err.message || 'Error processing analytics data');
       setLoading(false);
     }
   };
 
-  const processAnalyticsData = async (sessions: any[], tasks: any[], leaderboardStats: any) => {
-    // Calculate total hours and session metrics
-    const completedSessions = sessions.filter(session => session.completed && session.duration);
-    const totalMinutes = completedSessions.reduce((sum, session) => sum + (session.duration || 0), 0);
-    const totalHours = totalMinutes / 60;
-    
-    // Calculate average session length
-    const averageSessionLength = completedSessions.length > 0 
-      ? totalMinutes / completedSessions.length 
-      : 0;
-
-    // Calculate study days (unique days with sessions)
-    const studyDaysSet = new Set(
-      completedSessions.map(session => 
-        new Date(session.created_at).toDateString()
-      )
-    );
-    const studyDays = studyDaysSet.size;
-
-    // Calculate consistency score (study days / total days in period)
-    const daysInPeriod = timeRange === 'day' ? 1 : 
-                        timeRange === 'week' ? 7 : 
-                        timeRange === 'month' ? 30 : 365;
-    const consistencyScore = Math.round((studyDays / daysInPeriod) * 100);
-
-    // Find most productive time
-    const hourCounts: { [key: number]: number } = {};
-    completedSessions.forEach(session => {
-      const hour = new Date(session.created_at).getHours();
-      hourCounts[hour] = (hourCounts[hour] || 0) + (session.duration || 0);
-    });
-    
-    const mostProductiveHour = Object.keys(hourCounts).length > 0 
-      ? Object.keys(hourCounts).reduce((a, b) => 
-          hourCounts[parseInt(a)] > hourCounts[parseInt(b)] ? a : b
-        )
-      : '12';
-    
-    const mostProductiveTime = getMostProductiveTimeLabel(parseInt(mostProductiveHour));
-
-    // Process subject data from tasks
-    const subjectMinutes: { [key: string]: number } = {};
-    tasks.forEach(task => {
-      if (task.focus_sessions?.duration) {
-        const subject = task.title.split(' ')[0] || 'General'; // Simple subject extraction
-        subjectMinutes[subject] = (subjectMinutes[subject] || 0) + task.focus_sessions.duration;
-      }
-    });
-    
-    // If still no subjects, create a general category
-    if (Object.keys(subjectMinutes).length === 0 && totalMinutes > 0) {
-      subjectMinutes['General Study'] = totalMinutes;
-    }
-
-    // Convert to hours and percentages
-    const totalSubjectMinutes = Object.values(subjectMinutes).reduce((sum, minutes) => sum + minutes, 0);
-    const processedSubjectData = Object.entries(subjectMinutes)
-      .map(([subject, minutes]) => ({
-        subject,
-        hours: Math.round((minutes / 60) * 10) / 10,
-        percentage: totalSubjectMinutes > 0 ? Math.round((minutes / totalSubjectMinutes) * 100) : 0
-      }))
-      .sort((a, b) => b.hours - a.hours)
-      .slice(0, 5); // Top 5 subjects
-
-    const mostStudiedSubject = processedSubjectData.length > 0 
-      ? processedSubjectData[0].subject 
-      : 'Not available';
-
-    // Generate weekly data
-    const weeklyDataPoints = generateWeeklyData(completedSessions);
-
-    // Update state
-    setStudyData({
-      totalHours: Math.round(totalHours * 10) / 10,
-      averageSessionLength: Math.round(averageSessionLength),
-      mostProductiveTime,
-      mostStudiedSubject,
-      studyDays,
-      consistencyScore: Math.min(consistencyScore, 100)
-    });
-
-    setSubjectData(processedSubjectData);
-    setWeeklyData(weeklyDataPoints);
-  };
-
-  const getMostProductiveTimeLabel = (hour: number): string => {
-    if (hour >= 5 && hour < 12) return 'Morning (5AM-12PM)';
-    if (hour >= 12 && hour < 17) return 'Afternoon (12PM-5PM)';
-    if (hour >= 17 && hour < 22) return 'Evening (5PM-10PM)';
-    return 'Night (10PM-5AM)';
-  };
-
-  const generateWeeklyData = (sessions: any[]): WeeklyDataPoint[] => {
+  const generateWeeklyDataFromSessions = (sessions: any[]): WeeklyDataPoint[] => {
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const weekData = days.map(day => ({ day, hours: 0 }));
     
-    sessions.forEach(session => {
-      if (session.completed && session.duration) {
-        const dayIndex = new Date(session.created_at).getDay();
-        weekData[dayIndex].hours += (session.duration || 0) / 60;
+    sessions.forEach((session: any) => {
+      if (session.completed && session.duration_minutes && session.created_at) {
+        try {
+          const dayIndex = new Date(session.created_at).getDay();
+          weekData[dayIndex].hours += (session.duration_minutes || 0) / 60;
+        } catch (e) {
+          console.error('Error processing session date:', e);
+        }
       }
     });
 
@@ -239,7 +169,22 @@ const AnalyticsScreen = () => {
     }));
   };
 
-  if (authLoading || loading) {
+  const generateSubjectData = (subjectCountMap: { [key: string]: number }): SubjectDataPoint[] => {
+    const totalCount = Object.values(subjectCountMap).reduce((sum, count) => sum + count, 0);
+    
+    if (totalCount === 0) return [];
+
+    return Object.entries(subjectCountMap)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5) // Top 5 subjects
+      .map(([subject, count]) => ({
+        subject,
+        hours: Math.round(count * 10) / 10, // Approximate hours
+        percentage: Math.round((count / totalCount) * 100)
+      }));
+  };
+
+  if (authLoading || userDataLoading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         <View style={styles.loadingContainer}>
@@ -250,14 +195,18 @@ const AnalyticsScreen = () => {
     );
   }
 
-  if (error) {
+  if (error || userDataError) {
+    const errorMessage = error || (userDataError as Error)?.message || 'Error loading analytics data';
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle" size={48} color="#FF5252" />
-          <Text style={[styles.errorText, { color: theme.text }]}>{error}</Text>
-          <TouchableOpacity style={[styles.retryButton, { backgroundColor: theme.primary }]} onPress={fetchAnalyticsData}>
-            <Text style={[styles.retryButtonText, { color: theme.card }]}>Retry</Text>
+          <Text style={[styles.errorText, { color: theme.text }]}>{errorMessage}</Text>
+          <TouchableOpacity 
+            style={[styles.retryButton, { backgroundColor: theme.primary }]} 
+            onPress={refreshData}
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -267,45 +216,60 @@ const AnalyticsScreen = () => {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <ScrollView style={{ flex: 1, backgroundColor: theme.background }}>
-        <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.primary }]}>
+        {/* Header */}
+        <View style={styles.header}>
           <Text style={[styles.title, { color: theme.text }]}>Analytics</Text>
-          <Text style={[styles.subtitle, { color: theme.text }]}>Track your study patterns and progress</Text>
+          
+          {/* Time Range Selector */}
+          <View style={styles.timeRangeContainer}>
+            {['day', 'week', 'month'].map((range) => (
+              <TouchableOpacity
+                key={range}
+                style={[
+                  styles.timeRangeButton,
+                  timeRange === range && { backgroundColor: theme.primary },
+                  { borderColor: theme.primary }
+                ]}
+                onPress={() => setTimeRange(range)}
+              >
+                <Text style={[
+                  styles.timeRangeText,
+                  { color: timeRange === range ? '#FFFFFF' : theme.text }
+                ]}>
+                  {range.charAt(0).toUpperCase() + range.slice(1)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
-        
-        {/* Time Range Selector */}
-        <View style={[styles.timeRangeContainer, { backgroundColor: theme.card, borderColor: theme.primary }]}>
-          {['day', 'week', 'month', 'year'].map((range) => (
-            <TouchableOpacity 
-              key={range}
-              style={[styles.timeRangeButton, { backgroundColor: timeRange === range ? theme.primary : theme.background }]}
-              onPress={() => setTimeRange(range)}
-            >
-              <Text style={[styles.timeRangeText, { color: timeRange === range ? theme.card : theme.text }]}>
-                {range.charAt(0).toUpperCase() + range.slice(1)}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-        
-        {/* Summary Stats */}
-        <View style={[styles.summaryContainer, { backgroundColor: theme.card, borderColor: theme.primary }]}>
-          <View style={[styles.summaryCard, { backgroundColor: theme.background }]}>
+
+        {/* Summary Cards */}
+        <View style={styles.summaryContainer}>
+          <View style={[styles.summaryCard, { backgroundColor: theme.card }]}>
             <Ionicons name="time" size={24} color={theme.primary} />
             <Text style={[styles.summaryValue, { color: theme.text }]}>{studyData.totalHours}h</Text>
-            <Text style={[styles.summaryLabel, { color: theme.text }]}>Total Study Time</Text>
+            <Text style={[styles.summaryLabel, { color: theme.text }]}>Total Hours</Text>
           </View>
-          <View style={[styles.summaryCard, { backgroundColor: theme.background }]}>
+          
+          <View style={[styles.summaryCard, { backgroundColor: theme.card }]}>
+            <Ionicons name="timer" size={24} color={theme.primary} />
+            <Text style={[styles.summaryValue, { color: theme.text }]}>{studyData.averageSessionLength}m</Text>
+            <Text style={[styles.summaryLabel, { color: theme.text }]}>Avg Session</Text>
+          </View>
+          
+          <View style={[styles.summaryCard, { backgroundColor: theme.card }]}>
             <Ionicons name="calendar" size={24} color={theme.primary} />
             <Text style={[styles.summaryValue, { color: theme.text }]}>{studyData.studyDays}</Text>
             <Text style={[styles.summaryLabel, { color: theme.text }]}>Study Days</Text>
           </View>
-          <View style={[styles.summaryCard, { backgroundColor: theme.background }]}>
+          
+          <View style={[styles.summaryCard, { backgroundColor: theme.card }]}>
             <Ionicons name="trending-up" size={24} color={theme.primary} />
             <Text style={[styles.summaryValue, { color: theme.text }]}>{studyData.consistencyScore}%</Text>
             <Text style={[styles.summaryLabel, { color: theme.text }]}>Consistency</Text>
           </View>
         </View>
-        
+
         {/* Weekly Study Chart */}
         <View style={[styles.chartContainer, { backgroundColor: theme.card, borderColor: theme.primary }]}>
           <Text style={[styles.chartTitle, { color: theme.text }]}>Weekly Study Hours</Text>
@@ -338,35 +302,38 @@ const AnalyticsScreen = () => {
                 <View style={styles.subjectProgressContainer}>
                   <View style={[styles.subjectProgressBar, { width: `${subject.percentage}%`, backgroundColor: theme.primary }]} />
                 </View>
-                <Text style={[styles.subjectPercentage, { color: theme.text }]}>{subject.percentage}%</Text>
               </View>
             ))}
           </View>
         )}
-        
-        {/* Study Insights */}
-        <View style={[styles.insightsContainer, { backgroundColor: theme.card, borderColor: theme.primary }]}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Study Insights</Text>
-          <View style={[styles.insightCard, { backgroundColor: theme.background }]}>
-            <Ionicons name="bulb" size={24} color={theme.primary} style={styles.insightIcon} />
-            <View style={styles.insightContent}>
-              <Text style={[styles.insightTitle, { color: theme.text }]}>Most Productive Time</Text>
-              <Text style={[styles.insightText, { color: theme.text }]}>{studyData.mostProductiveTime}</Text>
-            </View>
+
+        {/* Insights */}
+        <View style={[styles.insightsContainer, { backgroundColor: theme.card }]}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Insights</Text>
+          
+          <View style={styles.insightRow}>
+            <Ionicons name="sunny" size={20} color={theme.primary} />
+            <Text style={[styles.insightText, { color: theme.text }]}>
+              Most productive time: {studyData.mostProductiveTime}
+            </Text>
           </View>
-          <View style={[styles.insightCard, { backgroundColor: theme.background }]}>
-            <Ionicons name="book" size={24} color={theme.primary} style={styles.insightIcon} />
-            <View style={styles.insightContent}>
-              <Text style={[styles.insightTitle, { color: theme.text }]}>Most Studied Subject</Text>
-              <Text style={[styles.insightText, { color: theme.text }]}>{studyData.mostStudiedSubject}</Text>
-            </View>
+          
+          <View style={styles.insightRow}>
+            <Ionicons name="book" size={20} color={theme.primary} />
+            <Text style={[styles.insightText, { color: theme.text }]}>
+              Most studied subject: {studyData.mostStudiedSubject}
+            </Text>
           </View>
-          <View style={[styles.insightCard, { backgroundColor: theme.background }]}>
-            <Ionicons name="timer" size={24} color={theme.primary} style={styles.insightIcon} />
-            <View style={styles.insightContent}>
-              <Text style={[styles.insightTitle, { color: theme.text }]}>Average Session Length</Text>
-              <Text style={[styles.insightText, { color: theme.text }]}>{studyData.averageSessionLength} minutes</Text>
-            </View>
+          
+          <View style={styles.insightRow}>
+            <Ionicons name="trophy" size={20} color={theme.primary} />
+            <Text style={[styles.insightText, { color: theme.text }]}>
+              Consistency score: {studyData.consistencyScore}% - {
+                studyData.consistencyScore >= 80 ? 'Excellent!' :
+                studyData.consistencyScore >= 60 ? 'Good!' :
+                studyData.consistencyScore >= 40 ? 'Improving!' : 'Keep going!'
+              }
+            </Text>
           </View>
         </View>
       </ScrollView>
@@ -612,6 +579,11 @@ const styles = StyleSheet.create({
     color: '#388E3C',
     marginTop: 2,
   },
+  insightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
 });
 
-export default AnalyticsScreen; 
+export default AnalyticsScreen;
