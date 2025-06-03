@@ -2,9 +2,9 @@
   "expo": {
     "name": "Triage System",
     "slug": "triage-system",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
-    "icon": "./assets/triage-app-logo.png",
+    "icon": "./assets/icon-ios-white-1024.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
@@ -17,11 +17,12 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.triagesystem.app"
+      "bundleIdentifier": "com.triagesystem.app",
+      "icon": "./assets/icon-ios-white-1024.png"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/triage-app-logo.png",
+        "foregroundImage": "./assets/triage-app-logo-solid.png",
         "backgroundColor": "#1B4A3A"
       },
       "package": "com.triagesystem.app",
@@ -53,6 +54,11 @@
         }
       ]
     ],
-    "scheme": "triage-system"
+    "scheme": "triage-system",
+    "extra": {
+      "eas": {
+        "projectId": "0abfeee3-c7fb-4a59-afdb-1fa13fd9b09a"
+      }
+    }
   }
 }
