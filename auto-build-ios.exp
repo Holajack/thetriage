@@ -1,0 +1,41 @@
+#!/usr/bin/expect -f
+
+# Set timeout for expect
+set timeout 300
+
+# Navigate to project directory
+cd "/Users/jackenholland/The Triage System/StudyTrackerNew"
+
+# Start the EAS build process
+spawn npx eas build --platform ios --clear-cache
+
+# Wait for the Apple account prompt and respond with Y
+expect {
+    "Do you want to log in to your Apple account?" {
+        send "Y\r"
+        exp_continue
+    }
+    "✔ Logged in" {
+        puts "Successfully logged in to Apple account"
+        exp_continue
+    }
+    "Compressing project files" {
+        puts "Build process started successfully"
+        exp_continue
+    }
+    "Build completed" {
+        puts "Build completed"
+        exit 0
+    }
+    timeout {
+        puts "Timeout reached or build is proceeding in background"
+        exit 0
+    }
+    eof {
+        puts "Process completed"
+        exit 0
+    }
+}
+
+# Wait for completion
+expect eof

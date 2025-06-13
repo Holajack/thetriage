@@ -64,30 +64,63 @@ const AnalyticsScreen = () => {
 
       const { sessions, metrics, tasks } = userData;
 
-      // Calculate total hours
-      const totalHours = (metrics?.total_focus_time ?? 0) / 60;
+      // Get current date for filtering
+      const now = new Date();
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const startOfWeek = new Date(startOfDay);
+      startOfWeek.setDate(startOfDay.getDate() - startOfDay.getDay()); // Start of week (Sunday)
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-      // Get completed sessions
-      const completedSessions = sessions?.filter((session: any) => 
-        session.completed && session.duration_minutes
-      ) || [];
+      // Filter sessions based on timeRange
+      let filteredSessions = sessions || [];
+      
+      if (timeRange === 'day') {
+        // Filter for current day only
+        filteredSessions = sessions?.filter((session: any) => {
+          if (!session.created_at) return false;
+          const sessionDate = new Date(session.created_at);
+          return sessionDate >= startOfDay && sessionDate < new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
+        }) || [];
+      } else if (timeRange === 'week') {
+        // Filter for current week (7 days)
+        filteredSessions = sessions?.filter((session: any) => {
+          if (!session.created_at) return false;
+          const sessionDate = new Date(session.created_at);
+          return sessionDate >= startOfWeek && sessionDate <= now;
+        }) || [];
+      } else if (timeRange === 'month') {
+        // Filter for current month
+        filteredSessions = sessions?.filter((session: any) => {
+          if (!session.created_at) return false;
+          const sessionDate = new Date(session.created_at);
+          return sessionDate >= startOfMonth && sessionDate <= now;
+        }) || [];
+      }
 
-      // Calculate average session length
+      console.log(`Analytics: Processing ${filteredSessions.length} sessions for ${timeRange} view`);
+
+      // Calculate total hours from filtered sessions
+      const totalMinutes = filteredSessions
+        .filter((session: any) => session.duration_minutes)
+        .reduce((sum: number, session: any) => sum + (session.duration_minutes || 0), 0);
+      const totalHours = totalMinutes / 60;
+
+      // Calculate average session length from filtered sessions
+      const completedSessions = filteredSessions.filter((session: any) => session.duration_minutes > 0);
       const averageSessionLength = completedSessions.length > 0 
-        ? completedSessions.reduce((sum: number, session: any) => sum + (session.duration_minutes || 0), 0) / completedSessions.length
+        ? Math.round(completedSessions.reduce((sum: number, session: any) => sum + (session.duration_minutes || 0), 0) / completedSessions.length)
         : 0;
 
-      // Find most productive time based on session start times
-      const hourCounts: { [key: number]: number } = {};
-      completedSessions.forEach((session: any) => {
+      // Find most productive hour (from all sessions, not filtered by time range)
+      const hourCountMap: { [key: string]: number } = {};
+      (sessions || []).forEach((session: any) => {
         if (session.created_at) {
-          const hour = new Date(session.created_at).getHours();
-          hourCounts[hour] = (hourCounts[hour] || 0) + 1;
+          const hour = new Date(session.created_at).getHours().toString();
+          hourCountMap[hour] = (hourCountMap[hour] || 0) + 1;
         }
       });
 
-      const mostProductiveHour = Object.entries(hourCounts)
-        .sort((a, b) => b[1] - a[1])[0]?.[0];
+      const mostProductiveHour = Object.entries(hourCountMap).sort((a, b) => b[1] - a[1])[0]?.[0];
       const mostProductiveTime = mostProductiveHour 
         ? `${mostProductiveHour}:00 - ${parseInt(mostProductiveHour) + 1}:00`
         : 'Not available';
@@ -108,20 +141,29 @@ const AnalyticsScreen = () => {
 
       const mostStudiedSubject = Object.entries(subjectCountMap).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Not enough data';
 
-      // Calculate study days (unique days with sessions)
+      // Calculate study days from filtered sessions
       const studyDaysSet = new Set(
-        completedSessions
+        filteredSessions
           .filter((session: any) => session.created_at)
           .map((session: any) => new Date(session.created_at).toDateString())
       );
       const studyDays = studyDaysSet.size;
 
-      // Calculate consistency score
-      const daysInRange = timeRange === 'week' ? 7 : timeRange === 'month' ? 30 : 90;
-      const consistencyScore = Math.min(100, Math.round((studyDays / daysInRange) * 100));
+      // Calculate consistency score based on time range
+      let maxPossibleDays = 1;
+      if (timeRange === 'day') {
+        maxPossibleDays = 1;
+      } else if (timeRange === 'week') {
+        maxPossibleDays = 7;
+      } else if (timeRange === 'month') {
+        const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        maxPossibleDays = Math.min(daysInMonth, now.getDate()); // Only count days that have passed
+      }
+      
+      const consistencyScore = Math.min(100, Math.round((studyDays / maxPossibleDays) * 100));
 
-      // Generate weekly data for chart
-      const weeklyChartData = generateWeeklyDataFromSessions(sessions || []);
+      // Generate weekly data for chart (always show 7 days for week view)
+      const weeklyChartData = generateWeeklyDataFromSessions(filteredSessions);
 
       // Generate subject data for chart
       const subjectChartData = generateSubjectData(subjectCountMap);
@@ -141,32 +183,77 @@ const AnalyticsScreen = () => {
       setError(null);
       setLoading(false);
 
-    } catch (err: any) {
-      console.error('Error processing user app data:', err);
-      setError(err.message || 'Error processing analytics data');
+    } catch (error) {
+      console.error('Error processing user data for analytics:', error);
+      setError('Failed to process analytics data');
       setLoading(false);
     }
   };
 
-  const generateWeeklyDataFromSessions = (sessions: any[]): WeeklyDataPoint[] => {
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const weekData = days.map(day => ({ day, hours: 0 }));
+  const generateWeeklyDataFromSessions = (sessions: any[]) => {
+    const weeklyData: WeeklyDataPoint[] = [];
+    const now = new Date();
     
-    sessions.forEach((session: any) => {
-      if (session.completed && session.duration_minutes && session.created_at) {
-        try {
-          const dayIndex = new Date(session.created_at).getDay();
-          weekData[dayIndex].hours += (session.duration_minutes || 0) / 60;
-        } catch (e) {
-          console.error('Error processing session date:', e);
-        }
+    if (timeRange === 'week') {
+      // Show last 7 days
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date(now);
+        date.setDate(now.getDate() - i);
+        const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+        const dateString = date.toDateString();
+        
+        const dayHours = sessions
+          .filter((session: any) => session.created_at && new Date(session.created_at).toDateString() === dateString)
+          .reduce((sum: number, session: any) => sum + (session.duration_minutes || 0), 0) / 60;
+        
+        weeklyData.push({
+          day: dayName,
+          hours: Math.round(dayHours * 10) / 10
+        });
       }
-    });
-
-    return weekData.map(data => ({
-      ...data,
-      hours: Math.round(data.hours * 10) / 10
-    }));
+    } else if (timeRange === 'month') {
+      // Show weeks in current month
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const weeksInMonth = Math.ceil((now.getDate() + startOfMonth.getDay()) / 7);
+      
+      for (let week = 1; week <= weeksInMonth; week++) {
+        const weekStart = new Date(startOfMonth);
+        weekStart.setDate(1 + (week - 1) * 7 - startOfMonth.getDay());
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 6);
+        
+        const weekHours = sessions
+          .filter((session: any) => {
+            if (!session.created_at) return false;
+            const sessionDate = new Date(session.created_at);
+            return sessionDate >= weekStart && sessionDate <= weekEnd;
+          })
+          .reduce((sum: number, session: any) => sum + (session.duration_minutes || 0), 0) / 60;
+        
+        weeklyData.push({
+          day: `W${week}`,
+          hours: Math.round(weekHours * 10) / 10
+        });
+      }
+    } else {
+      // Day view - show hours of the day
+      for (let hour = 0; hour < 24; hour += 3) { // Show every 3 hours
+        const hourSessions = sessions.filter((session: any) => {
+          if (!session.created_at) return false;
+          const sessionHour = new Date(session.created_at).getHours();
+          return sessionHour >= hour && sessionHour < hour + 3;
+        });
+        
+        const hours = hourSessions.reduce((sum: number, session: any) => sum + (session.duration_minutes || 0), 0) / 60;
+        
+        weeklyData.push({
+          day: `${hour}:00`,
+          hours: Math.round(hours * 10) / 10
+        });
+      }
+    }
+    
+    return weeklyData;
   };
 
   const generateSubjectData = (subjectCountMap: { [key: string]: number }): SubjectDataPoint[] => {
@@ -243,7 +330,7 @@ const AnalyticsScreen = () => {
           </View>
         </View>
 
-        {/* Summary Cards */}
+        {/* Summary Cards - Updated to show only 3 cards */}
         <View style={styles.summaryContainer}>
           <View style={[styles.summaryCard, { backgroundColor: theme.card }]}>
             <Ionicons name="time" size={24} color={theme.primary} />
@@ -258,21 +345,19 @@ const AnalyticsScreen = () => {
           </View>
           
           <View style={[styles.summaryCard, { backgroundColor: theme.card }]}>
-            <Ionicons name="calendar" size={24} color={theme.primary} />
-            <Text style={[styles.summaryValue, { color: theme.text }]}>{studyData.studyDays}</Text>
-            <Text style={[styles.summaryLabel, { color: theme.text }]}>Study Days</Text>
-          </View>
-          
-          <View style={[styles.summaryCard, { backgroundColor: theme.card }]}>
             <Ionicons name="trending-up" size={24} color={theme.primary} />
             <Text style={[styles.summaryValue, { color: theme.text }]}>{studyData.consistencyScore}%</Text>
             <Text style={[styles.summaryLabel, { color: theme.text }]}>Consistency</Text>
           </View>
         </View>
 
-        {/* Weekly Study Chart */}
+        {/* Weekly Study Chart - Updated title */}
         <View style={[styles.chartContainer, { backgroundColor: theme.card, borderColor: theme.primary }]}>
-          <Text style={[styles.chartTitle, { color: theme.text }]}>Weekly Study Hours</Text>
+          <Text style={[styles.chartTitle, { color: theme.text }]}>
+            {timeRange === 'day' ? 'Daily Study Hours' : 
+             timeRange === 'week' ? 'Weekly Study Hours' : 
+             'Monthly Study Hours'}
+          </Text>
           <View style={styles.chart}>
             {weeklyData.map((day, index) => {
               const maxHours = Math.max(...weeklyData.map(d => d.hours), 1);

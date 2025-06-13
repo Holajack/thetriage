@@ -8,13 +8,22 @@ import * as ImagePicker from 'expo-image-picker';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useSupabaseProfile, Profile } from '../../utils/supabaseHooks';
 import { useTheme } from '../../context/ThemeContext';
+const { useUserAppData } = require('../../utils/userAppData');
+import { supabase } from '../../utils/supabase';
 
 const ProfileScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<MainTabParamList>>();
   const [uploading, setUploading] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
-  const { profile, updateProfile, uploadProfileImage, updateStatus, loading, error } = useSupabaseProfile();
+  const { profile, updateProfile, uploadProfileImage, updateStatus, loading: profileLoading, error: profileError } = useSupabaseProfile();
+  // Use the comprehensive data hook
+  const { data: userData, isLoading: userDataLoading, error: userDataError, refreshData } = useUserAppData();
   const { theme } = useTheme();
+  
+  // Use profile from userData if available, otherwise fall back to the old hook
+  const userProfile = userData?.profile || profile;
+  const loading = userDataLoading || profileLoading;
+  const error = userDataError || profileError;
 
   const STATUS_OPTIONS = [
     { 
@@ -108,8 +117,8 @@ const ProfileScreen = () => {
         </View>
         <View style={styles.avatarContainer}>
           <TouchableOpacity onPress={handlePickImage} disabled={uploading} style={styles.avatarTouchable}>
-            {profile && profile.avatar_url ? (
-              <Image source={{ uri: profile.avatar_url }} style={styles.avatarImage} />
+            {userProfile && userProfile.avatar_url ? (
+              <Image source={{ uri: userProfile.avatar_url }} style={styles.avatarImage} />
             ) : (
               <View style={[styles.defaultAvatar, { backgroundColor: theme.primary + '22' }]}>
                 <Ionicons name="person" size={45} color={theme.primary} />
@@ -121,14 +130,30 @@ const ProfileScreen = () => {
             {/* Status indicator */}
             <View style={[styles.statusIndicator, { backgroundColor: currentStatus.color }]} />
           </TouchableOpacity>
-          {profile && (
+          {userProfile && (
             <View style={styles.profileInfo}>
               <Text style={[styles.profileName, { color: theme.text }]}>
-                {profile.full_name || profile.username || 'Set your name'}
+                {userProfile.full_name || userProfile.username || 'Set your name'}
               </Text>
-              <Text style={[styles.profileEmail, { color: theme.text + '99' }]}>{profile.email}</Text>
-              {profile.university && (
-                <Text style={[styles.profileUniversity, { color: theme.text + '99' }]}>{profile.university}</Text>
+              <Text style={[styles.profileEmail, { color: theme.text + '99' }]}>{userProfile.email}</Text>
+              {userProfile.university && (
+                <Text style={[styles.profileUniversity, { color: theme.text + '99' }]}>{userProfile.university}</Text>
+              )}
+              {userData?.leaderboard && (
+                <View style={styles.statsContainer}>
+                  <View style={styles.statItem}>
+                    <Text style={styles.statNumber}>{Math.floor(userData.leaderboard.total_focus_time / 60)}</Text>
+                    <Text style={styles.statLabel}>Hours</Text>
+                  </View>
+                  <View style={styles.statItem}>
+                    <Text style={styles.statNumber}>{userData.leaderboard.current_streak}</Text>
+                    <Text style={styles.statLabel}>Day Streak</Text>
+                  </View>
+                  <View style={styles.statItem}>
+                    <Text style={styles.statNumber}>{userData.leaderboard.level}</Text>
+                    <Text style={styles.statLabel}>Level</Text>
+                  </View>
+                </View>
               )}
             </View>
           )}
@@ -320,6 +345,25 @@ const styles = StyleSheet.create({
   },
   profileUniversity: {
     fontSize: 14,
+    color: '#666',
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    marginTop: 15,
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+  },
+  statItem: {
+    alignItems: 'center',
+    marginHorizontal: 15,
+  },
+  statNumber: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#388E3C',
+  },
+  statLabel: {
+    fontSize: 12,
     color: '#666',
   },
   loadingText: {

@@ -19,11 +19,12 @@
     "@react-navigation/native": "^7.1.6",
     "@react-navigation/native-stack": "^7.3.10",
     "@react-navigation/stack": "^7.3.2",
-    "@supabase/supabase-js": "^2.49.8",
+    "@supabase/supabase-js": "^2.49.10",
     "assert": "^2.1.0",
     "browserify-zlib": "^0.2.0",
     "buffer": "^6.0.3",
     "crypto-browserify": "^3.12.1",
+    "dotenv": "^16.5.0",
     "events": "^3.3.0",
     "expo": "^53.0.0",
     "expo-document-picker": "^13.1.5",
@@ -58,7 +59,9 @@
     "react-native-web": "^0.20.0",
     "stream-browserify": "^3.0.0",
     "stream-http": "^3.2.0",
-    "util": "^0.12.5"
+    "util": "^0.12.5",
+    "expo-dev-client": "~5.2.0",
+    "expo-updates": "~0.28.14"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

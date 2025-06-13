@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, ReactNode } from 'react';
 
 export type ThemeName = 'home' | 'office' | 'library' | 'coffee' | 'park';
 
-export const themePalettes = {
+export const themePalettes: Record<ThemeName, ThemePalette> = {
   home: {
     name: 'Home',
     primary: '#FF7043', // Deep sunset orange
@@ -13,11 +13,11 @@ export const themePalettes = {
   },
   office: {
     name: 'Office',
-    primary: '#1976D2', // Deep blue
-    background: '#BBDEFB', // Light blue
-    text: '#222', // dark text for light blue background
-    card: '#FFF',
-    accent: '#1976D2',
+    background: '#F5F5F5', // Changed to grey
+    card: '#FFFFFF',
+    text: '#2C2C2C',
+    primary: '#666666', // Changed to grey
+    secondary: '#888888',
   },
   park: {
     name: 'Park/Outdoors',
@@ -37,11 +37,11 @@ export const themePalettes = {
   },
   library: {
     name: 'Library',
-    primary: '#424242', // Deep grey
-    background: '#F5F5F5', // Light grey
-    text: '#222', // dark text for light grey
-    card: '#FFF',
-    accent: '#424242',
+    background: '#E3F2FD', // Changed to blue
+    card: '#FFFFFF',
+    text: '#1565C0',
+    primary: '#1976D2', // Changed to blue
+    secondary: '#42A5F5',
   },
 };
 
@@ -69,4 +69,4 @@ export function useTheme() {
   const ctx = useContext(ThemeContext);
   if (!ctx) throw new Error('useTheme must be used within ThemeProvider');
   return ctx;
-} 
+}

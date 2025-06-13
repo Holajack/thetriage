@@ -51,20 +51,21 @@ export type MessageContact = {
 };
 
 export type RootStackParamList = {
-  Landing: undefined;
-  Auth: NavigatorScreenParams<AuthStackParamList>;
-  Onboarding: NavigatorScreenParams<OnboardingStackParamList>;
-  Main: NavigatorScreenParams<MainTabParamList>;
   Login: undefined;
   Register: undefined;
-  ForgotPassword: undefined;
-  StudySessionScreen: { group?: boolean; room?: any } | undefined;
-  SessionReportScreen: undefined;
-  MessageScreen: { contact: MessageContact } | undefined;
-  StudyRoomScreen: { room: any };
-  PatrickSpeak: {
-    initialMessage?: string;
-    isResponse?: boolean;
-    responseMessage?: string;
+  Main: undefined;
+  BreakTimerScreen: undefined;
+  StudySessionScreen: { task?: Task };
+  SessionReportScreen: {
+    sessionDuration: number;
+    breakCount: number;
+    taskCompleted: boolean;
+    focusRating: number;
+    notes?: string;
+    sessionType: string;
   };
+  SessionHistory: undefined; // Add this line
+  PatrickSpeak: undefined;
+  MessageScreen: undefined;
+  StudyRoomScreen: undefined;
 };

@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import LeaderboardScreen from '../screens/main/LeaderboardScreen';
 import SettingsScreen from '../screens/main/SettingsScreen';
 import SubscriptionScreen from '../screens/main/SubscriptionScreen';
+import SessionHistoryScreen from '../screens/main/SessionHistoryScreen';
 
 const Drawer = createDrawerNavigator();
 
@@ -47,6 +48,12 @@ function CustomDrawerContent(props: any) {
         label="Results"
         icon={({ color, size }) => <Ionicons name="bar-chart-outline" size={size} color="#1B5E20" />}
         onPress={() => navigation.navigate('Tabs', { screen: 'Results' })}
+        labelStyle={{ color: '#1B5E20', fontWeight: 'bold' }}
+      />
+      <DrawerItem
+        label="Session History"
+        icon={({ color, size }) => <Ionicons name="time-outline" size={size} color="#1B5E20" />}
+        onPress={() => navigation.navigate('SessionHistory')}
         labelStyle={{ color: '#1B5E20', fontWeight: 'bold' }}
       />
       <DrawerItem
@@ -101,6 +108,14 @@ export const MainNavigator = () => {
       drawerContent={props => <CustomDrawerContent {...props} navigationRef={navigationRef} />}
     >
       <Drawer.Screen name="Tabs" component={BottomTabNavigator} options={{ drawerLabel: 'Main' }} />
+      <Drawer.Screen 
+        name="SessionHistory" 
+        component={SessionHistoryScreen} 
+        options={{
+          drawerLabel: 'Session History',
+          drawerIcon: ({ color, size }) => <Ionicons name="time-outline" size={size} color={color || '#1B5E20'} />,
+        }} 
+      />
       <Drawer.Screen name="Settings" component={SettingsScreen} options={{
         drawerLabel: 'Settings',
         drawerIcon: ({ color, size }) => <Ionicons name="settings-outline" size={size} color={color || '#4CAF50'} />,
@@ -143,4 +158,4 @@ const styles = StyleSheet.create({
     color: '#388E3C',
     fontSize: 13,
   },
-}); 
+});

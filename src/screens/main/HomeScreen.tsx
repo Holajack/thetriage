@@ -121,6 +121,8 @@ const HomeScreen = () => {
     await addTask(taskInput, '', priority);
     setTaskInput('');
     setPriority('Medium');
+    // Refresh data to sync between useSupabaseTasks and useUserAppData
+    await refreshData();
   };
 
   const handleEditTask = (taskId: string, text: string) => {
@@ -140,12 +142,15 @@ const HomeScreen = () => {
   };
   const handleCompleteTask = async (taskId: string) => {
     await updateTask(taskId, { status: 'completed' });
+    await refreshData();
   };
   const handleUndoTask = async (taskId: string) => {
     await updateTask(taskId, { status: 'pending' });
+    await refreshData();
   };
   const handleChangePriority = async (taskId: string, newPriority: string) => {
     await updateTask(taskId, { priority: newPriority });
+    await refreshData();
   };
   
   const handleAddSubTask = async (taskId: string) => {
@@ -239,6 +244,42 @@ const HomeScreen = () => {
     { label: 'High', color: '#ef4444' },
   ];
 
+  const getWorkStyleTimerDisplay = () => {
+    const workStyle = userData?.onboarding?.work_style || userData?.onboarding?.focus_method;
+    switch (workStyle) {
+      case 'Deep Work':
+      case 'deepwork':
+        return '90:00';
+      case 'Sprint':
+      case 'Sprint Focus':
+      case 'sprint':
+        return '25:00';
+      case 'Balanced':
+      case 'Balanced Focus':
+      case 'balanced':
+      default:
+        return '45:00';
+    }
+  };
+
+  const getBreakTimerDisplay = () => {
+    const workStyle = userData?.onboarding?.work_style || userData?.onboarding?.focus_method;
+    switch (workStyle) {
+      case 'Deep Work':
+      case 'deepwork':
+        return '15m';
+      case 'Sprint':
+      case 'Sprint Focus':
+      case 'sprint':
+        return '5m';
+      case 'Balanced':
+      case 'Balanced Focus':
+      case 'balanced':
+      default:
+        return '15m';
+    }
+  };
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
       {userDataLoading ? (
@@ -286,13 +327,17 @@ const HomeScreen = () => {
                   </Text>
                 </View>
                 <View style={[styles.timerMainBox, { backgroundColor: fadedPrimary }]}>
-                  <Text style={[styles.timerMain, { color: theme.primary }]}>45:00</Text>
+                  <Text style={[styles.timerMain, { color: theme.primary }]}>
+                    {getWorkStyleTimerDisplay()}
+                  </Text>
                   <Text style={[styles.timerMainLabel, { color: theme.text + '99' }]}>
-                    {userData?.onboarding?.focus_method || 'Balanced'} Timer
+                    {userData?.onboarding?.work_style || userData?.onboarding?.focus_method || 'Balanced'} Timer
                   </Text>
                 </View>
                 <View style={[styles.timerInfoBox, { backgroundColor: fadedPrimary }]}>
-                  <Text style={[styles.timerInfoLabel, { color: theme.primary }]}>15m</Text>
+                  <Text style={[styles.timerInfoLabel, { color: theme.primary }]}>
+                    {getBreakTimerDisplay()}
+                  </Text>
                   <Text style={[styles.timerInfoLabel, { color: theme.primary }]}>Break</Text>
                 </View>
               </View>
@@ -525,7 +570,7 @@ const HomeScreen = () => {
               {userData?.leaderboard && (
                 <Text style={styles.leaderboardGoal}>
                   Your Weekly Goal: {Math.round((userData.weeklyFocusTime || 0) / 60)}/
-                  {userData.leaderboard.weekly_focus_goal || 10} hours
+                  {userData.onboarding?.weekly_focus_goal || 10} hours
                 </Text>
               )}
               

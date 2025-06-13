@@ -309,26 +309,45 @@ export const PatrickSpeakScreen = ({ route }: { route: PatrickSpeakRouteProp }) 
     setChat((prev) => [...prev, userMsg]);
     await saveMessage(messageToSend, 'user');
 
-    // Get the latest session access token (sync)
-    const accessToken = supabase.auth.session?.()?.access_token || '';
-    if (!accessToken) {
-      setStreaming(false);
-      setError('Could not get session token.');
-      console.error('Session token error: No access token');
-      return;
-    }
-
     try {
+      // Ensure user is authenticated
+      if (!user) {
+        setError('Please sign in to chat with Patrick');
+        return;
+      }
+      
+      // Get fresh session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session?.access_token) {
+        setError('Authentication required. Please sign in again.');
+        return;
+      }
+
+      console.log('🔑 Making request with token:', session.access_token.substring(0, 20) + '...');
+      
       const response = await fetch('https://ucculvnodabrfwbkzsnx.supabase.co/functions/v1/patrick-response-function', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
+          'Authorization': `Bearer ${session.access_token}`, // Ensure this format is correct
         },
-        body: JSON.stringify({ message: messageToSend, userId: user.id }),
+        body: JSON.stringify({ 
+          message: messageToSend, 
+          userId: user.id 
+        }),
       });
 
+      console.log('📡 Response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.log('❌ Edge Function error:', errorText);
+        throw new Error(`Edge Function error: ${response.status} - ${errorText}`);
+      }
+
       const data = await response.json();
+
       setStreaming(false);
 
       if (data.response) {
@@ -347,10 +366,9 @@ export const PatrickSpeakScreen = ({ route }: { route: PatrickSpeakRouteProp }) 
       } else {
         setError('No response from Patrick.');
       }
-    } catch (err: any) {
-      setStreaming(false);
-      setError('Failed to get Patrick response.');
-      console.error('Patrick fetch error:', err);
+    } catch (error) {
+      console.error('Patrick request error:', error);
+      setError('Failed to get Patrick response: ' + error.message);
     }
   };
 
@@ -378,6 +396,8 @@ export const PatrickSpeakScreen = ({ route }: { route: PatrickSpeakRouteProp }) 
     );
   };
 
+  // Alternative solution using KeyboardAwareScrollView
+
   return (
     <View style={speakStyles.container}>
       <View style={speakStyles.headerRow}>
@@ -387,40 +407,90 @@ export const PatrickSpeakScreen = ({ route }: { route: PatrickSpeakRouteProp }) 
         <Text style={speakStyles.speakTitle}>Patrick AI Chat</Text>
         <View style={speakStyles.gridBtn} />
       </View>
-      <ScrollView
-        ref={scrollViewRef}
-        style={{ flex: 1, width: '100%' }}
-        contentContainerStyle={{ padding: 18, paddingBottom: 100 }}
-        onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+      
+      <KeyboardAwareScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ flexGrow: 1 }}
+        enableOnAndroid={true}
+        extraScrollHeight={80}
+        keyboardShouldPersistTaps="handled"
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        {chat.map(renderBubble)}
-        {streaming && (
-          <View style={{ alignSelf: 'flex-start', backgroundColor: '#fff', borderRadius: 18, marginVertical: 4, marginHorizontal: 8, padding: 14, maxWidth: '80%' }}>
-            <Text style={{ color: theme.text, fontSize: 16 }}>{streamedText}<Text style={{ opacity: 0.5 }}>|</Text></Text>
-            <Text style={{ color: '#BDBDBD', fontSize: 11, marginTop: 4 }}>Patrick is typing...</Text>
-          </View>
-        )}
-      </ScrollView>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 16, flexDirection: 'row', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, elevation: 8 }}>
-        <TextInput
-          style={{ flex: 1, fontSize: 17, color: theme.text, backgroundColor: '#F6F6E9', borderRadius: 12, padding: 14, marginRight: 10 }}
-          placeholder="Type your message..."
-          placeholderTextColor="#BDBDBD"
-          value={input}
-          onChangeText={setInput}
-          editable={!streaming}
-          onSubmitEditing={() => handleSend()}
-          returnKeyType="send"
-        />
-        <TouchableOpacity
-          style={{ backgroundColor: theme.primary, borderRadius: 12, padding: 12, alignItems: 'center', justifyContent: 'center', opacity: input.trim() && !streaming ? 1 : 0.5 }}
-          onPress={() => handleSend()}
-          disabled={!input.trim() || streaming}
+        {/* Chat messages */}
+        <ScrollView
+          ref={scrollViewRef}
+          style={{ flex: 1, width: '100%' }}
+          contentContainerStyle={{ padding: 18, paddingBottom: 20 }}
+          onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
         >
-          <Ionicons name="send" size={22} color="#fff" />
-        </TouchableOpacity>
-      </KeyboardAvoidingView>
-      {error ? <Text style={{ color: 'red', textAlign: 'center', margin: 8 }}>{error}</Text> : null}
+          {chat.map(renderBubble)}
+          {streaming && (
+            <View style={{ alignSelf: 'flex-start', backgroundColor: '#fff', borderRadius: 18, marginVertical: 4, marginHorizontal: 8, padding: 14, maxWidth: '80%' }}>
+              <Text style={{ color: theme.text, fontSize: 16 }}>{streamedText}<Text style={{ opacity: 0.5 }}>|</Text></Text>
+              <Text style={{ color: '#BDBDBD', fontSize: 11, marginTop: 4 }}>Patrick is typing...</Text>
+            </View>
+          )}
+        </ScrollView>
+        
+        {/* Input area */}
+        <View style={{
+          backgroundColor: '#fff',
+          borderTopLeftRadius: 24,
+          borderTopRightRadius: 24,
+          padding: 16,
+          flexDirection: 'row',
+          alignItems: 'center',
+          shadowColor: '#000',
+          shadowOpacity: 0.06,
+          shadowRadius: 8,
+          elevation: 8,
+          borderTopWidth: 1,
+          borderTopColor: '#F0F0F0'
+        }}>
+          <TextInput
+            style={{
+              flex: 1,
+              fontSize: 17,
+              color: theme.text,
+              backgroundColor: '#F6F6E9',
+              borderRadius: 12,
+              padding: 14,
+              marginRight: 10,
+              maxHeight: 100
+            }}
+            placeholder="Type your message..."
+            placeholderTextColor="#BDBDBD"
+            value={input}
+            onChangeText={setInput}
+            editable={!streaming}
+            onSubmitEditing={() => handleSend()}
+            returnKeyType="send"
+            multiline
+          />
+          <TouchableOpacity
+            style={{
+              backgroundColor: theme.primary,
+              borderRadius: 12,
+              padding: 12,
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: input.trim() && !streaming ? 1 : 0.5
+            }}
+            onPress={() => handleSend()}
+            disabled={!input.trim() || streaming}
+          >
+            <Ionicons name="send" size={22} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </KeyboardAwareScrollView>
+      
+      {error ? (
+        <View style={{ position: 'absolute', top: 100, left: 16, right: 16 }}>
+          <Text style={{ color: 'red', textAlign: 'center', backgroundColor: '#fff', padding: 8, borderRadius: 8 }}>
+            {error}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 };
@@ -470,4 +540,4 @@ const speakStyles = StyleSheet.create({
   speakMicBtn: { backgroundColor: '#E8F5E9', borderRadius: 40, padding: 18, justifyContent: 'center', alignItems: 'center' },
 });
 
-export default PatrickScreen; 
+export default PatrickScreen;
