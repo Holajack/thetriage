@@ -5,22 +5,23 @@ import { useSupabaseLeaderboardWithFriends, useSupabaseCommunityActivity, Leader
 import { useAuth } from '../../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
+const { useUserAppData, getLeaderboardData } = require('../../utils/userAppData');
 
 const LeaderboardScreen = () => {
   const { user } = useAuth();
   const navigation = useNavigation<any>();
-  const { profile } = useSupabaseProfile();
-  const { tasks } = useSupabaseTasks();
   const [tab, setTab] = useState<'Friends' | 'Global'>('Friends');
   const [refreshing, setRefreshing] = useState(false);
-  const { 
-    leaderboard, 
-    globalLeaderboard, 
-    loading, 
-    error, 
-    refetch,
-    updateStats 
-  } = useSupabaseLeaderboardWithFriends();
+  const [leaderboardData, setLeaderboardData] = useState<any>({
+    friendsLeaderboard: [],
+    globalLeaderboard: [],
+    userEntry: null
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Use our comprehensive data hook
+  const { data: userData, isLoading: userDataLoading, error: userDataError, refreshData } = useUserAppData();
 
   // Use real community activity data
   const { 
@@ -31,28 +32,41 @@ const LeaderboardScreen = () => {
   } = useSupabaseCommunityActivity();
 
   const { theme } = useTheme();
+  
+  // Load leaderboard data when component mounts
+  useEffect(() => {
+    loadLeaderboardData();
+  }, []);
+  
+  const loadLeaderboardData = async () => {
+    try {
+      setLoading(true);
+      const data = await getLeaderboardData();
+      setLeaderboardData(data);
+      setError(null);
+    } catch (err: any) {
+      console.error('Error loading leaderboard data:', err);
+      setError(err.message || 'Error loading leaderboard data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const currentLeaderboard = tab === 'Friends' ? leaderboard : globalLeaderboard;
-  const currentUserStats = currentLeaderboard.find((item: Leaderboard) => item.is_current_user);
+  const currentLeaderboard = tab === 'Friends' ? leaderboardData.friendsLeaderboard : leaderboardData.globalLeaderboard;
+  const currentUserStats = leaderboardData.userEntry;
 
   // Calculate tasks completed this week
   const getTasksCompletedThisWeek = () => {
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
+    if (!userData) return 0;
     
-    return tasks.filter(task => {
-      if (task.status === 'completed' && task.updated_at) {
-        const completedDate = new Date(task.updated_at);
-        return completedDate >= weekAgo;
-      }
-      return false;
-    }).length;
+    // Use our precalculated daily tasks data
+    return userData.dailyTasksCompleted.reduce((sum, day) => sum + day.count, 0);
   };
 
   // Calculate weekly goal percentage
   const getWeeklyGoalPercentage = () => {
-    const weeklyGoal = currentUserStats?.weekly_focus_goal || profile?.weeklyFocusGoal || 10;
-    const currentHours = (currentUserStats?.weekly_focus_time || 0) / 60; // Convert minutes to hours
+    const weeklyGoal = userData?.leaderboard?.weekly_focus_goal || currentUserStats?.weekly_focus_goal || 10;
+    const currentHours = userData ? (userData.weeklyFocusTime / 60) : (currentUserStats?.weekly_focus_time || 0) / 60; // Convert minutes to hours
     const percentage = Math.min(100, Math.round((currentHours / weeklyGoal) * 100));
     return { percentage, currentHours, weeklyGoal };
   };
@@ -61,8 +75,9 @@ const LeaderboardScreen = () => {
     setRefreshing(true);
     try {
       await Promise.all([
-        refetch(),
-        refetchActivity()
+        loadLeaderboardData(),
+        refetchActivity(),
+        refreshData()
       ]);
     } catch (err) {
       console.error('Error refreshing leaderboard:', err);
@@ -198,7 +213,7 @@ const LeaderboardScreen = () => {
               <Text style={[styles.weeklyGoalTitle, { color: theme.primary }]}>Weekly Focus Goal</Text>
             </View>
             <Text style={[styles.weeklyGoalProgress, { color: theme.primary }]}>
-              {getWeeklyGoalPercentage().currentHours.toFixed(1)}/{getWeeklyGoalPercentage().weeklyGoal} hours
+              {Math.round((userData?.weeklyFocusTime || 0) / 60)}/{userData?.onboarding?.weekly_focus_goal || 10} hours
             </Text>
           </View>
           
@@ -652,4 +667,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default LeaderboardScreen; 
+export default LeaderboardScreen;

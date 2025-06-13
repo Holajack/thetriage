@@ -50,13 +50,13 @@ export type LeaderboardStats = {
 
 export type AuthContextType = {
   isAuthenticated: boolean;
-  isInitialLoading: boolean; // Renamed from isLoading
+  isInitialLoading: boolean;
   hasSeenLanding: boolean;
   setHasSeenLanding: (seen: boolean) => void;
   hasCompletedOnboarding: boolean;
   setHasCompletedOnboarding: (completed: boolean) => void;
-  justLoggedIn: boolean; // Add flag to track when user just logged in
-  clearJustLoggedIn: () => void; // Function to reset the login flag
+  justLoggedIn: boolean;
+  clearJustLoggedIn: () => void;
   user: UserProfile | null;
   onboarding: OnboardingPreferences | null;
   leaderboard: LeaderboardStats | null;
@@ -71,15 +71,21 @@ export type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Default timeout values (in milliseconds)
+const DEFAULT_SESSION_CHECK_TIMEOUT = 15000; // Increased from 10000
+const DEFAULT_USER_DATA_FETCH_TIMEOUT = 20000; // Increased from 8000 (or 15000 from previous suggestion)
+const DEFAULT_SIGN_IN_TIMEOUT = 25000; // Increased from 6000 (or 20000 from previous suggestion)
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isInitialLoading, setIsInitialLoading] = useState(true); // Renamed from isLoading
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [hasSeenLanding, setHasSeenLanding] = useState(false);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
-  const [justLoggedIn, setJustLoggedIn] = useState(false); // Track when user just logged in
+  const [justLoggedIn, setJustLoggedIn] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [onboarding, setOnboarding] = useState<OnboardingPreferences | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardStats | null>(null);
+  const [isLoading, setIsLoading] = useState(false); // Added for more granular loading state
 
   // Helper functions to create default data
   const createDefaultOnboardingData = useCallback(async (userId: string): Promise<OnboardingPreferences | null> => {
@@ -129,9 +135,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .single();
         
       if (error) {
-        // If it's an RLS policy error, log it but don't crash the app
         if (error.code === '42501') {
-          console.warn('RLS policy prevents leaderboard creation, will try again later or user can manually trigger:', error.message);
+          console.warn('RLS policy prevents leaderboard creation, will try again later:', error.message);
           return null;
         }
         console.error('Failed to create default leaderboard data:', error);
@@ -145,12 +150,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  // Helper function to detect if a user is an existing user from the PWA
+  // Helper function to detect if a user is an existing user
   const isExistingUser = useCallback((profile: UserProfile | null): boolean => {
     if (!profile) return false;
     
-    // Check for indicators that this is an existing user from the PWA
-    // These fields would typically be populated if they used the app before
     const indicators = [
       profile.full_name,
       profile.username,
@@ -161,7 +164,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       profile.profession
     ];
     
-    // If at least 2 profile fields are filled, consider them an existing user
     const filledFields = indicators.filter(field => field && field.trim().length > 0);
     return filledFields.length >= 2;
   }, []);
@@ -173,13 +175,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       const onboardingData: Partial<OnboardingPreferences> = {
         user_id: userId,
-        is_onboarding_complete: true, // Mark as completed for existing users
-        weekly_focus_goal: 5, // Default value
-        // Map existing profile data to onboarding fields where possible
+        is_onboarding_complete: true,
+        weekly_focus_goal: 5,
         university: profile.university,
         major: profile.major,
         location: profile.state,
-        // Set default privacy preferences for existing users
         data_collection_consent: true,
         personalized_recommendations: true,
         usage_analytics: true,
@@ -207,7 +207,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  // Update hasSeenLanding with AsyncStorage persistence
+  // AsyncStorage helpers
   const updateHasSeenLanding = async (seen: boolean) => {
     try {
       await AsyncStorage.setItem('hasSeenLanding', JSON.stringify(seen));
@@ -218,7 +218,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Load hasSeenLanding from AsyncStorage
   const loadHasSeenLanding = async () => {
     try {
       const stored = await AsyncStorage.getItem('hasSeenLanding');
@@ -230,114 +229,217 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Fetch user data
+  // IMPROVED: Fetch user data with better timeout handling and fallback data
   const fetchUserData = useCallback(async (userId: string) => {
-    // setIsLoading(true); // Removed: This should not use the initial loading flag
+    console.log(`AuthContext: Attempting to fetch user data for ${userId}`);
     
     try {
-      // Fetch profile
-      const { data: profile, error: profileError } = await supabase.from('profiles').select('*').eq('id', userId).single();
-      if (profileError) console.error(`Profile fetch error:`, profileError);
-      setUser(profile || null);
-      
-      // Fetch onboarding
-      const { data: onboardingData, error: onboardingError } = await supabase.from('onboarding_preferences').select('*').eq('user_id', userId).single();
-      
-      let finalOnboardingData = onboardingData;
-      if (onboardingError?.code === 'PGRST116') {
-        // No onboarding record exists
-        if (isExistingUser(profile)) {
-          // This is an existing user from PWA - create completed onboarding record
-          console.log('Detected existing user from PWA, creating completed onboarding record');
-          finalOnboardingData = await createOnboardingForExistingUser(userId, profile);
+      // Helper function for timeout handling
+      const fetchWithTimeout = async <T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> => {
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error(`${operation} timeout after ${timeoutMs/1000}s`)), timeoutMs);
+        });
+        
+        try {
+          return await Promise.race([promise, timeoutPromise]);
+        } catch (error: any) {
+          console.warn(`AuthContext: ${operation} failed:`, error?.message || 'Unknown error');
+          throw error;
+        }
+      };
+
+      // Fetch profile with 5s timeout
+      let profile = null;
+      try {
+        const profileResponse = await fetchWithTimeout(
+          supabase.from('profiles').select('*').eq('id', userId).single(),
+          5000,
+          'Profile fetch'
+        );
+        
+        if (profileResponse.error) {
+          console.error('Profile fetch error:', profileResponse.error);
         } else {
-          // This is a new user - create default onboarding record
-          console.log('New user detected, creating default onboarding record');
-          finalOnboardingData = await createDefaultOnboardingData(userId);
+          profile = profileResponse.data;
+          console.log('AuthContext: Profile loaded:', profile?.full_name || 'No name');
         }
-      } else if (onboardingError) {
-        console.error(`Onboarding fetch error:`, onboardingError);
+      } catch (profileError: any) {
+        console.warn('AuthContext: Profile fetch failed, continuing without profile:', profileError?.message || 'Unknown error');
       }
       
-      setOnboarding(finalOnboardingData || null);
+      setUser(profile);
+      
+      // Fetch onboarding with 3s timeout
+      let finalOnboardingData = null;
+      try {
+        const onboardingResponse = await fetchWithTimeout(
+          supabase.from('onboarding_preferences').select('*').eq('user_id', userId).single(),
+          3000,
+          'Onboarding fetch'
+        );
+        
+        if (onboardingResponse.error?.code === 'PGRST116') {
+          if (isExistingUser(profile)) {
+            console.log('Creating onboarding for existing user');
+            finalOnboardingData = await createOnboardingForExistingUser(userId, profile);
+          } else {
+            console.log('Creating default onboarding for new user');
+            finalOnboardingData = await createDefaultOnboardingData(userId);
+          }
+        } else if (onboardingResponse.error) {
+          console.error('Onboarding fetch error:', onboardingResponse.error);
+        } else {
+          finalOnboardingData = onboardingResponse.data;
+        }
+      } catch (onboardingError: any) {
+        console.warn('AuthContext: Onboarding fetch failed, using fallback:', onboardingError?.message || 'Unknown error');
+        // Create minimal fallback onboarding data
+        finalOnboardingData = {
+          id: `temp-${userId}`,
+          user_id: userId,
+          is_onboarding_complete: false,
+          weekly_focus_goal: 5
+        } as OnboardingPreferences;
+      }
+      
+      setOnboarding(finalOnboardingData);
       setHasCompletedOnboarding(finalOnboardingData?.is_onboarding_complete || false);
+      console.log('AuthContext: Onboarding status:', finalOnboardingData?.is_onboarding_complete ? 'complete' : 'incomplete');
       
-      // Fetch leaderboard
-      const { data: leaderboardData, error: leaderboardError } = await supabase.from('leaderboard_stats').select('*').eq('user_id', userId).single();
-      
-      let finalLeaderboardData = leaderboardData;
-      if (leaderboardError?.code === 'PGRST116') {
-        finalLeaderboardData = await createDefaultLeaderboardData(userId);
-        if (!finalLeaderboardData) {
-          // Could not create leaderboard data due to RLS policies, will be created later
+      // Fetch leaderboard with 3s timeout
+      let finalLeaderboardData = null;
+      try {
+        const leaderboardResponse = await fetchWithTimeout(
+          supabase.from('leaderboard_stats').select('*').eq('user_id', userId).single(),
+          3000,
+          'Leaderboard fetch'
+        );
+        
+        if (leaderboardResponse.error?.code === 'PGRST116') {
+          console.log('Creating default leaderboard data');
+          finalLeaderboardData = await createDefaultLeaderboardData(userId);
+        } else if (leaderboardResponse.error) {
+          console.error('Leaderboard fetch error:', leaderboardResponse.error);
+        } else {
+          finalLeaderboardData = leaderboardResponse.data;
         }
-      } else if (leaderboardError) {
-        console.error(`Leaderboard fetch error:`, leaderboardError);
+      } catch (leaderboardError: any) {
+        console.warn('AuthContext: Leaderboard fetch failed, using fallback:', leaderboardError?.message || 'Unknown error');
+        // Create minimal fallback leaderboard data
+        finalLeaderboardData = {
+          id: `temp-${userId}`,
+          user_id: userId,
+          total_focus_time: 0,
+          level: 1,
+          points: 0,
+          current_streak: 0
+        } as LeaderboardStats;
       }
       
-      setLeaderboard(finalLeaderboardData || null);
+      setLeaderboard(finalLeaderboardData);
+      console.log('AuthContext: User data fetch completed successfully');
       
-    } catch (error) {
-      console.error('Error fetching user data:', error);
-    } finally {
-      // setIsLoading(false); // Removed: This should not use the initial loading flag
+    } catch (error: any) {
+      console.error('AuthContext: Critical error in fetchUserData:', error?.message || 'Unknown error');
+      throw error;
     }
   }, [createDefaultOnboardingData, createDefaultLeaderboardData, isExistingUser, createOnboardingForExistingUser]);
 
+  // IMPROVED: Session initialization with better error handling
   useEffect(() => {
     const checkSession = async () => {
-      setIsInitialLoading(true); // Use renamed setter
+      console.log('AuthContext: Starting session check...');
+      setIsInitialLoading(true); // Use isInitialLoading for the app's first load
+      
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Session check timeout')), DEFAULT_SESSION_CHECK_TIMEOUT);
+        });
+        
+        const sessionPromise = supabase.auth.getSession();
+        // Explicitly type the result of Promise.race if needed, or use 'as any' if confident
+        const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]) as { data: { session: Session | null } };
+        
+        console.log('AuthContext: Session check completed', { hasSession: !!session?.user });
         
         if (session?.user) {
-          await fetchUserData(session.user.id);
-          setIsAuthenticated(true);
-          // Don't set justLoggedIn here - this is for existing sessions, not new logins
+          console.log('AuthContext: User session found, fetching user data...');
+          try {
+            await Promise.race([
+              fetchUserData(session.user.id),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('User data fetch timeout')), DEFAULT_USER_DATA_FETCH_TIMEOUT))
+            ]);
+            setIsAuthenticated(true);
+            console.log('AuthContext: User data fetch completed for existing session.');
+          } catch (fetchError: any) {
+            console.error('AuthContext: User data fetch failed for existing session:', fetchError.message);
+            // Still set authenticated to allow fallback/cached data usage or app to proceed
+            setIsAuthenticated(true);
+            // Optionally, set an error state here to inform the user
+          }
         } else {
-          setUser(null);
-          setOnboarding(null);
-          setLeaderboard(null);
           setIsAuthenticated(false);
+          console.log('AuthContext: No active session found.');
         }
-      } catch (error) {
-        console.error("Error checking session:", error);
+      } catch (error: any) {
+        console.error("AuthContext: Error checking session:", error.message);
         setIsAuthenticated(false);
+        // Optionally, set an error state here
       } finally {
-        setIsInitialLoading(false); // Use renamed setter
+        console.log('AuthContext: Session check complete, setting isInitialLoading to false');
+        setIsInitialLoading(false);
       }
     };
 
     checkSession();
-    loadHasSeenLanding();
 
-    const { data: authListenerData } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // Removed setIsLoading(true) and setIsLoading(false) from here
-      if (session?.user) {
-        await fetchUserData(session.user.id); 
-        setIsAuthenticated(true);
-        // Don't set justLoggedIn here as this handles all auth state changes, not just manual login
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-        setOnboarding(null);
-        setLeaderboard(null);
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      console.log('AuthContext: Auth state changed', { event: _event, hasSession: !!session });
+      if (_event === 'SIGNED_IN' && session?.user) {
+        setIsLoading(true); // Use general isLoading for subsequent sign-ins
+        console.log('AuthContext: User SIGNED_IN, fetching user data...');
+        try {
+          await Promise.race([
+            fetchUserData(session.user.id),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('User data fetch timeout on SIGNED_IN')), DEFAULT_USER_DATA_FETCH_TIMEOUT))
+          ]);
+          setIsAuthenticated(true);
+          setJustLoggedIn(true); // Set this only on explicit sign-in
+          console.log('AuthContext: User data fetch completed after SIGNED_IN.');
+        } catch (fetchError: any) {
+          console.error('AuthContext: User data fetch failed after SIGNED_IN:', fetchError.message);
+          setIsAuthenticated(true); // Still authenticate
+        } finally {
+          setIsLoading(false);
+        }
+      } else if (_event === 'SIGNED_OUT') {
         setIsAuthenticated(false);
-        setJustLoggedIn(false); // Reset login flag on logout
+        setUser(null); // Clear user data on sign out
+        setJustLoggedIn(false);
+        console.log('AuthContext: User SIGNED_OUT.');
       }
+      // Handle other events like TOKEN_REFRESHED if necessary
+      // setIsInitialLoading(false); // This should only be set false after initial checkSession
     });
 
     return () => {
-      authListenerData.subscription.unsubscribe();
+      authListener?.unsubscribe();
     };
   }, [fetchUserData]);
 
-  // Sign up
+  // IMPROVED: Sign up with timeout protection
   const signUp = async (email: string, password: string, username?: string, full_name?: string) => {
     try {
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Sign up timeout')), 15000);
+      });
+
+      const signUpPromise = supabase.auth.signUp({
         email,
         password,
       });
+
+      const { data: authData, error: authError } = await Promise.race([signUpPromise, timeoutPromise]);
 
       if (authError) return { error: authError.message };
       if (!authData.user) return { error: 'Failed to create user' };
@@ -351,51 +453,83 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (profileError) return { error: profileError.message };
 
-      setJustLoggedIn(true); // Set flag that user just logged in to trigger proper navigation
-
+      setJustLoggedIn(true);
       return {};
-    } catch (error) {
-      return { error: 'Sign up failed' };
+    } catch (error: any) {
+      return { error: error?.message || 'Sign up failed' };
     }
   };
 
-  // Sign in
+  // IMPROVED: Sign in with timeout protection and fallback authentication
   const signIn = async (email: string, password: string) => {
+    console.log(`AuthContext: Attempting to sign in as ${email}`);
+    setIsLoading(true);
     try {
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Sign in timeout')), DEFAULT_SIGN_IN_TIMEOUT);
+      });
+
+      const signInPromise = supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-      if (authError) return { error: authError.message };
-      if (!authData.user) return { error: 'Failed to sign in' };
+      const { data: authData, error: authError } = await Promise.race([signInPromise, timeoutPromise]);
 
-      const authUser = authData.user;
-      await fetchUserData(authUser.id);
-      setIsAuthenticated(true);
-      setJustLoggedIn(true); // Set flag that user just logged in
+      if (authError) {
+        console.error('AuthContext: Sign in error from Supabase:', authError.message);
+        setIsLoading(false);
+        return { error: authError.message };
+      }
+      if (!authData?.user) {
+        console.error('AuthContext: Sign in failed, no user data returned.');
+        setIsLoading(false);
+        return { error: 'Failed to sign in, no user data.' };
+      }
+      
+      // The onAuthStateChange listener should handle setting isAuthenticated and fetching data.
+      // We don't need to call fetchUserData or setIsAuthenticated here directly if onAuthStateChange is robust.
+      // However, to ensure `justLoggedIn` is set and to provide immediate feedback:
+      console.log('AuthContext: Sign in successful via signIn function, user:', authData.user.id);
+      // If onAuthStateChange is reliable, these might be redundant but can provide quicker UI updates.
+      // await fetchUserData(authData.user.id); // This might race with onAuthStateChange's fetch
+      // setIsAuthenticated(true);
+      // setJustLoggedIn(true); // This is important for navigation logic
 
-      return {};
-    } catch (error) {
-      return { error: 'Sign in failed' };
+      setIsLoading(false);
+      return {}; // Successful sign-in
+    } catch (error: any) {
+      console.error('AuthContext: Sign in failed with error:', error.message);
+      setIsLoading(false);
+      return { error: error?.message || 'Sign in failed' };
     }
   };
 
   // Sign out
   const signOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setOnboarding(null);
-    setLeaderboard(null);
-    setIsAuthenticated(false);
-    setJustLoggedIn(false); // Reset login flag
+    console.log('AuthContext: Signing out...');
+    setIsLoading(true);
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error('AuthContext: Error signing out:', error.message);
+    }
+    // States will be updated by onAuthStateChange
+    // setUserData(null);
+    // setIsAuthenticated(false);
+    // setJustLoggedIn(false);
+    // setHasSeenOnboarding(false); // Or handle this based on your app logic
+    setIsLoading(false);
   };
 
   // Refresh user data
   const refreshUserData = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user) {
-      await fetchUserData(session.user.id);
+      try {
+        await fetchUserData(session.user.id);
+      } catch (error) {
+        console.warn('RefreshUserData failed, keeping existing data');
+      }
     }
   };
 
@@ -404,19 +538,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) return { error: 'No user' };
     const { error } = await supabase.from('profiles').update(updates).eq('id', user.id);
     if (error) return { error: error.message };
-    await fetchUserData(user.id);
+    await refreshUserData();
   };
 
   // Update onboarding
   const updateOnboarding = async (updates: Partial<OnboardingPreferences>) => {
     if (!user) return { error: 'No user' };
     
-    // If updating onboarding completion, immediately update local state
     if (updates.is_onboarding_complete !== undefined) {
       setHasCompletedOnboarding(updates.is_onboarding_complete);
     }
     
-    // First check if onboarding data exists
     const { data: existingData } = await supabase
       .from('onboarding_preferences')
       .select('id')
@@ -424,14 +556,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .single();
     
     if (!existingData) {
-      // Create new onboarding record
       const newData = { user_id: user.id, ...updates };
       const { error } = await supabase
         .from('onboarding_preferences')
         .insert(newData);
       if (error) return { error: error.message };
     } else {
-      // Update existing record
       const { error } = await supabase
         .from('onboarding_preferences')
         .update(updates)
@@ -439,28 +569,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) return { error: error.message };
     }
     
-    await fetchUserData(user.id);
+    await refreshUserData();
     return { success: true };
   };
 
-  // Function to clear the justLoggedIn flag
   const clearJustLoggedIn = () => {
     setJustLoggedIn(false);
   };
-  // Initialize leaderboard - can be called when user first needs leaderboard data
+
   const initializeLeaderboard = async () => {
     if (!user) return { error: 'No user' };
     
     try {
       const leaderboardData = await createDefaultLeaderboardData(user.id);
-      if (leaderboardData) {
+      if (leaderboardData) { // Added condition: check if leaderboardData is truthy
         setLeaderboard(leaderboardData);
         return { success: true };
       } else {
-        return { error: 'Unable to create leaderboard data due to database policies' };
+        // Handle the case where leaderboardData couldn't be created
+        console.warn('AuthContext: Failed to initialize leaderboard, createDefaultLeaderboardData returned null.');
+        return { error: 'Failed to initialize leaderboard data' };
       }
-    } catch (error) {
-      return { error: 'Failed to initialize leaderboard' };
+    } catch (error: any) {
+      console.error('AuthContext: Error in initializeLeaderboard:', error.message);
+      return { error: error?.message || 'Failed to initialize leaderboard' };
     }
   };
 
@@ -468,11 +600,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthContext.Provider
       value={{
         isAuthenticated,
-        isInitialLoading, // Renamed from isLoading
+        isInitialLoading,
         hasSeenLanding,
-        setHasSeenLanding: updateHasSeenLanding,
+        setHasSeenLanding: updateHasSeenLanding, // Ensure this is correctly implemented
         hasCompletedOnboarding,
-        setHasCompletedOnboarding,
+        setHasCompletedOnboarding, // Ensure this is correctly implemented
         justLoggedIn,
         clearJustLoggedIn,
         user,
@@ -497,9 +629,6 @@ export const useAuth = () => {
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
-  // Ensure the returned context matches the AuthContextType, especially the renamed isLoading
-  return {
-    ...context,
-    isLoading: context.isInitialLoading, // Keep isLoading for consumers if desired, but map it
-  };
+  // Ensure all values from AuthContextType are spread or returned
+  return context;
 };

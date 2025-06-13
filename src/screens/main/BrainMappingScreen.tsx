@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, ScrollView, 
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
+const { useUserAppData } = require('../../utils/userAppData');
 import Svg, { Path, Circle, Text as SvgText } from 'react-native-svg';
 
 interface BrainActivity {
@@ -92,6 +93,10 @@ const BrainMappingScreen: React.FC = () => {
       return acc;
     }, {} as Record<string, Animated.Value>)
   );
+  const [activities, setActivities] = useState<BrainActivity[]>(BRAIN_ACTIVITIES);
+
+  // Get user data from our comprehensive hook
+  const { data: userData, isLoading: userDataLoading } = useUserAppData();
 
   useEffect(() => {
     // Create pulsing animations for active brain regions
@@ -114,6 +119,189 @@ const BrainMappingScreen: React.FC = () => {
       }
     });
   }, []);
+
+  // Process user data to generate brain activity data
+  useEffect(() => {
+    if (userData && !userDataLoading) {
+      generateBrainActivityFromUserData(userData);
+    }
+  }, [userData, userDataLoading]);
+
+  // Generate brain activity data from user subjects and sessions
+  const generateBrainActivityFromUserData = (userData: any) => {
+    try {
+      if (!userData?.sessions || !userData?.tasks) {
+        return;
+      }
+
+      const sessions = userData.sessions || [];
+      const tasks = userData.tasks || [];
+
+      // Extract unique subjects from tasks
+      const subjectMap: Record<string, {
+        time: number,
+        lastActive: Date | null,
+        region: string,
+        description: string,
+        color: string,
+        coordinates: { x: number, y: number },
+        icon: string
+      }> = {};
+
+      // Define brain regions for subjects
+      const brainRegions = [
+        {
+          name: 'Left Prefrontal Cortex',
+          description: 'Critical for planning complex behavior, decision making, and moderating social behavior.',
+          coordinates: { x: 100, y: 100 },
+          color: '#4CAF50'
+        },
+        {
+          name: 'Right Temporal Lobe',
+          description: 'Important for processing auditory information and language comprehension.',
+          coordinates: { x: 180, y: 170 },
+          color: '#FF9800'
+        },
+        {
+          name: 'Left Parietal Lobe',
+          description: 'Responsible for logical reasoning, spatial processing, and mathematical calculations.',
+          coordinates: { x: 120, y: 140 },
+          color: '#2196F3'
+        },
+        {
+          name: 'Occipital Lobe',
+          description: 'Processes visual information essential for understanding diagrams, charts, and structures.',
+          coordinates: { x: 160, y: 210 },
+          color: '#9C27B0'
+        },
+        {
+          name: 'Broca\'s Area',
+          description: 'Involved in speech production and language processing.',
+          coordinates: { x: 90, y: 140 },
+          color: '#F44336'
+        },
+        {
+          name: 'Hippocampus',
+          description: 'Essential for long-term memory formation and recall of information.',
+          coordinates: { x: 140, y: 180 },
+          color: '#00BCD4'
+        }
+      ];
+
+      // Icons for different types of subjects
+      const subjectIcons: Record<string, string> = {
+        'Math': 'calculator',
+        'Science': 'flask',
+        'History': 'book',
+        'English': 'text',
+        'Art': 'color-palette',
+        'Music': 'musical-notes',
+        'Computer': 'code',
+        'Language': 'language',
+        'Physics': 'magnet',
+        'Chemistry': 'flask',
+        'Biology': 'leaf',
+        'Economics': 'cash',
+        'CS': 'code-slash',
+        'Psychology': 'brain',
+        'Geography': 'globe'
+      };
+
+      // Extract subjects from tasks and assign time from sessions
+      tasks.forEach((task: any) => {
+        if (!task.title) return;
+
+        // Extract subject from task name (first word)
+        const subject = task.title.split(' ')[0];
+
+        // Find related session for this task
+        const taskSessions = sessions.filter((session: any) =>
+          session.task_id === task.id
+        );
+
+        // Calculate total time spent on this subject
+        const timeSpent = taskSessions.reduce(
+          (sum: number, session: any) => sum + (session.duration_minutes || 0),
+          0
+        );
+
+        // Find the most recent activity for this subject
+        const latestSession = taskSessions.length > 0
+          ? taskSessions.sort((a: any, b: any) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          )[0]
+          : null;
+
+        const lastActive = latestSession?.created_at ? new Date(latestSession.created_at) : null;
+
+        // Assign a brain region and other properties
+        if (!subjectMap[subject]) {
+          const regionIndex = Object.keys(subjectMap).length % brainRegions.length;
+          const region = brainRegions[regionIndex];
+
+          subjectMap[subject] = {
+            time: 0,
+            lastActive: null,
+            region: region.name,
+            description: region.description,
+            color: region.color,
+            coordinates: region.coordinates,
+            icon: subjectIcons[subject] || 'book-outline'
+          };
+        }
+
+        // Update time spent and last active
+        subjectMap[subject].time += timeSpent;
+        if (lastActive && (!subjectMap[subject].lastActive || lastActive > subjectMap[subject].lastActive)) {
+          subjectMap[subject].lastActive = lastActive;
+        }
+      });
+
+      // Convert to BrainActivity array for display
+      const newActivities: BrainActivity[] = Object.entries(subjectMap).map(([subject, data], index) => {
+        // Calculate activity level based on time spent (0-1 scale)
+        const maxTime = Math.max(...Object.values(subjectMap).map(s => s.time));
+        const activity = maxTime > 0 ? data.time / maxTime : 0.5;
+
+        // Format last active time
+        let lastActiveStr = 'Never';
+        if (data.lastActive) {
+          const now = new Date();
+          const diffMs = now.getTime() - data.lastActive.getTime();
+          const diffHrs = diffMs / (1000 * 60 * 60);
+
+          if (diffHrs < 1) {
+            lastActiveStr = `${Math.round(diffHrs * 60)} minutes ago`;
+          } else if (diffHrs < 24) {
+            lastActiveStr = `${Math.round(diffHrs)} hours ago`;
+          } else {
+            lastActiveStr = `${Math.round(diffHrs / 24)} days ago`;
+          }
+        }
+
+        return {
+          id: String(index + 1),
+          subject,
+          region: data.region,
+          description: data.description,
+          activity: Math.max(0.3, Math.min(0.95, activity)), // Min 0.3, max 0.95
+          color: data.color,
+          coordinates: data.coordinates,
+          icon: data.icon,
+          lastActive: lastActiveStr,
+          studyTime: data.time
+        };
+      });
+
+      // If we found activities, update state
+      if (newActivities.length > 0) {
+        setActivities(newActivities);
+      }
+
+    } catch (err) {
+      console.error('Error generating brain activity data:', err);
+    }
+  };
 
   const openActivityDetail = (activity: BrainActivity) => {
     setSelectedActivity(activity);
@@ -142,9 +330,9 @@ const BrainMappingScreen: React.FC = () => {
           strokeWidth="2"
           fill="#F8F8F8"
         />
-        
+
         {/* Brain regions */}
-        {BRAIN_ACTIVITIES.map((activity) => (
+        {activities.map((activity) => (
           <Animated.View
             key={activity.id}
             style={{
@@ -173,7 +361,7 @@ const BrainMappingScreen: React.FC = () => {
           </Animated.View>
         ))}
       </Svg>
-      
+
       <Text style={styles.brainLabel}>Interactive Brain Map</Text>
       <Text style={styles.brainSubLabel}>Tap regions to see activity details</Text>
     </View>
@@ -192,7 +380,7 @@ const BrainMappingScreen: React.FC = () => {
           color={item.color}
         />
       </View>
-      
+
       <View style={styles.activityContent}>
         <View style={styles.activityHeader}>
           <Text style={styles.activitySubject}>{item.subject}</Text>
@@ -200,9 +388,9 @@ const BrainMappingScreen: React.FC = () => {
             {getActivityLevel(item.activity)}
           </Text>
         </View>
-        
+
         <Text style={styles.activityRegion}>{item.region}</Text>
-        
+
         <View style={styles.activityMeta}>
           <View style={styles.metaItem}>
             <Ionicons name="time-outline" size={14} color={theme.text + '99'} />
@@ -213,7 +401,7 @@ const BrainMappingScreen: React.FC = () => {
             <Text style={styles.metaText}>{item.studyTime}m studied</Text>
           </View>
         </View>
-        
+
         <View style={styles.activityProgress}>
           <View style={styles.progressBar}>
             <View
@@ -254,7 +442,7 @@ const BrainMappingScreen: React.FC = () => {
         <View style={styles.activitiesSection}>
           <Text style={styles.sectionTitle}>Brain Activity Breakdown</Text>
           <FlatList
-            data={BRAIN_ACTIVITIES}
+            data={activities}
             renderItem={renderActivityCard}
             keyExtractor={(item) => item.id}
             scrollEnabled={false}
@@ -561,4 +749,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default BrainMappingScreen; 
+export default BrainMappingScreen;

@@ -1,64 +1,53 @@
 {
   "expo": {
-    "name": "Triage System",
-    "slug": "triage-system",
-    "version": "1.0.1",
+    "name": "The Triage System",
+    "slug": "thetriage",
+    "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon-ios-white-1024.png",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#1B4A3A"
+      "backgroundColor": "#ffffff"
     },
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.triagesystem.app",
-      "icon": "./assets/icon-ios-white-1024.png"
+      "bundleIdentifier": "com.thetriage.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app uses camera for document scanning",
+        "NSMicrophoneUsageDescription": "This app uses microphone for voice features"
+      },
+      "runtimeVersion": "1.0.0"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/triage-app-logo-solid.png",
-        "backgroundColor": "#1B4A3A"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
       },
-      "package": "com.triagesystem.app",
-      "splash": {
-        "image": "./assets/splash-icon.png",
-        "resizeMode": "contain",
-        "backgroundColor": "#1B4A3A",
-        "mdpi": "./assets/splash-icon.png",
-        "hdpi": "./assets/splash-icon.png",
-        "xhdpi": "./assets/splash-icon.png",
-        "xxhdpi": "./assets/splash-icon.png",
-        "xxxhdpi": "./assets/splash-icon.png"
-      },
-      "permissions": []
+      "package": "com.thetriage.app",
+      "versionCode": 1,
+      "runtimeVersion": {
+        "policy": "appVersion"
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "sdkVersion": "53.0.0",
-    "plugins": [
-      "expo-localization",
-      [
-        "expo-splash-screen",
-        {
-          "image": "./assets/splash-icon.png",
-          "imageWidth": 200,
-          "resizeMode": "contain",
-          "backgroundColor": "#1B4A3A"
-        }
-      ]
-    ],
-    "scheme": "triage-system",
     "extra": {
       "eas": {
-        "projectId": "0abfeee3-c7fb-4a59-afdb-1fa13fd9b09a"
+        "projectId": "8c921112-45b4-48cf-91c3-a1326803d706"
       }
+    },
+    "plugins": [
+      "expo-dev-client"
+    ],
+    "updates": {
+      "url": "https://u.expo.dev/8c921112-45b4-48cf-91c3-a1326803d706"
     }
   }
 }

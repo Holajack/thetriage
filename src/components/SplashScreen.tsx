@@ -29,9 +29,18 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationComplete 
     let isMounted = true;
     let animationRef: Animated.CompositeAnimation | null = null;
     
+    // Add a reliable fallback timeout for iOS
+    const fallbackTimeout = setTimeout(() => {
+      console.log('SplashScreen: Fallback timeout reached, completing animation');
+      if (isMounted) {
+        onAnimationComplete();
+      }
+    }, Platform.OS === 'ios' ? 4000 : 5000); // 4 seconds for iOS, 5 for others
+    
     // Hide the native splash screen when our custom one starts
     const initializeAnimation = async () => {
       try {
+        console.log('SplashScreen: Starting animation sequence...');
         await ExpoSplashScreen.hideAsync();
         
         if (!isMounted) return;
@@ -86,11 +95,15 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationComplete 
         ]);
 
         animationRef.start((finished) => {
+          clearTimeout(fallbackTimeout); // Clear fallback timeout if animation completes normally
           if (isMounted && finished) {
+            console.log('SplashScreen: Animation completed successfully');
             onAnimationComplete();
           }
         });
       } catch (error) {
+        console.error('SplashScreen: Animation error:', error);
+        clearTimeout(fallbackTimeout);
         // Fallback: complete immediately if there's an error
         if (isMounted) {
           onAnimationComplete();
@@ -102,6 +115,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationComplete 
     
     return () => {
       isMounted = false;
+      clearTimeout(fallbackTimeout); // Clear timeout on cleanup
       if (animationRef) {
         animationRef.stop();
       }

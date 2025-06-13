@@ -9,6 +9,8 @@ import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { useSupabaseProfile } from '../../utils/supabaseHooks';
 import { useTheme } from '../../context/ThemeContext';
 import { themePalettes, ThemeName } from '../../context/ThemeContext';
+const { useUserAppData } = require('../../utils/userAppData');
+import { Slider } from '@react-native-community/slider'; // Add this import
 
 const SOUND_OPTIONS = [
   'Lo-Fi',
@@ -23,10 +25,29 @@ const APP_ICON_OPTIONS = ['Default', 'Minimal', 'Bold'];
 const FOCUS_DURATIONS = [15, 25, 45, 60];
 const BREAK_DURATIONS = [5, 10, 15, 20];
 
+// Update the focus duration options to work style options
+const WORK_STYLE_OPTIONS = [
+  { label: 'Balanced', focusDuration: 45, breakDuration: 15 },
+  { label: 'Sprint', focusDuration: 25, breakDuration: 5 },
+  { label: 'Deep Work', focusDuration: 60, breakDuration: 15 },
+];
+
+// Add icons for theme options
+const THEME_ICONS = {
+  home: 'home-outline',
+  office: 'business-outline', 
+  library: 'library-outline',
+  coffee: 'cafe-outline',
+  park: 'leaf-outline'
+} as const;
+
 const SettingsScreen = () => {
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
   const { profile, updateProfile } = useSupabaseProfile();
   const { theme, themeName, setThemeName } = useTheme();
+  
+  // Use our comprehensive data hook
+  const { data: userData, isLoading: userDataLoading } = useUserAppData();
   
   // Appearance
   const [appearanceTheme, setAppearanceTheme] = useState('System Default');
@@ -38,7 +59,7 @@ const SettingsScreen = () => {
   const [sessionEndReminder, setSessionEndReminder] = useState(true);
   // Focus & Study
   const [focusDuration, setFocusDuration] = useState(25);
-  const [breakDuration, setBreakDuration] = useState(5);
+  const [workStyle, setWorkStyle] = useState('Balanced');
   const [autoStartNext, setAutoStartNext] = useState(false);
   const [weeklyGoal, setWeeklyGoal] = useState(10);
   // Sound & Environment
@@ -54,9 +75,7 @@ const SettingsScreen = () => {
   const [showFontModal, setShowFontModal] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showIconModal, setShowIconModal] = useState(false);
-  const [showFocusModal, setShowFocusModal] = useState(false);
-  const [showBreakModal, setShowBreakModal] = useState(false);
-  const [showGoalModal, setShowGoalModal] = useState(false);
+  const [showWorkStyleModal, setShowWorkStyleModal] = useState(false);
   const [showEnvModal, setShowEnvModal] = useState(false);
   const [selectedEnv, setSelectedEnv] = useState<ThemeName>(themeName);
 
@@ -66,20 +85,144 @@ const SettingsScreen = () => {
       setWeeklyGoal(profile.weeklyFocusGoal || 10);
       setSelectedSound(profile.soundPreference || 'Lo-Fi');
       setFocusDuration(profile.focusDuration || 25);
-      setBreakDuration(profile.breakDuration || 5);
     }
   }, [profile]);
+
+  // Load settings from user data when available
+  useEffect(() => {
+    if (userData && !userDataLoading) {
+      try {
+        const { profile, onboarding, settings } = userData;
+        
+        // Load profile and preferences from the userData object
+        
+        // Appearance settings
+        if (profile?.theme) {
+          setAppearanceTheme(profile.theme);
+          
+          // Apply theme if not system default
+          if (profile.theme !== 'System Default') {
+            setThemeName(profile.theme.toLowerCase() as ThemeName);
+          }
+        }
+        
+        if (profile?.font_size) {
+          setFontSize(profile.font_size);
+        }
+        
+        if (profile?.app_icon) {
+          setAppIcon(profile.app_icon);
+        }
+        
+        // Sound & Environment settings
+        if (onboarding?.sound_preference) {
+          setSelectedSound(onboarding.sound_preference);
+        }
+        
+        if (onboarding?.learning_environment) {
+          // Any environment-specific settings can be loaded here
+        }
+        
+        // Focus & Study settings
+        if (onboarding?.weekly_focus_goal) {
+          setWeeklyGoal(onboarding.weekly_focus_goal);
+        }
+        
+        if (onboarding?.focus_method === 'Balanced Work-Rest Cycle') {
+          setFocusDuration(45);
+        } else if (onboarding?.focus_method === 'Pomodoro Technique') {
+          setFocusDuration(25);
+        } else if (onboarding?.focus_method === 'Deep Focus') {
+          setFocusDuration(60);
+        }
+        
+        // Load any additional settings from the settings object
+        if (settings) {
+          if (settings.notifications !== undefined) {
+            setNotifications(settings.notifications);
+          }
+          
+          if (settings.daily_reminder) {
+            setDailyReminder(settings.daily_reminder);
+          }
+          
+          if (settings.session_end_reminder !== undefined) {
+            setSessionEndReminder(settings.session_end_reminder);
+          }
+          
+          if (settings.auto_start_next !== undefined) {
+            setAutoStartNext(settings.auto_start_next);
+          }
+          
+          if (settings.sound !== undefined) {
+            setSound(settings.sound);
+          }
+          
+          if (settings.auto_play_sound !== undefined) {
+            setAutoPlaySound(settings.auto_play_sound);
+          }
+          
+          if (settings.ambient_noise !== undefined) {
+            setAmbientNoise(settings.ambient_noise);
+          }
+          
+          if (settings.tts !== undefined) {
+            setTts(settings.tts);
+          }
+          
+          if (settings.high_contrast !== undefined) {
+            setHighContrast(settings.high_contrast);
+          }
+        }
+        
+      } catch (error) {
+        console.error('Error loading settings from user data:', error);
+      }
+    }
+  }, [userData, userDataLoading, setThemeName]);
 
   // Handle weekly goal update
   const handleWeeklyGoalUpdate = async (goal: number) => {
     setWeeklyGoal(goal);
-    setShowGoalModal(false);
+    // setShowGoalModal(false); // Remove this line since we're not using the modal now
     
     try {
       await updateProfile({ weeklyFocusGoal: goal });
       Alert.alert('Success', 'Your weekly focus goal has been updated!');
     } catch (error) {
       Alert.alert('Error', 'Failed to update weekly focus goal. Please try again.');
+    }
+  };
+
+  // Update the handleWorkStyleUpdate function
+  const handleWorkStyleUpdate = async (style: string) => {
+    setWorkStyle(style);
+    setShowWorkStyleModal(false);
+    
+    const selectedStyle = WORK_STYLE_OPTIONS.find(option => option.label === style);
+    if (selectedStyle) {
+      setFocusDuration(selectedStyle.focusDuration);
+      
+      try {
+        // Update both profile and onboarding data
+        await updateProfile({ 
+          focusDuration: selectedStyle.focusDuration,
+          workStyle: style 
+        });
+        
+        // Also update onboarding data to ensure timer display updates
+        await updateOnboarding({
+          work_style: style,
+          focus_method: style
+        });
+        
+        // Refresh user data to update timer display
+        await refreshData();
+        
+        Alert.alert('Success', 'Your work style has been updated!');
+      } catch (error) {
+        Alert.alert('Error', 'Failed to update work style. Please try again.');
+      }
     }
   };
 
@@ -124,6 +267,49 @@ const SettingsScreen = () => {
           </TouchableOpacity>
         </View>
 
+        {/* MOVED: Sound section - now above App Environment */}
+        <Text style={styles.sectionHeader}>SOUND</Text>
+        <View style={styles.cardSection}>
+          <Text style={styles.sectionTitle}>Focus Sound</Text>
+          {SOUND_OPTIONS.map(option => (
+            <TouchableOpacity
+              key={option}
+              style={styles.soundOption}
+              onPress={() => setSelectedSound(option)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.radioCircle}>
+                {selectedSound === option && <View style={styles.radioDot} />}
+              </View>
+              <Text style={[styles.soundLabel, selectedSound === option && styles.soundLabelSelected]}>{option}</Text>
+              <TouchableOpacity onPress={() => placeholder('Preview ' + option)} style={{ marginLeft: 10 }}>
+                <Ionicons name="play-circle-outline" size={22} color="#388E3C" />
+              </TouchableOpacity>
+            </TouchableOpacity>
+          ))}
+          <View style={styles.rowCard}>
+            <MaterialIcons name="music-note" size={22} color="#388E3C" style={styles.rowIcon} />
+            <Text style={styles.rowLabel}>Auto-Play Sound</Text>
+            <Switch
+              value={autoPlaySound}
+              onValueChange={setAutoPlaySound}
+              trackColor={{ false: '#E0E0E0', true: '#4CAF50' }}
+              thumbColor={autoPlaySound ? '#1B5E20' : '#BDBDBD'}
+            />
+          </View>
+          <View style={styles.rowCard}>
+            <MaterialIcons name="volume-up" size={22} color="#388E3C" style={styles.rowIcon} />
+            <Text style={styles.rowLabel}>Ambient Noise Level</Text>
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <View style={{ height: 6, backgroundColor: '#E0E0E0', borderRadius: 3, marginVertical: 8 }}>
+                <View style={{ width: `${ambientNoise * 100}%`, height: 6, backgroundColor: '#4CAF50', borderRadius: 3 }} />
+              </View>
+            </View>
+            <TouchableOpacity onPress={() => setAmbientNoise(Math.max(0, ambientNoise - 0.1))}><Entypo name="minus" size={20} color="#388E3C" /></TouchableOpacity>
+            <TouchableOpacity onPress={() => setAmbientNoise(Math.min(1, ambientNoise + 0.1))}><Entypo name="plus" size={20} color="#388E3C" /></TouchableOpacity>
+          </View>
+        </View>
+
         {/* App Environment */}
         <Text style={styles.sectionHeader}>APP ENVIRONMENT</Text>
         <View style={{ marginHorizontal: 12, marginBottom: 12 }}>
@@ -138,7 +324,8 @@ const SettingsScreen = () => {
               <Text style={{ color: '#fff', fontWeight: 'bold' }}>Button Example</Text>
             </TouchableOpacity>
           </View>
-          {/* Environment Options as Cards */}
+          
+          {/* Environment Options as Cards with updated icons */}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
             {(['home','office','library','coffee','park'] as ThemeName[]).map(env => (
               <TouchableOpacity
@@ -156,7 +343,13 @@ const SettingsScreen = () => {
                 onPress={() => { setSelectedEnv(env); setShowEnvModal(true); }}
                 activeOpacity={0.8}
               >
-                <Ionicons name="color-palette-outline" size={28} color={themePalettes[env].primary} style={{ marginBottom: 6 }} />
+                {/* Updated icon based on environment name */}
+                <Ionicons 
+                  name={THEME_ICONS[env] as keyof typeof Ionicons.glyphMap} 
+                  size={28} 
+                  color={themePalettes[env].primary} 
+                  style={{ marginBottom: 6 }} 
+                />
                 <Text style={{ color: themePalettes[env].primary, fontWeight: 'bold', fontSize: 15 }}>{themePalettes[env].name}</Text>
                 <View style={{ backgroundColor: themePalettes[env].card, borderRadius: 8, padding: 6, marginTop: 8, width: '100%' }}>
                   <Text style={{ color: themePalettes[env].primary, fontWeight: 'bold', fontSize: 13 }}>Card</Text>
@@ -205,19 +398,13 @@ const SettingsScreen = () => {
           </View>
         </View>
 
-        {/* Focus & Study Preferences */}
+        {/* Focus & Study Preferences - Updated */}
         <Text style={styles.sectionHeader}>FOCUS & STUDY PREFERENCES</Text>
         <View style={styles.cardSection}>
-          <TouchableOpacity style={styles.rowCard} onPress={() => setShowFocusModal(true)} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.rowCard} onPress={() => setShowWorkStyleModal(true)} activeOpacity={0.7}>
             <MaterialCommunityIcons name="clock-outline" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>Default Focus Duration</Text>
-            <View style={styles.rowValueWrap}><Text style={styles.rowValue}>{focusDuration} min</Text></View>
-            <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.rowCard} onPress={() => setShowBreakModal(true)} activeOpacity={0.7}>
-            <MaterialIcons name="free-breakfast" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>Break Duration</Text>
-            <View style={styles.rowValueWrap}><Text style={styles.rowValue}>{breakDuration} min</Text></View>
+            <Text style={styles.rowLabel}>Work Style</Text>
+            <View style={styles.rowValueWrap}><Text style={styles.rowValue}>{workStyle}</Text></View>
             <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
           </TouchableOpacity>
           <View style={styles.rowCard}>
@@ -231,54 +418,30 @@ const SettingsScreen = () => {
               thumbColor={autoStartNext ? '#1B5E20' : '#BDBDBD'}
             />
           </View>
-          <TouchableOpacity style={styles.rowCard} onPress={() => setShowGoalModal(true)} activeOpacity={0.7}>
+          <View style={styles.rowCard}>
             <MaterialCommunityIcons name="target" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>Weekly Focus Goal</Text>
-            <View style={styles.rowValueWrap}><Text style={styles.rowValue}>{weeklyGoal} hrs</Text></View>
-            <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Sound & Environment */}
-        <Text style={styles.sectionHeader}>SOUND & ENVIRONMENT</Text>
-        <View style={styles.cardSection}>
-          <Text style={styles.sectionTitle}>Focus Sound</Text>
-          {SOUND_OPTIONS.map(option => (
-            <TouchableOpacity
-              key={option}
-              style={styles.soundOption}
-              onPress={() => setSelectedSound(option)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.radioCircle}>
-                {selectedSound === option && <View style={styles.radioDot} />}
-              </View>
-              <Text style={[styles.soundLabel, selectedSound === option && styles.soundLabelSelected]}>{option}</Text>
-              <TouchableOpacity onPress={() => placeholder('Preview ' + option)} style={{ marginLeft: 10 }}>
-                <Ionicons name="play-circle-outline" size={22} color="#388E3C" />
-              </TouchableOpacity>
-            </TouchableOpacity>
-          ))}
-          <View style={styles.rowCard}>
-            <MaterialIcons name="music-note" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>Auto-Play Sound</Text>
-            <Switch
-              value={autoPlaySound}
-              onValueChange={setAutoPlaySound}
-              trackColor={{ false: '#E0E0E0', true: '#4CAF50' }}
-              thumbColor={autoPlaySound ? '#1B5E20' : '#BDBDBD'}
-            />
-          </View>
-          <View style={styles.rowCard}>
-            <MaterialIcons name="volume-up" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>Ambient Noise Level</Text>
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <View style={{ height: 6, backgroundColor: '#E0E0E0', borderRadius: 3, marginVertical: 8 }}>
-                <View style={{ width: `${ambientNoise * 100}%`, height: 6, backgroundColor: '#4CAF50', borderRadius: 3 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowLabel}>Weekly Focus Goal</Text>
+              <Text style={[styles.rowValue, { fontSize: 12, color: '#666', marginTop: 2 }]}>
+                {weeklyGoal} hours per week
+              </Text>
+              <View style={styles.sliderContainer}>
+                <Text style={styles.sliderLabel}>5h</Text>
+                <Slider
+                  style={styles.slider}
+                  minimumValue={5}
+                  maximumValue={80}
+                  step={1}
+                  value={weeklyGoal}
+                  onValueChange={setWeeklyGoal}
+                  onSlidingComplete={handleWeeklyGoalUpdate}
+                  minimumTrackTintColor="#4CAF50"
+                  maximumTrackTintColor="#E0E0E0"
+                  thumbStyle={{ backgroundColor: '#4CAF50' }}
+                />
+                <Text style={styles.sliderLabel}>80h</Text>
               </View>
             </View>
-            <TouchableOpacity onPress={() => setAmbientNoise(Math.max(0, ambientNoise - 0.1))}><Entypo name="minus" size={20} color="#388E3C" /></TouchableOpacity>
-            <TouchableOpacity onPress={() => setAmbientNoise(Math.min(1, ambientNoise + 0.1))}><Entypo name="plus" size={20} color="#388E3C" /></TouchableOpacity>
           </View>
         </View>
 
@@ -462,42 +625,32 @@ const SettingsScreen = () => {
             </View>
           </View>
         </Modal>
-        <Modal visible={showFocusModal} transparent animationType="fade" onRequestClose={() => setShowFocusModal(false)}>
+        <Modal visible={showWorkStyleModal} transparent animationType="fade" onRequestClose={() => setShowWorkStyleModal(false)}>
           <View style={styles.modalOverlay}>
             <View style={styles.modalBox}>
-              <Text style={styles.modalTitle}>Select Focus Duration</Text>
-              {FOCUS_DURATIONS.map(opt => (
-                <TouchableOpacity key={opt} style={styles.modalOption} onPress={() => { setFocusDuration(opt); setShowFocusModal(false); }}>
-                  <Text style={[styles.modalOptionText, focusDuration === opt && { color: '#388E3C', fontWeight: 'bold' }]}>{opt} min</Text>
+              <Text style={styles.modalTitle}>Select Work Style</Text>
+              {WORK_STYLE_OPTIONS.map(option => (
+                <TouchableOpacity 
+                  key={option.label} 
+                  style={styles.modalOption} 
+                  onPress={() => handleWorkStyleUpdate(option.label)}
+                >
+                  <View style={{ alignItems: 'center' }}>
+                    <Text style={[
+                      styles.modalOptionText, 
+                      workStyle === option.label && { color: '#388E3C', fontWeight: 'bold' }
+                    ]}>
+                      {option.label}
+                    </Text>
+                    <Text style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
+                      {option.focusDuration}min focus / {option.breakDuration}min break
+                    </Text>
+                  </View>
                 </TouchableOpacity>
               ))}
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowFocusModal(false)}><Text style={styles.modalCancelText}>Cancel</Text></TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
-        <Modal visible={showBreakModal} transparent animationType="fade" onRequestClose={() => setShowBreakModal(false)}>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalBox}>
-              <Text style={styles.modalTitle}>Select Break Duration</Text>
-              {BREAK_DURATIONS.map(opt => (
-                <TouchableOpacity key={opt} style={styles.modalOption} onPress={() => { setBreakDuration(opt); setShowBreakModal(false); }}>
-                  <Text style={[styles.modalOptionText, breakDuration === opt && { color: '#388E3C', fontWeight: 'bold' }]}>{opt} min</Text>
-                </TouchableOpacity>
-              ))}
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowBreakModal(false)}><Text style={styles.modalCancelText}>Cancel</Text></TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
-        <Modal visible={showGoalModal} transparent animationType="fade" onRequestClose={() => setShowGoalModal(false)}>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalBox}>
-              <Text style={styles.modalTitle}>Set Weekly Focus Goal</Text>
-              {[5, 10, 15, 20, 25, 30].map(opt => (
-                <TouchableOpacity key={opt} style={styles.modalOption} onPress={() => handleWeeklyGoalUpdate(opt)}>
-                  <Text style={[styles.modalOptionText, weeklyGoal === opt && { color: '#388E3C', fontWeight: 'bold' }]}>{opt} hrs</Text>
-                </TouchableOpacity>
-              ))}
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowGoalModal(false)}><Text style={styles.modalCancelText}>Cancel</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowWorkStyleModal(false)}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>
@@ -657,6 +810,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     flex: 1,
   },
+  sliderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  slider: {
+    flex: 1,
+    height: 40,
+    marginHorizontal: 8,
+  },
+  sliderLabel: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
 });
 
-export default SettingsScreen; 
+export default SettingsScreen;

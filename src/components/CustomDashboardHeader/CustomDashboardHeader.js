@@ -10,6 +10,7 @@ const MENU_ITEMS = [
   { label: 'Nora', icon: <MaterialIcons name="smart-toy" size={22} color={theme.colors.primary} />, screen: 'Nora' },
   { label: 'Leaderboard', icon: <FontAwesome5 name="trophy" size={22} color={theme.colors.primary} />, screen: 'Leaderboard' },
   { label: 'Reports', icon: <Feather name="bar-chart-2" size={22} color={theme.colors.primary} />, screen: 'Results' },
+  { label: 'Session History', icon: <MaterialIcons name="history" size={22} color={theme.colors.primary} />, screen: 'SessionHistory' },
   { label: 'Bonuses', icon: <MaterialIcons name="stars" size={22} color={theme.colors.primary} />, screen: 'Bonuses' },
   { label: 'Profile', icon: <Feather name="user" size={22} color={theme.colors.primary} />, screen: 'Profile' },
   { label: 'Settings', icon: <Feather name="settings" size={22} color={theme.colors.primary} />, screen: 'Settings' },
@@ -19,8 +20,17 @@ const CustomDashboardHeader = ({ navigation }) => {
   const [drawerVisible, setDrawerVisible] = useState(false);
 
   const handleMenuPress = (screen) => {
+    console.log('🔍 Navigation Debug: Attempting to navigate to:', screen);
     setDrawerVisible(false);
-    if (screen) navigation.navigate(screen);
+    
+    if (screen) {
+      try {
+        navigation.navigate(screen);
+        console.log('✅ Navigation successful to:', screen);
+      } catch (error) {
+        console.error('❌ Navigation failed:', error);
+      }
+    }
   };
 
   const handleLogout = () => {

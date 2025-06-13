@@ -8,6 +8,11 @@ export interface Task {
   description?: string;
   priority: string;
   status: string;
+  due_date?: string;
+  category?: string;
+  estimated_minutes?: number;
+  actual_minutes?: number;
+  completed_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -155,19 +160,66 @@ export const useSupabaseTasks = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) throw new Error('Not authenticated');
 
+      // First, try to create the task with the order column
+      let taskData: any = {
+        user_id: session.user.id,
+        title,
+        description,
+        priority,
+        status: 'pending' as const
+      };
+
+      // Get the current maximum order for the user's tasks to set the next order
+      let nextOrder = 1;
+      try {
+        const { data: existingTasks, error: fetchError } = await supabase
+          .from('tasks')
+          .select('order')
+          .eq('user_id', session.user.id)
+          .order('order', { ascending: false })
+          .limit(1);
+
+        if (!fetchError && existingTasks && existingTasks.length > 0 && existingTasks[0].order) {
+          nextOrder = existingTasks[0].order + 1;
+        }
+
+        // Try to include order in the task data
+        taskData = { ...taskData, order: nextOrder };
+      } catch (orderError) {
+        console.log('Order column might not exist, proceeding without order field');
+      }
+
+      // Attempt to insert the task
       const { data, error } = await supabase
         .from('tasks')
-        .insert([{
-          user_id: session.user.id,
-          title,
-          description,
-          priority,
-          status: 'pending'
-        }])
+        .insert([taskData])
         .select();
 
-      if (error) throw error;
-      if (data) {
+      if (error) {
+        // If error is related to order column not existing, try without order
+        if (error.message.includes('column "order"') || error.message.includes('order')) {
+          console.log('Retrying task creation without order column...');
+          const taskDataWithoutOrder = {
+            user_id: session.user.id,
+            title,
+            description,
+            priority,
+            status: 'pending' as const
+          };
+
+          const { data: retryData, error: retryError } = await supabase
+            .from('tasks')
+            .insert([taskDataWithoutOrder])
+            .select();
+
+          if (retryError) throw retryError;
+          if (retryData) {
+            setTasks(prev => [retryData[0], ...prev]);
+          }
+        } else {
+          throw error;
+        }
+      } else if (data) {
         setTasks(prev => [data[0], ...prev]);
       }
     } catch (err: any) {

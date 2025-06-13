@@ -14,6 +14,7 @@ import StudyRoomScreen from '../screens/main/StudyRoomScreen';
 import { PatrickSpeakScreen } from '../screens/main/PatrickScreen';
 import LandingPage from '../screens/LandingPage';
 import { SplashScreen } from '../components/SplashScreen';
+import SessionHistoryScreen from '../screens/main/SessionHistoryScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -30,9 +31,10 @@ export const RootNavigator = () => {
   useEffect(() => {
     const maxSplashTime = setTimeout(() => {
       if (showSplash) {
+        console.log('RootNavigator: Splash timeout reached, forcing completion');
         setShowSplash(false);
       }
-    }, 8000); // 8 seconds max
+    }, Platform.OS === 'ios' ? 6000 : 8000); // Shorter timeout for iOS: 6 seconds vs 8 seconds
 
     return () => clearTimeout(maxSplashTime);
   }, [showSplash]);
@@ -107,6 +109,7 @@ export const RootNavigator = () => {
         <Stack.Screen name="Main" component={MainNavigator} />
         <Stack.Screen name="StudySessionScreen" component={StudySessionScreen} />
         <Stack.Screen name="SessionReportScreen" component={SessionReportScreen} />
+        <Stack.Screen name="SessionHistory" component={SessionHistoryScreen} />
         <Stack.Screen name="PatrickSpeak" component={PatrickSpeakScreen} />
         <Stack.Screen name="MessageScreen" component={MessageScreen} />
         <Stack.Screen name="StudyRoomScreen" component={StudyRoomScreen} />
