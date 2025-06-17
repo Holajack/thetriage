@@ -13,13 +13,17 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.thetriage.app",
-      "buildNumber": "16",
-      "icon": "./assets/icon-ios-solid.png"
+      "bundleIdentifier": "com.triagesystem.app",
+      "buildNumber": "17",
+      "icon": "./assets/icon-ios-solid.png",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app uses camera for document scanning",
+        "NSMicrophoneUsageDescription": "This app uses microphone for voice features"
+      }
     },
     "android": {
-      "package": "com.thetriage.app",
-      "versionCode": 16
+      "package": "com.triagesystem.app",
+      "versionCode": 17
     },
     "extra": {
       "eas": {

@@ -403,7 +403,7 @@
 					"-lc++",
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
-				PRODUCT_BUNDLE_IDENTIFIER = com.thetriage.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.triagesystem.app;
 				PRODUCT_NAME = TriageSystem;
 				SWIFT_OBJC_BRIDGING_HEADER = "TriageSystem/TriageSystem-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -420,6 +420,8 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = TriageSystem/TriageSystem.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 16;
 				DEVELOPMENT_TEAM = 7YMK4D784T;
 				INFOPLIST_FILE = TriageSystem/Info.plist;
@@ -436,8 +438,9 @@
 					"-lc++",
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
-				PRODUCT_BUNDLE_IDENTIFIER = com.thetriage.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.triagesystem.app;
 				PRODUCT_NAME = TriageSystem;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "TriageSystem/TriageSystem-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
