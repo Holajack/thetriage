@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ThemeProvider } from './src/context/ThemeContext';
 import * as SplashScreen from 'expo-splash-screen';
 import { LogBox } from 'react-native';
+import { StartupErrorBoundary } from './src/components/StartupErrorBoundary';
 
 // Ignore specific warnings
 LogBox.ignoreLogs(['Warning: useInsertionEffect must not schedule updates.']);
@@ -32,12 +33,14 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <ThemeProvider>
-          <AuthProvider>
-            <StatusBar style="auto" />
-            <RootNavigator />
-          </AuthProvider>
-        </ThemeProvider>
+        <StartupErrorBoundary>
+          <ThemeProvider>
+            <AuthProvider>
+              <StatusBar style="auto" />
+              <RootNavigator />
+            </AuthProvider>
+          </ThemeProvider>
+        </StartupErrorBoundary>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
