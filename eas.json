@@ -10,7 +10,8 @@
       "ios": {
         "resourceClass": "m1-medium",
         "simulator": true
-      }
+      },
+      "channel": "development"
     },
     "preview": {
       "distribution": "internal",
