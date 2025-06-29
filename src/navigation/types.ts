@@ -15,6 +15,78 @@ export type OnboardingStackParamList = {
   AppTutorial: { focusMethod?: string } | undefined;
 };
 
+export type RootStackParamList = {
+  Login: undefined;
+  Register: undefined;
+  Main: undefined;
+  BreakTimerScreen: {
+    sessionData?: {
+      duration: number;
+      task: string;
+      focusRating: number;
+      productivityRating: number;
+      notes?: string;
+      completedFullSession: boolean;
+      sessionType: 'auto' | 'manual';
+      subject: string;
+      plannedDuration: number;
+    };
+  } | undefined;
+  StudySessionScreen: { 
+    task?: Task;
+    group?: boolean; 
+    room?: any;
+    autoStart?: boolean;
+    selectedTask?: any;
+    manualSelection?: boolean;
+  } | undefined;
+  SessionReportScreen: {
+    sessionDuration: number;
+    breakDuration: number;
+    taskCompleted: boolean;
+    focusRating: number;
+    notes?: string;
+    sessionType: 'auto' | 'manual';
+    subject: string;
+    plannedDuration: number;
+    productivity: number;
+  } | undefined;
+  SessionHistory: undefined;
+  PatrickSpeak: {
+    initialMessage?: string;
+    isResponse?: boolean;
+    responseMessage?: string;
+    pdfContext?: {
+      title: string;
+      url: string;
+      fileSize?: number;
+    };
+  };
+  QuizPrompt?: undefined;
+  HistoryPrompt?: undefined;
+  EBooks?: undefined;
+  PDFViewer: {
+    url: string;
+    title: string;
+    bookData: any;
+  };
+  Patrick: {
+    initialMessage?: string;
+    pdfContext?: {
+      title: string;
+      url: string;
+      fileSize?: number;
+    };
+  };
+  Achievements: undefined;
+  SelfDiscoveryQuiz: undefined;
+  BrainMapping: undefined;
+  Quizzes: undefined;
+  Landing: undefined;
+  Auth: NavigatorScreenParams<AuthStackParamList>;
+  Onboarding: NavigatorScreenParams<OnboardingStackParamList>;
+};
+
 export type MainTabParamList = {
   Home: undefined;
   Community: { initialTab?: string } | undefined;
@@ -34,14 +106,33 @@ export type MainTabParamList = {
     initialMessage?: string;
     isResponse?: boolean;
     responseMessage?: string;
+    pdfContext?: {
+      title: string;
+      url: string;
+      fileSize?: number;
+    };
   };
   QuizPrompt?: undefined;
   HistoryPrompt?: undefined;
   EBooks?: undefined;
-  SelfDiscoveryQuiz?: undefined;
-  BrainMapping?: undefined;
-  Achievements?: undefined;
-  SessionReport?: undefined;
+  PDFViewer: {
+    url: string;
+    title: string;
+    bookData: any;
+  };
+  Patrick: {
+    initialMessage?: string;
+    pdfContext?: {
+      title: string;
+      url: string;
+      fileSize?: number;
+    };
+  };
+  Achievements: undefined;
+  SelfDiscoveryQuiz: undefined;
+  BrainMapping: undefined;
+  Quizzes: undefined;
+  SessionReport: undefined;
 };
 
 export type MessageContact = {
@@ -50,22 +141,12 @@ export type MessageContact = {
   status: string;
 };
 
-export type RootStackParamList = {
-  Login: undefined;
-  Register: undefined;
-  Main: undefined;
-  BreakTimerScreen: undefined;
-  StudySessionScreen: { task?: Task };
-  SessionReportScreen: {
-    sessionDuration: number;
-    breakCount: number;
-    taskCompleted: boolean;
-    focusRating: number;
-    notes?: string;
-    sessionType: string;
-  };
-  SessionHistory: undefined; // Add this line
-  PatrickSpeak: undefined;
-  MessageScreen: undefined;
-  StudyRoomScreen: undefined;
-};
+export interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  priority: 'High' | 'Medium' | 'Low';
+  subject?: string;
+  created_at: string;
+  completed?: boolean;
+}

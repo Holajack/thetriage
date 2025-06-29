@@ -1,31 +1,35 @@
-import React, { useState, useEffect, useLayoutEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  Modal,
-  Alert,
-  ScrollView,
+import React, { useState, useEffect } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TouchableOpacity, 
+  FlatList, 
+  Alert, 
+  Modal, 
   ActivityIndicator,
+  Platform,
+  Linking
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
-import * as DocumentPicker from 'expo-document-picker';
 import { supabase } from '../../utils/supabase';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+import { WebView } from 'react-native-webview';
+
+const BUCKET = 'e-books';
 
 interface UploadedBook {
-  id: string;             // full path in Storage (eg. userId/123_file.pdf)
-  title: string;          // "Human Anatomy"
-  file_size: number;      // bytes
-  upload_date: string;    // ISO string
-  public_url: string;     // CDN url for download
+  id: string;
+  name: string;
+  file_size: number;
+  upload_date: string;
+  file_path: string;
+  storage_path: string;
 }
-
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
-const BUCKET = 'e-books';
 
 const EBooksScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -35,312 +39,584 @@ const EBooksScreen: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
 
-  /* ----------  Header styling  ---------- */
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerShown: true,
-      title: 'E‑Book Uploads',
-      headerStyle: { backgroundColor: theme.background },
-      headerTintColor: theme.primary,
-      headerTitleStyle: { fontWeight: 'bold', color: theme.primary },
-    });
-  }, [navigation, theme]);
-
   /* ----------  Fetch existing files  ---------- */
-  useEffect(() => {
-    (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const userId = session?.user.id;
-      if (!userId) return;
+  const fetchBooks = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user.id;
+    if (!userId) return;
 
-      const { data, error } = await supabase.storage
+    try {
+      // Fetch from storage
+      const { data: storageData, error: storageError } = await supabase.storage
         .from(BUCKET)
         .list(`${userId}/`, { limit: 100, sortBy: { column: 'created_at', order: 'desc' } });
 
-      if (error) {
-        console.warn('Fetch list error', error);
-        return;
+      if (storageError) {
+        console.warn('Storage fetch error:', storageError);
       }
 
-      const mapped = data
-        .filter((f) => f.metadata?.mimetype === 'application/pdf')
+      // Fetch metadata from database with error handling
+      let dbData = [];
+      try {
+        const { data, error: dbError } = await supabase
+          .from('user_ebooks')
+          .select('*')
+          .eq('user_id', userId)
+          .order('upload_date', { ascending: false });
+
+        if (dbError) {
+          console.warn('Database fetch error:', dbError);
+        } else {
+          dbData = data || [];
+        }
+      } catch (dbError) {
+        console.warn('Database table access error:', dbError);
+      }
+
+      // Combine storage and database data
+      const combinedData = (storageData || [])
+        .filter((f) => f.metadata?.mimetype === 'application/pdf' || f.name.endsWith('.pdf'))
         .map((f) => {
-          const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(`${userId}/${f.name}`);
+          const dbRecord = dbData.find(record => record.file_path.endsWith(f.name));
           return {
-            id: `${userId}/${f.name}`,
-            title: f.name.replace(/\.pdf$/i, '').replace(/^\d+_/, ''),
-            file_size: f.metadata?.size ?? 0,
-            upload_date: f.updated_at ?? new Date().toISOString(),
-            public_url: urlData.publicUrl,
-          } as UploadedBook;
+            id: f.id || f.name,
+            name: dbRecord?.title || f.name.replace('.pdf', ''),
+            file_size: f.metadata?.size || dbRecord?.file_size || 0,
+            upload_date: dbRecord?.upload_date || f.created_at,
+            file_path: `${userId}/${f.name}`,
+            storage_path: f.name
+          };
         });
 
-      setBooks(mapped);
-    })();
-  }, []);
-
-  /* ----------  Helpers  ---------- */
-  const formatFileSize = (bytes: number) => {
-    if (!bytes) return '0 Bytes';
-    const units = ['Bytes', 'KB', 'MB', 'GB'];
-    const exp = Math.floor(Math.log(bytes) / Math.log(1024));
-    return `${(bytes / 1024 ** exp).toFixed(2)} ${units[exp]}`;
+      setBooks(combinedData);
+    } catch (error) {
+      console.error('Error fetching books:', error);
+      setBooks([]);
+    }
   };
 
-  /* ----------  Upload flow  ---------- */
-  const pickAndUpload = async () => {
+  useEffect(() => {
+    fetchBooks();
+  }, []);
+
+  /* ----------  React Native Compatible Upload Function  ---------- */
+  const handleUpload = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: 'application/pdf',
-        copyToCacheDirectory: false,
+        copyToCacheDirectory: true,
       });
 
       if (result.canceled || !result.assets?.length) return;
 
       const file = result.assets[0];
+      const MAX_SIZE = 100 * 1024 * 1024; // 100MB for textbooks
 
-      if (file.size && file.size > MAX_FILE_SIZE) {
-        Alert.alert('File too large', 'Please choose a file smaller than 50 MB.');
+      if (file.size && file.size > MAX_SIZE) {
+        Alert.alert('File too large', 'Please choose a file smaller than 100 MB.');
         return;
       }
 
       setLoading(true);
 
-      // ----------  Ensure user is authenticated ----------
-      // Prefer getSession() since it exists in every supabase‑js version
-      const {
-        data: { session },
-        error: sessionErr,
-      } = await supabase.auth.getSession();
-
+      const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
       if (sessionErr || !session?.user) {
         throw new Error('You must be logged in to upload files.');
       }
 
       const userId = session.user.id;
-      const filePath = `${userId}/${Date.now()}_${file.name}`;
+      const timestamp = Date.now();
+      const fileName = `${timestamp}_${file.name}`;
+      const filePath = `${userId}/${fileName}`;
 
-      // Convert local file‑system URI to Blob
-      const response = await fetch(file.uri);
-      const blob = await response.blob();
+      console.log('Starting direct file upload...');
+      
+      try {
+        // Method 1: Direct FormData upload (React Native compatible)
+        const formData = new FormData();
+        formData.append('file', {
+          uri: file.uri,
+          type: 'application/pdf',
+          name: fileName,
+        } as any);
 
-      const { error: uploadErr } = await supabase.storage
-        .from(BUCKET)
-        .upload(filePath, blob, {
-          contentType: 'application/pdf',
-          upsert: false,
-          cacheControl: '3600',
-        });
+        // Upload using Supabase storage with FormData
+        const { error: uploadError } = await supabase.storage
+          .from(BUCKET)
+          .upload(filePath, formData);
 
-      if (uploadErr) throw uploadErr;
+        if (uploadError) {
+          console.log('FormData upload failed, trying alternative method...');
+          
+          // Method 2: Base64 string upload
+          const base64Data = await FileSystem.readAsStringAsync(file.uri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
 
-      const { data: urlData } = await supabase.storage.from(BUCKET).getPublicUrl(filePath);
+          // Upload base64 string directly
+          const { error: base64UploadError } = await supabase.storage
+            .from(BUCKET)
+            .upload(filePath, base64Data, {
+              contentType: 'application/pdf',
+              upsert: false
+            });
 
-      setBooks((prev) => [
-        {
-          id: filePath,
-          title: file.name.replace(/\.pdf$/i, ''),
-          file_size: file.size ?? 0,
-          upload_date: new Date().toISOString(),
-          public_url: urlData.publicUrl,
-        },
-        ...prev,
-      ]);
+          if (base64UploadError) {
+            console.log('Base64 upload failed, trying file URI method...');
+            
+            // Method 3: Direct file URI (React Native specific)
+            const { error: uriUploadError } = await supabase.storage
+              .from(BUCKET)
+              .upload(filePath, {
+                uri: file.uri,
+                type: 'application/pdf',
+                name: fileName,
+              } as any);
 
-      Alert.alert('Success', 'E‑book uploaded successfully!');
+            if (uriUploadError) {
+              throw new Error(`All upload methods failed. Last error: ${uriUploadError.message}`);
+            }
+          }
+        }
 
-    } catch (err: any) {
-      console.error('Upload error', err);
-      Alert.alert('Upload Error', err.message ?? 'Something went wrong. Please try again.');
+        console.log('Upload successful, saving metadata...');
+
+        // Save metadata to database
+        try {
+          const { error: dbError } = await supabase
+            .from('user_ebooks')
+            .insert({
+              user_id: userId,
+              title: file.name.replace('.pdf', ''),
+              file_path: filePath,
+              file_size: file.size,
+              upload_date: new Date().toISOString()
+            });
+
+          if (dbError) {
+            console.warn('Database save error:', dbError);
+            Alert.alert(
+              'File Uploaded', 
+              'Your file was uploaded successfully, but there was an issue saving the metadata.'
+            );
+          } else {
+            Alert.alert('Success', 'Your e-book has been uploaded successfully!');
+          }
+        } catch (metadataError) {
+          console.error('Metadata save failed:', metadataError);
+          Alert.alert('File Uploaded', 'Your file was uploaded successfully.');
+        }
+
+        await fetchBooks();
+        setShowDisclaimer(false);
+
+      } catch (uploadError) {
+        console.error('All upload methods failed:', uploadError);
+        throw new Error('Unable to upload the file. Please check your internet connection and try again.');
+      }
+
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      
+      let errorMessage = 'There was an error uploading your file.';
+      
+      if (error.message.includes('Network request failed')) {
+        errorMessage = 'Network connection issue. Please check your internet connection and try again.';
+      } else if (error.message.includes('Unable to upload')) {
+        errorMessage = 'Upload failed. Please try selecting a different file or check your internet connection.';
+      } else if (error.message.includes('logged in')) {
+        errorMessage = 'Please sign in again to upload files.';
+      } else if (error.message.includes('too large')) {
+        errorMessage = 'File is too large. Please choose a file smaller than 100MB.';
+      }
+      
+      Alert.alert('Upload Failed', errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
-  /* ----------  Delete flow  ---------- */
-  const deleteBook = (book: UploadedBook) => {
-    Alert.alert('Delete E‑Book', 'Are you sure you want to delete this e‑book?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            const { error } = await supabase.storage.from(BUCKET).remove([book.id]);
-            if (error) console.warn('Storage deletion failed', error);
-          } catch (e) {
-            console.warn(e);
-          } finally {
-            setBooks((prev) => prev.filter((b) => b.id !== book.id));
+  /* ----------  Delete Function  ---------- */
+  const deleteBook = async (book: UploadedBook) => {
+    Alert.alert(
+      'Delete E-Book',
+      `Are you sure you want to delete "${book.name}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { data: { session } } = await supabase.auth.getSession();
+              if (!session?.user) return;
+
+              // Delete from storage
+              const { error: storageError } = await supabase.storage
+                .from(BUCKET)
+                .remove([book.file_path]);
+
+              if (storageError) {
+                console.warn('Storage delete error:', storageError);
+              }
+
+              // Delete from database
+              const { error: dbError } = await supabase
+                .from('user_ebooks')
+                .delete()
+                .eq('file_path', book.file_path);
+
+              if (dbError) {
+                console.warn('Database delete error:', dbError);
+              }
+
+              await fetchBooks();
+              
+            } catch (error) {
+              console.error('Delete error:', error);
+              Alert.alert('Error', 'Failed to delete the file.');
+            }
           }
-        },
-      },
-    ]);
+        }
+      ]
+    );
   };
 
-  /* ----------  Render  ---------- */
-  const renderBookItem = ({ item }: { item: UploadedBook }) => (
-    <View style={styles.bookCard}>
-      <MaterialCommunityIcons name="file-pdf-box" size={40} color="#1B5E20" />
-      <View style={styles.info}>
-        <Text style={[styles.title, { color: theme.primary }]}>{item.title}</Text>
-        <Text style={[styles.meta, { color: theme.accent }]}>{formatFileSize(item.file_size)}</Text>
-        <Text style={[styles.meta, { color: theme.text }]}>
-          {new Date(item.upload_date).toLocaleDateString()}
-        </Text>
-      </View>
-      <TouchableOpacity onPress={() => deleteBook(item)}>
-        <Ionicons name="trash-outline" size={20} color="#FF5252" />
-      </TouchableOpacity>
-    </View>
-  );
+  /* ----------  View PDF Function  ---------- */
+  const viewPDF = async (book: UploadedBook) => {
+    try {
+      setLoading(true);
+      
+      // Get signed URL for the PDF
+      const { data, error } = await supabase.storage
+        .from(BUCKET)
+        .createSignedUrl(book.file_path, 3600); // 1 hour expiry
+
+      if (error) {
+        throw new Error('Failed to get PDF URL');
+      }
+
+      if (data?.signedUrl) {
+        // Navigate to PDF viewer screen
+        navigation.navigate('PDFViewer', { 
+          url: data.signedUrl, 
+          title: book.name,
+          bookData: book 
+        });
+      }
+    } catch (error) {
+      console.error('Error viewing PDF:', error);
+      Alert.alert('Error', 'Could not open PDF. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /* ----------  Send to Patrick Function  ---------- */
+  const sendToPatrick = async (book: UploadedBook) => {
+    try {
+      Alert.alert(
+        'Send to Patrick',
+        `Send "${book.name}" to Patrick for study assistance?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Send',
+            onPress: async () => {
+              try {
+                setLoading(true);
+                
+                // Get signed URL for Patrick
+                const { data, error } = await supabase.storage
+                  .from(BUCKET)
+                  .createSignedUrl(book.file_path, 7200); // 2 hours for Patrick processing
+
+                if (error) {
+                  throw new Error('Failed to get PDF URL for Patrick');
+                }
+
+                // Navigate to Patrick with the PDF context
+                navigation.navigate('Patrick', { 
+                  initialMessage: `I've uploaded a textbook: "${book.name}". Can you help me study from it?`,
+                  pdfContext: {
+                    title: book.name,
+                    url: data.signedUrl,
+                    fileSize: book.file_size
+                  }
+                });
+                
+              } catch (error) {
+                console.error('Error sending to Patrick:', error);
+                Alert.alert('Error', 'Could not send PDF to Patrick. Please try again.');
+              } finally {
+                setLoading(false);
+              }
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Send to Patrick error:', error);
+    }
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <Text style={[styles.subtitle, { color: theme.text }]}>
-        Upload your class PDFs to access them anytime, anywhere.
-      </Text>
-
-      <TouchableOpacity
-        style={styles.uploadArea}
-        onPress={() => setShowDisclaimer(true)}
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator size="large" color={theme.primary} />
-        ) : (
-          <>
-            <MaterialCommunityIcons name="cloud-upload" size={40} color={theme.primary} />
-            <Text style={[styles.uploadText, { color: theme.primary }]}>
-              Tap to upload a PDF
-            </Text>
-            <Text style={[styles.uploadSubtext, { color: theme.text }]}>
-              Max file size 50 MB
-            </Text>
-          </>
-        )}
-      </TouchableOpacity>
-
-      <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, { color: theme.primary }]}>Uploaded files</Text>
-        <Text style={[styles.bookCount, { color: theme.text }]}>{books.length}</Text>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>E-Books</Text>
+        <View style={{ width: 24 }} />
       </View>
 
-      <FlatList
-        data={books}
-        renderItem={renderBookItem}
-        keyExtractor={(i) => i.id}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 20 }}
-      />
+      <View style={styles.content}>
+        <Text style={[styles.subtitle, { color: theme.text }]}>
+          Upload your textbooks and class materials to access them anytime, anywhere.
+        </Text>
 
-      {/* --- Copyright disclaimer --- */}
-      <Modal
-        visible={showDisclaimer}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowDisclaimer(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.disclaimerModal}>
-            <View style={styles.disclaimerHeader}>
-              <MaterialCommunityIcons name="alert-circle" size={48} color="#FF9800" />
-              <Text style={[styles.disclaimerTitle, { color: theme.primary }]}>
-                Copyright Notice
+        <TouchableOpacity
+          style={[styles.uploadArea, { borderColor: theme.primary }]}
+          onPress={() => setShowDisclaimer(true)}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator size="large" color={theme.primary} />
+          ) : (
+            <>
+              <MaterialCommunityIcons name="cloud-upload" size={40} color={theme.primary} />
+              <Text style={[styles.uploadText, { color: theme.text }]}>
+                Upload New E-Book
+              </Text>
+              <Text style={[styles.uploadSubtext, { color: theme.text + '99' }]}>
+                Tap to select PDF files (up to 100MB)
+              </Text>
+            </>
+          )}
+        </TouchableOpacity>
+
+        <FlatList
+          data={books}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <View style={[styles.bookItem, { backgroundColor: theme.card }]}>
+              <View style={styles.bookIcon}>
+                <MaterialCommunityIcons name="file-pdf-box" size={32} color={theme.primary} />
+              </View>
+              <View style={styles.bookInfo}>
+                <Text style={[styles.bookTitle, { color: theme.text }]} numberOfLines={2}>
+                  {item.name}
+                </Text>
+                <Text style={[styles.meta, { color: theme.text + '99' }]}>
+                  {formatFileSize(item.file_size)} • {new Date(item.upload_date).toLocaleDateString()}
+                </Text>
+              </View>
+              
+              {/* Action Buttons */}
+              <View style={styles.actionButtons}>
+                <TouchableOpacity 
+                  onPress={() => viewPDF(item)} 
+                  style={[styles.actionButton, { backgroundColor: theme.primary + '15' }]}
+                >
+                  <Ionicons name="eye-outline" size={18} color={theme.primary} />
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  onPress={() => sendToPatrick(item)} 
+                  style={[styles.actionButton, { backgroundColor: '#FF5722' + '15' }]}
+                >
+                  <MaterialCommunityIcons name="robot" size={18} color="#FF5722" />
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  onPress={() => deleteBook(item)} 
+                  style={[styles.actionButton, { backgroundColor: '#FF5252' + '15' }]}
+                >
+                  <Ionicons name="trash-outline" size={18} color="#FF5252" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+          contentContainerStyle={styles.listContainer}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <MaterialCommunityIcons name="book-open-page-variant" size={64} color={theme.text + '33'} />
+              <Text style={[styles.emptyText, { color: theme.text + '99' }]}>
+                No e-books uploaded yet
+              </Text>
+              <Text style={[styles.emptySubtext, { color: theme.text + '66' }]}>
+                Upload your first textbook to get started
               </Text>
             </View>
+          }
+        />
+      </View>
 
-            <ScrollView style={styles.disclaimerContent}>
-              <Text style={[styles.disclaimerText, { color: theme.text }]}>
-                <Text style={[styles.boldText, { color: theme.primary }]}>
-                  IMPORTANT COPYRIGHT DISCLAIMER:
-                </Text>
-                {'\n\n'}
-                We do not condone the practice of uploading copyrighted material without the
-                purchase of that material.
-                {'\n\n• '}You own the rights to this material OR have proper authorization.
-                {'\n• '}You upload at your own risk.
-                {'\n• '}We cooperate with authorities if requested.
-                {'\n• '}Any violation is your sole responsibility.
-                {'\n\n'}
-                <Text style={[styles.boldText, { color: theme.primary }]}>
-                  Please upload only material you legally own or have permission to use.
-                </Text>
+      {/* Enhanced Disclaimer Modal */}
+      <Modal visible={showDisclaimer} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
+            <View style={styles.modalHeader}>
+              <MaterialCommunityIcons name="shield-check" size={32} color={theme.primary} />
+              <Text style={[styles.modalTitle, { color: theme.text }]}>
+                Upload Agreement
               </Text>
-            </ScrollView>
-
-            <View style={styles.disclaimerActions}>
+            </View>
+            
+            <View style={styles.modalBody}>
+              <Text style={[styles.disclaimerText, { color: theme.text }]}>
+                By uploading this file, you confirm that:
+              </Text>
+              
+              <View style={styles.agreementList}>
+                <Text style={[styles.agreementItem, { color: theme.text }]}>
+                  • You own this content or have permission to upload it
+                </Text>
+                <Text style={[styles.agreementItem, { color: theme.text }]}>
+                  • The file is for personal educational use only
+                </Text>
+                <Text style={[styles.agreementItem, { color: theme.text }]}>
+                  • You will not share copyrighted material without permission
+                </Text>
+                <Text style={[styles.agreementItem, { color: theme.text }]}>
+                  • The file does not contain inappropriate content
+                </Text>
+              </View>
+              
+              <Text style={[styles.noteText, { color: theme.text + '99' }]}>
+                Files are stored securely and are only accessible by you.
+              </Text>
+            </View>
+            
+            <View style={styles.modalActions}>
               <TouchableOpacity
-                style={[styles.cancelButton, { backgroundColor: theme.background }]}
-                onPress={() => setShowDisclaimer(false)}
+                style={[styles.agreeButton, { backgroundColor: theme.primary }]}
+                onPress={handleUpload}
+                disabled={loading}
               >
-                <Text style={[styles.cancelButtonText, { color: theme.text }]}>Cancel</Text>
+                <Text style={styles.agreeButtonText}>
+                  {loading ? 'Uploading...' : 'I Agree & Upload'}
+                </Text>
               </TouchableOpacity>
+              
               <TouchableOpacity
-                style={[styles.proceedButton, { backgroundColor: theme.primary }]}
-                onPress={() => {
-                  setShowDisclaimer(false);
-                  pickAndUpload();
-                }}
+                style={[styles.cancelButton, { borderColor: theme.text + '33' }]}
+                onPress={() => setShowDisclaimer(false)}
+                disabled={loading}
               >
-                <Text style={[styles.proceedButtonText, { color: theme.background }]}>
-                  I Understand, Proceed
+                <Text style={[styles.cancelButtonText, { color: theme.text }]}>
+                  Cancel
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 };
 
-/* ----------  Styles  ---------- */
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  backButton: {
+    padding: 4,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  content: {
+    flex: 1,
+    padding: 20,
+  },
   subtitle: {
     fontSize: 16,
-    textAlign: 'center',
-    marginVertical: 16,
-    paddingHorizontal: 20,
+    marginBottom: 20,
+    lineHeight: 22,
   },
   uploadArea: {
-    borderRadius: 20,
     borderWidth: 2,
-    borderColor: '#C8E6C9',
     borderStyle: 'dashed',
-    padding: 20,
-    marginHorizontal: 20,
-    marginBottom: 16,
+    borderRadius: 12,
+    padding: 32,
     alignItems: 'center',
+    marginBottom: 24,
   },
-  uploadText: { fontSize: 18, fontWeight: '600', marginTop: 12 },
-  uploadSubtext: { fontSize: 14, marginTop: 4 },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 12,
+  uploadText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginTop: 12,
   },
-  sectionTitle: { fontSize: 20, fontWeight: 'bold' },
-  bookCount: { fontSize: 14 },
-  bookCard: {
+  uploadSubtext: {
+    fontSize: 14,
+    marginTop: 4,
+  },
+  listContainer: {
+    paddingBottom: 20,
+  },
+  bookItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
     padding: 16,
+    borderRadius: 12,
     marginBottom: 12,
-    elevation: 2,
     shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  info: { flex: 1, marginLeft: 16 },
-  title: { fontSize: 16, fontWeight: '600' },
-  meta: { fontSize: 12 },
+  bookIcon: {
+    marginRight: 12,
+  },
+  bookInfo: {
+    flex: 1,
+  },
+  bookTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  meta: {
+    fontSize: 12,
+  },
+  deleteButton: {
+    padding: 8,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    textAlign: 'center',
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -348,37 +624,82 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
   },
-  disclaimerModal: {
-    backgroundColor: '#FFF',
-    borderRadius: 24,
-    padding: 24,
-    maxHeight: '80%',
+  modalContent: {
     width: '100%',
+    maxWidth: 420,
+    borderRadius: 16,
+    padding: 0,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  disclaimerHeader: { alignItems: 'center', marginBottom: 20 },
-  disclaimerTitle: { fontSize: 20, fontWeight: 'bold', marginTop: 12 },
-  disclaimerContent: { maxHeight: 300 },
-  disclaimerText: { fontSize: 14, lineHeight: 20 },
-  boldText: { fontWeight: 'bold' },
-  disclaimerActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 24,
+  modalHeader: {
+    alignItems: 'center',
+    padding: 24,
+    paddingBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginTop: 8,
+  },
+  modalBody: {
+    paddingHorizontal: 24,
+  },
+  disclaimerText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 16,
+  },
+  agreementList: {
+    marginBottom: 16,
+  },
+  agreementItem: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  noteText: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    textAlign: 'center',
+  },
+  modalActions: {
+    padding: 24,
+    paddingTop: 16,
+  },
+  agreeButton: {
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  agreeButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   cancelButton: {
-    flex: 0.45,
+    paddingVertical: 14,
     borderRadius: 12,
-    paddingVertical: 12,
     alignItems: 'center',
+    borderWidth: 1,
   },
-  cancelButtonText: { fontSize: 16, fontWeight: '600' },
-  proceedButton: {
-    flex: 0.45,
-    borderRadius: 12,
-    paddingVertical: 12,
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionButton: {
+    padding: 8,
+    borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  proceedButtonText: { fontSize: 16, fontWeight: '600', color: '#FFF' },
 });
 
 export default EBooksScreen;

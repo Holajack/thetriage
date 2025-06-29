@@ -10,7 +10,7 @@ import { useSupabaseProfile } from '../../utils/supabaseHooks';
 import { useTheme } from '../../context/ThemeContext';
 import { themePalettes, ThemeName } from '../../context/ThemeContext';
 const { useUserAppData } = require('../../utils/userAppData');
-import { Slider } from '@react-native-community/slider'; // Add this import
+import Slider from '@react-native-community/slider'; // Fixed import - remove the destructuring
 
 const SOUND_OPTIONS = [
   'Lo-Fi',

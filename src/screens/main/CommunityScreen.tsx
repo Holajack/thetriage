@@ -728,200 +728,88 @@ const CommunityScreen = () => {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.background }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]} edges={["top", "left", "right"]}>
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <View style={{ flex: 1 }} />
-          <TouchableOpacity style={styles.iconBtn}>
-            <Ionicons name="refresh" size={22} color={theme.text} />
-          </TouchableOpacity>
-        </View>
-        {/* Tabs */}
-        <View style={[styles.tabsRow, { backgroundColor: theme.card }]}>
-          {TABS.map(tab => (
-            <TouchableOpacity
-              key={tab}
-              style={[styles.tabBtn, activeTab === tab && { backgroundColor: theme.background, borderColor: theme.primary }]}
-              onPress={() => setActiveTab(tab)}
-            >
-              <Text style={[styles.tabText, { color: activeTab === tab ? theme.primary : theme.text }]}>{tab}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-        {/* Search Bar */}
-        <View style={[styles.searchBarRow, { backgroundColor: theme.card }]}>
-          <Ionicons name="search" size={20} color={theme.primary} style={{ marginRight: 6 }} />
-          <TextInput
-            style={[styles.searchInput, { color: theme.text }]}
-            placeholder="Search users, messages, or study rooms.."
-            placeholderTextColor={theme.text + '99'}
-            value={search}
-            onChangeText={setSearch}
-          />
-        </View>
-        {/* Friends List */}
-        {activeTab === 'Friends' && (
-          <>
-            {pendingRequests.length > 0 && (
-              <View style={{ marginHorizontal: 16, marginBottom: 10 }}>
-                <Text style={{ fontWeight: 'bold', color: theme.primary, marginBottom: 4 }}>Pending Requests</Text>
-                {pendingRequests.map(req => (
-                  <View key={req.id} style={[styles.friendCard, { backgroundColor: theme.card, borderColor: theme.primary }]}> 
-                    <Text style={[styles.friendName, { color: theme.text }]}>{req.email || req.name}</Text>
-                    <View style={{ flexDirection: 'row', marginLeft: 'auto' }}>
-                      <TouchableOpacity style={styles.friendIconBtn} onPress={() => handleUpdateRequest(req.id, 'accept')}>
-                        <Ionicons name="checkmark" size={22} color={theme.primary} />
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.friendIconBtn} onPress={() => handleUpdateRequest(req.id, 'decline')}>
-                        <Ionicons name="close" size={22} color="#ef4444" />
-                      </TouchableOpacity>
+    <View style={{ flex: 1 }}>
+      <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.background }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <SafeAreaView style={styles.container}>
+          {/* Remove the header section entirely */}
+          
+          {/* Search Bar - move up to replace header */}
+          <View style={[styles.searchContainer, { backgroundColor: theme.card, marginTop: 20 }]}>
+            <Ionicons name="search" size={20} color={theme.primary} style={{ marginRight: 6 }} />
+            <TextInput
+              style={[styles.searchInput, { color: theme.text }]}
+              placeholder="Search users, messages, or study rooms.."
+              placeholderTextColor={theme.text + '99'}
+              value={search}
+              onChangeText={setSearch}
+            />
+          </View>
+
+          {/* Tab Navigation */}
+          <View style={styles.tabRow}>
+            {TABS.map(tab => (
+              <TouchableOpacity
+                key={tab}
+                style={[styles.tab, activeTab === tab && styles.activeTab]}
+                onPress={() => setActiveTab(tab)}
+              >
+                <Text style={[styles.tabText, activeTab === tab && styles.activeTabText, { color: activeTab === tab ? theme.primary : theme.text + '99' }]}>
+                  {tab}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Content based on active tab */}
+          {activeTab === 'Friends' && (
+            <>
+              {pendingRequests.length > 0 && (
+                <View style={{ marginHorizontal: 16, marginBottom: 10 }}>
+                  <Text style={{ fontWeight: 'bold', color: theme.primary, marginBottom: 4 }}>
+                    Pending Requests
+                  </Text>
+                  {pendingRequests.map(req => (
+                    <View key={req.id} style={[styles.friendCard, { backgroundColor: theme.card, borderColor: theme.primary }]}> 
+                      <Text style={[styles.friendName, { color: theme.text }]}>
+                        {req.email || req.name}
+                      </Text>
+                      <View style={{ flexDirection: 'row', marginLeft: 'auto' }}>
+                        <TouchableOpacity style={styles.friendIconBtn} onPress={() => handleUpdateRequest(req.id, 'accept')}>
+                          <Ionicons name="checkmark" size={22} color={theme.primary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.friendIconBtn} onPress={() => handleUpdateRequest(req.id, 'decline')}>
+                          <Ionicons name="close" size={22} color="#ef4444" />
+                        </TouchableOpacity>
+                      </View>
                     </View>
-                  </View>
-                ))}
-              </View>
-            )}
-            <FlatList
-              data={friendProfiles}
-              keyExtractor={item => item.id}
-              contentContainerStyle={{ paddingBottom: 24 }}
-              renderItem={({ item }) => (
-                <View style={[styles.friendCard, { backgroundColor: theme.card, borderColor: theme.primary }]}>
-                  <View style={styles.avatarCircle}>
-                    {item.avatar_url ? (
-                      <Image source={{ uri: item.avatar_url }} style={styles.avatarCircle} />
-                    ) : (
-                      <Text style={[styles.avatarText, { color: theme.primary }]}>{item.full_name ? item.full_name[0] : item.email[0]}</Text>
-                    )}
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.friendName, { color: theme.text }]}>{item.full_name || item.username || item.email}</Text>
-                    <Text style={[styles.friendJoined, { color: theme.text + '99' }]}>Joined {item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}</Text>
-                  </View>
-                  <TouchableOpacity 
-                    style={styles.friendIconBtn} 
-                    onPress={() => navigation.navigate('MessageScreen' as any, {
-                      contact: {
-                        id: item.id,
-                        name: item.full_name || item.username || item.email,
-                        avatar: item.avatar_url,
-                        status: getStatusLabel(item.status)
-                      }
-                    })}
-                  >
-                    <Ionicons name="chatbubble-outline" size={22} color={theme.primary} />
-                  </TouchableOpacity>
+                  ))}
                 </View>
               )}
-              refreshing={loading}
-              onRefresh={refreshData}
-              ListEmptyComponent={
-                <View style={styles.emptyContainer}>
-                  <Text style={[styles.emptyText, { color: theme.text }]}>No friends yet</Text>
-                  <Text style={[styles.emptySubtext, { color: theme.text + '99' }]}>Start connecting with others in the All Users tab!</Text>
-                </View>
-              }
-            />
-          </>
-        )}
-        {/* Messages Tab */}
-        {activeTab === 'Messages' && (
-          <FlatList
-            data={userConversations}
-            keyExtractor={item => item.id}
-            contentContainerStyle={{ paddingBottom: 24 }}
-            refreshing={loading}
-            onRefresh={async () => {
-              setLoading(true);
-              await refreshData();
-              setLoading(false);
-            }}
-            renderItem={({ item }) => {
-              const partner = item.partner;
-              const lastMessage = item.lastMessage;
-              const timeAgo = lastMessage ? new Date(lastMessage.created_at).toLocaleString() : '';
-              
-              return (
-                <TouchableOpacity
-                  onPress={() => {
-                    navigation.navigate('MessageScreen' as any, {
-                      contact: {
-                        id: partner.id,
-                        name: partner.full_name || partner.username || partner.email,
-                        avatar: partner.avatar_url,
-                        status: getStatusLabel(partner.status)
-                      }
-                    });
-                  }}
-                >
-                  <View style={styles.friendCard}>
-                    <View style={styles.avatarContainer}>
-                      {partner.avatar_url ? (
-                        <Image source={{ uri: partner.avatar_url }} style={styles.avatar} />
+              <FlatList
+                data={friendProfiles}
+                keyExtractor={item => item.id}
+                contentContainerStyle={{ paddingBottom: 24 }}
+                renderItem={({ item }) => (
+                  <View style={[styles.friendCard, { backgroundColor: theme.card, borderColor: theme.primary }]}>
+                    <View style={styles.avatarCircle}>
+                      {item.avatar_url ? (
+                        <Image source={{ uri: item.avatar_url }} style={styles.avatarCircle} />
                       ) : (
-                        <View style={styles.avatarPlaceholder}>
-                          <Text style={styles.avatarText}>
-                            {partner.full_name?.[0] || partner.username?.[0] || partner.email?.[0] || '?'}
-                          </Text>
-                        </View>
+                        <Text style={[styles.avatarText, { color: theme.primary }]}>
+                          {item.full_name ? item.full_name[0] : item.email[0]}
+                        </Text>
                       )}
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.friendName}>{partner.full_name || partner.username || partner.email}</Text>
-                      <Text style={styles.lastMessage} numberOfLines={1}>
-                        {lastMessage.sender_id === currentUser?.id ? 'You: ' : ''}
-                        {lastMessage.content}
+                      <Text style={[styles.friendName, { color: theme.text }]}>
+                        {item.full_name || item.username || item.email}
+                      </Text>
+                      <Text style={[styles.friendJoined, { color: theme.text + '99' }]}>
+                        Joined {item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}
                       </Text>
                     </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={styles.timeText}>{timeAgo}</Text>
-                      {item.unreadCount > 0 && (
-                        <View style={styles.unreadBadge}>
-                          <Text style={styles.unreadText}>{item.unreadCount}</Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              );
-            }}
-            ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No conversations yet</Text>
-                <Text style={styles.emptySubtext}>Start a conversation with someone!</Text>
-              </View>
-            }
-          />
-        )}
-        {/* All Users Tab */}
-        {activeTab === 'All Users' && (
-          <FlatList
-            data={filteredUsers}
-            keyExtractor={item => item.id}
-            contentContainerStyle={styles.listContainer}
-            refreshing={loading}
-            onRefresh={refreshData}
-            renderItem={({ item }) => {
-              const friendStatus = getFriendStatus(item.id);
-              return (
-                <View key={item.id} style={styles.userCardCompact}>
-                  {/* Left: Avatar/Initial and Info */}
-                  <View style={styles.userInfoCompact}>
-                    <View style={styles.avatarCircleCompact}>
-                      {item.avatar_url ? (
-                        <Image source={{ uri: item.avatar_url }} style={styles.avatarCircleCompact} />
-                      ) : (
-                        <Text style={styles.avatarTextCompact}>{item.full_name ? item.full_name[0] : item.email[0]}</Text>
-                      )}
-                    </View>
-                    <View>
-                      <Text style={styles.userNameCompact}>{item.full_name || item.username || 'Anonymous User'}</Text>
-                      <Text style={styles.userJoinedCompact}>Joined {item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}</Text>
-                    </View>
-                  </View>
-                  {/* Right: Action Buttons */}
-                  <View style={styles.actionButtonsCompact}>
                     <TouchableOpacity 
+                      style={styles.friendIconBtn} 
                       onPress={() => navigation.navigate('MessageScreen' as any, {
                         contact: {
                           id: item.id,
@@ -930,161 +818,314 @@ const CommunityScreen = () => {
                           status: getStatusLabel(item.status)
                         }
                       })}
-                      style={styles.messageButtonCompact}
                     >
-                      <Ionicons name="chatbubble-outline" size={20} color="#4CAF50" />
-                    </TouchableOpacity>
-                    {!friendStatus && !pendingFriendRequestIds.includes(item.id) && (
-                      <TouchableOpacity
-                        onPress={() => handleAddFriend(item.id)}
-                        style={styles.addFriendButtonCompact}
-                      >
-                        <Ionicons 
-                          name="person-add-outline"
-                          size={20} 
-                          color="#4CAF50"
-                        />
-                      </TouchableOpacity>
-                    )}
-                    {pendingFriendRequestIds.includes(item.id) && (
-                      <View style={styles.pendingBadgeCompact}>
-                        <Ionicons name="hourglass-outline" size={18} color="#FF9800" />
-                      </View>
-                    )}
-                    {friendStatus === 'pending' && (
-                      <View style={styles.pendingBadgeCompact}>
-                        <Text style={styles.pendingTextCompact}>Pending</Text>
-                      </View>
-                    )}
-                    {friendStatus === 'accepted' && (
-                      <View style={styles.friendBadgeCompact}>
-                        <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
-                      </View>
-                    )}
-                  </View>
-                </View>
-              );
-            }}
-          />
-        )}
-        {/* Study Rooms Tab */}
-        {activeTab === 'Study Rooms' && (
-          <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-            <TouchableOpacity style={styles.createRoomBtn} onPress={() => setShowCreateModal(true)}>
-              <Ionicons name="add" size={20} color="#222" />
-              <Text style={styles.createRoomBtnText}>Create Study Room</Text>
-            </TouchableOpacity>
-            
-            {studyRooms.length === 0 ? (
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No study rooms yet</Text>
-                <Text style={styles.emptySubtext}>Create or join a study room to start collaborating!</Text>
-              </View>
-            ) : (
-              studyRooms.map(room => (
-                <View key={room.id} style={styles.studyRoomCard}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                    <Text style={[styles.studyRoomTitle, { fontWeight: 'bold' }]}>{room.name}</Text>
-                    {room.current_participants > 0 && <View style={styles.liveBadge}><Text style={styles.liveBadgeText}>Active</Text></View>}
-                    <View style={{ flex: 1 }} />
-                    <TouchableOpacity style={styles.joinNowBtn} onPress={() => handleJoinRoom(room)}>
-                      <Text style={styles.joinNowBtnText}>Enter</Text>
+                      <Ionicons name="chatbubble-outline" size={22} color={theme.primary} />
                     </TouchableOpacity>
                   </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
-                    <Ionicons name="people-outline" size={16} color="#888" style={{ marginRight: 4 }} />
-                    <Text style={styles.studyRoomParticipants}>{room.current_participants || 0} participants</Text>
+                )}
+                refreshing={loading}
+                onRefresh={refreshData}
+                ListEmptyComponent={
+                  <View style={styles.emptyContainer}>
+                    <Text style={[styles.emptyText, { color: theme.text }]}>No friends yet</Text>
+                    <Text style={[styles.emptySubtext, { color: theme.text + '99' }]}>
+                      Start connecting with others in the All Users tab!
+                    </Text>
                   </View>
-                  {room.description && (
-                    <Text style={styles.studyRoomDescription} numberOfLines={2}>{room.description}</Text>
-                  )}
-                  <Text style={styles.studyRoomCreator}>Created by {room.creator?.full_name || room.creator?.username || 'Unknown'}</Text>
-                </View>
-              ))
-            )}
-            
-            <Modal
-              visible={showCreateModal}
-              animationType="slide"
-              transparent
-              onRequestClose={() => setShowCreateModal(false)}
-            >
-              <View style={styles.modalOverlay}>
-                <KeyboardAvoidingView 
-                  behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                  style={styles.keyboardAvoidingView}
-                >
-                  <ScrollView 
-                    contentContainerStyle={styles.scrollContent}
-                    keyboardShouldPersistTaps="handled"
-                    showsVerticalScrollIndicator={false}
-                  >
-                    <View style={styles.modalContentLarge}>
-                      <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setShowCreateModal(false)}>
-                        <Ionicons name="close" size={26} color="#888" />
-                      </TouchableOpacity>
-                      <Text style={styles.modalTitleLarge}>Create Study Room</Text>
-                      <Text style={styles.modalSubtitle}>Create a new study room to collaborate with other students</Text>
-                      <Text style={styles.modalLabel}>Room Name *</Text>
-                      <TextInput
-                        style={styles.modalInputLarge}
-                        placeholder="e.g. Math Study Group"
-                        value={newRoomName}
-                        onChangeText={setNewRoomName}
-                        autoCorrect={false}
-                      />
-                      <Text style={styles.modalLabel}>Topic *</Text>
-                      <TextInput
-                        style={styles.modalInputLarge}
-                        placeholder="e.g. Calculus 101"
-                        value={newTopic}
-                        onChangeText={setNewTopic}
-                        autoCorrect={false}
-                      />
-                      <Text style={styles.modalLabel}>Description</Text>
-                      <TextInput
-                        style={[styles.modalInputLarge, { height: 80, textAlignVertical: 'top' }]}
-                        placeholder="Describe what you'll be studying..."
-                        value={newDescription}
-                        onChangeText={setNewDescription}
-                        multiline
-                        autoCorrect={false}
-                      />
-                      <Text style={styles.modalLabel}>Schedule</Text>
-                      <TextInput
-                        style={styles.modalInputLarge}
-                        placeholder="e.g. Mondays at 5pm (optional)"
-                        value={newSchedule}
-                        onChangeText={setNewSchedule}
-                        autoCorrect={false}
-                      />
-                      <Text style={styles.modalLabel}>Duration</Text>
-                      <TextInput
-                        style={styles.modalInputLarge}
-                        placeholder="e.g. 1 hour (optional)"
-                        value={newDuration}
-                        onChangeText={setNewDuration}
-                        autoCorrect={false}
-                      />
+                }
+              />
+            </>
+          )}
 
-                      <TouchableOpacity
-                        style={[styles.modalCreateRoomBtn, (!newRoomName.trim() || !newTopic.trim()) && styles.disabledButton]}
-                        onPress={handleCreateRoom}
-                        disabled={!newRoomName.trim() || !newTopic.trim()}
+          {/* Messages Tab */}
+          {activeTab === 'Messages' && (
+            <FlatList
+              data={userConversations}
+              keyExtractor={item => item.id}
+              contentContainerStyle={{ paddingBottom: 24 }}
+              refreshing={loading}
+              onRefresh={async () => {
+                setLoading(true);
+                await refreshData();
+                setLoading(false);
+              }}
+              renderItem={({ item }) => {
+                const partner = item.partner;
+                const lastMessage = item.lastMessage;
+                const timeAgo = lastMessage ? new Date(lastMessage.created_at).toLocaleString() : '';
+                
+                return (
+                  <TouchableOpacity
+                    onPress={() => {
+                      navigation.navigate('MessageScreen' as any, {
+                        contact: {
+                          id: partner.id,
+                          name: partner.full_name || partner.username || partner.email,
+                          avatar: partner.avatar_url,
+                          status: getStatusLabel(partner.status)
+                        }
+                      });
+                    }}
+                  >
+                    <View style={styles.friendCard}>
+                      <View style={styles.avatarContainer}>
+                        {partner.avatar_url ? (
+                          <Image source={{ uri: partner.avatar_url }} style={styles.avatar} />
+                        ) : (
+                          <View style={styles.avatarPlaceholder}>
+                            <Text style={styles.avatarText}>
+                              {partner.full_name?.[0] || partner.username?.[0] || partner.email?.[0] || '?'}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.friendName}>
+                          {partner.full_name || partner.username || partner.email}
+                        </Text>
+                        <Text style={styles.lastMessage} numberOfLines={1}>
+                          {lastMessage.sender_id === currentUser?.id ? 'You: ' : ''}
+                          {lastMessage.content}
+                        </Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={styles.timeText}>{timeAgo}</Text>
+                        {item.unreadCount > 0 && (
+                          <View style={styles.unreadBadge}>
+                            <Text style={styles.unreadText}>{item.unreadCount}</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              }}
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyText}>No conversations yet</Text>
+                  <Text style={styles.emptySubtext}>Start a conversation with someone!</Text>
+                </View>
+              }
+            />
+          )}
+
+          {/* All Users Tab */}
+          {activeTab === 'All Users' && (
+            <FlatList
+              data={filteredUsers}
+              keyExtractor={item => item.id}
+              contentContainerStyle={styles.listContainer}
+              refreshing={loading}
+              onRefresh={refreshData}
+              renderItem={({ item }) => {
+                const friendStatus = getFriendStatus(item.id);
+                return (
+                  <View key={item.id} style={styles.userCardCompact}>
+                    {/* Left: Avatar/Initial and Info */}
+                    <View style={styles.userInfoCompact}>
+                      <View style={styles.avatarCircleCompact}>
+                        {item.avatar_url ? (
+                          <Image source={{ uri: item.avatar_url }} style={styles.avatarCircleCompact} />
+                        ) : (
+                          <Text style={styles.avatarTextCompact}>
+                            {item.full_name ? item.full_name[0] : item.email[0]}
+                          </Text>
+                        )}
+                      </View>
+                      <View>
+                        <Text style={styles.userNameCompact}>
+                          {item.full_name || item.username || 'Anonymous User'}
+                        </Text>
+                        <Text style={styles.userJoinedCompact}>
+                          Joined {item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}
+                        </Text>
+                      </View>
+                    </View>
+                    {/* Right: Action Buttons */}
+                    <View style={styles.actionButtonsCompact}>
+                      <TouchableOpacity 
+                        onPress={() => navigation.navigate('MessageScreen' as any, {
+                          contact: {
+                            id: item.id,
+                            name: item.full_name || item.username || item.email,
+                            avatar: item.avatar_url,
+                            status: getStatusLabel(item.status)
+                          }
+                        })}
+                        style={styles.messageButtonCompact}
                       >
-                        <Text style={styles.modalCreateRoomBtnText}>Create Room</Text>
+                        <Ionicons name="chatbubble-outline" size={20} color="#4CAF50" />
                       </TouchableOpacity>
-                      <TouchableOpacity style={styles.modalCancelBtnLarge} onPress={() => setShowCreateModal(false)}>
-                        <Text style={styles.modalCancelTextLarge}>Cancel</Text>
+                      {!friendStatus && !pendingFriendRequestIds.includes(item.id) && (
+                        <TouchableOpacity
+                          onPress={() => handleAddFriend(item.id)}
+                          style={styles.addFriendButtonCompact}
+                        >
+                          <Ionicons 
+                            name="person-add-outline"
+                            size={20} 
+                            color="#4CAF50"
+                          />
+                        </TouchableOpacity>
+                      )}
+                      {pendingFriendRequestIds.includes(item.id) && (
+                        <View style={styles.pendingBadgeCompact}>
+                          <Ionicons name="hourglass-outline" size={18} color="#FF9800" />
+                        </View>
+                      )}
+                      {friendStatus === 'pending' && (
+                        <View style={styles.pendingBadgeCompact}>
+                          <Text style={styles.pendingTextCompact}>Pending</Text>
+                        </View>
+                      )}
+                      {friendStatus === 'accepted' && (
+                        <View style={styles.friendBadgeCompact}>
+                          <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                );
+              }}
+            />
+          )}
+
+          {/* Study Rooms Tab */}
+          {activeTab === 'Study Rooms' && (
+            <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
+              <TouchableOpacity style={styles.createRoomBtn} onPress={() => setShowCreateModal(true)}>
+                <Ionicons name="add" size={20} color="#222" />
+                <Text style={styles.createRoomBtnText}>Create Study Room</Text>
+              </TouchableOpacity>
+              
+              {studyRooms.length === 0 ? (
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyText}>No study rooms yet</Text>
+                  <Text style={styles.emptySubtext}>Create or join a study room to start collaborating!</Text>
+                </View>
+              ) : (
+                studyRooms.map(room => (
+                  <View key={room.id} style={styles.studyRoomCard}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                      <Text style={[styles.studyRoomTitle, { fontWeight: 'bold' }]}>{room.name}</Text>
+                      {room.current_participants > 0 && (
+                        <View style={styles.liveBadge}>
+                          <Text style={styles.liveBadgeText}>Active</Text>
+                        </View>
+                      )}
+                      <View style={{ flex: 1 }} />
+                      <TouchableOpacity style={styles.joinNowBtn} onPress={() => handleJoinRoom(room)}>
+                        <Text style={styles.joinNowBtnText}>Enter</Text>
                       </TouchableOpacity>
                     </View>
-                  </ScrollView>
-                </KeyboardAvoidingView>
-              </View>
-            </Modal>
-          </ScrollView>
-        )}
-      </SafeAreaView>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+                      <Ionicons name="people-outline" size={16} color="#888" style={{ marginRight: 4 }} />
+                      <Text style={styles.studyRoomParticipants}>
+                        {room.current_participants || 0} participants
+                      </Text>
+                    </View>
+                    {room.description && (
+                      <Text style={styles.studyRoomDescription} numberOfLines={2}>
+                        {room.description}
+                      </Text>
+                    )}
+                    <Text style={styles.studyRoomCreator}>
+                      Created by {room.creator?.full_name || room.creator?.username || 'Unknown'}
+                    </Text>
+                  </View>
+                ))
+              )}
+              
+              {/* Create Room Modal */}
+              <Modal
+                visible={showCreateModal}
+                animationType="slide"
+                transparent
+                onRequestClose={() => setShowCreateModal(false)}
+              >
+                <View style={styles.modalOverlay}>
+                  <KeyboardAvoidingView 
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={styles.keyboardAvoidingView}
+                  >
+                    <ScrollView 
+                      contentContainerStyle={styles.scrollContent}
+                      keyboardShouldPersistTaps="handled"
+                      showsVerticalScrollIndicator={false}
+                    >
+                      <View style={styles.modalContentLarge}>
+                        <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setShowCreateModal(false)}>
+                          <Ionicons name="close" size={26} color="#888" />
+                        </TouchableOpacity>
+                        <Text style={styles.modalTitleLarge}>Create Study Room</Text>
+                        <Text style={styles.modalSubtitle}>Create a new study room to collaborate with other students</Text>
+                        
+                        <Text style={styles.modalLabel}>Room Name *</Text>
+                        <TextInput
+                          style={styles.modalInputLarge}
+                          placeholder="e.g. Math Study Group"
+                          value={newRoomName}
+                          onChangeText={setNewRoomName}
+                          autoCorrect={false}
+                        />
+                        
+                        <Text style={styles.modalLabel}>Topic *</Text>
+                        <TextInput
+                          style={styles.modalInputLarge}
+                          placeholder="e.g. Calculus 101"
+                          value={newTopic}
+                          onChangeText={setNewTopic}
+                          autoCorrect={false}
+                        />
+                        
+                        <Text style={styles.modalLabel}>Description</Text>
+                        <TextInput
+                          style={[styles.modalInputLarge, { height: 80, textAlignVertical: 'top' }]}
+                          placeholder="Describe what you'll be studying..."
+                          value={newDescription}
+                          onChangeText={setNewDescription}
+                          multiline
+                          autoCorrect={false}
+                        />
+                        
+                        <Text style={styles.modalLabel}>Schedule</Text>
+                        <TextInput
+                          style={styles.modalInputLarge}
+                          placeholder="e.g. Mondays at 5pm (optional)"
+                          value={newSchedule}
+                          onChangeText={setNewSchedule}
+                          autoCorrect={false}
+                        />
+                        
+                        <Text style={styles.modalLabel}>Duration</Text>
+                        <TextInput
+                          style={styles.modalInputLarge}
+                          placeholder="e.g. 1 hour (optional)"
+                          value={newDuration}
+                          onChangeText={setNewDuration}
+                          autoCorrect={false}
+                        />
+
+                        <TouchableOpacity
+                          style={[styles.modalCreateRoomBtn, (!newRoomName.trim() || !newTopic.trim()) && styles.disabledButton]}
+                          onPress={handleCreateRoom}
+                          disabled={!newRoomName.trim() || !newTopic.trim()}
+                        >
+                          <Text style={styles.modalCreateRoomBtnText}>Create Room</Text>
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity style={styles.modalCancelBtnLarge} onPress={() => setShowCreateModal(false)}>
+                          <Text style={styles.modalCancelTextLarge}>Cancel</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </ScrollView>
+                  </KeyboardAvoidingView>
+                </View>
+              </Modal>
+            </ScrollView>
+          )}
+        </SafeAreaView>
+      </KeyboardAvoidingView>
 
       {/* Message Modal */}
       <Modal
@@ -1123,24 +1164,61 @@ const CommunityScreen = () => {
           </View>
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 
+// Add the missing styles to your existing styles object:
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#FAFCFA' },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', padding: 20, paddingBottom: 0 },
-  headerIcons: { flexDirection: 'row', alignItems: 'center' },
-  iconBtn: { marginLeft: 10, padding: 4 },
-  tabsRow: { flexDirection: 'row', backgroundColor: '#F5F5F5', borderRadius: 12, margin: 16, marginTop: 18, marginBottom: 8, padding: 4 },
-  tabBtn: { flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center' },
-  tabBtnActive: { backgroundColor: '#fff', elevation: 2 },
-  tabText: { color: '#888', fontWeight: 'bold', fontSize: 15 },
-  tabTextActive: { color: '#222', fontWeight: 'bold' },
-  searchBarRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F5F5', borderRadius: 8, marginHorizontal: 16, marginBottom: 12, paddingHorizontal: 10, paddingVertical: 6 },
-  searchInput: { flex: 1, fontSize: 15, color: '#222' },
-  friendCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E8F5E9', borderRadius: 14, marginHorizontal: 16, marginBottom: 14, padding: 14, borderWidth: 1, borderColor: '#C8E6C9' },
-  avatarCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F1F8E9', alignItems: 'center', justifyContent: 'center', marginRight: 14 },
+  container: { 
+    flex: 1 
+  },
+  header: { 
+    paddingHorizontal: 20, 
+    paddingTop: 20, // Reduced padding
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.1)'
+  },
+  headerTitle: { 
+    fontSize: 28, 
+    fontWeight: 'bold' 
+  },
+  searchContainer: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#F5F5F5', 
+    borderRadius: 8, 
+    marginHorizontal: 16, 
+    marginBottom: 12, 
+    paddingHorizontal: 10, 
+    paddingVertical: 6 
+  },
+  searchInput: { 
+    flex: 1, 
+    fontSize: 15, 
+    color: '#222' 
+  },
+  friendCard: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#E8F5E9', 
+    borderRadius: 14, 
+    marginHorizontal: 16, 
+    marginBottom: 14, 
+    padding: 14, 
+    borderWidth: 1, 
+    borderColor: '#C8E6C9' 
+  },
+  avatarCircle: { 
+    width: 40, 
+    height: 40, 
+    borderRadius: 20, 
+    backgroundColor: '#F1F8E9', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    marginRight: 14 
+  },
   avatarText: {
     color: '#1B5E20',
     fontWeight: 'bold',
@@ -1349,8 +1427,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FF9800',
   },
   pendingTextCompact: {
-    color: '#fff',
     fontSize: 12,
+    color: '#FF9800',
     fontWeight: 'bold',
   },
   friendBadgeCompact: {
@@ -1400,6 +1478,35 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     backgroundColor: '#BDBDBD',
+  },
+  tabRow: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginBottom: 16,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    padding: 4,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  activeTab: {
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  activeTabText: {
+    fontWeight: 'bold',
   },
   // Missing styles for message functionality
   avatarContainer: {

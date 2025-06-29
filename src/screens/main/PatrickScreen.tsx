@@ -9,11 +9,18 @@ import { supabase } from '../../utils/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 
+interface PDFContext {
+  title: string;
+  url: string;
+  fileSize?: number;
+}
+
 type RootStackParamList = {
   PatrickSpeak: {
     initialMessage?: string;
     isResponse?: boolean;
     responseMessage?: string;
+    pdfContext?: PDFContext; // Add PDF context type
   };
   Quizzes: undefined;
   SessionReportScreen: undefined;
@@ -124,11 +131,17 @@ const PatrickHomeScreen = ({ nickname }: { nickname: string }) => {
     setChatModalVisible(true);
   };
 
-  const handleSendChat = () => {
+  const handleSendChat = async () => {
     if (!chatInput.trim()) return;
-    navigation.navigate('PatrickSpeak', { initialMessage: chatInput });
-    setChatInput('');
-    setChatModalVisible(false);
+    
+    try {
+      navigation.navigate('PatrickSpeak', { initialMessage: chatInput });
+      setChatInput('');
+      setChatModalVisible(false);
+    } catch (error) {
+      console.error('Navigation error:', error);
+      Alert.alert('Error', 'Failed to open chat. Please try again.');
+    }
   };
 
   return (
@@ -240,19 +253,21 @@ const PatrickHomeScreen = ({ nickname }: { nickname: string }) => {
 };
 
 export const PatrickSpeakScreen = ({ route }: { route: PatrickSpeakRouteProp }) => {
-  const { initialMessage } = route.params || {};
+  const { initialMessage, pdfContext } = route.params || {};
   const { user } = useAuth();
   const navigation = useNavigation();
-  const [input, setInput] = useState(initialMessage || '');
+  const [input, setInput] = useState('');
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [streamedText, setStreamedText] = useState('');
   const [error, setError] = useState('');
+  const [activePDF, setActivePDF] = useState<PDFContext | null>(pdfContext || null);
   const scrollViewRef = React.useRef<ScrollView>(null);
   const { theme } = useTheme();
 
   useEffect(() => {
     fetchChatHistory();
+    // Send initial message with PDF context if provided
     if (initialMessage) {
       handleSend(initialMessage);
     }
@@ -291,84 +306,109 @@ export const PatrickSpeakScreen = ({ route }: { route: PatrickSpeakRouteProp }) 
     if (error) console.error('Failed to save message:', error);
   };
 
-  const handleSend = async (msg?: string) => {
-    const messageToSend = (msg !== undefined ? msg : input).trim();
-    if (!messageToSend || !user) return;
-    setInput('');
-    setError('');
-    setStreaming(true);
+  const handleSend = async (messageText?: string) => {
+    const textToSend = messageText || input.trim();
+    if (!textToSend || !user) return;
 
-    // Add user message to chat
+    setError('');
+    
+    // Enhanced message with PDF context
+    let enhancedMessage = textToSend;
+    if (activePDF) {
+      enhancedMessage = `[PDF Context: "${activePDF.title}"] ${textToSend}`;
+    }
+    
+    // Add user message to chat immediately
     const userMsg: ChatMessage = {
       id: Math.random().toString(36).slice(2),
-      content: messageToSend,
+      content: textToSend, // Display original message to user
       sender: 'user',
       timestamp: new Date().toISOString(),
       user_id: user.id,
     };
     setChat((prev) => [...prev, userMsg]);
-    await saveMessage(messageToSend, 'user');
+    
+    // Clear input only if it came from the input field
+    if (!messageText) {
+      setInput('');
+    }
+    
+    await saveMessage(textToSend, 'user');
+    setStreaming(true);
+    setStreamedText('');
 
     try {
-      // Ensure user is authenticated
-      if (!user) {
-        setError('Please sign in to chat with Patrick');
-        return;
-      }
+      const { data: { session } } = await supabase.auth.getSession();
       
-      // Get fresh session
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      
-      if (sessionError || !session?.access_token) {
-        setError('Authentication required. Please sign in again.');
-        return;
+      if (!session) {
+        throw new Error('No active session');
       }
 
-      console.log('🔑 Making request with token:', session.access_token.substring(0, 20) + '...');
-      
-      const response = await fetch('https://ucculvnodabrfwbkzsnx.supabase.co/functions/v1/patrick-response-function', {
+      // Send enhanced message with PDF context to Patrick
+      const response = await fetch('https://ucculvnodabrfwbkzsnx.supabase.co/functions/v1/patrick-chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`, // Ensure this format is correct
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '',
         },
-        body: JSON.stringify({ 
-          message: messageToSend, 
-          userId: user.id 
+        body: JSON.stringify({
+          message: enhancedMessage, // Send enhanced message with PDF context
+          userId: user.id,
+          pdfContext: activePDF, // Include PDF context
+          userSettings: {
+            focus_method: userData?.onboarding?.focus_method || userData?.settings?.focus_method,
+            weekly_focus_goal: userData?.onboarding?.weekly_focus_goal || userData?.settings?.weekly_goal,
+            environment_theme: userData?.settings?.environment_theme,
+            notifications: userData?.settings?.notifications,
+            onboarding: userData?.onboarding
+          }
         }),
       });
 
-      console.log('📡 Response status:', response.status);
-
       if (!response.ok) {
         const errorText = await response.text();
-        console.log('❌ Edge Function error:', errorText);
-        throw new Error(`Edge Function error: ${response.status} - ${errorText}`);
+        console.error('Edge Function Error:', response.status, errorText);
+        throw new Error(`Server error: ${response.status}`);
       }
 
       const data = await response.json();
-
       setStreaming(false);
 
       if (data.response) {
-        // Add Patrick's message to chat
+        // Clean response by removing markdown formatting
+        const cleanResponse = data.response
+          .replace(/\*\*(.*?)\*\*/g, '$1') // Remove **bold** formatting
+          .replace(/\*(.*?)\*/g, '$1')     // Remove *italic* formatting
+          .replace(/__(.*?)__/g, '$1')     // Remove __underline__ formatting
+          .trim();
+
         const patrickMsg: ChatMessage = {
           id: Math.random().toString(36).slice(2),
-          content: data.response,
+          content: cleanResponse,
           sender: 'patrick',
           timestamp: new Date().toISOString(),
           user_id: user.id,
         };
         setChat((prev) => [...prev, patrickMsg]);
-        await saveMessage(data.response, 'patrick');
-      } else if (data.error) {
-        setError('Patrick error: ' + data.error);
+        await saveMessage(cleanResponse, 'patrick');
       } else {
-        setError('No response from Patrick.');
+        throw new Error('No response from Patrick');
       }
     } catch (error) {
       console.error('Patrick request error:', error);
-      setError('Failed to get Patrick response: ' + error.message);
+      setError('Sorry, I had trouble connecting. Please try again.');
+      setStreaming(false);
+      
+      // Add fallback response
+      const fallbackMsg: ChatMessage = {
+        id: Math.random().toString(36).slice(2),
+        content: "I'm having some technical difficulties right now. Please try again in a moment!",
+        sender: 'patrick',
+        timestamp: new Date().toISOString(),
+        user_id: user.id,
+      };
+      setChat((prev) => [...prev, fallbackMsg]);
     }
   };
 
@@ -396,31 +436,50 @@ export const PatrickSpeakScreen = ({ route }: { route: PatrickSpeakRouteProp }) 
     );
   };
 
-  // Alternative solution using KeyboardAwareScrollView
-
   return (
     <View style={speakStyles.container}>
       <View style={speakStyles.headerRow}>
-        <TouchableOpacity style={speakStyles.backBtn} onPress={() => navigation.goBack()}>
+        <TouchableOpacity 
+          style={speakStyles.backBtn} 
+          onPress={() => navigation.goBack()}
+        >
           <Ionicons name="arrow-back" size={24} color={theme.primary} />
         </TouchableOpacity>
         <Text style={speakStyles.speakTitle}>Patrick AI Chat</Text>
         <View style={speakStyles.gridBtn} />
       </View>
       
-      <KeyboardAwareScrollView
+      {/* PDF Context Banner */}
+      {activePDF && (
+        <View style={[speakStyles.pdfBanner, { backgroundColor: theme.primary + '15' }]}>
+          <MaterialCommunityIcons name="file-pdf-box" size={20} color={theme.primary} />
+          <View style={{ flex: 1, marginLeft: 8 }}>
+            <Text style={[speakStyles.pdfTitle, { color: theme.primary }]} numberOfLines={1}>
+              📖 {activePDF.title}
+            </Text>
+            <Text style={[speakStyles.pdfSubtitle, { color: theme.primary + '99' }]}>
+              Patrick can help you study from this document
+            </Text>
+          </View>
+          <TouchableOpacity 
+            onPress={() => setActivePDF(null)}
+            style={speakStyles.removePdfButton}
+          >
+            <Ionicons name="close" size={16} color={theme.primary} />
+          </TouchableOpacity>
+        </View>
+      )}
+      
+      <KeyboardAvoidingView
         style={{ flex: 1 }}
-        contentContainerStyle={{ flexGrow: 1 }}
-        enableOnAndroid={true}
-        extraScrollHeight={80}
-        keyboardShouldPersistTaps="handled"
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
       >
-        {/* Chat messages */}
         <ScrollView
           ref={scrollViewRef}
-          style={{ flex: 1, width: '100%' }}
-          contentContainerStyle={{ padding: 18, paddingBottom: 20 }}
+          style={{ flex: 1 }}
+          contentContainerStyle={{ padding: 18, paddingBottom: 120 }}
+          keyboardShouldPersistTaps="handled"
           onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
         >
           {chat.map(renderBubble)}
@@ -432,14 +491,18 @@ export const PatrickSpeakScreen = ({ route }: { route: PatrickSpeakRouteProp }) 
           )}
         </ScrollView>
         
-        {/* Input area */}
+        {/* Fixed Input Area */}
         <View style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
           backgroundColor: '#fff',
           borderTopLeftRadius: 24,
           borderTopRightRadius: 24,
           padding: 16,
           flexDirection: 'row',
-          alignItems: 'center',
+          alignItems: 'flex-end',
           shadowColor: '#000',
           shadowOpacity: 0.06,
           shadowRadius: 8,
@@ -466,6 +529,7 @@ export const PatrickSpeakScreen = ({ route }: { route: PatrickSpeakRouteProp }) 
             onSubmitEditing={() => handleSend()}
             returnKeyType="send"
             multiline
+            textAlignVertical="top"
           />
           <TouchableOpacity
             style={{
@@ -482,7 +546,7 @@ export const PatrickSpeakScreen = ({ route }: { route: PatrickSpeakRouteProp }) 
             <Ionicons name="send" size={22} color="#fff" />
           </TouchableOpacity>
         </View>
-      </KeyboardAwareScrollView>
+      </KeyboardAvoidingView>
       
       {error ? (
         <View style={{ position: 'absolute', top: 100, left: 16, right: 16 }}>
@@ -538,6 +602,27 @@ const speakStyles = StyleSheet.create({
   speakDesc: { fontSize: 15, color: '#222', textAlign: 'center', marginBottom: 24 },
   speakMicRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 12 },
   speakMicBtn: { backgroundColor: '#E8F5E9', borderRadius: 40, padding: 18, justifyContent: 'center', alignItems: 'center' },
+  pdfBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(76, 175, 80, 0.3)',
+  },
+  pdfTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  pdfSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  removePdfButton: {
+    padding: 4,
+  },
 });
 
 export default PatrickScreen;

@@ -1,0 +1,53 @@
+{
+  "mcpServers": {
+    "server-sequential-thinking": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@smithery/cli@latest",
+        "run",
+        "@smithery-ai/server-sequential-thinking"
+      ]
+    },
+    "github": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@smithery/cli@latest",
+        "run",
+        "@smithery-ai/github",
+        "--config",
+        "\"{\\\"githubPersonalAccessToken\\\":\\\"YOUR_GITHUB_TOKEN_HERE\\\"}\""
+      ]
+    },
+    "task-master": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "task-master-ai"
+      ]
+    },
+    "supabase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@supabase/mcp-server-supabase@latest",
+        "--access-token",
+        "sbp_f89ab46f79a10bd3c35089940f73d10210eed1f3"
+      ]
+    },
+    "browser-tools": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@agentdeskai/browser-tools-mcp@1.2.0"
+      ]
+    }
+  }
+}
+
+// This MCP configuration file defines various servers and their commands for the MCP framework.
+// Each server has a unique identifier and specifies the command to run along with its arguments.
+// The configuration includes servers for sequential thinking, GitHub integration, task management, Supabase, and browser tools.
+// The commands are executed using `npx` to ensure the latest version of the specified packages is used.
+// The GitHub server includes a personal access token for authentication, while the Supabase server uses an access token for secure access to the Supabase services.
