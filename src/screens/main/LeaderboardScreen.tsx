@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, ActivityIndicator, RefreshControl } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useSupabaseLeaderboardWithFriends, useSupabaseCommunityActivity, Leaderboard, useSupabaseTasks, useSupabaseProfile } from '../../utils/supabaseHooks';
-import { useAuth } from '../../context/AuthContext'; // Add this import
+import { useSupabaseLeaderboardWithFriends, Leaderboard, useSupabaseTasks, useSupabaseProfile } from '../../utils/supabaseHooks';
+import { useAuth } from '../../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
 const { useUserAppData, getLeaderboardData } = require('../../utils/userAppData');
@@ -18,7 +18,7 @@ const LeaderboardScreen = () => {
   });
 
   // Use demo data when database fails
-  const { data: userData } = useUserAppData();
+  const { data: userData, refreshData } = useUserAppData();
   const { theme } = useTheme();
 
   const {
@@ -27,6 +27,21 @@ const LeaderboardScreen = () => {
     error: leaderboardError,
     refetch: refetchLeaderboard
   } = useSupabaseLeaderboardWithFriends();
+
+  // Extract current user stats and leaderboard data
+  const currentUserStats = userData?.leaderboard || userData?.stats;
+  const currentLeaderboard = tab === 'Friends' 
+    ? (leaderboardData.friendsLeaderboard || supabaseLeaderboard?.friendsLeaderboard || [])
+    : (leaderboardData.globalLeaderboard || supabaseLeaderboard?.globalLeaderboard || []);
+  
+  // General loading and error states
+  const loading = leaderboardLoading;
+  const error = leaderboardError ? String(leaderboardError) : null;
+  
+  // Community activity (mock data since useSupabaseCommunityActivity doesn't exist)
+  const communityActivity: any[] = [];
+  const activityLoading = false;
+  const activityError = null;
 
   useEffect(() => {
     if (leaderboardError) {
@@ -41,10 +56,10 @@ const LeaderboardScreen = () => {
 
   // Calculate tasks completed this week
   const getTasksCompletedThisWeek = () => {
-    if (!userData) return 0;
+    if (!userData || !userData.dailyTasksCompleted) return 0;
     
     // Use our precalculated daily tasks data
-    return userData.dailyTasksCompleted.reduce((sum, day) => sum + day.count, 0);
+    return userData.dailyTasksCompleted.reduce((sum: number, day: any) => sum + (day.count || 0), 0);
   };
 
   // Calculate weekly goal percentage
@@ -59,8 +74,7 @@ const LeaderboardScreen = () => {
     setRefreshing(true);
     try {
       await Promise.all([
-        loadLeaderboardData(),
-        refetchActivity(),
+        refetchLeaderboard(),
         refreshData()
       ]);
     } catch (err) {
