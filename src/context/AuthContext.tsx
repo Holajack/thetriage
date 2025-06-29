@@ -393,39 +393,75 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     checkSession();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      console.log('AuthContext: Auth state changed', { event: _event, hasSession: !!session });
-      if (_event === 'SIGNED_IN' && session?.user) {
-        setIsLoading(true); // Use general isLoading for subsequent sign-ins
-        console.log('AuthContext: User SIGNED_IN, fetching user data...');
-        try {
-          await Promise.race([
-            fetchUserData(session.user.id),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('User data fetch timeout on SIGNED_IN')), DEFAULT_USER_DATA_FETCH_TIMEOUT))
-          ]);
-          setIsAuthenticated(true);
-          setJustLoggedIn(true); // Set this only on explicit sign-in
-          console.log('AuthContext: User data fetch completed after SIGNED_IN.');
-        } catch (fetchError: any) {
-          console.error('AuthContext: User data fetch failed after SIGNED_IN:', fetchError.message);
-          setIsAuthenticated(true); // Still authenticate
-        } finally {
-          setIsLoading(false);
-        }
-      } else if (_event === 'SIGNED_OUT') {
+    console.log('AuthContext: Setting up auth listener...');
+    
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('AuthContext: Auth state changed:', event);
+      
+      if (event === 'SIGNED_IN' && session?.user) {
+        setUser(session.user as UserProfile);
+        setIsAuthenticated(true);
+        setJustLoggedIn(true);
+        // Fix: Use the existing function name
+        await fetchUserDataWithTimeout(session.user.id);
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
         setIsAuthenticated(false);
-        setUser(null); // Clear user data on sign out
         setJustLoggedIn(false);
-        console.log('AuthContext: User SIGNED_OUT.');
+        setOnboarding({});
+        setLeaderboard({});
       }
-      // Handle other events like TOKEN_REFRESHED if necessary
-      // setIsInitialLoading(false); // This should only be set false after initial checkSession
     });
 
     return () => {
-      authListener?.unsubscribe();
+      if (subscription) {
+        subscription.unsubscribe();
+      }
     };
-  }, [fetchUserData]);
+  }, []);
+
+  // Fix: Make sure this function exists and is properly named
+  const fetchUserDataWithTimeout = async (userId: string) => {
+    try {
+      const timeout = 8000;
+      
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('User data fetch timeout')), timeout);
+      });
+
+      // Fetch profile
+      const profilePromise = supabase.from('profiles').select('*').eq('id', userId).single();
+      const { data: profile, error: profileError } = await Promise.race([profilePromise, timeoutPromise]);
+
+      if (!profileError && profile) {
+        setUser(profile);
+      }
+
+      // Fetch onboarding
+      try {
+        const onboardingPromise = supabase.from('onboarding_preferences').select('*').eq('user_id', userId).single();
+        const { data: onboarding } = await Promise.race([onboardingPromise, timeoutPromise]);
+        setOnboarding(onboarding || {});
+      } catch (err) {
+        setOnboarding({ is_onboarding_complete: false });
+      }
+
+      // Fetch leaderboard
+      try {
+        const leaderboardPromise = supabase.from('leaderboard_stats').select('*').eq('user_id', userId).single();
+        const { data: leaderboard } = await Promise.race([leaderboardPromise, timeoutPromise]);
+        setLeaderboard(leaderboard || {});
+      } catch (err) {
+        setLeaderboard({ level: 1, points: 0, total_focus_time: 0 });
+      }
+
+    } catch (error) {
+      console.log('AuthContext: User data fetch failed, using fallbacks');
+      // Set fallback data
+      setOnboarding({ is_onboarding_complete: false });
+      setLeaderboard({ level: 1, points: 0, total_focus_time: 0 });
+    }
+  };
 
   // IMPROVED: Sign up with timeout protection
   const signUp = async (email: string, password: string, username?: string, full_name?: string) => {

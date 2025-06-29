@@ -8,23 +8,21 @@
       "developmentClient": true,
       "distribution": "internal",
       "ios": {
-        "resourceClass": "m1-medium",
-        "simulator": true
-      },
-      "channel": "development"
+        "resourceClass": "m1-medium"
+      }
     },
-    "preview": {
+    "client-testing": {
+      "developmentClient": true,
       "distribution": "internal",
       "ios": {
         "resourceClass": "m1-medium",
         "buildConfiguration": "Release"
       },
-      "channel": "preview"
+      "channel": "client-testing"
     },
     "production": {
       "ios": {
         "resourceClass": "m1-medium",
-        "buildConfiguration": "Release",
         "autoIncrement": true
       },
       "channel": "production"

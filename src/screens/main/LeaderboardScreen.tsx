@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, ActivityIndicator, RefreshControl } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSupabaseLeaderboardWithFriends, useSupabaseCommunityActivity, Leaderboard, useSupabaseTasks, useSupabaseProfile } from '../../utils/supabaseHooks';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthContext'; // Add this import
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
 const { useUserAppData, getLeaderboardData } = require('../../utils/userAppData');
@@ -15,45 +15,29 @@ const LeaderboardScreen = () => {
   const [leaderboardData, setLeaderboardData] = useState<any>({
     friendsLeaderboard: [],
     globalLeaderboard: [],
-    userEntry: null
   });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  
-  // Use our comprehensive data hook
-  const { data: userData, isLoading: userDataLoading, error: userDataError, refreshData } = useUserAppData();
 
-  // Use real community activity data
-  const { 
-    activities: communityActivity, 
-    loading: activityLoading, 
-    error: activityError,
-    refetch: refetchActivity
-  } = useSupabaseCommunityActivity();
-
+  // Use demo data when database fails
+  const { data: userData } = useUserAppData();
   const { theme } = useTheme();
-  
-  // Load leaderboard data when component mounts
-  useEffect(() => {
-    loadLeaderboardData();
-  }, []);
-  
-  const loadLeaderboardData = async () => {
-    try {
-      setLoading(true);
-      const data = await getLeaderboardData();
-      setLeaderboardData(data);
-      setError(null);
-    } catch (err: any) {
-      console.error('Error loading leaderboard data:', err);
-      setError(err.message || 'Error loading leaderboard data');
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  const currentLeaderboard = tab === 'Friends' ? leaderboardData.friendsLeaderboard : leaderboardData.globalLeaderboard;
-  const currentUserStats = leaderboardData.userEntry;
+  const {
+    data: supabaseLeaderboard,
+    loading: leaderboardLoading,
+    error: leaderboardError,
+    refetch: refetchLeaderboard
+  } = useSupabaseLeaderboardWithFriends();
+
+  useEffect(() => {
+    if (leaderboardError) {
+      console.log('Using demo leaderboard data due to database error');
+      // Use demo data from your comprehensive system
+      const demoData = getLeaderboardData(userData);
+      setLeaderboardData(demoData);
+    } else if (supabaseLeaderboard) {
+      setLeaderboardData(supabaseLeaderboard);
+    }
+  }, [supabaseLeaderboard, leaderboardError, userData]);
 
   // Calculate tasks completed this week
   const getTasksCompletedThisWeek = () => {

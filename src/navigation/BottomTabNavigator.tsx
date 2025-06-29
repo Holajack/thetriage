@@ -23,6 +23,7 @@ import { TouchableOpacity, View, Text } from 'react-native';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import type { MainTabParamList } from './types';
+import PDFViewerScreen from '../screens/main/PDFViewerScreen';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const Stack = createStackNavigator<MainTabParamList>();
@@ -31,26 +32,85 @@ const VISIBLE_TABS = ['Home', 'Community', 'Patrick', 'Bonuses', 'Results'];
 function DrawerToggleButton() {
   const navigation = useNavigation();
   return (
-    <TouchableOpacity
-      onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
-      style={{ marginRight: 16 }}
-      accessibilityLabel="Open menu"
-    >
+    <TouchableOpacity onPress={() => navigation.dispatch(DrawerActions.openDrawer())} style={{ marginRight: 12 }}>
       <Entypo name="dots-three-horizontal" size={28} color="#1B5E20" />
     </TouchableOpacity>
   );
 }
 
 function CustomTabBar(props: BottomTabBarProps) {
-  const filteredState = {
-    ...props.state,
-    routes: props.state.routes.filter(route => VISIBLE_TABS.includes(route.name)),
-    index: Math.max(
-      0,
-      VISIBLE_TABS.indexOf(props.state.routes[props.state.index]?.name)
-    ),
-  };
-  return <BottomTabBar {...props} state={filteredState} />;
+  const { state, descriptors, navigation } = props;
+  
+  return (
+    <View style={{
+      flexDirection: 'row',
+      backgroundColor: '#FFFFFF',
+      paddingTop: 8,
+      paddingBottom: 20,
+      paddingHorizontal: 16,
+      borderTopWidth: 1,
+      borderTopColor: 'rgba(0,0,0,0.1)',
+    }}>
+      {state.routes.filter(route => VISIBLE_TABS.includes(route.name)).map((route, index) => {
+        const { options } = descriptors[route.key];
+        const label = options.tabBarLabel !== undefined ? options.tabBarLabel : options.title !== undefined ? options.title : route.name;
+        const isFocused = state.index === state.routes.findIndex(r => r.key === route.key);
+
+        const onPress = () => {
+          const event = navigation.emit({
+            type: 'tabPress',
+            target: route.key,
+            canPreventDefault: true,
+          });
+
+          if (!isFocused && !event.defaultPrevented) {
+            navigation.navigate(route.name, route.params);
+          }
+        };
+
+        return (
+          <TouchableOpacity
+            key={route.key}
+            accessibilityRole="button"
+            accessibilityState={isFocused ? { selected: true } : {}}
+            accessibilityLabel={options.tabBarAccessibilityLabel}
+            testID={options.tabBarTestID}
+            onPress={onPress}
+            style={{
+              flex: 1,
+              alignItems: 'center',
+              paddingVertical: 8,
+            }}
+          >
+            <Ionicons 
+              name={getTabIcon(route.name)} 
+              size={22} 
+              color={isFocused ? '#4CAF50' : '#888'} 
+            />
+            <Text style={{
+              color: isFocused ? '#4CAF50' : '#888',
+              fontSize: 12,
+              marginTop: 2,
+              fontWeight: isFocused ? 'bold' : 'normal',
+            }}>
+              {typeof label === 'string' ? label : route.name}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+function getTabIcon(routeName: string): any {
+  switch (routeName) {
+    case 'Home': return 'home-outline';
+    case 'Community': return 'people-outline';
+    case 'Patrick': return 'chatbubble-outline';
+    case 'Bonuses': return 'gift-outline';
+    case 'Results': return 'bar-chart-outline';
+    default: return 'ellipse-outline';
+  }
 }
 
 function ProfileStack() {
@@ -93,20 +153,11 @@ function ProfileStack() {
 export function BottomTabNavigator() {
   return (
     <Tab.Navigator
-      tabBar={props => <CustomTabBar {...props} />}
-      screenOptions={({ route }: { route: { name: string } }) => ({
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName = '';
-          if (route.name === 'Home') iconName = focused ? 'home' : 'home-outline';
-          else if (route.name === 'Community') iconName = focused ? 'people' : 'people-outline';
-          else if (route.name === 'Patrick') iconName = focused ? 'person-circle' : 'person-circle-outline';
-          else if (route.name === 'Bonuses') iconName = focused ? 'gift' : 'gift-outline';
-          else if (route.name === 'Results') iconName = focused ? 'bar-chart' : 'bar-chart-outline';
-          return <Ionicons name={iconName as any} size={size} color={color} />;
-        },
-        tabBarActiveTintColor: '#2196F3',
-        tabBarInactiveTintColor: 'gray',
-        headerShown: true,
+      tabBar={CustomTabBar}
+      screenOptions={() => ({
+        headerStyle: { backgroundColor: '#FAFCFA' },
+        headerTintColor: '#1B5E20',
+        headerTitleStyle: { fontWeight: 'bold' },
         headerRight: () => <DrawerToggleButton />,
       })}
     >
@@ -117,10 +168,17 @@ export function BottomTabNavigator() {
       <Tab.Screen name="Results" component={ResultsScreen} />
       <Tab.Screen name="Leaderboard" component={LeaderboardScreen} options={{ tabBarButton: () => null, title: 'Leaderboard' }} />
       <Tab.Screen name="Profile" component={ProfileStack} options={{ tabBarButton: () => null, title: 'Profile' }} />
-      <Tab.Screen name="EBooks" component={EBooksScreen} options={{ tabBarButton: () => null, title: 'E-Books' }} />
-      <Tab.Screen name="SelfDiscoveryQuiz" component={SelfDiscoveryQuizScreen} options={{ tabBarButton: () => null, title: 'Self-Discovery Quiz' }} />
-      <Tab.Screen name="BrainMapping" component={BrainMappingScreen} options={{ tabBarButton: () => null, title: 'Brain Mapping' }} />
-      <Tab.Screen name="Achievements" component={AchievementsScreen} options={{ tabBarButton: () => null, title: 'Achievements' }} />
+      <Tab.Screen name="EBooks" component={EBooksScreen} options={{ tabBarButton: () => null }} />
+      <Tab.Screen name="PDFViewer" component={PDFViewerScreen} options={{ tabBarButton: () => null }} />
+      {/* ADD MISSING SCREENS HERE */}
+      <Tab.Screen name="Achievements" component={AchievementsScreen} options={{ tabBarButton: () => null }} />
+      <Tab.Screen name="SelfDiscoveryQuiz" component={SelfDiscoveryQuizScreen} options={{ tabBarButton: () => null }} />
+      <Tab.Screen name="BrainMapping" component={BrainMappingScreen} options={{ tabBarButton: () => null }} />
+      <Tab.Screen name="PatrickSpeak" component={PatrickSpeakScreen} options={{ tabBarButton: () => null }} />
+      <Tab.Screen name="Quizzes" component={QuizzesScreen} options={{ tabBarButton: () => null }} />
+      <Tab.Screen name="QuizPrompt" component={QuizPromptScreen} options={{ tabBarButton: () => null }} />
+      <Tab.Screen name="HistoryPrompt" component={HistoryPromptScreen} options={{ tabBarButton: () => null }} />
+      <Tab.Screen name="SessionReport" component={SessionReportScreen} options={{ tabBarButton: () => null }} />
     </Tab.Navigator>
   );
-} 
+}

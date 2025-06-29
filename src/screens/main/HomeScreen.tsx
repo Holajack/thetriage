@@ -47,7 +47,7 @@ const MOCK_DAILY_INSPIRATION = '"It always seems impossible until it\'s done."';
 // Extract functions from userAppData module
 const { useUserAppData, getDailyInspiration } = userAppDataModule;
 
-const HomeScreen = () => {
+export default function HomeScreen() {
   const { user } = useAuth();
   const [taskInput, setTaskInput] = useState('');
   const [priority, setPriority] = useState('Medium');
@@ -108,12 +108,26 @@ const HomeScreen = () => {
   }, [refreshData]);
 
   const handleStartFocusSession = () => {
+    // Show the priority modal to let user choose automatic or manual
     setShowPriorityModal(true);
   };
 
-  const handlePriorityChoice = (auto: boolean) => {
+  const handlePriorityChoice = (automatic: boolean) => {
     setShowPriorityModal(false);
-    navigation.navigate('StudySessionScreen');
+    
+    if (automatic) {
+      // Use automatic selection based on user's work style and task priorities
+      navigation.navigate('StudySessionScreen', { 
+        autoStart: true,
+        manualSelection: false
+      });
+    } else {
+      // Use manual selection - show setup modal
+      navigation.navigate('StudySessionScreen', { 
+        autoStart: false,
+        manualSelection: true
+      });
+    }
   };
 
   const handleAddTask = async () => {
@@ -244,21 +258,63 @@ const HomeScreen = () => {
     { label: 'High', color: '#ef4444' },
   ];
 
+  // Add the missing getDurationText function
+  const getDurationText = (workStyle?: string) => {
+    switch (workStyle) {
+      case 'Deep Work':
+      case 'deepwork':
+        return '90 minutes';
+      case 'Sprint Focus':
+      case 'sprint':
+        return '25 minutes';
+      case 'Extended Focus':
+      case 'extended':
+        return '60 minutes';
+      case 'Balanced Focus':
+      case 'Balanced':
+      case 'balanced':
+      default:
+        return '45 minutes';
+    }
+  };
+
+  // Add the missing getWorkStyleDuration function
+  const getWorkStyleDuration = (workStyle?: string) => {
+    switch (workStyle) {
+      case 'Deep Work':
+      case 'deepwork':
+        return 90 * 60; // 90 minutes in seconds
+      case 'Sprint Focus':
+      case 'sprint':
+        return 25 * 60; // 25 minutes in seconds
+      case 'Extended Focus':
+      case 'extended':
+        return 60 * 60; // 60 minutes in seconds
+      case 'Balanced Focus':
+      case 'Balanced':
+      case 'balanced':
+      default:
+        return 45 * 60; // 45 minutes in seconds
+    }
+  };
+
   const getWorkStyleTimerDisplay = () => {
     const workStyle = userData?.onboarding?.work_style || userData?.onboarding?.focus_method;
     switch (workStyle) {
       case 'Deep Work':
       case 'deepwork':
-        return '90:00';
-      case 'Sprint':
+        return '90m';
       case 'Sprint Focus':
       case 'sprint':
-        return '25:00';
-      case 'Balanced':
+        return '25m';
+      case 'Extended Focus':
+      case 'extended':
+        return '60m';
       case 'Balanced Focus':
+      case 'Balanced':
       case 'balanced':
       default:
-        return '45:00';
+        return '45m';
     }
   };
 
@@ -267,13 +323,15 @@ const HomeScreen = () => {
     switch (workStyle) {
       case 'Deep Work':
       case 'deepwork':
-        return '15m';
-      case 'Sprint':
+        return '20m';
       case 'Sprint Focus':
       case 'sprint':
         return '5m';
-      case 'Balanced':
+      case 'Extended Focus':
+      case 'extended':
+        return '15m';
       case 'Balanced Focus':
+      case 'Balanced':
       case 'balanced':
       default:
         return '15m';
@@ -281,7 +339,7 @@ const HomeScreen = () => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+    <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
       {userDataLoading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <Text style={{ color: theme.text }}>Loading your study data...</Text>
@@ -321,12 +379,15 @@ const HomeScreen = () => {
                 {userData?.onboarding?.focus_method || 'Balanced'} work and rest cycles (45min/15min)
               </Text>
               <View style={styles.timerRow}>
-                <View style={[styles.timerInfoBox, { backgroundColor: fadedPrimary }]}>
+                {/* Tasks Section - Separate Rectangle */}
+                <View style={[styles.timerSectionBox, { backgroundColor: fadedPrimary }]}>
                   <Text style={[styles.timerInfoLabel, { color: theme.primary }]}>
                     {userData?.activeTasks?.length > 0 ? `${userData.activeTasks.length} Tasks` : 'No Tasks'}
                   </Text>
                 </View>
-                <View style={[styles.timerMainBox, { backgroundColor: fadedPrimary }]}>
+                
+                {/* Main Timer Section - Separate Rectangle */}
+                <View style={[styles.timerSectionBox, styles.timerMainSection, { backgroundColor: fadedPrimary }]}>
                   <Text style={[styles.timerMain, { color: theme.primary }]}>
                     {getWorkStyleTimerDisplay()}
                   </Text>
@@ -334,7 +395,9 @@ const HomeScreen = () => {
                     {userData?.onboarding?.work_style || userData?.onboarding?.focus_method || 'Balanced'} Timer
                   </Text>
                 </View>
-                <View style={[styles.timerInfoBox, { backgroundColor: fadedPrimary }]}>
+                
+                {/* Break Section - Separate Rectangle */}
+                <View style={[styles.timerSectionBox, { backgroundColor: fadedPrimary }]}>
                   <Text style={[styles.timerInfoLabel, { color: theme.primary }]}>
                     {getBreakTimerDisplay()}
                   </Text>
@@ -831,27 +894,50 @@ const HomeScreen = () => {
         </KeyboardAvoidingView>
       )}
       
-      {/* Modal for Task Priority */}
-      <Modal
-        visible={showPriorityModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowPriorityModal(false)}
-      >
-        <View style={getStyle(modalStyles, 'overlay')}>
-          <View style={getStyle(modalStyles, 'modalBox')}>
-            <Text style={getStyle(modalStyles, 'modalTitle')}>Task Priority</Text>
-            <Text style={getStyle(modalStyles, 'modalDesc')}>
-              Would you like to automatically prioritize tasks based on their priority level, or would you prefer to create your own order?
+      {/* Enhanced Priority Modal */}
+      <Modal visible={showPriorityModal} transparent animationType="fade">
+        <View style={priorityModalStyles.overlay}>
+          <View style={priorityModalStyles.modalBox}>
+            <Text style={priorityModalStyles.modalTitle}>Start Focus Session</Text>
+            <Text style={priorityModalStyles.modalDesc}>
+              Choose how you want to set up your study session.
             </Text>
-            <TouchableOpacity style={getStyle(modalStyles, 'modalBtn')} onPress={() => handlePriorityChoice(false)}>
-              <Text style={getStyle(modalStyles, 'modalBtnText')}>Create My Own Order</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[getStyle(modalStyles, 'modalBtn'), getStyle(modalStyles, 'modalBtnPrimary')]} onPress={() => handlePriorityChoice(true)}>
-              <Text style={[getStyle(modalStyles, 'modalBtnText'), getStyle(modalStyles, 'modalBtnTextPrimary')]}>Use Automatic Priority</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={getStyle(modalStyles, 'cancelBtn')} onPress={() => setShowPriorityModal(false)}>
-              <Text style={getStyle(modalStyles, 'cancelBtnText')}>Cancel</Text>
+            
+            {/* Automatic Selection */}
+            <View style={priorityModalStyles.workStyleSection}>
+              <Text style={priorityModalStyles.sectionTitle}>Automatic Setup</Text>
+              <Text style={priorityModalStyles.workStyleInfo}>
+                Uses your work style ({userData?.onboarding?.work_style || 'Balanced'}) and task priorities automatically.
+              </Text>
+              <TouchableOpacity 
+                style={priorityModalStyles.useWorkStyleBtn}
+                onPress={() => handlePriorityChoice(true)}
+              >
+                <MaterialIcons name="autorenew" size={20} color="#fff" />
+                <Text style={priorityModalStyles.useWorkStyleBtnText}>Quick Start (Automatic)</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Manual Selection */}
+            <View style={priorityModalStyles.manualSection}>
+              <Text style={priorityModalStyles.sectionTitle}>Custom Setup</Text>
+              <Text style={priorityModalStyles.manualInfo}>
+                Manually select tasks, subjects, and session duration.
+              </Text>
+              <TouchableOpacity 
+                style={priorityModalStyles.manualBtn}
+                onPress={() => handlePriorityChoice(false)}
+              >
+                <MaterialIcons name="tune" size={20} color="#2196F3" />
+                <Text style={priorityModalStyles.manualBtnText}>Custom Setup (Manual)</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity 
+              style={priorityModalStyles.cancelBtn}
+              onPress={() => setShowPriorityModal(false)}
+            >
+              <Text style={priorityModalStyles.cancelBtnText}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -866,12 +952,46 @@ const styles = StyleSheet.create({
   timerCard: { backgroundColor: '#fff', margin: 16, borderRadius: 12, padding: 18, borderWidth: 1, borderColor: '#C8E6C9', alignItems: 'center' },
   timerTitle: { fontWeight: 'bold', fontSize: 16, color: '#1B5E20' },
   timerSubtitle: { color: '#666', fontSize: 13, marginBottom: 10 },
-  timerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginVertical: 10 },
-  timerInfoBox: { flex: 1, alignItems: 'center' },
-  timerInfoLabel: { color: '#888', fontSize: 13 },
-  timerMainBox: { flex: 2, alignItems: 'center' },
-  timerMain: { fontSize: 36, fontWeight: 'bold', color: '#388E3C' },
-  timerMainLabel: { color: '#888', fontSize: 12 },
+  timerRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    width: '100%', 
+    marginVertical: 10,
+    gap: 12 // Add spacing between sections
+  },
+  timerSectionBox: {
+    backgroundColor: '#F0F8F0',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    minHeight: 80,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(76, 175, 80, 0.2)',
+  },
+  timerMainSection: {
+    flex: 2, // Make the main timer section larger
+    minHeight: 100,
+  },
+  timerInfoLabel: { 
+    color: '#888', 
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center'
+  },
+  timerMain: { 
+    fontSize: 32, 
+    fontWeight: 'bold', 
+    color: '#388E3C',
+    textAlign: 'center'
+  },
+  timerMainLabel: { 
+    color: '#888', 
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 4
+  },
   startButton: { backgroundColor: '#388E3C', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 30, marginTop: 10 },
   startButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
   taskCard: { backgroundColor: '#fff', marginHorizontal: 16, marginBottom: 16, borderRadius: 12, padding: 18, borderWidth: 1, borderColor: '#C8E6C9' },
@@ -1052,6 +1172,67 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#888',
   },
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#F8FCF8',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  focusCard: {
+    backgroundColor: '#fff',
+    margin: 16,
+    borderRadius: 12,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#C8E6C9',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  focusCardContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  focusCardTitle: {
+    fontWeight: 'bold',
+    fontSize: 16,
+    color: '#1B5E20',
+    marginBottom: 4,
+  },
+  focusCardDesc: {
+    color: '#666',
+    fontSize: 14,
+    marginBottom: 12,
+  },
+  focusOptionsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+  },
+  focusBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    gap: 6,
+  },
+  autoBtnStyle: {
+    backgroundColor: '#4CAF50',
+  },
+  manualBtnStyle: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+  },
+  focusBtnText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
 });
 
 const modalStyles = StyleSheet.create({
@@ -1085,4 +1266,97 @@ const modalStyles = StyleSheet.create({
   cancelBtnText: { color: '#388E3C', fontWeight: 'bold', fontSize: 14 },
 });
 
-export default HomeScreen;
+const priorityModalStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalBox: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 8,
+    color: '#333',
+  },
+  modalDesc: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 24,
+    color: '#666',
+    lineHeight: 20,
+  },
+  workStyleSection: {
+    marginBottom: 20,
+    padding: 16,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
+  },
+  manualSection: {
+    marginBottom: 20,
+    padding: 16,
+    backgroundColor: '#E3F2FD',
+    borderRadius: 12,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    color: '#333',
+  },
+  workStyleInfo: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 12,
+  },
+  manualInfo: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 12,
+  },
+  useWorkStyleBtn: {
+    backgroundColor: '#4CAF50',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  useWorkStyleBtnText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  manualBtn: {
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#2196F3',
+    gap: 8,
+  },
+  manualBtnText: {
+    color: '#2196F3',
+    fontWeight: 'bold',
+  },
+  cancelBtn: {
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  cancelBtnText: {
+    color: '#666',
+    fontSize: 16,
+  },
+});

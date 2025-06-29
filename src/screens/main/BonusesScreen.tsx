@@ -1,238 +1,333 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated } from 'react-native';
-import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
 
-const BonusesScreen: React.FC = () => {
-  const navigation = useNavigation<any>();
+const BonusesScreen = () => {
+  const navigation = useNavigation();
   const { theme } = useTheme();
-  const fadeAnim = React.useRef(new Animated.Value(0)).current;
-  const slideAnim = React.useRef(new Animated.Value(50)).current;
 
-  React.useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
-
-  const bonusItems = [
+  const bonusFeatures = [
     {
-      icon: 'trophy-variant',
+      id: 'achievements',
       title: 'Achievements',
-      description: 'Track your progress and unlock rewards',
-      colors: ['#FFF8E1', '#FFE082'] as [string, string],
-      route: 'Achievements',
+      description: 'Track your progress and unlock exclusive rewards',
+      icon: 'trophy',
+      iconFamily: 'Ionicons',
+      color: '#FFD700',
+      gradient: ['#FFD700', '#FFA000'],
+      onPress: () => navigation.navigate('Achievements' as any),
+      stats: 'Unlock 50+ achievements'
     },
     {
-      icon: 'book-open-page-variant',
-      title: 'E-Book Uploads',
-      description: 'Upload and organize your study materials',
-      colors: ['#E8F5E9', '#C8E6C9'] as [string, string],
-      route: 'EBooks',
+      id: 'ebooks',
+      title: 'E-Book Library',
+      description: 'Upload and access your textbooks anywhere, anytime',
+      icon: 'book',
+      iconFamily: 'Ionicons',
+      color: '#4CAF50',
+      gradient: ['#4CAF50', '#2E7D32'],
+      onPress: () => navigation.navigate('EBooks' as any),
+      stats: 'Support for 100MB+ files'
     },
     {
-      icon: 'lightbulb-on-outline',
+      id: 'self-discovery',
       title: 'Self-Discovery Quizzes',
-      description: 'Understand your learning style better',
-      colors: ['#FFF3E0', '#FFE0B2'] as [string, string],
-      route: 'SelfDiscoveryQuiz',
+      description: 'Discover your unique learning style and study patterns',
+      icon: 'brain',
+      iconFamily: 'MaterialCommunityIcons',
+      color: '#9C27B0',
+      gradient: ['#9C27B0', '#7B1FA2'],
+      onPress: () => navigation.navigate('SelfDiscoveryQuiz' as any),
+      stats: '5 comprehensive assessments'
     },
     {
+      id: 'brain-mapping',
+      title: 'Brain Activity Mapping',
+      description: 'Visualize your cognitive patterns and learning zones',
       icon: 'brain',
-      title: 'Brain Mapping',
-      description: 'Visualize your cognitive activity',
-      colors: ['#E8EAF6', '#C5CAE9'] as [string, string],
-      route: 'BrainMapping',
-    },
+      iconFamily: 'MaterialCommunityIcons',
+      color: '#E91E63',
+      gradient: ['#E91E63', '#C2185B'],
+      onPress: () => navigation.navigate('BrainMapping' as any),
+      stats: 'Real-time brain insights'
+    }
   ];
 
-  return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <View style={[styles.header, { backgroundColor: theme.card }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backButton, { backgroundColor: theme.background }]}>
-          <Ionicons name="arrow-back" size={24} color={theme.primary} />
-        </TouchableOpacity>
-        <Text style={[styles.title, { color: theme.primary }]}>Bonus Features</Text>
-        <View style={{ width: 40 }} />
-      </View>
+  const renderFeatureCard = (feature: any) => {
+    const IconComponent = feature.iconFamily === 'MaterialCommunityIcons' ? MaterialCommunityIcons : Ionicons;
+    
+    return (
+      <TouchableOpacity
+        key={feature.id}
+        style={[styles.featureCard, { backgroundColor: theme.card }]}
+        onPress={feature.onPress}
+        activeOpacity={0.8}
+      >
+        <View style={styles.cardContent}>
+          <View style={[styles.iconContainer, { backgroundColor: feature.color + '15' }]}>
+            <IconComponent 
+              name={feature.icon as any} 
+              size={32} 
+              color={feature.color} 
+            />
+          </View>
+          
+          <View style={styles.textContent}>
+            <Text style={[styles.featureTitle, { color: theme.text }]}>
+              {feature.title}
+            </Text>
+            <Text style={[styles.featureDescription, { color: theme.text + '99' }]}>
+              {feature.description}
+            </Text>
+            <Text style={[styles.featureStats, { color: feature.color }]}>
+              {feature.stats}
+            </Text>
+          </View>
+          
+          <View style={styles.arrowContainer}>
+            <Ionicons 
+              name="chevron-forward" 
+              size={24} 
+              color={theme.text + '66'} 
+            />
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
-      <Text style={[styles.subtitle, { color: theme.text }]}>Enhance your learning experience</Text>
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      {/* Header */}
+      <View style={[styles.header, { backgroundColor: theme.card }]}>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>Bonus Features</Text>
+        <Text style={[styles.headerSubtitle, { color: theme.text + '99' }]}>
+          Unlock advanced tools to enhance your study experience
+        </Text>
+      </View>
 
       <ScrollView 
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {bonusItems.map((item, index) => (
-          <Animated.View
-            key={item.title}
-            style={[
-              {
-                opacity: fadeAnim,
-                transform: [{ 
-                  translateY: Animated.add(
-                    slideAnim,
-                    Animated.multiply(slideAnim, index * 0.3)
-                  )
-                }],
-              },
-            ]}
-          >
-            <TouchableOpacity 
-              style={styles.card}
-              onPress={() => navigation.navigate(item.route)}
-              activeOpacity={0.9}
-            >
-              <LinearGradient
-                colors={item.colors}
-                style={styles.cardGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-              >
-                <View style={styles.iconContainer}>
-                  <MaterialCommunityIcons 
-                    name={item.icon as any}
-                    size={48} 
-                    color={theme.primary} 
-                  />
-                </View>
-                <View style={styles.cardContent}>
-                  <Text style={[styles.cardTitle, { color: theme.primary }]}>{item.title}</Text>
-                  <Text style={[styles.cardDescription, { color: theme.text }]}>{item.description}</Text>
-                </View>
-                <Ionicons 
-                  name="chevron-forward" 
-                  size={24} 
-                  color={theme.primary} 
-                  style={styles.chevron}
-                />
-              </LinearGradient>
-            </TouchableOpacity>
-          </Animated.View>
-        ))}
+        {/* Features Grid */}
+        <View style={styles.featuresContainer}>
+          {bonusFeatures.map(renderFeatureCard)}
+        </View>
 
-        <View style={styles.infoSection}>
-          <MaterialCommunityIcons name="information-outline" size={24} color={theme.primary} />
-          <Text style={[styles.infoText, { color: theme.text }]}>
-            These features are designed to complement your study sessions and help you achieve better learning outcomes.
+        {/* Coming Soon Section */}
+        <View style={[styles.comingSoonContainer, { backgroundColor: theme.card }]}>
+          <View style={styles.comingSoonHeader}>
+            <MaterialCommunityIcons 
+              name="rocket-launch" 
+              size={24} 
+              color={theme.primary} 
+            />
+            <Text style={[styles.comingSoonTitle, { color: theme.text }]}>
+              Coming Soon
+            </Text>
+          </View>
+          <Text style={[styles.comingSoonDescription, { color: theme.text + '99' }]}>
+            We're constantly working on new features to help you study more effectively. 
+            Stay tuned for exciting updates!
           </Text>
+          
+          <View style={styles.upcomingFeatures}>
+            {[
+              'Advanced Study Analytics',
+              'Collaborative Study Sessions',
+              'AI-Powered Study Recommendations',
+              'Virtual Study Environments'
+            ].map((feature, index) => (
+              <View key={index} style={styles.upcomingFeature}>
+                <Ionicons 
+                  name="ellipse" 
+                  size={6} 
+                  color={theme.primary} 
+                  style={styles.bulletPoint}
+                />
+                <Text style={[styles.upcomingFeatureText, { color: theme.text + '88' }]}>
+                  {feature}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* Stats Card */}
+        <View style={[styles.statsCard, { backgroundColor: theme.primary + '15' }]}>
+          <Text style={[styles.statsTitle, { color: theme.primary }]}>
+            Your Progress
+          </Text>
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Text style={[styles.statNumber, { color: theme.primary }]}>4</Text>
+              <Text style={[styles.statLabel, { color: theme.text + '88' }]}>Features</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={[styles.statNumber, { color: theme.primary }]}>∞</Text>
+              <Text style={[styles.statLabel, { color: theme.text + '88' }]}>Possibilities</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={[styles.statNumber, { color: theme.primary }]}>24/7</Text>
+              <Text style={[styles.statLabel, { color: theme.text + '88' }]}>Available</Text>
+            </View>
+          </View>
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: '#FAFAF6',
+  container: {
+    flex: 1,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
+    padding: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F0F0F0',
-    justifyContent: 'center',
-    alignItems: 'center',
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    marginBottom: 4,
   },
-  title: { 
-    fontSize: 24, 
-    fontWeight: 'bold', 
-    color: '#1B5E20',
-  },
-  subtitle: {
+  headerSubtitle: {
     fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 24,
-    paddingHorizontal: 20,
+    lineHeight: 22,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 24,
+    padding: 20,
+    paddingBottom: 40,
   },
-  card: {
-    marginBottom: 20,
-    borderRadius: 24,
-    overflow: 'hidden',
-    elevation: 4,
+  featuresContainer: {
+    marginBottom: 24,
+  },
+  featureCard: {
+    borderRadius: 16,
+    marginBottom: 16,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.05,
     shadowRadius: 8,
-  },
-  cardGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 24,
-    minHeight: 120,
-  },
-  iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 20,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
   cardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+  },
+  iconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  textContent: {
     flex: 1,
   },
-  cardTitle: {
-    fontSize: 20,
+  featureTitle: {
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#1B5E20',
     marginBottom: 4,
   },
-  cardDescription: {
+  featureDescription: {
     fontSize: 14,
-    color: '#666',
     lineHeight: 20,
+    marginBottom: 6,
   },
-  chevron: {
+  featureStats: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  arrowContainer: {
     marginLeft: 12,
   },
-  infoSection: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#E8F5E9',
+  comingSoonContainer: {
+    padding: 20,
     borderRadius: 16,
-    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(76, 175, 80, 0.2)',
+  },
+  comingSoonHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  comingSoonTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  comingSoonDescription: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  upcomingFeatures: {
     marginTop: 8,
   },
-  infoText: {
-    flex: 1,
-    marginLeft: 12,
+  upcomingFeature: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  bulletPoint: {
+    marginRight: 12,
+  },
+  upcomingFeatureText: {
     fontSize: 14,
-    color: '#388E3C',
-    lineHeight: 20,
+    flex: 1,
+  },
+  statsCard: {
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 8,
+  },
+  statsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+  },
+  statItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  statNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  statDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    marginHorizontal: 16,
   },
 });
 
-export default BonusesScreen; 
+export default BonusesScreen;

@@ -8,6 +8,7 @@ import { AuthNavigator } from './AuthNavigator';
 import { OnboardingNavigator } from './OnboardingNavigator';
 import { RootStackParamList } from './types';
 import { StudySessionScreen } from '../screens/main/StudySessionScreen';
+import BreakTimerScreen from '../screens/main/BreakTimerScreen';
 import SessionReportScreen from '../screens/main/SessionReportScreen';
 import MessageScreen from '../screens/main/MessageScreen';
 import StudyRoomScreen from '../screens/main/StudyRoomScreen';
@@ -108,6 +109,7 @@ export const RootNavigator = () => {
         <Stack.Screen name="Onboarding" component={OnboardingNavigator} />
         <Stack.Screen name="Main" component={MainNavigator} />
         <Stack.Screen name="StudySessionScreen" component={StudySessionScreen} />
+        <Stack.Screen name="BreakTimerScreen" component={BreakTimerScreen} />
         <Stack.Screen name="SessionReportScreen" component={SessionReportScreen} />
         <Stack.Screen name="SessionHistory" component={SessionHistoryScreen} />
         <Stack.Screen name="PatrickSpeak" component={PatrickSpeakScreen} />
