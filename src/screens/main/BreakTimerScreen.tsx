@@ -6,6 +6,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
 const { useUserAppData } = require('../../utils/userAppData');
+import { useBackgroundMusic } from '../../hooks/useBackgroundMusic';
 
 // Break duration based on focus method
 const getBreakDuration = (focusMethod?: string, sessionDuration?: number) => {
@@ -261,6 +262,33 @@ export const BreakTimerScreen = () => {
     ));
   };
 
+  // Add music hook
+  const { 
+    currentTrack, 
+    currentPlaylist,
+    currentTrackIndex,
+    isPlaying,
+    stopPlayback,
+    audioSupported,
+    isPreviewMode
+  } = useBackgroundMusic();
+
+  const renderMusicStatus = () => {
+    if (!audioSupported) return null;
+
+    return (
+      <View style={[styles.musicStatusCard, { backgroundColor: colors.secondary }]}>
+        <MaterialIcons name={isPlaying ? "music-note" : "music-off"} size={24} color={colors.primary} />
+        <Text style={[styles.musicStatusText, { color: colors.primary }]}>
+          {isPlaying ? `Now Playing: ${currentTrack?.title}` : 'Music Paused'}
+        </Text>
+        <TouchableOpacity style={styles.musicControlBtn} onPress={stopPlayback}>
+          <Ionicons name="stop" size={20} color="#fff" />
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={["top", "left", "right"]}>
       {/* Top Navigation Bar - Same style as HomeScreen */}
@@ -356,6 +384,9 @@ export const BreakTimerScreen = () => {
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* 🎵 ADD MUSIC STATUS CARD HERE */}
+        {renderMusicStatus()}
 
         {/* Background Timer Indicator */}
         {AppState.currentState === 'background' && !isPaused && (
@@ -642,6 +673,54 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 16,
     textAlign: 'center',
+  },
+  musicStatusCard: {
+    borderRadius: 12,
+    padding: 16,
+    marginVertical: 12,
+    marginHorizontal: 16,
+  },
+  musicHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  musicTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  musicStatusText: {
+    fontSize: 14,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  nowPlayingContainer: {
+    alignItems: 'center',
+  },
+  nowPlayingText: {
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  playlistProgress: {
+    fontSize: 12,
+    color: '#81C784',
+    marginBottom: 12,
+  },
+  stopMusicButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  stopMusicText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
   },
 });
 

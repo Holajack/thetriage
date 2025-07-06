@@ -122,6 +122,7 @@ const CommunityScreen = () => {
   const [studyRooms, setStudyRooms] = useState<any[]>([]);
   const [userConversations, setUserConversations] = useState<any[]>([]);
   const { theme } = useTheme();
+  const [networkStatus, setNetworkStatus] = useState<'online' | 'offline' | 'slow'>('online');
 
   // Helper for faded primary color
   const fadedPrimary = theme.primary + '22'; // 13% opacity hex fallback
@@ -255,32 +256,108 @@ const CommunityScreen = () => {
   // Fetch all users and friend requests
   useEffect(() => {
     const fetchUsersAndRequests = async () => {
-      if (!currentUser) return;
+      if (!currentUser) {
+        console.log('❌ No current user, skipping fetch');
+        return;
+      }
       
       setLoading(true);
+      setError(null);
+      
       try {
-        // Fetch all users except current user
-        const { data: usersData, error: usersError } = await supabase
-          .from('profiles')
-          .select('*')
-          .neq('id', currentUser.id)
-          .order('created_at', { ascending: false });
+        console.log('🔄 Starting user and friend requests fetch...');
+        console.log('👤 Current user ID:', currentUser.id);
+        
+        // Test basic connection first
+        try {
+          await withTimeout(
+            supabase.from('profiles').select('count').limit(1),
+            3000
+          );
+          console.log('✅ Basic connection test passed');
+        } catch (connError) {
+          console.log('❌ Basic connection test failed:', connError.message);
+          throw new Error('Unable to connect to the server. Please check your internet connection.');
+        }
+        
+        // Fetch users with enhanced retry logic
+        console.log('📊 Fetching users...');
+        let usersResult;
+        try {
+          usersResult = await fetchWithRetry(async () => {
+            return await supabase
+              .from('profiles')
+              .select('id, email, username, full_name, avatar_url, university, major, created_at, status')
+              .neq('id', currentUser.id)
+              .order('created_at', { ascending: false })
+              .limit(50); // Limit results to improve performance
+          }, 2); // Reduce retries for faster failure
 
-        if (usersError) throw usersError;
+          if (usersResult.error) {
+            console.log('❌ Users fetch error:', usersResult.error);
+            throw usersResult.error;
+          }
+          
+          console.log(`✅ Users fetched: ${usersResult.data?.length || 0} users`);
+        } catch (usersError) {
+          console.log('❌ Users fetch failed completely:', usersError.message);
+          // Don't throw here, continue with empty users list
+          usersResult = { data: [], error: null };
+        }
 
-        // Fetch friend requests
-        const { data: requestsData, error: requestsError } = await supabase
-          .from('friends')
-          .select('*')
-          .or(`user_id.eq.${currentUser.id},friend_id.eq.${currentUser.id}`);
+        // Fetch friend requests (with fallback)
+        console.log('🤝 Fetching friend requests...');
+        let requestsResult;
+        try {
+          requestsResult = await fetchWithRetry(async () => {
+            return await supabase
+              .from('friends')
+              .select('id, user_id, friend_id, status, created_at')
+              .or(`user_id.eq.${currentUser.id},friend_id.eq.${currentUser.id}`)
+              .limit(100);
+          }, 2);
 
-        if (requestsError) throw requestsError;
+          if (requestsResult.error) {
+            console.log('❌ Friend requests fetch error:', requestsResult.error);
+            throw requestsResult.error;
+          }
+          
+          console.log(`✅ Friend requests fetched: ${requestsResult.data?.length || 0} requests`);
+        } catch (requestsError) {
+          console.log('⚠️ Friend requests fetch failed, continuing without them:', requestsError.message);
+          requestsResult = { data: [], error: null };
+        }
 
-        setUsers(usersData || []);
-        setFriendRequests(requestsData || []);
-      } catch (err) {
-        console.error('Error fetching data:', err);
-        setError(err instanceof Error ? err.message : 'Failed to fetch data');
+        // Update state with fetched data
+        setUsers(usersResult.data || []);
+        setFriendRequests(requestsResult.data || []);
+        
+        console.log('✅ Data fetch completed successfully');
+        console.log(`📊 Final counts - Users: ${usersResult.data?.length || 0}, Friend requests: ${requestsResult.data?.length || 0}`);
+
+      } catch (err: any) {
+        console.error('❌ Critical error in fetchUsersAndRequests:', err);
+        
+        // Provide specific error messages based on error type
+        let userMessage = 'Unable to load community data. Please try again.';
+        
+        if (err.message.includes('timeout') || err.message.includes('Request timeout')) {
+          userMessage = 'Connection timeout. Please check your internet connection and try again.';
+          setNetworkStatus('slow');
+        } else if (err.message.includes('Network request failed') || err.message.includes('fetch')) {
+          userMessage = 'Network connection failed. Please check your internet and try again.';
+          setNetworkStatus('offline');
+        } else if (err.message.includes('Unable to connect')) {
+          userMessage = err.message; // Use our custom connection message
+          setNetworkStatus('offline');
+        }
+        
+        setError(userMessage);
+        
+        // Provide fallback empty data
+        setUsers([]);
+        setFriendRequests([]);
+        
       } finally {
         setLoading(false);
       }
@@ -478,53 +555,108 @@ const CommunityScreen = () => {
     }
   };
 
-  // Handle adding friend with proper pending status
+  // Enhanced handleAddFriend with better error handling:
   const handleAddFriend = async (friendId: string) => {
-    if (!currentUser) return;
+    if (!currentUser) {
+      Alert.alert('Error', 'You must be logged in to send friend requests.');
+      return;
+    }
+
+    console.log(`🤝 Starting friend request for user: ${friendId}`);
 
     try {
-      // Check if request already exists
-      const { data: existing } = await supabase
-        .from('friend_requests')
-        .select()
-        .or(`and(sender_id.eq.${currentUser.id},recipient_id.eq.${friendId}),and(sender_id.eq.${friendId},recipient_id.eq.${currentUser.id})`)
-        .single();
-
-      if (existing) {
-        Alert.alert('Info', 'Friend request already exists');
-        return;
-      }
-
       // Add to pending state immediately for UI feedback
       setPendingFriendRequestIds(prev => [...prev, friendId]);
 
+      // Check network connectivity first
+      try {
+        await withTimeout(
+          supabase.from('profiles').select('count').limit(1),
+          3000
+        );
+      } catch (connError) {
+        throw new Error('Network connection failed. Please check your internet connection.');
+      }
+
+      // Check if request already exists
+      console.log('🔍 Checking for existing friend request...');
+      let existingCheck;
+      try {
+        existingCheck = await fetchWithRetry(async () => {
+          return await supabase
+            .from('friend_requests')
+            .select('id, status')
+            .or(`and(sender_id.eq.${currentUser.id},recipient_id.eq.${friendId}),and(sender_id.eq.${friendId},recipient_id.eq.${currentUser.id})`)
+            .maybeSingle();
+        }, 2);
+
+        if (existingCheck.data) {
+          Alert.alert('Info', 'Friend request already exists');
+          setPendingFriendRequestIds(prev => prev.filter(id => id !== friendId));
+          return;
+        }
+      } catch (checkError) {
+        console.log('⚠️ Could not check existing requests, proceeding anyway');
+      }
+
       // Send friend request
-      const { error } = await supabase
-        .from('friend_requests')
-        .insert({
-          sender_id: currentUser.id,
-          recipient_id: friendId,
-          status: 'pending'
-        });
+      console.log('📤 Sending friend request...');
+      await fetchWithRetry(async () => {
+        const { error: requestError } = await supabase
+          .from('friend_requests')
+          .insert({
+            sender_id: currentUser.id,
+            recipient_id: friendId,
+            status: 'pending',
+            created_at: new Date().toISOString()
+          });
 
-      if (error) throw error;
+        if (requestError) throw requestError;
+        return { error: null };
+      }, 2);
 
-      // Also insert into friends table with pending status
-      await supabase
-        .from('friends')
-        .insert({
-          user_id: currentUser.id,
-          friend_id: friendId,
-          status: 'pending'
-        });
+      // Also add to friends table
+      console.log('👥 Adding to friends table...');
+      await fetchWithRetry(async () => {
+        const { error: friendError } = await supabase
+          .from('friends')
+          .insert({
+            user_id: currentUser.id,
+            friend_id: friendId,
+            status: 'pending',
+            created_at: new Date().toISOString()
+          });
+
+        if (friendError) throw friendError;
+        return { error: null };
+      }, 2);
 
       Alert.alert('Success', 'Friend request sent!');
-      await refreshData();
+      console.log('✅ Friend request sent successfully');
+
+      // Refresh data after successful operation
+      setTimeout(() => {
+        refreshData();
+      }, 1000);
+
     } catch (err: any) {
-      console.error('Error sending friend request:', err);
-      Alert.alert('Error', 'Failed to send friend request');
-      // Remove from pending if failed
+      console.error('❌ Friend request failed:', err);
+      
+      // Remove from pending state
       setPendingFriendRequestIds(prev => prev.filter(id => id !== friendId));
+      
+      // Show user-friendly error message
+      let errorMessage = 'Failed to send friend request. Please try again.';
+      
+      if (err.message.includes('Network connection failed') || err.message.includes('check your internet')) {
+        errorMessage = err.message;
+      } else if (err.message.includes('timeout') || err.message.includes('Request timeout')) {
+        errorMessage = 'Request timed out. Please check your internet connection and try again.';
+      } else if (err.message.includes('Network request failed')) {
+        errorMessage = 'Network error. Please check your internet connection and try again.';
+      }
+      
+      Alert.alert('Network Error', errorMessage);
     }
   };
 
@@ -726,6 +858,118 @@ const CommunityScreen = () => {
     setPendingRequests(prev => prev.filter(r => r.id !== requestId));
     await refreshData();
   };
+
+  // Add these network-safe functions to CommunityScreen.tsx:
+
+  // Network-safe fetch with retry logic - ENHANCED VERSION
+  const fetchWithRetry = async (operation: () => Promise<any>, retries = 3): Promise<any> => {
+    for (let i = 0; i < retries; i++) {
+      try {
+        console.log(`🔄 Network attempt ${i + 1}/${retries}`);
+        const result = await withTimeout(operation(), 8000); // 8 second timeout
+        console.log(`✅ Network operation succeeded on attempt ${i + 1}`);
+        return result;
+      } catch (error: any) {
+        console.log(`❌ Attempt ${i + 1} failed:`, error.message);
+        
+        if (i === retries - 1) {
+          // Last attempt failed
+          console.log(`🚫 All ${retries} attempts failed`);
+          throw new Error(`Network operation failed after ${retries} attempts: ${error.message}`);
+        }
+        
+        // Wait before retry (exponential backoff)
+        const delay = 1000 * Math.pow(2, i); // 1s, 2s, 4s
+        console.log(`⏳ Waiting ${delay}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  };
+
+  // Enhanced network status checker
+  useEffect(() => {
+    let statusCheckInterval: NodeJS.Timeout;
+    let isComponentMounted = true;
+
+    const checkNetworkStatus = async () => {
+      if (!isComponentMounted) return;
+      
+      try {
+        console.log('🌐 Checking network status...');
+        const start = Date.now();
+        
+        await withTimeout(
+          supabase.from('profiles').select('count').limit(1),
+          5000
+        );
+        
+        const elapsed = Date.now() - start;
+        console.log(`⏱️ Network check completed in ${elapsed}ms`);
+        
+        if (elapsed > 3000) {
+          console.log('🐌 Slow connection detected');
+          setNetworkStatus('slow');
+        } else {
+          console.log('🚀 Good connection');
+          setNetworkStatus('online');
+        }
+        
+      } catch (error: any) {
+        console.log('❌ Network check failed:', error.message);
+        
+        if (error.message.includes('timeout') || error.message.includes('Request timeout')) {
+          setNetworkStatus('slow');
+        } else {
+          setNetworkStatus('offline');
+        }
+      }
+    };
+
+    // Initial check
+    checkNetworkStatus();
+    
+    // Set up periodic checks
+    statusCheckInterval = setInterval(checkNetworkStatus, 30000); // Every 30 seconds
+    
+    return () => {
+      isComponentMounted = false;
+      if (statusCheckInterval) {
+        clearInterval(statusCheckInterval);
+      }
+    };
+  }, []);
+
+  // Add emergency offline mode data
+  const getOfflineFallbackData = () => {
+    console.log('📱 Switching to offline mode with cached data');
+    
+    // Return minimal fallback data
+    return {
+      users: [],
+      friendRequests: [],
+      studyRooms: [],
+      conversations: []
+    };
+  };
+
+  // Update your useEffect to use fallback data when network fails completely
+  useEffect(() => {
+    const initializeData = async () => {
+      try {
+        await fetchUsersAndRequests();
+      } catch (criticalError) {
+        console.log('🚨 Critical network failure, using offline mode');
+        const fallbackData = getOfflineFallbackData();
+        setUsers(fallbackData.users);
+        setFriendRequests(fallbackData.friendRequests);
+        setError('App is running in offline mode. Some features may be limited.');
+      }
+    };
+
+    if (currentUser) {
+      initializeData();
+    }
+  }, [currentUser]);
 
   return (
     <View style={{ flex: 1 }}>
@@ -1164,8 +1408,40 @@ const CommunityScreen = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Network Status Banner */}
+      {networkStatus !== 'online' && (
+        <View style={[styles.networkBanner, 
+          networkStatus === 'offline' ? styles.offlineBanner : styles.slowBanner
+        ]}>
+          <Ionicons 
+            name={networkStatus === 'offline' ? 'wifi-outline' : 'hourglass-outline'} 
+            size={16} 
+            color="#fff" 
+          />
+          <Text style={styles.networkText}>
+            {networkStatus === 'offline' 
+              ? 'No internet connection' 
+              : 'Slow connection detected'
+            }
+          </Text>
+        </View>
+      )}
     </View>
   );
+};
+
+// Timeout wrapper for network requests
+const withTimeout = <T>(
+  promise: Promise<T>,
+  timeoutMs: number = 10000
+): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error('Request timeout')), timeoutMs)
+    ),
+  ]);
 };
 
 // Add the missing styles to your existing styles object:
@@ -1578,6 +1854,149 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 16,
   },
+  // Network status banner styles
+  networkBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 8,
+    gap: 8,
+  },
+  offlineBanner: {
+    backgroundColor: '#ef4444',
+  },
+  slowBanner: {
+    backgroundColor: '#f97316',
+  },
+  networkText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  // Music control styles
+  musicControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  musicControlBtn: {
+    padding: 8,
+    borderRadius: 6,
+    backgroundColor: '#E8F5E9',
+  },
+  trackInfo: {
+    flex: 1,
+    marginLeft: 8,
+  },
+  volumeText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
+  autoPlayStatus: {
+    fontSize: 11,
+    color: '#888',
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
+  volumeControl: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E8F5E9',
+  },
+  volumeLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 8,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  volumeSliderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  volumeSlider: {
+    flex: 1,
+    height: 4,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 2,
+    position: 'relative',
+  },
+  volumeTrack: {
+    height: '100%',
+    backgroundColor: '#E0E0E0',
+    borderRadius: 2,
+  },
+  volumeFill: {
+    position: 'absolute',
+    height: '100%',
+    backgroundColor: '#4CAF50',
+    borderRadius: 2,
+    left: 0,
+    top: 0,
+  },
+  
+  // Subtask styles
+  subtasksList: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E8F5E9',
+  },
+  subtasksTitle: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#1B5E20',
+    marginBottom: 8,
+  },
+  subtaskItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  subtaskText: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 8,
+    flex: 1,
+  },
+  subtaskCompleted: {
+    textDecorationLine: 'line-through',
+    color: '#888',
+  },
+  moreSubtasks: {
+    fontSize: 11,
+    color: '#888',
+    fontStyle: 'italic',
+    marginTop: 4,
+    marginLeft: 24,
+  },
+  
+  // Due date badge
+  dueDateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF3E0',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginHorizontal: 8,
+  },
+  dueDateText: {
+    fontSize: 10,
+    color: '#F57C00',
+    fontWeight: '600',
+    marginLeft: 2,
+  },
+  
+  // ...rest of existing styles...
 });
 
 export default CommunityScreen;

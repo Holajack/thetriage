@@ -7,6 +7,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { supabase } from '../../utils/supabase';
 const { useUserAppData } = require('../../utils/userAppData');
+import { useBackgroundMusic } from '../../hooks/useBackgroundMusic';
 
 export const SessionReportScreen = () => {
   const { data: userData } = useUserAppData();
@@ -27,6 +28,15 @@ export const SessionReportScreen = () => {
 
   const [newAchievements, setNewAchievements] = useState<any[]>([]);
   const [sessionScore, setSessionScore] = useState(0);
+
+  // Music hook
+  const { 
+    currentTrack, 
+    isPlaying,
+    stopPlayback,
+    audioSupported,
+    isPreviewMode
+  } = useBackgroundMusic();
 
   // Calculate comprehensive session score
   const calculateSessionScore = useMemo(() => {
@@ -351,6 +361,24 @@ export const SessionReportScreen = () => {
           </View>
         )}
 
+        {/* Music Status Section */}
+        {currentTrack && isPlaying && !isPreviewMode && (
+          <View style={[styles.musicContinuing, { backgroundColor: colors.secondary }]}>
+            <MaterialIcons name="music-note" size={20} color={colors.primary} />
+            <View style={{ flex: 1, marginLeft: 8 }}>
+              <Text style={[styles.musicContinuingTitle, { color: colors.accent }]}>
+                Music Continuing
+              </Text>
+              <Text style={[styles.musicContinuingText, { color: colors.primary }]}>
+                ♪ {currentTrack.displayName}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={stopPlayback} style={styles.musicStopBtn}>
+              <Ionicons name="stop-circle-outline" size={20} color="#E57373" />
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Action Buttons */}
         <View style={styles.actionsContainer}>
           <TouchableOpacity
@@ -600,6 +628,29 @@ const styles = StyleSheet.create({
   achievementDesc: {
     fontSize: 14,
     color: '#666',
+  },
+  musicContinuing: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  musicContinuingTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  musicContinuingText: {
+    fontSize: 14,
+    marginTop: 4,
+  },
+  musicStopBtn: {
+    marginLeft: 16,
   },
   actionsContainer: {
     marginBottom: 32,

@@ -2,13 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, ActivityIndicator, RefreshControl } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSupabaseLeaderboardWithFriends, Leaderboard, useSupabaseTasks, useSupabaseProfile } from '../../utils/supabaseHooks';
-import { useAuth } from '../../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
+
+// Import useAuth FIRST, before userAppData
+import { useAuth } from '../../context/AuthContext';
+
+// Import userAppData functions using CommonJS require
 const { useUserAppData, getLeaderboardData } = require('../../utils/userAppData');
 
 const LeaderboardScreen = () => {
-  const { user } = useAuth();
+  const { user } = useAuth(); // This should now work
   const navigation = useNavigation<any>();
   const [tab, setTab] = useState<'Friends' | 'Global'>('Friends');
   const [refreshing, setRefreshing] = useState(false);

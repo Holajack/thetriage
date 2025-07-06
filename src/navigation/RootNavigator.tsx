@@ -56,7 +56,7 @@ export const RootNavigator = () => {
       showSplash
     });
     
-    // Handle navigation for users who just logged in
+    // ONLY handle navigation for users who just logged in - NOT existing authenticated users
     if (isAuthenticated && justLoggedIn) {
       // User just logged in - route them appropriately
       if (hasCompletedOnboarding) {
@@ -81,8 +81,11 @@ export const RootNavigator = () => {
       clearJustLoggedIn();
     }
     
+    // REMOVED: The automatic navigation for existing authenticated users
+    // This was preventing users from seeing the Landing page on app restart
+    
     // Handle logout - only if user was on an authenticated screen
-    if (!isAuthenticated && currentRoute && 
+    else if (!isAuthenticated && currentRoute && 
         (['Main', 'Onboarding'].includes(currentRoute.name as string))) {
       console.log("RootNavigator: User logged out, returning to Landing");
       navigationRef.current.dispatch(
@@ -92,7 +95,7 @@ export const RootNavigator = () => {
         })
       );
     }
-  }, [isAuthenticated, hasCompletedOnboarding, justLoggedIn, isInitialLoading, showSplash]);
+  }, [isAuthenticated, hasCompletedOnboarding, justLoggedIn, isInitialLoading, showSplash, clearJustLoggedIn]);
 
   if (isInitialLoading || showSplash) {
     return <SplashScreen onAnimationComplete={handleSplashComplete} />;
