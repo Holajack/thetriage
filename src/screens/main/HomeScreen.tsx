@@ -116,13 +116,14 @@ export default function HomeScreen() {
     setShowPriorityModal(false);
     
     if (automatic) {
-      // Use automatic selection based on user's work style and task priorities
+      // Navigate directly to timer with automatic configuration and task auto-selection
+      console.log('🎯 Starting automatic focus session with highest priority task');
       navigation.navigate('StudySessionScreen', { 
         autoStart: true,
         manualSelection: false
       });
     } else {
-      // Use manual selection - show setup modal
+      // Navigate to custom setup modal
       navigation.navigate('StudySessionScreen', { 
         autoStart: false,
         manualSelection: true
@@ -170,33 +171,61 @@ export default function HomeScreen() {
   const handleAddSubTask = async (taskId: string) => {
     if (!subTaskInput[taskId]?.trim()) return;
     
+    setSubtasksLoading(prev => ({ ...prev, [taskId]: true }));
+    
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        throw new Error('No authenticated user');
+      }
+
+      // Get the current count of subtasks for this task to determine order
+      const { count } = await supabase
+        .from('subtasks')
+        .select('*', { count: 'exact', head: true })
+        .eq('task_id', taskId);
+
+      const nextOrder = (count || 0) + 1;
+
+      const subtaskData = {
+        task_id: taskId,
+        user_id: session.user.id,
+        text: subTaskInput[taskId].trim(),
+        title: subTaskInput[taskId].trim(), // Add title field
+        completed: false,
+        order: nextOrder, // Add the required order field
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
       const { data, error } = await supabase
         .from('subtasks')
-        .insert({
-          task_id: taskId,
-          user_id: user?.id,
-          text: subTaskInput[taskId],
-          completed: false
-        })
+        .insert(subtaskData)
         .select();
+
+      if (error) {
+        console.error('Error adding subtask:', error);
+        throw error;
+      }
+
+      if (data && data[0]) {
+        // Update local state
+        setAllSubtasks(prev => ({
+          ...prev,
+          [taskId]: [...(prev[taskId] || []), data[0]]
+        }));
         
-      if (error) throw error;
-      
-      // Update local state
-      setAllSubtasks(prev => ({
-        ...prev,
-        [taskId]: [...(prev[taskId] || []), data[0]]
-      }));
-      
-      // Clear input
-      setSubTaskInput(prev => ({ ...prev, [taskId]: '' }));
-      
-      // Refresh data
-      await refreshData();
-      
+        // Clear input
+        setSubTaskInput(prev => ({ ...prev, [taskId]: '' }));
+        console.log('✅ Subtask added successfully:', data[0].text);
+      }
+
     } catch (error) {
       console.error('Error adding subtask:', error);
+      setSubtasksError(prev => ({ ...prev, [taskId]: error.message }));
+      Alert.alert('Error', 'Failed to add subtask. Please try again.');
+    } finally {
+      setSubtasksLoading(prev => ({ ...prev, [taskId]: false }));
     }
   };
   

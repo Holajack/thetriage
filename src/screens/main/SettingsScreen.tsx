@@ -10,7 +10,10 @@ import { useSupabaseProfile } from '../../utils/supabaseHooks';
 import { useTheme } from '../../context/ThemeContext';
 import { themePalettes, ThemeName } from '../../context/ThemeContext';
 const { useUserAppData } = require('../../utils/userAppData');
-import Slider from '@react-native-community/slider'; // Fixed import - remove the destructuring
+import Slider from '@react-native-community/slider';
+import { useBackgroundMusic } from '../../hooks/useBackgroundMusic';
+import { supabase } from '../../utils/supabase';
+import { getUserSettings, updateUserSettings, UserSettings } from '../../utils/userSettings';
 
 const SOUND_OPTIONS = [
   'Lo-Fi',
@@ -78,6 +81,9 @@ const SettingsScreen = () => {
   const [showWorkStyleModal, setShowWorkStyleModal] = useState(false);
   const [showEnvModal, setShowEnvModal] = useState(false);
   const [selectedEnv, setSelectedEnv] = useState<ThemeName>(themeName);
+
+  // Music preview state
+  const { playPreview, stopPreview, isPlaying, isPreviewMode, currentTrack } = useBackgroundMusic();
 
   // Load profile data when available
   useEffect(() => {
@@ -181,6 +187,52 @@ const SettingsScreen = () => {
     }
   }, [userData, userDataLoading, setThemeName]);
 
+  // Add this useEffect to load user_settings data:
+  useEffect(() => {
+    const loadUserSettings = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) return;
+
+        // Load from user_settings table
+        const { data: userSettings, error: settingsError } = await supabase
+          .from('user_settings')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .single();
+
+        if (userSettings && !settingsError) {
+          setAutoPlaySound(userSettings.auto_play_sound || false);
+          setSound(userSettings.sound_enabled !== undefined ? userSettings.sound_enabled : true);
+          setAmbientNoise(userSettings.music_volume || 0.5);
+          setNotifications(userSettings.notifications_enabled !== undefined ? userSettings.notifications_enabled : true);
+          setAutoStartNext(userSettings.auto_start_focus !== undefined ? userSettings.auto_start_focus : false);
+          
+          console.log('🎵 User settings loaded from database');
+        } else {
+          // Fallback: try loading from onboarding_preferences
+          const { data: onboardingData, error: onboardingError } = await supabase
+            .from('onboarding_preferences')
+            .select('auto_play_sound, sound_preference')
+            .eq('user_id', session.user.id)
+            .single();
+
+          if (onboardingData && !onboardingError) {
+            setAutoPlaySound(onboardingData.auto_play_sound || false);
+            if (onboardingData.sound_preference) {
+              setSelectedSound(onboardingData.sound_preference);
+            }
+            console.log('🎵 Settings loaded from onboarding preferences fallback');
+          }
+        }
+      } catch (error) {
+        console.error('Error loading user settings:', error);
+      }
+    };
+
+    loadUserSettings();
+  }, []);
+
   // Handle weekly goal update
   const handleWeeklyGoalUpdate = async (goal: number) => {
     setWeeklyGoal(goal);
@@ -229,6 +281,166 @@ const SettingsScreen = () => {
   // Placeholder actions
   const placeholder = (msg: string) => Alert.alert(msg, 'Coming soon!');
 
+  // Update the handlePreviewSound function:
+
+  const handlePreviewSound = async (soundOption: string) => {
+    try {
+      if (isPreviewMode && currentTrack) {
+        // Stop preview if already playing
+        await stopPreview();
+      } else {
+        // Start 10-second preview
+        console.log(`🎵 Starting preview for: ${soundOption}`);
+        await playPreview(soundOption);
+      }
+    } catch (error) {
+      console.error('Error in preview sound:', error);
+      Alert.alert('Preview Error', 'Unable to play preview. Please check your audio settings.');
+    }
+  };
+
+  // Update the SettingsScreen save function:
+  const handleSave = async () => {
+    try {
+      setIsSaving(true);
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        throw new Error('No authenticated user');
+      }
+
+      // Save sound preference to onboarding_preferences table
+      const { error: onboardingError } = await supabase
+        .from('onboarding_preferences')
+        .upsert({
+          user_id: session.user.id,
+          sound_preference: selectedSound,
+          updated_at: new Date().toISOString()
+        });
+
+      if (onboardingError) {
+        console.error('Error saving sound preference:', onboardingError);
+      } else {
+        console.log('✅ Sound preference saved successfully');
+      }
+
+      // Also update profile table for backup
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert({
+          id: session.user.id,
+          soundpreference: selectedSound,
+          updated_at: new Date().toISOString()
+        });
+
+      if (profileError) {
+        console.warn('Profile update warning (may not affect functionality):', profileError);
+      }
+
+      // Save auto-play setting to user_settings if table exists
+      try {
+        const { error: settingsError } = await supabase
+          .from('user_settings')
+          .upsert({
+            user_id: session.user.id,
+            auto_play_sound: autoPlaySound,
+            music_volume: ambientLevel / 100,
+            updated_at: new Date().toISOString()
+          });
+
+        if (settingsError) {
+          console.log('User settings table may not exist, auto-play setting not saved');
+        }
+      } catch (settingsErr) {
+        console.log('User settings table not available');
+      }
+
+      // Force refresh user data
+      await refreshData();
+      
+      Alert.alert('Success', 'Settings saved successfully!');
+      
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      Alert.alert('Error', 'Failed to save settings. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Replace the handleAutoPlayToggle function:
+  const handleAutoPlayToggle = async (value: boolean) => {
+    setAutoPlaySound(value);
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        throw new Error('No authenticated user');
+      }
+
+      const success = await updateUserSettings(session.user.id, {
+        auto_play_sound: value
+      });
+
+      if (!success) {
+        throw new Error('Failed to update user settings');
+      }
+
+      console.log(`🎵 Auto-play sound setting saved: ${value}`);
+
+    } catch (error) {
+      console.error('Error saving auto-play setting:', error);
+      Alert.alert('Error', 'Failed to save auto-play setting. Please try again.');
+      // Revert the UI state
+      setAutoPlaySound(!value);
+    }
+  };
+
+  // Add persistent sound preference saving in SettingsScreen.tsx:
+
+  const handleSoundPreferenceChange = async (preference: string) => {
+    setSoundPreference(preference);
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        throw new Error('No authenticated user');
+      }
+
+      // Save to onboarding_preferences table
+      const { error: onboardingError } = await supabase
+        .from('onboarding_preferences')
+        .upsert({
+          user_id: session.user.id,
+          sound_preference: preference,
+          updated_at: new Date().toISOString()
+        });
+
+      if (onboardingError) {
+        console.error('Error saving sound preference to onboarding:', onboardingError);
+      }
+
+      // Also save to user_settings as backup
+      const { error: settingsError } = await supabase
+        .from('user_settings')
+        .upsert({
+          user_id: session.user.id,
+          sound_preference: preference,
+          updated_at: new Date().toISOString()
+        });
+
+      if (settingsError) {
+        console.error('Error saving sound preference to settings:', settingsError);
+      }
+
+      console.log(`🎵 Sound preference saved: ${preference}`);
+
+    } catch (error) {
+      console.error('Error saving sound preference:', error);
+      Alert.alert('Error', 'Failed to save sound preference. Please try again.');
+    }
+  };
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
       {/* Drawer Toggle Button */}
@@ -267,7 +479,7 @@ const SettingsScreen = () => {
           </TouchableOpacity>
         </View>
 
-        {/* MOVED: Sound section - now above App Environment */}
+        {/* SOUND SECTION - FIXED */}
         <Text style={styles.sectionHeader}>SOUND</Text>
         <View style={styles.cardSection}>
           <Text style={styles.sectionTitle}>Focus Sound</Text>
@@ -282,31 +494,56 @@ const SettingsScreen = () => {
                 {selectedSound === option && <View style={styles.radioDot} />}
               </View>
               <Text style={[styles.soundLabel, selectedSound === option && styles.soundLabelSelected]}>{option}</Text>
-              <TouchableOpacity onPress={() => placeholder('Preview ' + option)} style={{ marginLeft: 10 }}>
-                <Ionicons name="play-circle-outline" size={22} color="#388E3C" />
+              <TouchableOpacity 
+                onPress={() => handlePreviewSound(option)} 
+                style={[
+                  styles.previewButton,
+                  isPreviewMode && currentTrack?.displayName.toLowerCase().includes(option.toLowerCase()) && styles.previewButtonActive
+                ]}
+              >
+                <Ionicons 
+                  name={isPreviewMode && currentTrack?.displayName.toLowerCase().includes(option.toLowerCase()) ? "stop-circle" : "play-circle-outline"} 
+                  size={22} 
+                  color={isPreviewMode && currentTrack?.displayName.toLowerCase().includes(option.toLowerCase()) ? "#E57373" : "#388E3C"} 
+                />
               </TouchableOpacity>
             </TouchableOpacity>
           ))}
+          
+          {/* Auto-Play Sound Toggle Row - Fixed styling */}
           <View style={styles.rowCard}>
             <MaterialIcons name="music-note" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>Auto-Play Sound</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowLabel}>Auto-Play Sound</Text>
+              <Text style={styles.rowDescription}>Automatically start music when focus session begins</Text>
+            </View>
             <Switch
               value={autoPlaySound}
-              onValueChange={setAutoPlaySound}
+              onValueChange={handleAutoPlayToggle}
               trackColor={{ false: '#E0E0E0', true: '#4CAF50' }}
               thumbColor={autoPlaySound ? '#1B5E20' : '#BDBDBD'}
             />
           </View>
+          
+          {/* Ambient Noise Level Row */}
           <View style={styles.rowCard}>
             <MaterialIcons name="volume-up" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>Ambient Noise Level</Text>
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <View style={{ height: 6, backgroundColor: '#E0E0E0', borderRadius: 3, marginVertical: 8 }}>
-                <View style={{ width: `${ambientNoise * 100}%`, height: 6, backgroundColor: '#4CAF50', borderRadius: 3 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowLabel}>Ambient Noise Level</Text>
+              <View style={styles.sliderContainer}>
+                <TouchableOpacity onPress={() => setAmbientNoise(Math.max(0, ambientNoise - 0.1))}>
+                  <Entypo name="minus" size={20} color="#388E3C" />
+                </TouchableOpacity>
+                <View style={{ flex: 1, marginHorizontal: 12 }}>
+                  <View style={{ height: 6, backgroundColor: '#E0E0E0', borderRadius: 3, marginVertical: 8 }}>
+                    <View style={{ width: `${ambientNoise * 100}%`, height: 6, backgroundColor: '#4CAF50', borderRadius: 3 }} />
+                  </View>
+                </View>
+                <TouchableOpacity onPress={() => setAmbientNoise(Math.min(1, ambientNoise + 0.1))}>
+                  <Entypo name="plus" size={20} color="#388E3C" />
+                </TouchableOpacity>
               </View>
             </View>
-            <TouchableOpacity onPress={() => setAmbientNoise(Math.max(0, ambientNoise - 0.1))}><Entypo name="minus" size={20} color="#388E3C" /></TouchableOpacity>
-            <TouchableOpacity onPress={() => setAmbientNoise(Math.min(1, ambientNoise + 0.1))}><Entypo name="plus" size={20} color="#388E3C" /></TouchableOpacity>
           </View>
         </View>
 
@@ -824,6 +1061,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     fontWeight: '500',
+  },
+  previewButton: {
+    padding: 4,
+    borderRadius: 4,
+  },
+  previewButtonActive: {
+    backgroundColor: '#FFEBEE',
   },
 });
 

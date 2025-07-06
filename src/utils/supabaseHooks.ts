@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '../context/AuthContext'; // Make sure this path is correct
 import { supabase } from './supabase';
 
 export interface Task {
@@ -370,51 +371,93 @@ export const useSupabaseLeaderboardWithFriends = () => {
   const { user } = useAuth();
 
   const fetchLeaderboard = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     
     try {
       setLoading(true);
       setError(null);
 
-      // Fix the friends query - use proper join syntax
-      const { data: friendsData, error: friendsError } = await supabase
-        .from('leaderboard')
-        .select(`
-          *,
-          profiles!inner(*)
-        `)
-        .in('user_id', [
-          // Get user's friend IDs first
-          // This is a simplified approach - you may need to adjust based on your friends table structure
-        ])
-        .order('points', { ascending: false })
-        .limit(10);
-
-      if (friendsError) {
-        console.error('Friends leaderboard error:', friendsError);
-        // Don't throw here, just log and continue with empty array
-      }
-
-      // Global leaderboard query (this should work fine)
+      // Fix 1: Use correct table name 'leaderboard_stats' instead of 'leaderboard'
       const { data: globalData, error: globalError } = await supabase
-        .from('leaderboard')
+        .from('leaderboard_stats')
         .select(`
           *,
-          profiles(*)
+          profiles!leaderboard_stats_user_id_fkey(username, full_name, avatar_url)
         `)
         .order('points', { ascending: false })
         .limit(50);
 
-      if (globalError) throw globalError;
+      if (globalError) {
+        console.error('Global leaderboard error:', globalError);
+        throw globalError;
+      }
+
+      // Fix 2: Try to get friends from user_friends table (if it exists)
+      let friendsData = [];
+      try {
+        // First, get the user's friends
+        const { data: userFriends, error: friendsError } = await supabase
+          .from('user_friends')
+          .select('friend_id')
+          .eq('user_id', user.id)
+          .eq('status', 'accepted');
+
+        if (!friendsError && userFriends && userFriends.length > 0) {
+          const friendIds = userFriends.map(f => f.friend_id);
+          
+          // Get leaderboard data for friends
+          const { data: friendsLeaderboard, error: friendsLeaderboardError } = await supabase
+            .from('leaderboard_stats')
+            .select(`
+              *,
+              profiles!leaderboard_stats_user_id_fkey(username, full_name, avatar_url)
+            `)
+            .in('user_id', friendIds)
+            .order('points', { ascending: false });
+
+          if (!friendsLeaderboardError) {
+            friendsData = friendsLeaderboard || [];
+          }
+        }
+      } catch (friendsErr) {
+        console.warn('Friends data not available (table may not exist):', friendsErr);
+        // Continue without friends data
+      }
+
+      // Format the data
+      const formattedGlobal = (globalData || []).map(entry => ({
+        ...entry,
+        is_current_user: entry.user_id === user.id,
+        display_name: entry.user_id === user.id ? 'You' : (entry.profiles?.full_name || entry.profiles?.username || 'Unknown User'),
+        avatar_url: entry.profiles?.avatar_url
+      }));
+
+      const formattedFriends = friendsData.map(entry => ({
+        ...entry,
+        is_current_user: entry.user_id === user.id,
+        display_name: entry.user_id === user.id ? 'You' : (entry.profiles?.full_name || entry.profiles?.username || 'Unknown User'),
+        avatar_url: entry.profiles?.avatar_url
+      }));
+
+      // Add current user to friends leaderboard if not already there
+      const currentUserInFriends = formattedFriends.find(f => f.is_current_user);
+      if (!currentUserInFriends) {
+        const currentUserEntry = formattedGlobal.find(g => g.is_current_user);
+        if (currentUserEntry) {
+          formattedFriends.push(currentUserEntry);
+        }
+      }
 
       setData({
-        friendsLeaderboard: friendsData || [],
-        globalLeaderboard: globalData || [],
+        friendsLeaderboard: formattedFriends,
+        globalLeaderboard: formattedGlobal,
       });
     } catch (err: any) {
       console.error('Leaderboard fetch error:', err);
       setError(err.message);
-      // Set fallback data
       setData({
         friendsLeaderboard: [],
         globalLeaderboard: [],
@@ -428,7 +471,12 @@ export const useSupabaseLeaderboardWithFriends = () => {
     fetchLeaderboard();
   }, [fetchLeaderboard]);
 
-  return { data, loading, error, refetch: fetchLeaderboard };
+  return {
+    data,
+    loading,
+    error,
+    refetch: fetchLeaderboard
+  };
 };
 
 export const useSupabaseAchievements = () => {
@@ -965,5 +1013,109 @@ export const useSupabaseProfile = () => {
     loading,
     error,
     refetch: fetchProfile
+  };
+};
+
+export const useUserAppData = () => {
+  const [userData, setUserData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchUserData = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        setUserData(null);
+        setLoading(false);
+        return;
+      }
+
+      const userId = session.user.id;
+
+      // Enhanced parallel fetching with better error handling
+      const fetchWithFallback = async (tableName: string, query: any) => {
+        try {
+          const result = await query;
+          if (result.error) {
+            console.warn(`Table '${tableName}' error:`, result.error.message);
+            return { data: null, error: result.error };
+          }
+          return result;
+        } catch (err) {
+          console.warn(`Table '${tableName}' fetch failed:`, err.message);
+          return { data: null, error: err };
+        }
+      };
+
+      const [
+        profileResult,
+        onboardingResult,
+        settingsResult,
+        tasksResult,
+        achievementsResult,
+        insightsResult,
+        metricsResult
+      ] = await Promise.all([
+        fetchWithFallback('profiles', supabase.from('profiles').select('*').eq('id', userId).single()),
+        fetchWithFallback('onboarding_preferences', supabase.from('onboarding_preferences').select('*').eq('user_id', userId).single()),
+        fetchWithFallback('user_settings', supabase.from('user_settings').select('*').eq('user_id', userId).single()),
+        fetchWithFallback('tasks', supabase.from('tasks').select(`
+          *,
+          subtasks:subtasks(*)
+        `).eq('user_id', userId).order('created_at', { ascending: false })),
+        fetchWithFallback('achievements', supabase.from('achievements').select('*').eq('user_id', userId)),
+        fetchWithFallback('ai_insights', supabase.from('ai_insights').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(5)),
+        fetchWithFallback('learning_metrics', supabase.from('learning_metrics').select('*').eq('user_id', userId).limit(1))
+      ]);
+
+      // Collect any errors for logging
+      const errors = [
+        profileResult.error && { table: 'profiles', error: profileResult.error },
+        onboardingResult.error && { table: 'onboarding_preferences', error: onboardingResult.error },
+        settingsResult.error && { table: 'user_settings', error: settingsResult.error },
+        tasksResult.error && { table: 'tasks', error: tasksResult.error },
+        achievementsResult.error && { table: 'achievements', error: achievementsResult.error },
+        insightsResult.error && { table: 'ai_insights', error: insightsResult.error },
+        metricsResult.error && { table: 'learning_metrics', error: metricsResult.error }
+      ].filter(Boolean);
+
+      if (errors.length > 0) {
+        console.warn('Errors fetching user data (using fallbacks where possible):', errors);
+      }
+
+      const compiledData = {
+        profile: profileResult.data || null,
+        onboarding: onboardingResult.data || null,
+        settings: settingsResult.data || null,
+        tasks: tasksResult.data || [],
+        achievements: achievementsResult.data || [],
+        insights: insightsResult.data || [],
+        metrics: metricsResult.data?.[0] || null // Take first record only to avoid multiple rows error
+      };
+
+      console.log('📊 User data compiled:', {
+        tasksCount: compiledData.tasks.length,
+        hasProfile: !!compiledData.profile,
+        hasOnboarding: !!compiledData.onboarding
+      });
+
+      setUserData(compiledData);
+    } catch (err: any) {
+      console.error('Error fetching user data:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchUserData();
+  }, [fetchUserData]);
+
+  return { 
+    data: userData, 
+    loading, 
+    error, 
+    refetch: fetchUserData 
   };
 };

@@ -23,38 +23,52 @@ const DEMO_USER_ID = '11111111-2222-3333-4444-555555555555';
  * @returns {Promise<Object>} - Object containing data from all tables
  */
 export async function fetchUserAppData(userId = null) {
-  // Use mock data for development if flag is set
-  if (USE_MOCK_DATA) {
-    console.log('Using mock admin user data instead of Supabase API calls');
-    return mockDataHelper.getMockAdminData();
-  }
-  
-  // Force demo mode on mobile platforms to avoid iOS issues
-  const shouldUseDemoMode = USE_DEMO_MODE || (FORCE_DEMO_ON_MOBILE && Platform.OS !== 'web');
-  
-  // Use demo mode for testing without authentication
-  if (shouldUseDemoMode) {
-    console.log('Using demo mode with test user ID (mobile platform detected)');
-    userId = DEMO_USER_ID;
-    
-    // On mobile, skip Supabase calls entirely and return demo data directly
-    if (Platform.OS !== 'web' && FORCE_DEMO_ON_MOBILE) {
-      console.log('Mobile platform detected: returning demo data without Supabase calls');
-      return getMobileDemoData(userId);
-    }
-  }
-  
-  try {
-    // If no userId provided, get from current session
-    if (!userId && !USE_DEMO_MODE) {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
-        throw new Error('No authenticated user found');
+  // Add authentication check with fallback
+  if (!userId) {
+    try {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.warn('Session error in fetchUserAppData:', sessionError.message);
+        return getMobileDemoData('demo-user-fallback');
       }
+      
+      if (!session?.user) {
+        console.warn('No authenticated user found, using demo data');
+        return getMobileDemoData('demo-user-fallback');
+      }
+      
       userId = session.user.id;
+    } catch (authError) {
+      console.warn('Authentication check failed, using demo data:', authError.message);
+      return getMobileDemoData('demo-user-fallback');
     }
+  }
+
+  // Use demo mode if enabled or if no user ID
+  if (USE_DEMO_MODE || !userId) {
+    console.log('📱 Using demo data mode');
+    return getMobileDemoData(userId || 'demo-user-fallback');
+  }
+
+  try {
+    console.log('📊 Fetching user app data for user:', userId);
     
-    // Fetch data from multiple tables in parallel
+    // Enhanced parallel fetching with better error handling
+    const fetchWithFallback = async (tableName, query) => {
+      try {
+        const result = await query;
+        if (result.error) {
+          console.warn(`Table '${tableName}' error:`, result.error.message);
+          return { data: null, error: result.error };
+        }
+        return result;
+      } catch (err) {
+        console.warn(`Table '${tableName}' fetch failed:`, err.message);
+        return { data: null, error: err };
+      }
+    };
+
     const [
       profileResult,
       onboardingResult,
@@ -62,476 +76,107 @@ export async function fetchUserAppData(userId = null) {
       sessionsResult,
       tasksResult,
       achievementsResult,
+      settingsResult,
       insightsResult,
       metricsResult,
-      friendsResult,
-      settingsResult
+      friendsResult
     ] = await Promise.all([
-      // User profile
-      supabase.from('profiles').select('*').eq('id', userId).single(),
-      
-      // Onboarding preferences
-      supabase.from('onboarding_preferences').select('*').eq('user_id', userId).single(),
-      
-      // Leaderboard stats
-      supabase.from('leaderboard_stats').select('*').eq('user_id', userId).single(),
-      
-      // Focus sessions (limited to recent)
-      supabase.from('focus_sessions')
-        .select('*, session_reflections(*)')
-        .eq('user_id', userId)
-        .order('start_time', { ascending: false })
-        .limit(20),
-      
-      // Tasks with subtasks
-      supabase.from('tasks')
-        .select(`
-          *,
-          subtasks:subtasks(*)
-        `)
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false }),
-      
-      // Achievements
-      supabase.from('achievements')
-        .select('*')
-        .eq('user_id', userId)
-        .order('earned_at', { ascending: false }),
-      
-      // AI insights
-      supabase.from('ai_insights')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(5),
-      
-      // Learning metrics
-      supabase.from('learning_metrics')
-        .select('*')
-        .eq('user_id', userId)
-        .single(),
-        
-      // Friends
-      supabase.from('user_friends')
-        .select(`
-          *,
-          friend:friend_id(id, username, full_name, avatar_url, university, status)
-        `)
-        .eq('user_id', userId)
-        .eq('status', 'accepted'),
-        
-      // User settings
-      supabase.from('user_settings')
-        .select('*')
-        .eq('user_id', userId)
-        .single()
+      fetchWithFallback('profiles', supabase.from('profiles').select('*').eq('id', userId).single()),
+      fetchWithFallback('onboarding_preferences', supabase.from('onboarding_preferences').select('*').eq('user_id', userId).single()),
+      fetchWithFallback('leaderboard_stats', supabase.from('leaderboard_stats').select('*').eq('user_id', userId).single()),
+      fetchWithFallback('focus_sessions', supabase.from('focus_sessions').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(50)),
+      fetchWithFallback('tasks', supabase.from('tasks').select(`
+        *,
+        subtasks:subtasks(*)
+      `).eq('user_id', userId).order('created_at', { ascending: false })),
+      fetchWithFallback('achievements', supabase.from('achievements').select('*').eq('user_id', userId).order('earned_at', { ascending: false })),
+      fetchWithFallback('user_settings', supabase.from('user_settings').select('*').eq('user_id', userId).single()),
+      fetchWithFallback('ai_insights', supabase.from('ai_insights').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(10)),
+      fetchWithFallback('learning_metrics', supabase.from('learning_metrics').select('*').eq('user_id', userId).single()),
+      fetchWithFallback('user_friends', supabase.from('user_friends').select('*').eq('user_id', userId))
     ]);
-    
-    // Handle any errors from the queries with fallback data
-    const errors = [];
-    
-    // Create fallback data for missing or failed queries
-    const getDataOrFallback = (result, tableName, fallbackData = null) => {
-      if (result.error) {
-        errors.push({ table: tableName, error: result.error });
-        console.warn(`Table '${tableName}' error: ${result.error.message}`);
-        
-        // Provide fallback data for missing tables
-        if (result.error.message.includes('does not exist')) {
-          console.log(`Using fallback data for missing table: ${tableName}`);
-          return fallbackData;
-        }
-        return null;
-      }
-      return result.data;
-    };
-    
-    // Get data with fallbacks
-    const profile = getDataOrFallback(profileResult, 'profiles', {
-      id: userId,
-      username: 'demo_user',
-      full_name: 'Demo User',
-      avatar_url: null,
-      university: 'Demo University',
-      status: 'active'
-    });
-    
-    const onboarding = getDataOrFallback(onboardingResult, 'onboarding_preferences', {
-      user_id: userId,
-      preferred_study_duration: 25,
-      preferred_break_duration: 5,
-      study_goals: ['focus', 'productivity'],
-      completed_at: new Date().toISOString()
-    });
-    
-    const leaderboard = getDataOrFallback(leaderboardResult, 'leaderboard_stats', {
-      user_id: userId,
-      total_focus_time: 150,
-      sessions_completed: 6,
-      current_streak: 3,
-      longest_streak: 7,
-      total_points: 180,
-      rank_position: 1,
-      achievements_count: 3
-    });
-    
-    const sessions = getDataOrFallback(sessionsResult, 'focus_sessions', [
-      {
-        id: 'demo-session-1',
-        user_id: userId,
-        start_time: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
-        end_time: new Date(Date.now() - 75 * 60 * 1000).toISOString(), // 1h 15m ago
-        duration: 45, // minutes
-        intended_duration: 45,
-        status: 'completed',
-        focus_quality: 8,
-        interruptions: 1,
-        session_type: 'study',
-        subject: 'Mathematics',
-        notes: 'Great focus on algebra problems',
-        created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-        session_reflections: []
-      },
-      {
-        id: 'demo-session-2',
-        user_id: userId,
-        start_time: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
-        end_time: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000 + 25 * 60 * 1000).toISOString(),
-        duration: 25,
-        intended_duration: 25,
-        status: 'completed',
-        focus_quality: 9,
-        interruptions: 0,
-        session_type: 'study',
-        subject: 'Chemistry',
-        notes: 'Solid session on chemical bonding',
-        created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-        session_reflections: []
-      },
-      {
-        id: 'demo-session-3',
-        user_id: userId,
-        start_time: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days ago
-        end_time: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 + 90 * 60 * 1000).toISOString(),
-        duration: 90,
-        intended_duration: 60,
-        status: 'completed',
-        focus_quality: 7,
-        interruptions: 2,
-        session_type: 'deep_work',
-        subject: 'Computer Science',
-        notes: 'Long coding session, got into flow state',
-        created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-        session_reflections: []
-      },
-      {
-        id: 'demo-session-4',
-        user_id: userId,
-        start_time: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days ago
-        end_time: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000 + 30 * 60 * 1000).toISOString(),
-        duration: 30,
-        intended_duration: 30,
-        status: 'completed',
-        focus_quality: 6,
-        interruptions: 3,
-        session_type: 'review',
-        subject: 'History',
-        notes: 'Review session with some distractions',
-        created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-        session_reflections: []
-      },
-      {
-        id: 'demo-session-5',
-        user_id: userId,
-        start_time: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(), // 4 days ago
-        end_time: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000 + 50 * 60 * 1000).toISOString(),
-        duration: 50,
-        intended_duration: 45,
-        status: 'completed',
-        focus_quality: 9,
-        interruptions: 0,
-        session_type: 'study',
-        subject: 'Mathematics',
-        notes: 'Excellent focus on calculus derivatives',
-        created_at: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
-        session_reflections: []
-      }
-    ]);
-    const tasks = getDataOrFallback(tasksResult, 'tasks', [
-      {
-        id: 'demo-task-1',
-        user_id: userId,
-        title: 'Review Mathematics Chapter 5',
-        description: 'Complete exercises 1-15 and review concept summary',
-        priority: 'high',
-        status: 'pending',
-        category: 'Mathematics',
-        estimated_minutes: 45,
-        actual_minutes: null,
-        due_date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days from now
-        completed_at: null,
-        created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
-        updated_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-        subtasks: [
-          {
-            id: 'demo-subtask-1',
-            task_id: 'demo-task-1',
-            title: 'Read theory section',
-            completed: true,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          },
-          {
-            id: 'demo-subtask-2',
-            task_id: 'demo-task-1',
-            title: 'Complete practice problems',
-            completed: false,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }
-        ]
-      },
-      {
-        id: 'demo-task-2',
-        user_id: userId,
-        title: 'Prepare Chemistry Lab Report',
-        description: 'Write up findings from last week\'s titration experiment',
-        priority: 'medium',
-        status: 'in_progress',
-        category: 'Chemistry',
-        estimated_minutes: 90,
-        actual_minutes: 30,
-        due_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 days from now
-        completed_at: null,
-        created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days ago
-        updated_at: new Date().toISOString(),
-        subtasks: []
-      },
-      {
-        id: 'demo-task-3',
-        user_id: userId,
-        title: 'Study for History Midterm',
-        description: 'Review chapters 8-12, focus on key dates and figures',
-        priority: 'high',
-        status: 'pending',
-        category: 'History',
-        estimated_minutes: 120,
-        actual_minutes: null,
-        due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 1 week from now
-        completed_at: null,
-        created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days ago
-        updated_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-        subtasks: [
-          {
-            id: 'demo-subtask-3',
-            task_id: 'demo-task-3',
-            title: 'Review chapter 8',
-            completed: false,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          },
-          {
-            id: 'demo-subtask-4',
-            task_id: 'demo-task-3',
-            title: 'Make timeline of events',
-            completed: false,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }
-        ]
-      },
-      {
-        id: 'demo-task-4',
-        user_id: userId,
-        title: 'Complete Programming Assignment',
-        description: 'Implement binary search algorithm and write unit tests',
-        priority: 'medium',
-        status: 'completed',
-        category: 'Computer Science',
-        estimated_minutes: 180,
-        actual_minutes: 165,
-        due_date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
-        completed_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(), // 6 hours ago
-        created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 days ago
-        updated_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
-        subtasks: [
-          {
-            id: 'demo-subtask-5',
-            task_id: 'demo-task-4',
-            title: 'Write algorithm implementation',
-            completed: true,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          },
-          {
-            id: 'demo-subtask-6',
-            task_id: 'demo-task-4',
-            title: 'Write unit tests',
-            completed: true,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }
-        ]
-      }
-    ]);
-    const achievements = getDataOrFallback(achievementsResult, 'achievements', [
-      {
-        id: 'demo-achievement-1',
-        user_id: userId,
-        achievement_type: 'streak',
-        title: 'Study Streak Starter',
-        description: 'Completed 3 days of focused study sessions in a row',
-        icon: '🔥',
-        points_awarded: 50,
-        unlocked_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-        category: 'motivation',
-        created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString()
-      },
-      {
-        id: 'demo-achievement-2',
-        user_id: userId,
-        achievement_type: 'task',
-        title: 'Task Master',
-        description: 'Completed 10 tasks this week',
-        icon: '✅',
-        points_awarded: 30,
-        unlocked_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-        category: 'productivity',
-        created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString()
-      },
-      {
-        id: 'demo-achievement-3',
-        user_id: userId,
-        achievement_type: 'focus',
-        title: 'Deep Focus',
-        description: 'Completed a 90-minute focused study session',
-        icon: '🎯',
-        points_awarded: 40,
-        unlocked_at: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
-        category: 'focus',
-        created_at: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString()
-      }
-    ]);
-    const insights = getDataOrFallback(insightsResult, 'ai_insights', [
-      {
-        id: 'demo-insight-1',
-        user_id: userId,
-        insight_type: 'tip',
-        title: 'Peak Focus Time',
-        content: 'You tend to be most productive between 2-4 PM. Consider scheduling your most challenging tasks during this time.',
-        priority: 'medium',
-        category: 'productivity',
-        read_at: null,
-        created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString()
-      },
-      {
-        id: 'demo-insight-2',
-        user_id: userId,
-        insight_type: 'recommendation',
-        title: 'Break Reminder',
-        content: 'You\'ve been studying for 45 minutes. Taking a 5-10 minute break can help maintain focus and retention.',
-        priority: 'high',
-        category: 'wellness',
-        read_at: null,
-        created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
-      },
-      {
-        id: 'demo-insight-3',
-        user_id: userId,
-        insight_type: 'suggestion',
-        title: 'Study Method Variety',
-        content: 'Try mixing active recall techniques with your current study methods. This can improve retention by up to 40%.',
-        priority: 'medium',
-        category: 'technique',
-        read_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-        created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
-      }
-    ]);
-    const metrics = getDataOrFallback(metricsResult, 'learning_metrics', {
-      user_id: userId,
-      total_study_time: 300,
-      average_session_length: 26,
-      focus_score: 85,
-      productivity_trend: 'improving',
-      weekly_goal: 600,
-      weekly_progress: 300
-    });
-    
-    const friends = getDataOrFallback(friendsResult, 'user_friends', []);
-    const settings = getDataOrFallback(settingsResult, 'user_settings', {
-      user_id: userId,
-      theme: 'auto',
-      notifications_enabled: true,
-      study_reminders: true,
-      break_reminders: true,
-      daily_goal_minutes: 120,
-      preferred_session_length: 25,
-      preferred_break_length: 5
-    });
-    
-    if (errors.length > 0) {
-      console.warn('Errors fetching user data (using fallbacks where possible):', errors);
-    }
 
-    // Calculate weekly focus time from sessions
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
-    
-    const weeklyFocusSessions = (sessions || []).filter(session => {
-      const sessionDate = new Date(session.start_time);
-      return sessionDate >= weekAgo && session.status === 'completed';
-    });
-    
-    const weeklyFocusTime = weeklyFocusSessions.reduce((sum, session) => {
-      return sum + (session.duration || 0);
-    }, 0);
-    
-    // Format daily focus time for charts
-    const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    // Process results with comprehensive fallbacks
+    const profile = profileResult.data || { id: userId, email: '', full_name: 'Study User' };
+    const onboarding = onboardingResult.data || { 
+      user_id: userId,
+      focus_method: 'Balanced',
+      sound_preference: 'Lo-Fi',
+      weekly_focus_goal: 10,
+      is_onboarding_complete: true
+    };
+    const leaderboard = leaderboardResult.data || { 
+      user_id: userId,
+      total_focus_time: 0,
+      level: 1,
+      points: 0,
+      current_streak: 0
+    };
+    const sessions = sessionsResult.data || [];
+    const tasks = tasksResult.data || [];
+    const achievements = achievementsResult.data || [];
+    const settings = settingsResult.data || {
+      user_id: userId,
+      auto_play_sound: true,
+      music_volume: 0.7,
+      notifications_enabled: true
+    };
+    const insights = insightsResult.data || [];
+    const metrics = metricsResult.data || { user_id: userId };
+    const friends = friendsResult.data || [];
+
+    // Calculate derived data
     const today = new Date();
+    const weekStart = new Date(today);
+    weekStart.setDate(today.getDate() - today.getDay());
+
+    const weeklyFocusTime = (sessions || [])
+      .filter(session => {
+        const sessionDate = new Date(session.created_at);
+        return sessionDate >= weekStart && session.status === 'completed';
+      })
+      .reduce((total, session) => total + (session.duration || 0), 0);
+
+    // Daily focus data for the past 7 days
     const dailyFocusData = [];
+    const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     
     for (let i = 6; i >= 0; i--) {
       const date = new Date(today);
       date.setDate(today.getDate() - i);
       const dayName = daysOfWeek[date.getDay()];
       
-      // Format date as YYYY-MM-DD for comparison
       const dateString = date.toISOString().split('T')[0];
       
       const daySessionsMinutes = (sessions || [])
         .filter(session => {
-          const sessionDate = session.start_time.split('T')[0];
+          const sessionDate = session.created_at ? session.created_at.split('T')[0] : '';
           return sessionDate === dateString && session.status === 'completed';
         })
-        .reduce((sum, session) => sum + (session.duration || 0), 0);
-      
-      // Convert minutes to hours for better display
+        .reduce((total, session) => total + (session.duration || 0), 0);
+
       dailyFocusData.push({
         day: dayName,
-        hours: Math.round(daySessionsMinutes / 60 * 10) / 10, // Round to 1 decimal place
+        hours: Math.round(daySessionsMinutes / 60 * 10) / 10,
         date: dateString
       });
     }
-    
-    // Format task completion data
+
+    // Daily task completion data
     const dailyTasksCompleted = [];
     for (let i = 6; i >= 0; i--) {
       const date = new Date(today);
       date.setDate(today.getDate() - i);
       const dayName = daysOfWeek[date.getDay()];
-      
-      // Format date as YYYY-MM-DD for comparison
       const dateString = date.toISOString().split('T')[0];
       
       const completedCount = (tasks || [])
         .filter(task => {
-          // For completed tasks, check updated_at date
           if (task.status !== 'completed') return false;
           const taskDate = (task.updated_at || task.created_at).split('T')[0];
           return taskDate === dateString;
         }).length;
-      
+
       dailyTasksCompleted.push({
         day: dayName,
         count: completedCount,
@@ -539,75 +184,70 @@ export async function fetchUserAppData(userId = null) {
       });
     }
 
-    // Return the compiled data
+    console.log('📊 User data compiled successfully:', {
+      tasksCount: tasks.length,
+      sessionsCount: sessions.length,
+      weeklyFocusTime: weeklyFocusTime
+    });
+
     return {
-      profile: profile || {},
-      onboarding: onboarding || {},
-      leaderboard: leaderboard || {},
-      sessions: sessions || [],
-      tasks: tasks || [],
-      achievements: achievements || [],
-      settings: settings || {},
-      insights: insights || [],
-      metrics: metrics || {},
-      friends: friends || [],
+      profile,
+      onboarding,
+      leaderboard,
+      sessions,
+      tasks,
+      achievements,
+      settings,
+      insights,
+      metrics,
+      friends,
       
-      // Derived data for easy access
+      // Derived data
       weeklyFocusTime,
       dailyFocusData,
       dailyTasksCompleted,
       
       // Helper data
-      activeTasks: (tasksResult.data || []).filter(task => task.status !== 'completed'),
-      completedTasks: (tasksResult.data || []).filter(task => task.status === 'completed'),
-      activeSession: (sessionsResult.data || []).find(session => session.status === 'active'),
-      errors
+      activeTasks: (tasks || []).filter(task => task.status !== 'completed'),
+      completedTasks: (tasks || []).filter(task => task.status === 'completed'),
+      activeSession: (sessions || []).find(session => session.status === 'active')
     };
+
   } catch (error) {
     console.error('Error fetching user app data:', error);
-    throw error;
+    console.log('📱 Falling back to demo data due to error');
+    return getMobileDemoData(userId || 'demo-user-fallback');
   }
 }
 
 /**
- * React hook to fetch and use user data across the app
+ * React hook for fetching user data
  */
 export function useUserAppData() {
   const [data, setData] = React.useState(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState(null);
   
-  React.useEffect(() => {
-    async function loadData() {
-      try {
-        setIsLoading(true);
-        const userData = await fetchUserAppData();
-        setData(userData);
-      } catch (err) {
-        setError(err);
-        console.error('Error in useUserAppData:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    
-    loadData();
-  }, []);
-  
   const refreshData = React.useCallback(async () => {
     try {
       setIsLoading(true);
+      setError(null);
       const userData = await fetchUserAppData();
       setData(userData);
-      return userData;
     } catch (err) {
-      setError(err);
-      console.error('Error refreshing user data:', err);
-      throw err;
+      console.error('Error in useUserAppData:', err);
+      setError(err.message);
+      // Even on error, provide demo data
+      const fallbackData = getMobileDemoData('demo-user-fallback');
+      setData(fallbackData);
     } finally {
       setIsLoading(false);
     }
   }, []);
+  
+  React.useEffect(() => {
+    refreshData();
+  }, [refreshData]);
   
   return { data, isLoading, error, refreshData };
 }
@@ -705,49 +345,49 @@ export async function getLeaderboardData() {
     
     const userId = session.user.id;
     
-    // Get current user's leaderboard entry
+    // Get current user's leaderboard entry using correct table name
     const { data: userEntry, error: userError } = await supabase
       .from('leaderboard_stats')
-      .select('*, profiles:user_id(username, full_name, avatar_url)')
+      .select('*, profiles!leaderboard_stats_user_id_fkey(username, full_name, avatar_url)')
       .eq('user_id', userId)
       .single();
       
-    if (userError) {
+    if (userError && userError.code !== 'PGRST116') {
       console.error('Error fetching user leaderboard:', userError);
     }
     
-    // Get friends' leaderboard entries
-    const { data: friendsData, error: friendsError } = await supabase
-      .from('friends')
-      .select(`
-        friend_id,
-        leaderboard:friend_id(
-          user_id,
-          total_focus_time,
-          weekly_focus_time,
-          points,
-          level,
-          current_streak,
-          profiles:user_id(username, full_name, avatar_url)
-        )
-      `)
-      .eq('user_id', userId)
-      .eq('status', 'accepted');
-      
-    if (friendsError) {
-      console.error('Error fetching friends leaderboard:', friendsError);
+    // Try to get friends' leaderboard entries
+    let friendsLeaderboard = [];
+    try {
+      // Check if user_friends table exists
+      const { data: friendsData, error: friendsError } = await supabase
+        .from('user_friends')
+        .select('friend_id')
+        .eq('user_id', userId)
+        .eq('status', 'accepted');
+        
+      if (!friendsError && friendsData && friendsData.length > 0) {
+        const friendIds = friendsData.map(f => f.friend_id);
+        
+        // Get leaderboard data for friends
+        const { data: friendsLeaderboardData, error: friendsLeaderboardError } = await supabase
+          .from('leaderboard_stats')
+          .select('*, profiles!leaderboard_stats_user_id_fkey(username, full_name, avatar_url)')
+          .in('user_id', friendIds);
+          
+        if (!friendsLeaderboardError) {
+          friendsLeaderboard = (friendsLeaderboardData || []).map(entry => ({
+            ...entry,
+            is_current_user: false,
+            display_name: entry.profiles?.full_name || entry.profiles?.username || 'Unknown User',
+            avatar_url: entry.profiles?.avatar_url,
+          }));
+        }
+      }
+    } catch (friendsErr) {
+      console.warn('Friends table not available, using empty friends list:', friendsErr);
+      // Continue with empty friends list
     }
-    
-    // Format friends data for display
-    const friendsLeaderboard = (friendsData || [])
-      .map(item => item.leaderboard)
-      .filter(Boolean)
-      .map(entry => ({
-        ...entry,
-        is_current_user: false,
-        display_name: entry.profiles?.full_name || 'Unknown User',
-        avatar_url: entry.profiles?.avatar_url,
-      }));
     
     // Add current user to friends leaderboard
     if (userEntry) {
@@ -762,10 +402,10 @@ export async function getLeaderboardData() {
     // Sort by points (descending)
     friendsLeaderboard.sort((a, b) => (b.points || 0) - (a.points || 0));
     
-    // Get global leaderboard (top users)
+    // Get global leaderboard (top users) using correct table name
     const { data: globalData, error: globalError } = await supabase
       .from('leaderboard_stats')
-      .select('*, profiles:user_id(username, full_name, avatar_url)')
+      .select('*, profiles!leaderboard_stats_user_id_fkey(username, full_name, avatar_url)')
       .order('points', { ascending: false })
       .limit(10);
       
@@ -778,7 +418,7 @@ export async function getLeaderboardData() {
       .map(entry => ({
         ...entry,
         is_current_user: entry.user_id === userId,
-        display_name: entry.is_current_user ? 'You' : entry.profiles?.full_name || 'Unknown User',
+        display_name: entry.user_id === userId ? 'You' : (entry.profiles?.full_name || entry.profiles?.username || 'Unknown User'),
         avatar_url: entry.profiles?.avatar_url
       }));
     
@@ -789,7 +429,13 @@ export async function getLeaderboardData() {
     };
   } catch (error) {
     console.error('Error fetching leaderboard data:', error);
-    throw error;
+    
+    // Return fallback data to prevent app crashes
+    return {
+      userEntry: null,
+      friendsLeaderboard: [],
+      globalLeaderboard: []
+    };
   }
 }
 

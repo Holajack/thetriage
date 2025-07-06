@@ -1,220 +1,120 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../utils/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export type UserProfile = {
-  id: string;
-  email: string;
-  username?: string;
-  full_name?: string;
-  avatar_url?: string;
-  university?: string;
-  major?: string;
-  business?: string;
-  profession?: string;
-  state?: string;
-  display_name_preference?: string;
-  [key: string]: any;
+// Timeout wrapper for all network requests
+const withTimeout = <T>(
+  promise: Promise<T>,
+  timeoutMs: number = 6000 // Reduced from 15s to 6s
+): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error('Request timeout')), timeoutMs)
+    ),
+  ]);
 };
 
-export type OnboardingPreferences = {
-  id: string;
-  user_id: string;
-  learning_environment?: string;
-  user_goal?: string;
-  work_style?: string;
-  sound_preference?: string;
-  weekly_focus_goal?: number;
-  is_onboarding_complete?: boolean;
-  created_at?: string;
-  updated_at?: string;
-  [key: string]: any;
+// Add this enhanced version to your AuthContext.tsx:
+
+// Enhanced timeout wrapper with retry capability
+const withTimeoutAndRetry = <T>(
+  promiseFactory: () => Promise<T>,
+  timeoutMs: number = 6000,
+  retries: number = 2
+): Promise<T> => {
+  return new Promise(async (resolve, reject) => {
+    for (let attempt = 1; attempt <= retries + 1; attempt++) {
+      try {
+        console.log(`🔄 Network attempt ${attempt}/${retries + 1}`);
+        
+        const result = await Promise.race([
+          promiseFactory(),
+          new Promise<never>((_, timeoutReject) =>
+            setTimeout(() => timeoutReject(new Error(`Request timeout after ${timeoutMs}ms`)), timeoutMs)
+          ),
+        ]);
+        
+        console.log(`✅ Network request succeeded on attempt ${attempt}`);
+        resolve(result);
+        return;
+        
+      } catch (error: any) {
+        console.log(`❌ Attempt ${attempt} failed:`, error.message);
+        
+        if (attempt === retries + 1) {
+          // Final attempt failed
+          reject(new Error(`Network failed after ${retries + 1} attempts: ${error.message}`));
+          return;
+        }
+        
+        // Wait before retry with exponential backoff
+        const delay = 1000 * Math.pow(2, attempt - 1); // 1s, 2s, 4s
+        console.log(`⏳ Waiting ${delay}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  });
 };
 
-export type LeaderboardStats = {
-  id: string;
-  user_id: string;
-  total_focus_time?: number;
-  weekly_focus_time?: number;
-  monthly_focus_time?: number;
-  current_streak?: number;
-  longest_streak?: number;
-  total_sessions?: number;
-  level?: number;
-  points?: number;
-  created_at?: string;
-  updated_at?: string;
-  [key: string]: any;
+// Network connectivity test
+const testNetworkConnectivity = async (): Promise<boolean> => {
+  try {
+    console.log('🌐 Testing network connectivity...');
+    
+    // Test basic Supabase connection with minimal timeout
+    await withTimeoutAndRetry(
+      () => supabase.from('profiles').select('count').limit(1),
+      3000, // 3 second timeout
+      1     // 1 retry
+    );
+    
+    console.log('✅ Network connectivity confirmed');
+    return true;
+  } catch (error) {
+    console.log('❌ Network connectivity failed:', error.message);
+    return false;
+  }
 };
 
-export type AuthContextType = {
+interface AuthContextType {
   isAuthenticated: boolean;
+  user: any;
+  onboarding: any;
+  leaderboard: any;
+  hasCompletedOnboarding: boolean;
+  justLoggedIn: boolean;
   isInitialLoading: boolean;
   hasSeenLanding: boolean;
-  setHasSeenLanding: (seen: boolean) => void;
-  hasCompletedOnboarding: boolean;
-  setHasCompletedOnboarding: (completed: boolean) => void;
-  justLoggedIn: boolean;
-  clearJustLoggedIn: () => void;
-  user: UserProfile | null;
-  onboarding: OnboardingPreferences | null;
-  leaderboard: LeaderboardStats | null;
-  signUp: (email: string, password: string, username?: string, full_name?: string) => Promise<{ error?: string }>;
+  setHasSeenLanding: (seen: boolean) => Promise<void>;
+  clearJustLoggedIn: () => void;  // Add this line
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
+  signUp: (email: string, password: string, userData: any) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
+  updateOnboarding: (data: any) => Promise<void>;
   refreshUserData: () => Promise<void>;
-  updateProfile: (updates: Partial<UserProfile>) => Promise<{ error?: string } | void>;
-  updateOnboarding: (updates: Partial<OnboardingPreferences>) => Promise<{ error?: string; success?: boolean }>;
-  initializeLeaderboard: () => Promise<{ error?: string; success?: boolean }>;
-};
+}
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Default timeout values (in milliseconds)
-const DEFAULT_SESSION_CHECK_TIMEOUT = 15000; // Increased from 10000
-const DEFAULT_USER_DATA_FETCH_TIMEOUT = 20000; // Increased from 8000 (or 15000 from previous suggestion)
-const DEFAULT_SIGN_IN_TIMEOUT = 25000; // Increased from 6000 (or 20000 from previous suggestion)
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const [hasSeenLanding, setHasSeenLanding] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [onboarding, setOnboarding] = useState<any>(null);
+  const [leaderboard, setLeaderboard] = useState<any>(null);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
   const [justLoggedIn, setJustLoggedIn] = useState(false);
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [onboarding, setOnboarding] = useState<OnboardingPreferences | null>(null);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardStats | null>(null);
-  const [isLoading, setIsLoading] = useState(false); // Added for more granular loading state
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [hasSeenLanding, setHasSeenLandingState] = useState(false);
 
-  // Helper functions to create default data
-  const createDefaultOnboardingData = useCallback(async (userId: string): Promise<OnboardingPreferences | null> => {
-    try {
-      const defaultData: Partial<OnboardingPreferences> = {
-        user_id: userId,
-        is_onboarding_complete: false,
-        weekly_focus_goal: 5,
-      };
-      
-      const { data, error } = await supabase
-        .from('onboarding_preferences')
-        .insert(defaultData)
-        .select()
-        .single();
-        
-      if (error) {
-        console.error('Failed to create default onboarding data:', error);
-        return null;
-      }
-      
-      return data;
-    } catch (error) {
-      console.error('Error creating default onboarding data:', error);
-      return null;
-    }
-  }, []);
-
-  const createDefaultLeaderboardData = useCallback(async (userId: string): Promise<LeaderboardStats | null> => {
-    try {
-      const defaultData: Partial<LeaderboardStats> = {
-        user_id: userId,
-        total_focus_time: 0,
-        weekly_focus_time: 0,
-        monthly_focus_time: 0,
-        current_streak: 0,
-        longest_streak: 0,
-        total_sessions: 0,
-        level: 1,
-        points: 0,
-      };
-      
-      const { data, error } = await supabase
-        .from('leaderboard_stats')
-        .insert(defaultData)
-        .select()
-        .single();
-        
-      if (error) {
-        if (error.code === '42501') {
-          console.warn('RLS policy prevents leaderboard creation, will try again later:', error.message);
-          return null;
-        }
-        console.error('Failed to create default leaderboard data:', error);
-        return null;
-      }
-      
-      return data;
-    } catch (error) {
-      console.error('Error creating default leaderboard data:', error);
-      return null;
-    }
-  }, []);
-
-  // Helper function to detect if a user is an existing user
-  const isExistingUser = useCallback((profile: UserProfile | null): boolean => {
-    if (!profile) return false;
-    
-    const indicators = [
-      profile.full_name,
-      profile.username,
-      profile.university,
-      profile.major,
-      profile.state,
-      profile.business,
-      profile.profession
-    ];
-    
-    const filledFields = indicators.filter(field => field && field.trim().length > 0);
-    return filledFields.length >= 2;
-  }, []);
-
-  // Helper function to create onboarding data for existing users
-  const createOnboardingForExistingUser = useCallback(async (userId: string, profile: UserProfile): Promise<OnboardingPreferences | null> => {
-    try {
-      console.log('Creating onboarding record for existing user:', userId);
-      
-      const onboardingData: Partial<OnboardingPreferences> = {
-        user_id: userId,
-        is_onboarding_complete: true,
-        weekly_focus_goal: 5,
-        university: profile.university,
-        major: profile.major,
-        location: profile.state,
-        data_collection_consent: true,
-        personalized_recommendations: true,
-        usage_analytics: true,
-        marketing_communications: false,
-        profile_visibility: 'friends',
-        study_data_sharing: false,
-      };
-      
-      const { data, error } = await supabase
-        .from('onboarding_preferences')
-        .insert(onboardingData)
-        .select()
-        .single();
-        
-      if (error) {
-        console.error('Failed to create onboarding data for existing user:', error);
-        return null;
-      }
-      
-      console.log('Successfully created onboarding record for existing user');
-      return data;
-    } catch (error) {
-      console.error('Error creating onboarding data for existing user:', error);
-      return null;
-    }
-  }, []);
-
-  // AsyncStorage helpers
-  const updateHasSeenLanding = async (seen: boolean) => {
+  // Landing page state management
+  const setHasSeenLanding = async (seen: boolean) => {
     try {
       await AsyncStorage.setItem('hasSeenLanding', JSON.stringify(seen));
-      setHasSeenLanding(seen);
+      setHasSeenLandingState(seen);
     } catch (error) {
       console.error('Failed to update hasSeenLanding in AsyncStorage:', error);
-      setHasSeenLanding(seen);
+      setHasSeenLandingState(seen);
     }
   };
 
@@ -222,439 +122,448 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const stored = await AsyncStorage.getItem('hasSeenLanding');
       if (stored !== null) {
-        setHasSeenLanding(JSON.parse(stored));
+        setHasSeenLandingState(JSON.parse(stored));
       }
     } catch (error) {
       console.error('Failed to load hasSeenLanding from AsyncStorage:', error);
     }
   };
 
-  // IMPROVED: Fetch user data with better timeout handling and fallback data
-  const fetchUserData = useCallback(async (userId: string) => {
-    console.log(`AuthContext: Attempting to fetch user data for ${userId}`);
-    
+  // Enhanced session check with timeout and fallback data
+  const checkSession = async (showLogs = false) => {
     try {
-      // Helper function for timeout handling
-      const fetchWithTimeout = async <T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> => {
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error(`${operation} timeout after ${timeoutMs/1000}s`)), timeoutMs);
-        });
-        
-        try {
-          return await Promise.race([promise, timeoutPromise]);
-        } catch (error: any) {
-          console.warn(`AuthContext: ${operation} failed:`, error?.message || 'Unknown error');
-          throw error;
-        }
-      };
+      if (showLogs) console.log('🔐 AuthContext: Starting session check...');
+      
+      // Step 1: Get session with timeout
+      const { data: { session }, error: sessionError } = await withTimeout(
+        supabase.auth.getSession(),
+        5000 // 5 second timeout for session check
+      );
 
-      // Fetch profile with 5s timeout
-      let profile = null;
-      try {
-        const profileResponse = await fetchWithTimeout(
-          supabase.from('profiles').select('*').eq('id', userId).single(),
-          5000,
-          'Profile fetch'
-        );
-        
-        if (profileResponse.error) {
-          console.error('Profile fetch error:', profileResponse.error);
-        } else {
-          profile = profileResponse.data;
-          console.log('AuthContext: Profile loaded:', profile?.full_name || 'No name');
-        }
-      } catch (profileError: any) {
-        console.warn('AuthContext: Profile fetch failed, continuing without profile:', profileError?.message || 'Unknown error');
+      if (sessionError) {
+        console.error('AuthContext: Session error:', sessionError);
+        throw sessionError;
       }
-      
-      setUser(profile);
-      
-      // Fetch onboarding with 3s timeout
-      let finalOnboardingData = null;
-      try {
-        const onboardingResponse = await fetchWithTimeout(
-          supabase.from('onboarding_preferences').select('*').eq('user_id', userId).single(),
-          3000,
-          'Onboarding fetch'
-        );
-        
-        if (onboardingResponse.error?.code === 'PGRST116') {
-          if (isExistingUser(profile)) {
-            console.log('Creating onboarding for existing user');
-            finalOnboardingData = await createOnboardingForExistingUser(userId, profile);
-          } else {
-            console.log('Creating default onboarding for new user');
-            finalOnboardingData = await createDefaultOnboardingData(userId);
-          }
-        } else if (onboardingResponse.error) {
-          console.error('Onboarding fetch error:', onboardingResponse.error);
-        } else {
-          finalOnboardingData = onboardingResponse.data;
-        }
-      } catch (onboardingError: any) {
-        console.warn('AuthContext: Onboarding fetch failed, using fallback:', onboardingError?.message || 'Unknown error');
-        // Create minimal fallback onboarding data
-        finalOnboardingData = {
-          id: `temp-${userId}`,
-          user_id: userId,
-          is_onboarding_complete: false,
-          weekly_focus_goal: 5
-        } as OnboardingPreferences;
-      }
-      
-      setOnboarding(finalOnboardingData);
-      setHasCompletedOnboarding(finalOnboardingData?.is_onboarding_complete || false);
-      console.log('AuthContext: Onboarding status:', finalOnboardingData?.is_onboarding_complete ? 'complete' : 'incomplete');
-      
-      // Fetch leaderboard with 3s timeout
-      let finalLeaderboardData = null;
-      try {
-        const leaderboardResponse = await fetchWithTimeout(
-          supabase.from('leaderboard_stats').select('*').eq('user_id', userId).single(),
-          3000,
-          'Leaderboard fetch'
-        );
-        
-        if (leaderboardResponse.error?.code === 'PGRST116') {
-          console.log('Creating default leaderboard data');
-          finalLeaderboardData = await createDefaultLeaderboardData(userId);
-        } else if (leaderboardResponse.error) {
-          console.error('Leaderboard fetch error:', leaderboardResponse.error);
-        } else {
-          finalLeaderboardData = leaderboardResponse.data;
-        }
-      } catch (leaderboardError: any) {
-        console.warn('AuthContext: Leaderboard fetch failed, using fallback:', leaderboardError?.message || 'Unknown error');
-        // Create minimal fallback leaderboard data
-        finalLeaderboardData = {
-          id: `temp-${userId}`,
-          user_id: userId,
-          total_focus_time: 0,
-          level: 1,
-          points: 0,
-          current_streak: 0
-        } as LeaderboardStats;
-      }
-      
-      setLeaderboard(finalLeaderboardData);
-      console.log('AuthContext: User data fetch completed successfully');
-      
-    } catch (error: any) {
-      console.error('AuthContext: Critical error in fetchUserData:', error?.message || 'Unknown error');
-      throw error;
-    }
-  }, [createDefaultOnboardingData, createDefaultLeaderboardData, isExistingUser, createOnboardingForExistingUser]);
 
-  // IMPROVED: Session initialization with better error handling
-  useEffect(() => {
-    const checkSession = async () => {
-      console.log('AuthContext: Starting session check...');
-      setIsInitialLoading(true); // Use isInitialLoading for the app's first load
-      
-      try {
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Session check timeout')), DEFAULT_SESSION_CHECK_TIMEOUT);
-        });
-        
-        const sessionPromise = supabase.auth.getSession();
-        // Explicitly type the result of Promise.race if needed, or use 'as any' if confident
-        const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]) as { data: { session: Session | null } };
-        
-        console.log('AuthContext: Session check completed', { hasSession: !!session?.user });
-        
-        if (session?.user) {
-          console.log('AuthContext: User session found, fetching user data...');
-          try {
-            await Promise.race([
-              fetchUserData(session.user.id),
-              new Promise((_, reject) => setTimeout(() => reject(new Error('User data fetch timeout')), DEFAULT_USER_DATA_FETCH_TIMEOUT))
-            ]);
-            setIsAuthenticated(true);
-            console.log('AuthContext: User data fetch completed for existing session.');
-          } catch (fetchError: any) {
-            console.error('AuthContext: User data fetch failed for existing session:', fetchError.message);
-            // Still set authenticated to allow fallback/cached data usage or app to proceed
-            setIsAuthenticated(true);
-            // Optionally, set an error state here to inform the user
-          }
-        } else {
-          setIsAuthenticated(false);
-          console.log('AuthContext: No active session found.');
-        }
-      } catch (error: any) {
-        console.error("AuthContext: Error checking session:", error.message);
-        setIsAuthenticated(false);
-        // Optionally, set an error state here
-      } finally {
-        console.log('AuthContext: Session check complete, setting isInitialLoading to false');
-        setIsInitialLoading(false);
-      }
-    };
-
-    checkSession();
-
-    console.log('AuthContext: Setting up auth listener...');
-    
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('AuthContext: Auth state changed:', event);
-      
-      if (event === 'SIGNED_IN' && session?.user) {
-        setUser(session.user as UserProfile);
-        setIsAuthenticated(true);
-        setJustLoggedIn(true);
-        // Fix: Use the existing function name
-        await fetchUserDataWithTimeout(session.user.id);
-      } else if (event === 'SIGNED_OUT') {
+      if (!session?.user) {
+        if (showLogs) console.log('AuthContext: No session found');
         setUser(null);
+        setOnboarding(null);
+        setLeaderboard(null);
         setIsAuthenticated(false);
-        setJustLoggedIn(false);
-        setOnboarding({});
-        setLeaderboard({});
+        setHasCompletedOnboarding(false);
+        return;
       }
-    });
 
-    return () => {
-      if (subscription) {
-        subscription.unsubscribe();
+      if (showLogs) console.log('AuthContext: Session found, fetching user data...');
+
+      // Step 2: Fetch user data with timeout and fallback
+      const userData = await fetchUserDataWithFallback(session.user, showLogs);
+      
+      // Step 3: Set authentication state
+      setIsAuthenticated(true);
+      setUser(userData.profile);
+      setOnboarding(userData.onboarding);
+      setLeaderboard(userData.leaderboard);
+      setHasCompletedOnboarding(userData.onboarding?.is_onboarding_complete || false);
+
+      if (showLogs) {
+        console.log('✅ AuthContext: User authenticated successfully');
+        console.log('👤 User:', userData.profile?.full_name || userData.profile?.email);
+        console.log('🎯 Onboarding complete:', userData.onboarding?.is_onboarding_complete);
+      }
+
+    } catch (error: any) {
+      console.error("AuthContext: Session check failed:", error.message);
+      
+      // Don't set authentication to false if it's just a data fetch timeout
+      // This allows users to stay logged in even with network issues
+      if (error.message.includes('timeout') || error.message.includes('Network request failed')) {
+        console.log('AuthContext: Using cached/fallback data due to network timeout');
+        // Keep existing auth state if available
+        if (!isAuthenticated) {
+          setIsAuthenticated(false);
+          setUser(null);
+          setOnboarding(null);
+          setLeaderboard(null);
+        }
+      } else {
+        // For other errors, clear auth state
+        setIsAuthenticated(false);
+        setUser(null);
+        setOnboarding(null);
+        setLeaderboard(null);
+        setHasCompletedOnboarding(false);
+      }
+    }
+  };
+
+  // Enhanced user data fetch with fallback
+  const fetchUserDataWithFallback = async (sessionUser: any, showLogs = false) => {
+    const fallbackData = {
+      profile: {
+        id: sessionUser.id,
+        email: sessionUser.email,
+        full_name: sessionUser.user_metadata?.full_name || 'User',
+        username: sessionUser.user_metadata?.username || sessionUser.email?.split('@')[0],
+      },
+      onboarding: {
+        id: `fallback-${sessionUser.id}`,
+        user_id: sessionUser.id,
+        is_onboarding_complete: false,
+        weekly_focus_goal: 5,
+      },
+      leaderboard: {
+        id: `fallback-${sessionUser.id}`,
+        user_id: sessionUser.id,
+        total_focus_time: 0,
+        level: 1,
+        points: 0,
+        current_streak: 0,
       }
     };
-  }, []);
 
-  // Fix: Make sure this function exists and is properly named
-  const fetchUserDataWithTimeout = async (userId: string) => {
     try {
-      const timeout = 8000;
+      // Try to fetch profile data with timeout
+      if (showLogs) console.log('📊 Fetching profile data...');
       
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('User data fetch timeout')), timeout);
-      });
-
-      // Fetch profile
-      const profilePromise = supabase.from('profiles').select('*').eq('id', userId).single();
-      const { data: profile, error: profileError } = await Promise.race([profilePromise, timeoutPromise]);
-
-      if (!profileError && profile) {
-        setUser(profile);
-      }
-
-      // Fetch onboarding
+      let profile;
       try {
-        const onboardingPromise = supabase.from('onboarding_preferences').select('*').eq('user_id', userId).single();
-        const { data: onboarding } = await Promise.race([onboardingPromise, timeoutPromise]);
-        setOnboarding(onboarding || {});
-      } catch (err) {
-        setOnboarding({ is_onboarding_complete: false });
+        const { data: profileData, error: profileError } = await withTimeout(
+          supabase.from('profiles').select('*').eq('id', sessionUser.id).single(),
+          4000 // 4 second timeout
+        );
+
+        if (profileError && profileError.code !== 'PGRST116') {
+          throw profileError;
+        }
+        
+        profile = profileData || fallbackData.profile;
+        if (showLogs) console.log('✅ Profile data loaded');
+      } catch (profileError) {
+        console.log('⚠️ Profile fetch failed, using fallback:', profileError.message);
+        profile = fallbackData.profile;
       }
 
-      // Fetch leaderboard
+      // Try to fetch onboarding data with timeout
+      let onboarding;
       try {
-        const leaderboardPromise = supabase.from('leaderboard_stats').select('*').eq('user_id', userId).single();
-        const { data: leaderboard } = await Promise.race([leaderboardPromise, timeoutPromise]);
-        setLeaderboard(leaderboard || {});
-      } catch (err) {
-        setLeaderboard({ level: 1, points: 0, total_focus_time: 0 });
+        if (showLogs) console.log('🎯 Fetching onboarding data...');
+        
+        const { data: onboardingData, error: onboardingError } = await withTimeout(
+          supabase.from('onboarding_preferences').select('*').eq('user_id', sessionUser.id).single(),
+          4000 // 4 second timeout
+        );
+
+        if (onboardingError && onboardingError.code !== 'PGRST116') {
+          throw onboardingError;
+        }
+
+        onboarding = onboardingData || fallbackData.onboarding;
+        if (showLogs) console.log('✅ Onboarding data loaded');
+      } catch (onboardingError) {
+        console.log('⚠️ Onboarding fetch failed, using fallback:', onboardingError.message);
+        onboarding = fallbackData.onboarding;
       }
+
+      // Try to fetch leaderboard data with timeout
+      let leaderboard;
+      try {
+        if (showLogs) console.log('🏆 Fetching leaderboard data...');
+        
+        const { data: leaderboardData, error: leaderboardError } = await withTimeout(
+          supabase.from('leaderboard_stats').select('*').eq('user_id', sessionUser.id).single(),
+          4000 // 4 second timeout
+        );
+
+        if (leaderboardError && leaderboardError.code !== 'PGRST116') {
+          throw leaderboardError;
+        }
+
+        leaderboard = leaderboardData || fallbackData.leaderboard;
+        if (showLogs) console.log('✅ Leaderboard data loaded');
+      } catch (leaderboardError) {
+        console.log('⚠️ Leaderboard fetch failed, using fallback:', leaderboardError.message);
+        leaderboard = fallbackData.leaderboard;
+      }
+
+      return { profile, onboarding, leaderboard };
 
     } catch (error) {
-      console.log('AuthContext: User data fetch failed, using fallbacks');
-      // Set fallback data
-      setOnboarding({ is_onboarding_complete: false });
-      setLeaderboard({ level: 1, points: 0, total_focus_time: 0 });
+      console.log('❌ Critical error in data fetch, using complete fallback:', error.message);
+      return fallbackData;
     }
   };
 
-  // IMPROVED: Sign up with timeout protection
-  const signUp = async (email: string, password: string, username?: string, full_name?: string) => {
+  // Enhanced sign in with comprehensive network handling
+  const signIn = async (email: string, password: string): Promise<{ error?: string }> => {
     try {
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Sign up timeout')), 15000);
-      });
-
-      const signUpPromise = supabase.auth.signUp({
-        email,
-        password,
-      });
-
-      const { data: authData, error: authError } = await Promise.race([signUpPromise, timeoutPromise]);
-
-      if (authError) return { error: authError.message };
-      if (!authData.user) return { error: 'Failed to create user' };
-
-      const { error: profileError } = await supabase.from('profiles').insert({
-        id: authData.user.id,
-        email,
-        username,
-        full_name,
-      });
-
-      if (profileError) return { error: profileError.message };
-
-      setJustLoggedIn(true);
-      return {};
-    } catch (error: any) {
-      return { error: error?.message || 'Sign up failed' };
-    }
-  };
-
-  // IMPROVED: Sign in with timeout protection and fallback authentication
-  const signIn = async (email: string, password: string) => {
-    console.log(`AuthContext: Attempting to sign in as ${email}`);
-    setIsLoading(true);
-    try {
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Sign in timeout')), DEFAULT_SIGN_IN_TIMEOUT);
-      });
-
-      const signInPromise = supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      const { data: authData, error: authError } = await Promise.race([signInPromise, timeoutPromise]);
-
-      if (authError) {
-        console.error('AuthContext: Sign in error from Supabase:', authError.message);
-        setIsLoading(false);
-        return { error: authError.message };
-      }
-      if (!authData?.user) {
-        console.error('AuthContext: Sign in failed, no user data returned.');
-        setIsLoading(false);
-        return { error: 'Failed to sign in, no user data.' };
+      console.log('🔐 Starting enhanced sign in process...');
+      console.log('📧 Email:', email);
+      
+      // Step 1: Test network connectivity first
+      const networkAvailable = await testNetworkConnectivity();
+      if (!networkAvailable) {
+        return { 
+          error: 'No internet connection. Please check your network and try again.' 
+        };
       }
       
-      // The onAuthStateChange listener should handle setting isAuthenticated and fetching data.
-      // We don't need to call fetchUserData or setIsAuthenticated here directly if onAuthStateChange is robust.
-      // However, to ensure `justLoggedIn` is set and to provide immediate feedback:
-      console.log('AuthContext: Sign in successful via signIn function, user:', authData.user.id);
-      // If onAuthStateChange is reliable, these might be redundant but can provide quicker UI updates.
-      // await fetchUserData(authData.user.id); // This might race with onAuthStateChange's fetch
-      // setIsAuthenticated(true);
-      // setJustLoggedIn(true); // This is important for navigation logic
+      // Step 2: Attempt authentication with retry logic
+      console.log('🔑 Attempting authentication with retry logic...');
+      
+      const authResult = await withTimeoutAndRetry(
+        () => supabase.auth.signInWithPassword({ email, password }),
+        8000, // 8 second timeout per attempt
+        2     // 2 retries = 3 total attempts
+      );
+      
+      const { data: authData, error: authError } = authResult;
 
-      setIsLoading(false);
-      return {}; // Successful sign-in
+      if (authError) {
+        console.error('❌ Authentication failed:', authError.message);
+        
+        // Handle specific authentication errors
+        if (authError.message.includes('Invalid login credentials')) {
+          return { error: 'Invalid email or password. Please check your credentials and try again.' };
+        } else if (authError.message.includes('Too many requests')) {
+          return { error: 'Too many login attempts. Please wait a moment and try again.' };
+        } else if (authError.message.includes('Email not confirmed')) {
+          return { error: 'Please check your email and confirm your account before logging in.' };
+        } else {
+          return { error: `Authentication failed: ${authError.message}` };
+        }
+      }
+
+      if (!authData.user) {
+        return { error: 'Authentication failed - no user data returned. Please try again.' };
+      }
+
+      console.log('✅ Authentication successful');
+      console.log('👤 User ID:', authData.user.id);
+
+      // Step 3: Set login flag immediately
+      setJustLoggedIn(true);
+      
+      // Step 4: Fetch user data with fallback (don't let this block authentication)
+      try {
+        console.log('📊 Fetching user data...');
+        const userData = await fetchUserDataWithFallback(authData.user, true);
+        
+        // Step 5: Update auth state
+        setIsAuthenticated(true);
+        setUser(userData.profile);
+        setOnboarding(userData.onboarding);
+        setLeaderboard(userData.leaderboard);
+        setHasCompletedOnboarding(userData.onboarding?.is_onboarding_complete || false);
+        
+        console.log('🎉 Sign in completed successfully with full data');
+        return {};
+        
+      } catch (dataError: any) {
+        console.log('⚠️ Data fetch failed during login, but authentication succeeded');
+        console.log('📝 Using minimal fallback data to allow user login');
+        
+        // Still set user as authenticated with minimal data
+        setIsAuthenticated(true);
+        setUser({
+          id: authData.user.id,
+          email: authData.user.email,
+          full_name: authData.user.user_metadata?.full_name || authData.user.email?.split('@')[0] || 'User',
+          username: authData.user.user_metadata?.username || authData.user.email?.split('@')[0],
+        });
+        setOnboarding({ 
+          user_id: authData.user.id, 
+          is_onboarding_complete: false,
+          weekly_focus_goal: 5 
+        });
+        setLeaderboard({ 
+          user_id: authData.user.id, 
+          total_focus_time: 0, 
+          level: 1, 
+          points: 0,
+          current_streak: 0 
+        });
+        setHasCompletedOnboarding(false);
+        
+        console.log('✅ User authenticated with fallback data');
+        return {}; // Success, even with data fetch issues
+      }
+
     } catch (error: any) {
-      console.error('AuthContext: Sign in failed with error:', error.message);
-      setIsLoading(false);
-      return { error: error?.message || 'Sign in failed' };
+      console.error('❌ Sign in failed completely:', error.message);
+      
+      // Provide specific user-friendly error messages
+      let errorMessage = 'Login failed. Please try again.';
+      
+      if (error.message.includes('Network failed after') || error.message.includes('Network request failed')) {
+        errorMessage = 'Network connection failed. Please check your internet connection and try again.';
+      } else if (error.message.includes('timeout') || error.message.includes('Request timeout')) {
+        errorMessage = 'Login is taking too long. Please check your internet connection and try again.';
+      } else if (error.message.includes('fetch')) {
+        errorMessage = 'Unable to connect to the server. Please check your internet connection and try again.';
+      }
+      
+      return { error: errorMessage };
+    }
+  };
+
+  // Enhanced sign up with timeout
+  const signUp = async (email: string, password: string, userData: any): Promise<{ error?: string }> => {
+    try {
+      console.log('📝 Starting sign up process...');
+      
+      const { data: authData, error: authError } = await withTimeout(
+        supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: userData
+          }
+        }),
+        10000 // 10 second timeout for sign up
+      );
+
+      if (authError) {
+        console.error('❌ Sign up failed:', authError.message);
+        return { error: authError.message };
+      }
+
+      console.log('✅ Sign up successful');
+      return {};
+
+    } catch (error: any) {
+      console.error('❌ Sign up error:', error.message);
+      
+      let errorMessage = 'Account creation failed. Please try again.';
+      
+      if (error.message.includes('timeout') || error.message.includes('Request timeout')) {
+        errorMessage = 'Account creation is taking too long. Please check your internet connection and try again.';
+      } else if (error.message.includes('Network request failed')) {
+        errorMessage = 'Network error. Please check your internet connection and try again.';
+      }
+      
+      return { error: errorMessage };
     }
   };
 
   // Sign out
   const signOut = async () => {
-    console.log('AuthContext: Signing out...');
-    setIsLoading(true);
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      console.error('AuthContext: Error signing out:', error.message);
+    try {
+      await withTimeout(supabase.auth.signOut(), 5000);
+      setIsAuthenticated(false);
+      setUser(null);
+      setOnboarding(null);
+      setLeaderboard(null);
+      setHasCompletedOnboarding(false);
+      setJustLoggedIn(false);
+      console.log('✅ Sign out successful');
+    } catch (error) {
+      console.error('❌ Sign out error:', error);
+      // Still clear local state even if network request fails
+      setIsAuthenticated(false);
+      setUser(null);
+      setOnboarding(null);
+      setLeaderboard(null);
+      setHasCompletedOnboarding(false);
+      setJustLoggedIn(false);
     }
-    // States will be updated by onAuthStateChange
-    // setUserData(null);
-    // setIsAuthenticated(false);
-    // setJustLoggedIn(false);
-    // setHasSeenOnboarding(false); // Or handle this based on your app logic
-    setIsLoading(false);
+  };
+
+  // Update onboarding
+  const updateOnboarding = async (data: any) => {
+    try {
+      const { error } = await withTimeout(
+        supabase.from('onboarding_preferences').upsert(data),
+        8000
+      );
+      
+      if (error) throw error;
+      
+      setOnboarding(prev => ({ ...prev, ...data }));
+      console.log('✅ Onboarding data updated');
+    } catch (error) {
+      console.error('❌ Update onboarding error:', error);
+    }
   };
 
   // Refresh user data
   const refreshUserData = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) {
-      try {
-        await fetchUserData(session.user.id);
-      } catch (error) {
-        console.warn('RefreshUserData failed, keeping existing data');
-      }
+    try {
+      if (!user) return;
+      
+      console.log('🔄 Refreshing user data...');
+      const userData = await fetchUserDataWithFallback(user, true);
+      
+      setUser(userData.profile);
+      setOnboarding(userData.onboarding);
+      setLeaderboard(userData.leaderboard);
+      setHasCompletedOnboarding(userData.onboarding?.is_onboarding_complete || false);
+      
+      console.log('✅ User data refreshed');
+    } catch (error) {
+      console.error('❌ Refresh user data error:', error);
     }
   };
 
-  // Update profile
-  const updateProfile = async (updates: Partial<UserProfile>) => {
-    if (!user) return { error: 'No user' };
-    const { error } = await supabase.from('profiles').update(updates).eq('id', user.id);
-    if (error) return { error: error.message };
-    await refreshUserData();
-  };
+  // Initial load
+  useEffect(() => {
+    const initialize = async () => {
+      await loadHasSeenLanding();
+      await checkSession();
+      setIsInitializing(false);
+    };
 
-  // Update onboarding
-  const updateOnboarding = async (updates: Partial<OnboardingPreferences>) => {
-    if (!user) return { error: 'No user' };
-    
-    if (updates.is_onboarding_complete !== undefined) {
-      setHasCompletedOnboarding(updates.is_onboarding_complete);
-    }
-    
-    const { data: existingData } = await supabase
-      .from('onboarding_preferences')
-      .select('id')
-      .eq('user_id', user.id)
-      .single();
-    
-    if (!existingData) {
-      const newData = { user_id: user.id, ...updates };
-      const { error } = await supabase
-        .from('onboarding_preferences')
-        .insert(newData);
-      if (error) return { error: error.message };
-    } else {
-      const { error } = await supabase
-        .from('onboarding_preferences')
-        .update(updates)
-        .eq('user_id', user.id);
-      if (error) return { error: error.message };
-    }
-    
-    await refreshUserData();
-    return { success: true };
-  };
+    initialize();
+  }, []);
 
+  // Clear justLoggedIn state after initial load
+  useEffect(() => {
+    if (isInitializing) return;
+    
+    const timer = setTimeout(() => {
+      setJustLoggedIn(false);
+    }, 3000); // 3 seconds
+
+    return () => clearTimeout(timer);
+  }, [isInitializing]);
+
+  // Clear justLoggedIn flag after navigation
+  useEffect(() => {
+    if (justLoggedIn) {
+      const timer = setTimeout(() => {
+        setJustLoggedIn(false);
+      }, 2000); // Clear after 2 seconds
+    
+      return () => clearTimeout(timer);
+    }
+  }, [justLoggedIn]);
+
+  // Function to clear the justLoggedIn flag
   const clearJustLoggedIn = () => {
     setJustLoggedIn(false);
   };
 
-  const initializeLeaderboard = async () => {
-    if (!user) return { error: 'No user' };
-    
-    try {
-      const leaderboardData = await createDefaultLeaderboardData(user.id);
-      if (leaderboardData) { // Added condition: check if leaderboardData is truthy
-        setLeaderboard(leaderboardData);
-        return { success: true };
-      } else {
-        // Handle the case where leaderboardData couldn't be created
-        console.warn('AuthContext: Failed to initialize leaderboard, createDefaultLeaderboardData returned null.');
-        return { error: 'Failed to initialize leaderboard data' };
-      }
-    } catch (error: any) {
-      console.error('AuthContext: Error in initializeLeaderboard:', error.message);
-      return { error: error?.message || 'Failed to initialize leaderboard' };
-    }
+  const value = {
+    isAuthenticated,
+    user,
+    onboarding,
+    leaderboard,
+    hasCompletedOnboarding,
+    justLoggedIn,
+    isInitialLoading: isInitializing,
+    hasSeenLanding,
+    setHasSeenLanding,
+    clearJustLoggedIn,  // This line is already there
+    signIn,
+    signUp,
+    signOut,
+    updateOnboarding,
+    refreshUserData,
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        isAuthenticated,
-        isInitialLoading,
-        hasSeenLanding,
-        setHasSeenLanding: updateHasSeenLanding, // Ensure this is correctly implemented
-        hasCompletedOnboarding,
-        setHasCompletedOnboarding, // Ensure this is correctly implemented
-        justLoggedIn,
-        clearJustLoggedIn,
-        user,
-        onboarding,
-        leaderboard,
-        signUp,
-        signIn,
-        signOut,
-        refreshUserData,
-        updateProfile,
-        updateOnboarding,
-        initializeLeaderboard,
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
@@ -665,6 +574,5 @@ export const useAuth = () => {
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
-  // Ensure all values from AuthContextType are spread or returned
   return context;
 };
