@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView, Alert, AppState } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView, Alert, AppState, BackHandler } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -8,6 +9,7 @@ import type { RootStackParamList } from '../../navigation/types';
 import { supabase } from '../../utils/supabase';
 import { useSupabaseFocusSession, Task } from '../../utils/supabaseHooks';
 import { useBackgroundMusic } from '../../hooks/useBackgroundMusic';
+import { getSoundPreference, getAutoPlaySetting } from '../../utils/musicPreferences';
 const { useUserAppData } = require('../../utils/userAppData');
 
 // Work Style Focus Durations (in seconds)
@@ -63,17 +65,31 @@ export const StudySessionScreen = () => {
     isPlaying,
     audioSupported,
     isPreviewMode,
-    nextTrack,           // Add this
-    previousTrack,       // Add this  
-    pausePlayback,       // Add this
-    getCurrentPlaylistTracks, // Add this
-    volume,              // Add this
-    setVolume           // Add this
+    nextTrack,
+    previousTrack,
+    pausePlayback,
+    getCurrentPlaylistTracks,
+    volume,
+    setVolume
   } = useBackgroundMusic();
   
-  // Get user's sound preference from settings
-  const userSoundPreference = userData?.profile?.soundpreference || userData?.onboarding?.sound_preference || 'Lo-Fi';
-  const autoPlaySound = userData?.settings?.auto_play_sound || false;
+  // Get user's sound preference from settings using centralized utility
+  const userSoundPreference = getSoundPreference(userData);
+  const autoPlaySound = getAutoPlaySetting(userData);
+  
+  // Navigation and route params - must be defined before useState calls
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute();
+  const params = route.params as { 
+    group?: boolean; 
+    room?: any;
+    autoStart?: boolean;
+    selectedTask?: any;
+    manualSelection?: boolean;
+  } | undefined;
+
+  // Add this missing state variable
+  const [showBackConfirmModal, setShowBackConfirmModal] = useState(false);
   
   // Timer refs for background functionality
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -125,16 +141,6 @@ export const StudySessionScreen = () => {
   const [productivityRating, setProductivityRating] = useState(0);
   const [sessionNotes, setSessionNotes] = useState('');
   const [completedSessionData, setCompletedSessionData] = useState<any>(null);
-  
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const route = useRoute();
-  const params = route.params as { 
-    group?: boolean; 
-    room?: any;
-    autoStart?: boolean;
-    selectedTask?: any;
-    manualSelection?: boolean;
-  } | undefined;
 
   // Enhanced task selection logic using real Supabase data
   const currentTask = useMemo(() => {
@@ -326,6 +332,10 @@ export const StudySessionScreen = () => {
     if (params?.autoStart === true && !sessionStarted && currentTask) {
       console.log('🔄 Auto-starting session with selected task:', currentTask.title);
       
+      // Get subject from current task or default to "General Study"
+      const autoSubject = currentTask.subject || 'General Study';
+      setSelectedSubject(autoSubject);
+      
       // Start session automatically
       setTimeout(async () => {
         const sessionTypeParam = isGroupSession ? 'group' : 'individual';
@@ -349,6 +359,9 @@ export const StudySessionScreen = () => {
     // If auto-start is true but no task is found, start general study session
     else if (params?.autoStart === true && !sessionStarted && !currentTask) {
       console.log('🔄 Auto-starting general study session (no tasks available)');
+      
+      // Automatically set subject to "General Study" for auto mode with no tasks
+      setSelectedSubject('General Study');
       
       setTimeout(async () => {
         const sessionTypeParam = isGroupSession ? 'group' : 'individual';
@@ -540,19 +553,39 @@ export const StudySessionScreen = () => {
     return `${min}:${sec}`;
   };
 
-  const handleBack = () => {
-    if (showPreSessionModal) {
-      navigation.navigate('Main', { screen: 'Home' });
+  // Enhanced back button handling with confirmation
+  const handleBack = async () => {
+    // If session is active, show confirmation modal
+    if (sessionStarted && timer > 0) {
+      setShowBackConfirmModal(true);
       return;
     }
     
-    startTimeRef.current = null;
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    navigation.navigate('Main', { screen: 'Home' });
+    // Otherwise, safe to go back
+    // Stop music when leaving the session
+    await stopPlayback();
+    console.log('🎵 Stopped music when returning to home');
+    navigation.goBack();
   };
+
+  // Android hardware back button handling
+  useFocusEffect(
+    React.useCallback(() => {
+      const onBackPress = () => {
+        if (sessionStarted && timer > 0) {
+          setShowBackConfirmModal(true);
+          return true; // Prevent default back behavior
+        }
+        return false; // Let default back behavior happen
+      };
+
+      // Store the subscription object returned by addEventListener
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      
+      // Return a cleanup function that calls .remove() on the subscription
+      return () => subscription.remove();
+    }, [sessionStarted, timer])
+  );
 
   const handlePause = () => {
     setIsPaused(prev => {
@@ -725,7 +758,7 @@ export const StudySessionScreen = () => {
                 Now Playing: {currentTrack.name}
               </Text>
               <Text style={styles.playlistInfo}>
-                {currentPlaylist} • Track {currentTrackIndex + 1} of {getCurrentPlaylistTracks().length}
+                {currentTrack?.category} • Track {currentTrackIndex + 1} of {getCurrentPlaylistTracks().length}
               </Text>
             </View>
             <Text style={styles.volumeText}>
@@ -794,7 +827,7 @@ export const StudySessionScreen = () => {
   );
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
+    <SafeAreaView style={styles.safeArea}>
       {/* Pre-Session Selection Modal - Only for Manual/Custom Setup */}
       <Modal visible={showPreSessionModal} transparent animationType="slide">
         <View style={modalStyles.overlay}>
@@ -1074,7 +1107,7 @@ export const StudySessionScreen = () => {
                             styles.subtaskText, 
                             subtask.completed && styles.subtaskCompleted
                           ]}>
-                            {subtask.text || subtask.title}
+                            {subtask.title || subtask.text}
                           </Text>
                         </View>
                       ))}
@@ -1268,6 +1301,35 @@ export const StudySessionScreen = () => {
               </View>
             </View>
           </Modal>
+
+          {/* Back Button Confirmation Modal */}
+          <Modal visible={showBackConfirmModal} transparent animationType="fade">
+            <View style={modalStyles.overlay}>
+              <View style={modalStyles.modalBox}>
+                <MaterialIcons name="warning" size={48} color="#FF9800" />
+                <Text style={modalStyles.modalTitle}>End Session?</Text>
+                <Text style={modalStyles.modalDesc}>
+                  Leaving now will end your current session. Your progress will not be saved.
+                </Text>
+                <TouchableOpacity 
+                  style={modalStyles.continueBtn} 
+                  onPress={() => setShowBackConfirmModal(false)}
+                >
+                  <Text style={modalStyles.continueBtnText}>Continue Session</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={modalStyles.endNowBtn} 
+                  onPress={async () => {
+                    setShowBackConfirmModal(false);
+                    await stopPlayback();
+                    navigation.goBack();
+                  }}
+                >
+                  <Text style={modalStyles.endNowBtnText}>End Session</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
         </>
       )}
     </SafeAreaView>
@@ -1416,6 +1478,76 @@ const styles = StyleSheet.create({
     color: '#F57C00',
     marginLeft: 6,
     flex: 1,
+  },
+  
+  // Missing styles for music controls
+  trackInfo: {
+    flex: 1,
+    marginLeft: 8,
+  },
+  volumeText: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 8,
+  },
+  autoPlayStatus: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  
+  // Missing styles for task due dates
+  dueDateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF3E0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginHorizontal: 8,
+  },
+  dueDateText: {
+    fontSize: 12,
+    color: '#F57C00',
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  
+  // Missing styles for subtasks
+  subtasksList: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E8F5E9',
+  },
+  subtasksTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1B5E20',
+    marginBottom: 8,
+  },
+  subtaskItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+    paddingHorizontal: 4,
+  },
+  subtaskText: {
+    fontSize: 14,
+    color: '#333',
+    marginLeft: 8,
+    flex: 1,
+  },
+  subtaskCompleted: {
+    textDecorationLine: 'line-through',
+    color: '#888',
+  },
+  moreSubtasks: {
+    fontSize: 12,
+    color: '#666',
+    fontStyle: 'italic',
+    marginTop: 4,
+    marginLeft: 24,
   },
 });
 
@@ -1861,45 +1993,170 @@ const modalStyles = StyleSheet.create({
   backBtnText: {
     color: '#666',
     fontWeight: '600',
-    fontSize: 16,
+    fontSize: 14,
   },
   
-  customSection: {
+  // Music settings styles
+  musicSection: {
     width: '100%',
-    marginBottom: 20,
-  },
-  
-  customInput: {
+    marginTop: 16,
+    borderRadius: 12,
+    overflow: 'hidden',
     borderWidth: 1,
     borderColor: '#E0E0E0',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    marginBottom: 16,
     backgroundColor: '#fff',
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  
-  setCustomBtn: {
-    backgroundColor: '#4CAF50',
-    borderRadius: 8,
-    paddingVertical: 12,
+  musicHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  musicControls: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
+  musicControlBtn: {
+    padding: 8,
+    borderRadius: 50,
+    marginLeft: 8,
+    marginRight: 8,
+    backgroundColor: '#F1F8E9',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  currentMusicDisplay: {
+    backgroundColor: '#F9F9F9',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    marginTop: 12,
+  },
+  trackInfo: {
+    flex: 1,
+    marginLeft: 8,
+  },
+  volumeControl: {
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  volumeLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
+  },
+  volumeSliderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  volumeSlider: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#E0E0E0',
+    overflow: 'hidden',
+    marginHorizontal: 8,
+  },
+  volumeTrack: {
+    height: '100%',
+    backgroundColor: '#4CAF50',
+  },
+  volumeFill: {
+    height: '100%',
+    backgroundColor: '#81C784',
+  },
   
+  // Custom timer modal styles
+  customSection: {
+    width: '100%',
+    marginTop: 16,
+  },
+  customInput: {
+    borderWidth: 1, 
+    borderColor: '#E0E0E0', 
+    borderRadius: 12, 
+    padding: 16, 
+    fontSize: 16, 
+    textAlign: 'center',
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  setCustomBtn: {
+    backgroundColor: '#4CAF50',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 8,
+    shadowColor: '#4CAF50',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
   setCustomBtnText: {
     color: '#fff',
     fontWeight: 'bold',
-    fontSize: 14,
+    fontSize: 16,
   },
-  
   cancelBtn: {
     backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 12,
     paddingVertical: 12,
     alignItems: 'center',
+    marginTop: 12,
   },
-  
   cancelBtnText: {
     color: '#666',
+    fontWeight: '600',
     fontSize: 14,
+  },
+  
+  // Common modal styles
+  modalTitle: { 
+    fontSize: 22, 
+    fontWeight: 'bold', 
+    color: '#1B5E20',
+    textAlign: 'center',
+    flex: 1,
+  },
+  modalDesc: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 24,
+  },
+  closeBtn: { 
+    padding: 8,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 20,
+  },
+  iconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#E8F5E9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'center',
+    marginBottom: 20,
   },
 });
