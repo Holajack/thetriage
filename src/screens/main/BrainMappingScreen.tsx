@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, ScrollView, Animated } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, ScrollView, Animated, Switch } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
 const { useUserAppData } = require('../../utils/userAppData');
 import Svg, { Path, Circle, Text as SvgText } from 'react-native-svg';
+import Brain3D from '../../components/Brain3D';
+import RealisticBrain3D from '../../components/RealisticBrain3D';
+import { generateBrainVisualizationData, Brain3DRegion } from '../../utils/brain3DData';
 
 interface BrainActivity {
   id: string;
@@ -87,6 +90,10 @@ const BrainMappingScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const [selectedActivity, setSelectedActivity] = useState<BrainActivity | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [is3DMode, setIs3DMode] = useState(false);
+  const [useRealisticModel, setUseRealisticModel] = useState(true);
+  const [brain3DData, setBrain3DData] = useState<Brain3DRegion[]>([]);
+  const [selectedRegion, setSelectedRegion] = useState<Brain3DRegion | null>(null);
   const [pulseAnimations] = useState(
     BRAIN_ACTIVITIES.reduce((acc, activity) => {
       acc[activity.id] = new Animated.Value(1);
@@ -97,6 +104,44 @@ const BrainMappingScreen: React.FC = () => {
 
   // Get user data from our comprehensive hook
   const { data: userData, isLoading: userDataLoading } = useUserAppData();
+
+  // Configure header
+  useEffect(() => {
+    navigation.setOptions({
+      title: 'Brain Activity Mapping',
+      headerLeft: () => (
+        <TouchableOpacity 
+          onPress={() => navigation.navigate('Bonuses' as never)} 
+          style={{ marginLeft: 8 }}
+        >
+          <Ionicons name="arrow-back" size={24} color={theme.primary} />
+        </TouchableOpacity>
+      ),
+      headerRight: () => (
+        <View style={styles.headerRight}>
+          <Text style={[styles.viewModeText, { color: theme.text }]}>
+            {is3DMode ? (useRealisticModel ? 'MRI' : '3D') : '2D'}
+          </Text>
+          <Switch
+            value={is3DMode}
+            onValueChange={setIs3DMode}
+            trackColor={{ false: '#767577', true: theme.primary }}
+            thumbColor={is3DMode ? '#f4f3f4' : '#f4f3f4'}
+          />
+          {is3DMode && (
+            <TouchableOpacity
+              style={[styles.modelToggle, { backgroundColor: theme.primary + '20' }]}
+              onPress={() => setUseRealisticModel(!useRealisticModel)}
+            >
+              <Text style={[styles.modelToggleText, { color: theme.primary }]}>
+                {useRealisticModel ? 'MRI' : 'Simple'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      ),
+    });
+  }, [navigation, theme, is3DMode, useRealisticModel]);
 
   useEffect(() => {
     // Create pulsing animations for active brain regions
@@ -124,6 +169,9 @@ const BrainMappingScreen: React.FC = () => {
   useEffect(() => {
     if (userData && !userDataLoading) {
       generateBrainActivityFromUserData(userData);
+      // Generate 3D brain data
+      const brain3D = generateBrainVisualizationData(userData);
+      setBrain3DData(brain3D);
     }
   }, [userData, userDataLoading]);
 
@@ -311,6 +359,12 @@ const BrainMappingScreen: React.FC = () => {
   const closeDetail = () => {
     setModalVisible(false);
     setSelectedActivity(null);
+    setSelectedRegion(null);
+  };
+
+  const handle3DRegionPress = (region: Brain3DRegion) => {
+    setSelectedRegion(region);
+    setModalVisible(true);
   };
 
   const getActivityLevel = (activity: number) => {
@@ -367,6 +421,61 @@ const BrainMappingScreen: React.FC = () => {
     </View>
   );
 
+  const render3DRegionCard = ({ item }: { item: Brain3DRegion }) => (
+    <TouchableOpacity
+      style={styles.activityCard}
+      onPress={() => handle3DRegionPress(item)}
+      activeOpacity={0.8}
+    >
+      <View style={[styles.activityIcon, { backgroundColor: `${item.color}15` }]}>
+        <Ionicons
+          name="pulse-outline"
+          size={24}
+          color={item.color}
+        />
+      </View>
+
+      <View style={styles.activityContent}>
+        <View style={styles.activityHeader}>
+          <Text style={styles.activitySubject}>{item.name}</Text>
+          <Text style={[styles.activityLevel, { color: item.color }]}>
+            {getActivityLevel(item.activity)}
+          </Text>
+        </View>
+
+        {item.subject && (
+          <Text style={styles.activityRegion}>Subject: {item.subject}</Text>
+        )}
+
+        <View style={styles.activityMeta}>
+          <View style={styles.metaItem}>
+            <Ionicons name="time-outline" size={14} color={theme.text + '99'} />
+            <Text style={styles.metaText}>{item.lastActive}</Text>
+          </View>
+          <View style={styles.metaItem}>
+            <Ionicons name="hourglass-outline" size={14} color={theme.text + '99'} />
+            <Text style={styles.metaText}>{item.studyTime}m studied</Text>
+          </View>
+        </View>
+
+        <View style={styles.activityProgress}>
+          <View style={styles.progressBar}>
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  width: `${item.activity * 100}%`,
+                  backgroundColor: item.color,
+                }
+              ]}
+            />
+          </View>
+          <Text style={styles.progressText}>{Math.round(item.activity * 100)}% active</Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+
   const renderActivityCard = ({ item }: { item: BrainActivity }) => (
     <TouchableOpacity
       style={styles.activityCard}
@@ -421,15 +530,7 @@ const BrainMappingScreen: React.FC = () => {
   );
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#1B5E20" />
-        </TouchableOpacity>
-        <Text style={styles.title}>Brain Mapping</Text>
-        <View style={{ width: 40 }} />
-      </View>
-
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.headerContent}>
           <Text style={styles.subtitle}>
@@ -437,13 +538,31 @@ const BrainMappingScreen: React.FC = () => {
           </Text>
         </View>
 
-        {renderBrainVisualization()}
+        {is3DMode ? (
+          <View style={styles.brain3DContainer}>
+            {useRealisticModel ? (
+              <RealisticBrain3D 
+                regions={brain3DData} 
+                onRegionPress={handle3DRegionPress}
+              />
+            ) : (
+              <Brain3D 
+                regions={brain3DData} 
+                onRegionPress={handle3DRegionPress}
+              />
+            )}
+          </View>
+        ) : (
+          renderBrainVisualization()
+        )}
 
         <View style={styles.activitiesSection}>
-          <Text style={styles.sectionTitle}>Brain Activity Breakdown</Text>
+          <Text style={styles.sectionTitle}>
+            {is3DMode ? '3D Brain Region Activity' : 'Brain Activity Breakdown'}
+          </Text>
           <FlatList
-            data={activities}
-            renderItem={renderActivityCard}
+            data={is3DMode ? brain3DData : activities}
+            renderItem={is3DMode ? render3DRegionCard : renderActivityCard}
             keyExtractor={(item) => item.id}
             scrollEnabled={false}
             showsVerticalScrollIndicator={false}
@@ -460,14 +579,16 @@ const BrainMappingScreen: React.FC = () => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            {selectedActivity && (
+            {(selectedActivity || selectedRegion) && (
               <ScrollView showsVerticalScrollIndicator={false}>
                 <View style={styles.modalHeader}>
-                  <View style={[styles.modalIcon, { backgroundColor: `${selectedActivity.color}15` }]}>
+                  <View style={[styles.modalIcon, { 
+                    backgroundColor: `${(selectedActivity?.color || selectedRegion?.color)}15` 
+                  }]}>
                     <Ionicons
-                      name={selectedActivity.icon as any}
+                      name={(selectedActivity?.icon || 'pulse-outline') as any}
                       size={32}
-                      color={selectedActivity.color}
+                      color={selectedActivity?.color || selectedRegion?.color}
                     />
                   </View>
                   <TouchableOpacity style={styles.closeButton} onPress={closeDetail}>
@@ -475,27 +596,41 @@ const BrainMappingScreen: React.FC = () => {
                   </TouchableOpacity>
                 </View>
 
-                <Text style={styles.modalTitle}>{selectedActivity.subject}</Text>
-                <Text style={styles.modalRegion}>{selectedActivity.region}</Text>
+                <Text style={styles.modalTitle}>
+                  {selectedActivity?.subject || selectedRegion?.name}
+                </Text>
+                <Text style={styles.modalRegion}>
+                  {selectedActivity?.region || (selectedRegion?.subject ? `Subject: ${selectedRegion.subject}` : 'Brain Region')}
+                </Text>
 
                 <View style={styles.modalStats}>
                   <View style={styles.statItem}>
-                    <Text style={styles.statValue}>{Math.round(selectedActivity.activity * 100)}%</Text>
+                    <Text style={styles.statValue}>
+                      {Math.round((selectedActivity?.activity || selectedRegion?.activity || 0) * 100)}%
+                    </Text>
                     <Text style={styles.statLabel}>Activity Level</Text>
                   </View>
                   <View style={styles.statItem}>
-                    <Text style={styles.statValue}>{selectedActivity.studyTime}m</Text>
+                    <Text style={styles.statValue}>
+                      {selectedActivity?.studyTime || selectedRegion?.studyTime || 0}m
+                    </Text>
                     <Text style={styles.statLabel}>Study Time</Text>
                   </View>
                   <View style={styles.statItem}>
-                    <Text style={styles.statValue}>{selectedActivity.lastActive}</Text>
+                    <Text style={styles.statValue}>
+                      {selectedActivity?.lastActive || selectedRegion?.lastActive}
+                    </Text>
                     <Text style={styles.statLabel}>Last Active</Text>
                   </View>
                 </View>
 
-                <Text style={styles.modalDescription}>{selectedActivity.description}</Text>
+                <Text style={styles.modalDescription}>
+                  {selectedActivity?.description || selectedRegion?.description}
+                </Text>
 
-                <TouchableOpacity style={[styles.viewDetailsButton, { backgroundColor: selectedActivity.color }]}>
+                <TouchableOpacity style={[styles.viewDetailsButton, { 
+                  backgroundColor: selectedActivity?.color || selectedRegion?.color 
+                }]}>
                   <Text style={styles.viewDetailsText}>View Study History</Text>
                 </TouchableOpacity>
               </ScrollView>
@@ -746,6 +881,41 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#FFFFFF',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  viewModeText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginRight: 8,
+  },
+  brain3DContainer: {
+    height: 300,
+    marginHorizontal: 20,
+    marginBottom: 24,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#F8F8F8',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+  modelToggle: {
+    marginLeft: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  modelToggleText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
 

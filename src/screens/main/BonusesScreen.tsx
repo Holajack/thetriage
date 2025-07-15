@@ -18,7 +18,7 @@ const BonusesScreen = () => {
       iconFamily: 'Ionicons',
       color: '#FFD700',
       gradient: ['#FFD700', '#FFA000'],
-      onPress: () => navigation.navigate('Achievements' as any),
+      onPress: () => navigation.navigate('Achievements'),
       stats: 'Unlock 50+ achievements'
     },
     {
@@ -29,7 +29,7 @@ const BonusesScreen = () => {
       iconFamily: 'Ionicons',
       color: '#4CAF50',
       gradient: ['#4CAF50', '#2E7D32'],
-      onPress: () => navigation.navigate('EBooks' as any),
+      onPress: () => navigation.navigate('EBooks'),
       stats: 'Support for 100MB+ files'
     },
     {
@@ -40,7 +40,7 @@ const BonusesScreen = () => {
       iconFamily: 'MaterialCommunityIcons',
       color: '#9C27B0',
       gradient: ['#9C27B0', '#7B1FA2'],
-      onPress: () => navigation.navigate('SelfDiscoveryQuiz' as any),
+      onPress: () => navigation.navigate('SelfDiscoveryQuiz'),
       stats: '5 comprehensive assessments'
     },
     {
@@ -51,7 +51,7 @@ const BonusesScreen = () => {
       iconFamily: 'MaterialCommunityIcons',
       color: '#E91E63',
       gradient: ['#E91E63', '#C2185B'],
-      onPress: () => navigation.navigate('BrainMapping' as any),
+      onPress: () => navigation.navigate('BrainMapping'),
       stats: 'Real-time brain insights'
     }
   ];

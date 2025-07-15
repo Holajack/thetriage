@@ -85,7 +85,10 @@ export default function AccountCreationScreen({ route }: { route: AccountCreatio
     }
 
     setIsLoading(true);
-    const { error: signUpError } = await signUp(email, password, username, fullName);
+    const { error: signUpError } = await signUp(email, password, {
+      username: username,
+      full_name: fullName
+    });
     setIsLoading(false);
 
     if (signUpError) {
@@ -108,7 +111,15 @@ export default function AccountCreationScreen({ route }: { route: AccountCreatio
       style={styles.container}
     >
       <SafeAreaView style={styles.safeArea}>
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent} 
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          keyboardDismissMode="on-drag"
+          automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+          contentInsetAdjustmentBehavior="automatic"
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={styles.header}>
             <TouchableOpacity 
               onPress={() => navigation.goBack()} 
@@ -234,7 +245,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: 120, // Ensure space for bottom container
+    paddingBottom: 300, // Extra space for keyboard and confirm password field
   },
   header: {
     marginBottom: 30,

@@ -52,7 +52,7 @@ export type RootStackParamList = {
     productivity: number;
   } | undefined;
   SessionHistory: undefined;
-  PatrickSpeak: {
+  NoraSpeak: {
     initialMessage?: string;
     isResponse?: boolean;
     responseMessage?: string;
@@ -70,7 +70,7 @@ export type RootStackParamList = {
     title: string;
     bookData: any;
   };
-  Patrick: {
+  Nora: {
     initialMessage?: string;
     pdfContext?: {
       title: string;
@@ -90,7 +90,7 @@ export type RootStackParamList = {
 export type MainTabParamList = {
   Home: undefined;
   Community: { initialTab?: string } | undefined;
-  Patrick: undefined;
+  Nora: undefined;
   Bonuses: undefined;
   Results: undefined;
   Leaderboard: undefined;
@@ -102,7 +102,7 @@ export type MainTabParamList = {
   LocationAndTime: undefined;
   Privacy: undefined;
   Preferences: undefined;
-  PatrickSpeak: {
+  NoraSpeak: {
     initialMessage?: string;
     isResponse?: boolean;
     responseMessage?: string;
@@ -120,7 +120,7 @@ export type MainTabParamList = {
     title: string;
     bookData: any;
   };
-  Patrick: {
+  Nora: {
     initialMessage?: string;
     pdfContext?: {
       title: string;

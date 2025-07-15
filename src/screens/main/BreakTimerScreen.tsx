@@ -5,8 +5,9 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
-const { useUserAppData } = require('../../utils/userAppData');
 import { useBackgroundMusic } from '../../hooks/useBackgroundMusic';
+import { getSoundPreference } from '../../utils/musicPreferences';
+const { useUserAppData } = require('../../utils/userAppData');
 
 // Break duration based on focus method
 const getBreakDuration = (focusMethod?: string, sessionDuration?: number) => {
@@ -268,6 +269,7 @@ export const BreakTimerScreen = () => {
     currentPlaylist,
     currentTrackIndex,
     isPlaying,
+    startPlaylist, // Add this to the destructuring
     stopPlayback,
     audioSupported,
     isPreviewMode
@@ -276,15 +278,48 @@ export const BreakTimerScreen = () => {
   const renderMusicStatus = () => {
     if (!audioSupported) return null;
 
+    // Get user's sound preference from settings using centralized utility
+    const userSoundPreference = getSoundPreference(userData);
+  
+    const handleStartMusic = async () => {
+      try {
+        await startPlaylist(userSoundPreference);
+        console.log(`🎵 Started ${userSoundPreference} playlist during break`);
+      } catch (error) {
+        console.error('🎵 Failed to start music during break:', error);
+      }
+    };
+  
     return (
       <View style={[styles.musicStatusCard, { backgroundColor: colors.secondary }]}>
         <MaterialIcons name={isPlaying ? "music-note" : "music-off"} size={24} color={colors.primary} />
-        <Text style={[styles.musicStatusText, { color: colors.primary }]}>
-          {isPlaying ? `Now Playing: ${currentTrack?.title}` : 'Music Paused'}
-        </Text>
-        <TouchableOpacity style={styles.musicControlBtn} onPress={stopPlayback}>
-          <Ionicons name="stop" size={20} color="#fff" />
-        </TouchableOpacity>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.musicStatusText, { color: colors.primary }]}>
+            {isPlaying ? `Now Playing: ${currentTrack?.name || currentTrack?.title}` : 'Music Available'}
+          </Text>
+          {!isPlaying && (
+            <Text style={[styles.musicSubText, { color: colors.primary, opacity: 0.7 }]}>
+              Preferred: {userSoundPreference}
+            </Text>
+          )}
+        </View>
+        <View style={styles.musicControls}>
+          {!isPlaying ? (
+            <TouchableOpacity 
+              style={[styles.musicControlBtn, { backgroundColor: colors.primary }]} 
+              onPress={handleStartMusic}
+            >
+              <Ionicons name="play" size={20} color="#fff" />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity 
+              style={[styles.musicControlBtn, { backgroundColor: '#E57373' }]} 
+              onPress={stopPlayback}
+            >
+              <Ionicons name="stop" size={20} color="#fff" />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
     );
   };
@@ -368,48 +403,42 @@ export const BreakTimerScreen = () => {
             <Text style={[styles.tipsTitle, { color: colors.accent }]}>Break Suggestions:</Text>
             <Text style={styles.tipText}>• Stretch your body and neck</Text>
             <Text style={styles.tipText}>• Hydrate with water</Text>
-            <Text style={styles.tipText}>• Take deep breaths</Text>
-            <Text style={styles.tipText}>• Rest your eyes by looking away from screens</Text>
+            <Text style={styles.tipText}>• Rest your eyes from screens</Text>
+            <Text style={[styles.tipText, { marginTop: 10 }]}>
+              Taking full breaks helps maintain your focus for the next session. You still have {formatTime(timer)} remaining.
+            </Text>
           </View>
 
-          {/* Timer Controls */}
+          {/* Controls */}
           <View style={styles.controlsRow}>
-            <TouchableOpacity style={styles.pauseBtn} onPress={handlePause}>
-              <Ionicons name={isPaused ? 'play' : 'pause'} size={22} color="#222" />
+            <TouchableOpacity style={[styles.pauseBtn, { borderColor: colors.primary }]} onPress={handlePause}>
+              <Ionicons name={isPaused ? "play" : "pause"} size={22} color="#222" />
               <Text style={styles.pauseBtnText}>{isPaused ? 'Resume' : 'Pause'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.endBtn, { backgroundColor: colors.primary }]} onPress={handleEndBreak}>
-              <Ionicons name="stop" size={22} color="#fff" />
+              <MaterialIcons name="timer-off" size={22} color="#fff" />
               <Text style={styles.endBtnText}>End Break</Text>
             </TouchableOpacity>
           </View>
         </View>
-
-        {/* 🎵 ADD MUSIC STATUS CARD HERE */}
+        
+        {/* Add music controls */}
         {renderMusicStatus()}
-
-        {/* Background Timer Indicator */}
-        {AppState.currentState === 'background' && !isPaused && (
-          <View style={[styles.backgroundIndicator, { backgroundColor: colors.secondary }]}>
-            <MaterialIcons name="schedule" size={16} color={colors.primary} />
-            <Text style={[styles.backgroundText, { color: colors.primary }]}>Break timer running in background</Text>
-          </View>
-        )}
       </ScrollView>
-
-      {/* End Break Confirmation Modal */}
+      
+      {/* End Break Modal */}
       <Modal visible={showEndModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
             <MaterialIcons name="warning" size={48} color="#FF9800" />
             <Text style={styles.modalTitle}>End Break Early?</Text>
             <Text style={styles.modalDesc}>
-              Taking full breaks helps maintain your focus for the next session. You still have {formatTime(timer)} remaining.
+              Taking full breaks helps maintain your focus for the next session.
             </Text>
             <TouchableOpacity style={[styles.continueBtn, { borderColor: colors.primary }]} onPress={handleCancelEndBreak}>
               <Text style={[styles.continueBtnText, { color: colors.primary }]}>Continue Break</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.endNowBtn, { backgroundColor: colors.primary }]} onPress={handleFirstEndConfirm}>
+            <TouchableOpacity style={[styles.endNowBtn, { backgroundColor: '#FF9800' }]} onPress={handleFirstEndConfirm}>
               <Text style={styles.endNowBtnText}>End Break Now</Text>
             </TouchableOpacity>
           </View>

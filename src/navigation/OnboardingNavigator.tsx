@@ -5,7 +5,7 @@ import FocusMethodIntroScreen from '../screens/onboarding/FocusMethodIntroScreen
 import AccountCreationScreen from '../screens/onboarding/AccountCreationScreen';
 import ProfileCreationScreen from '../screens/onboarding/ProfileCreationScreen';
 import PrivacySettingsScreen from '../screens/onboarding/PrivacySettingsScreen';
-import AppTutorialScreen from '../screens/onboarding/AppTutorialScreen';
+import AppSummaryScreen from '../screens/onboarding/AppSummaryScreen';
 
 const Stack = createNativeStackNavigator<OnboardingStackParamList>();
 
@@ -22,7 +22,7 @@ export const OnboardingNavigator = () => {
       <Stack.Screen name="AccountCreation" component={AccountCreationScreen} />
       <Stack.Screen name="ProfileCreation" component={ProfileCreationScreen} />
       <Stack.Screen name="PrivacySettings" component={PrivacySettingsScreen} />
-      <Stack.Screen name="AppTutorial" component={AppTutorialScreen} />
+      <Stack.Screen name="AppTutorial" component={AppSummaryScreen} />
     </Stack.Navigator>
   );
 };

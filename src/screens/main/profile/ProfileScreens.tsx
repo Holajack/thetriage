@@ -2,20 +2,39 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, Platform, KeyboardAvoidingView } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { useSupabaseProfile } from '../../../utils/supabaseHooks';
 import * as Localization from 'expo-localization';
 import Slider from '@react-native-community/slider';
 import DropDownPicker from 'react-native-dropdown-picker';
 import { useAuth } from '../../../context/AuthContext';
+import { useTheme } from '../../../context/ThemeContext';
 
 export const PersonalInformationScreen = () => {
   const { profile, updateProfile } = useSupabaseProfile();
+  const { theme } = useTheme();
+  const navigation = useNavigation();
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     username: '',
     email: '',
     fullName: '',
   });
+
+  // Configure header
+  useEffect(() => {
+    navigation.setOptions({
+      title: 'Personal Information',
+      headerLeft: () => (
+        <TouchableOpacity 
+          onPress={() => navigation.goBack()} 
+          style={{ marginLeft: 8 }}
+        >
+          <Ionicons name="arrow-back" size={24} color={theme.primary} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, theme]);
 
   useEffect(() => {
     if (profile) {
@@ -128,12 +147,29 @@ export const PersonalInformationScreen = () => {
 
 export const EducationScreen = () => {
   const { profile, updateProfile } = useSupabaseProfile();
+  const { theme } = useTheme();
+  const navigation = useNavigation();
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     university: '',
     major: '',
     classes: '',
   });
+
+  // Configure header
+  useEffect(() => {
+    navigation.setOptions({
+      title: 'Education',
+      headerLeft: () => (
+        <TouchableOpacity 
+          onPress={() => navigation.goBack()} 
+          style={{ marginLeft: 8 }}
+        >
+          <Ionicons name="arrow-back" size={24} color={theme.primary} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, theme]);
 
   useEffect(() => {
     if (profile) {
@@ -266,11 +302,28 @@ const TIME_ZONES = [
 
 export const LocationAndTimeScreen = () => {
   const { profile, updateProfile } = useSupabaseProfile();
+  const { theme } = useTheme();
+  const navigation = useNavigation();
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     location: '',
     timeZone: '',
   });
+
+  // Configure header
+  useEffect(() => {
+    navigation.setOptions({
+      title: 'Location and Time',
+      headerLeft: () => (
+        <TouchableOpacity 
+          onPress={() => navigation.goBack()} 
+          style={{ marginLeft: 8 }}
+        >
+          <Ionicons name="arrow-back" size={24} color={theme.primary} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, theme]);
 
   useEffect(() => {
     if (profile) {
@@ -391,7 +444,24 @@ const PRIVACY_OPTIONS = [
 
 export const PrivacyScreen = () => {
   const { profile, updateProfile } = useSupabaseProfile();
+  const { theme } = useTheme();
+  const navigation = useNavigation();
   const [isEditing, setIsEditing] = useState(false);
+
+  // Configure header
+  useEffect(() => {
+    navigation.setOptions({
+      title: 'Privacy',
+      headerLeft: () => (
+        <TouchableOpacity 
+          onPress={() => navigation.goBack()} 
+          style={{ marginLeft: 8 }}
+        >
+          <Ionicons name="arrow-back" size={24} color={theme.primary} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, theme]);
 
   // Dropdown state for each field
   const [fullNameOpen, setFullNameOpen] = useState(false);
@@ -602,7 +672,24 @@ const SOUND_OPTIONS = [
 
 export const PreferencesScreen = () => {
   const { onboarding, updateOnboarding } = useAuth();
+  const { theme } = useTheme();
+  const navigation = useNavigation();
   const [isEditing, setIsEditing] = useState(false);
+
+  // Configure header
+  useEffect(() => {
+    navigation.setOptions({
+      title: 'Preferences',
+      headerLeft: () => (
+        <TouchableOpacity 
+          onPress={() => navigation.goBack()} 
+          style={{ marginLeft: 8 }}
+        >
+          <Ionicons name="arrow-back" size={24} color={theme.primary} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, theme]);
 
   // Dropdown state for each field
   const [mainGoalOpen, setMainGoalOpen] = useState(false);

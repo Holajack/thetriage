@@ -99,6 +99,21 @@ const EBooksScreen: React.FC = () => {
     fetchBooks();
   }, []);
 
+  // Configure header
+  useEffect(() => {
+    navigation.setOptions({
+      title: 'E-Books',
+      headerLeft: () => (
+        <TouchableOpacity 
+          onPress={() => navigation.navigate('Bonuses' as never)} 
+          style={{ marginLeft: 8 }}
+        >
+          <Ionicons name="arrow-back" size={24} color={theme.primary} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, theme]);
+
   /* ----------  React Native Compatible Upload Function  ---------- */
   const handleUpload = async () => {
     try {
@@ -312,12 +327,12 @@ const EBooksScreen: React.FC = () => {
     }
   };
 
-  /* ----------  Send to Patrick Function  ---------- */
-  const sendToPatrick = async (book: UploadedBook) => {
+  /* ----------  Send to Nora Function  ---------- */
+  const sendToNora = async (book: UploadedBook) => {
     try {
       Alert.alert(
-        'Send to Patrick',
-        `Send "${book.name}" to Patrick for study assistance?`,
+        'Send to Nora',
+        `Send "${book.name}" to Nora for study assistance?`,
         [
           { text: 'Cancel', style: 'cancel' },
           {
@@ -326,17 +341,17 @@ const EBooksScreen: React.FC = () => {
               try {
                 setLoading(true);
                 
-                // Get signed URL for Patrick
+                // Get signed URL for Nora
                 const { data, error } = await supabase.storage
                   .from(BUCKET)
-                  .createSignedUrl(book.file_path, 7200); // 2 hours for Patrick processing
+                  .createSignedUrl(book.file_path, 7200); // 2 hours for Nora processing
 
                 if (error) {
-                  throw new Error('Failed to get PDF URL for Patrick');
+                  throw new Error('Failed to get PDF URL for Nora');
                 }
 
-                // Navigate to Patrick with the PDF context
-                navigation.navigate('Patrick', { 
+                // Navigate to Nora with the PDF context
+                navigation.navigate('Nora', { 
                   initialMessage: `I've uploaded a textbook: "${book.name}". Can you help me study from it?`,
                   pdfContext: {
                     title: book.name,
@@ -346,8 +361,8 @@ const EBooksScreen: React.FC = () => {
                 });
                 
               } catch (error) {
-                console.error('Error sending to Patrick:', error);
-                Alert.alert('Error', 'Could not send PDF to Patrick. Please try again.');
+                console.error('Error sending to Nora:', error);
+                Alert.alert('Error', 'Could not send PDF to Nora. Please try again.');
               } finally {
                 setLoading(false);
               }
@@ -356,7 +371,7 @@ const EBooksScreen: React.FC = () => {
         ]
       );
     } catch (error) {
-      console.error('Send to Patrick error:', error);
+      console.error('Send to Nora error:', error);
     }
   };
 
@@ -370,15 +385,6 @@ const EBooksScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={theme.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>E-Books</Text>
-        <View style={{ width: 24 }} />
-      </View>
-
       <View style={styles.content}>
         <Text style={[styles.subtitle, { color: theme.text }]}>
           Upload your textbooks and class materials to access them anytime, anywhere.
@@ -431,7 +437,7 @@ const EBooksScreen: React.FC = () => {
                 </TouchableOpacity>
                 
                 <TouchableOpacity 
-                  onPress={() => sendToPatrick(item)} 
+                  onPress={() => sendToNora(item)} 
                   style={[styles.actionButton, { backgroundColor: '#FF5722' + '15' }]}
                 >
                   <MaterialCommunityIcons name="robot" size={18} color="#FF5722" />

@@ -77,6 +77,7 @@ export default function HomeScreen() {
 
   const [allSubtasks, setAllSubtasks] = useState<{ [taskId: string]: any[] }>({});
   const [subtasksLoading, setSubtasksLoading] = useState<{ [taskId: string]: boolean }>({});
+  const [addingSubtask, setAddingSubtask] = useState<{ [taskId: string]: boolean }>({});
   const [subtasksError, setSubtasksError] = useState<{ [taskId: string]: string | null }>({});
 
   const days = Array.from({ length: 7 }, (_, i) => {
@@ -106,6 +107,28 @@ export default function HomeScreen() {
       console.error('Error refreshing data:', error);
     }
   }, [refreshData]);
+
+  const fetchSubtasks = useCallback(async (taskId: string) => {
+    try {
+      setSubtasksLoading(prev => ({ ...prev, [taskId]: true }));
+      setSubtasksError(prev => ({ ...prev, [taskId]: null }));
+      
+      const { data, error } = await supabase
+        .from('subtasks')
+        .select('*')
+        .eq('task_id', taskId)
+        .order('created_at', { ascending: true });
+      
+      if (error) throw error;
+      
+      setAllSubtasks(prev => ({ ...prev, [taskId]: data || [] }));
+    } catch (error) {
+      console.error('Error fetching subtasks:', error);
+      setSubtasksError(prev => ({ ...prev, [taskId]: 'Failed to load subtasks' }));
+    } finally {
+      setSubtasksLoading(prev => ({ ...prev, [taskId]: false }));
+    }
+  }, []);
 
   const handleStartFocusSession = () => {
     // Show the priority modal to let user choose automatic or manual
@@ -171,61 +194,102 @@ export default function HomeScreen() {
   const handleAddSubTask = async (taskId: string) => {
     if (!subTaskInput[taskId]?.trim()) return;
     
-    setSubtasksLoading(prev => ({ ...prev, [taskId]: true }));
-    
     try {
+      setAddingSubtask(prev => ({ ...prev, [taskId]: true }));
+      
+      // Debug: Check user authentication and task ownership
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
-        throw new Error('No authenticated user');
+      console.log('🔍 Subtask creation debug:', {
+        taskId,
+        userId: session?.user?.id,
+        isAuthenticated: !!session?.user
+      });
+
+      // Verify the task exists and belongs to the user
+      const { data: taskData, error: taskError } = await supabase
+        .from('tasks')
+        .select('id, user_id, title')
+        .eq('id', taskId)
+        .single();
+
+      if (taskError) {
+        console.error('❌ Task verification failed:', taskError);
+        throw new Error('Task not found or access denied');
       }
 
-      // Get the current count of subtasks for this task to determine order
+      console.log('✅ Task verification:', {
+        taskExists: !!taskData,
+        taskUserId: taskData?.user_id,
+        currentUserId: session?.user?.id,
+        ownershipMatch: taskData?.user_id === session?.user?.id
+      });
+
+      // Get existing subtasks count for order
       const { count } = await supabase
         .from('subtasks')
         .select('*', { count: 'exact', head: true })
         .eq('task_id', taskId);
-
+      
       const nextOrder = (count || 0) + 1;
 
+      // Try with 'title' first, then fallback to 'text' if schema mismatch
       const subtaskData = {
         task_id: taskId,
-        user_id: session.user.id,
-        text: subTaskInput[taskId].trim(),
-        title: subTaskInput[taskId].trim(), // Add title field
         completed: false,
-        order: nextOrder, // Add the required order field
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        order: nextOrder,
       };
 
-      const { data, error } = await supabase
+      // First attempt with 'title' column
+      let { data, error } = await supabase
         .from('subtasks')
-        .insert(subtaskData)
-        .select();
-
+        .insert({
+          ...subtaskData,
+          title: subTaskInput[taskId].trim(),
+        });
+        
+      // If we get a schema error about 'title' column, try with 'text' column
+      if (error && error.code === 'PGRST204' && error.message.includes('title')) {
+        console.log('🔄 Falling back to text column for subtasks');
+        const fallbackResult = await supabase
+          .from('subtasks')
+          .insert({
+            ...subtaskData,
+            text: subTaskInput[taskId].trim(),
+          });
+        data = fallbackResult.data;
+        error = fallbackResult.error;
+      }
+        
       if (error) {
-        console.error('Error adding subtask:', error);
+        console.error('❌ Subtask insertion error:', error);
         throw error;
       }
 
-      if (data && data[0]) {
-        // Update local state
-        setAllSubtasks(prev => ({
-          ...prev,
-          [taskId]: [...(prev[taskId] || []), data[0]]
-        }));
-        
-        // Clear input
-        setSubTaskInput(prev => ({ ...prev, [taskId]: '' }));
-        console.log('✅ Subtask added successfully:', data[0].text);
-      }
-
+      console.log('✅ Subtask created successfully:', data);
+      
+      // Update the UI
+      setSubTaskInput(prev => ({ ...prev, [taskId]: '' }));
+      fetchSubtasks(taskId); // Refresh the subtasks
     } catch (error) {
-      console.error('Error adding subtask:', error);
-      setSubtasksError(prev => ({ ...prev, [taskId]: error.message }));
-      Alert.alert('Error', 'Failed to add subtask. Please try again.');
+      console.error('❌ Error adding subtask:', error);
+      
+      let errorMessage = 'Failed to add subtask. Please try again.';
+      if (error.code === '42501') {
+        errorMessage = 'Permission denied. You can only add subtasks to your own tasks.';
+      } else if (error.code === 'PGRST204') {
+        errorMessage = 'Database schema mismatch. Please contact support.';
+      } else if (error.message?.includes('not found')) {
+        errorMessage = 'Task not found. Please refresh and try again.';
+      }
+      
+      // Only show alert if it's a user-facing error, not a background issue
+      if (error.code !== '42501' || taskData) {
+        Alert.alert('Error', errorMessage);
+      } else {
+        console.log('🔧 Suppressing RLS error alert for background operation');
+      }
     } finally {
-      setSubtasksLoading(prev => ({ ...prev, [taskId]: false }));
+      setAddingSubtask(prev => ({ ...prev, [taskId]: false }));
     }
   };
   
@@ -538,7 +602,7 @@ export default function HomeScreen() {
                               allSubtasks[task.id].map((st: any) => (
                                 <TouchableOpacity key={st.id} style={styles.subTaskRow} onPress={() => handleToggleSubTask(task.id, st.id, st.completed)}>
                                   <Ionicons name={st.completed ? 'checkbox' : 'square-outline'} size={20} color={st.completed ? '#22c55e' : '#888'} />
-                                  <Text style={[styles.subTaskText, st.completed && { textDecorationLine: 'line-through', color: '#aaa' }]}>{st.text}</Text>
+                                  <Text style={[styles.subTaskText, st.completed && { textDecorationLine: 'line-through', color: '#aaa' }]}>{st.title || st.text}</Text>
                                 </TouchableOpacity>
                               ))
                             )}
@@ -587,7 +651,7 @@ export default function HomeScreen() {
                           task.subTasks.map((st: any) => (
                             <View key={st.id} style={styles.subTaskRow}>
                               <Ionicons name={st.completed ? 'checkbox' : 'square-outline'} size={20} color={st.completed ? '#22c55e' : '#888'} />
-                              <Text style={[styles.subTaskText, { textDecorationLine: 'line-through', color: '#aaa' }]}>{st.text}</Text>
+                              <Text style={[styles.subTaskText, { textDecorationLine: 'line-through', color: '#aaa' }]}>{st.title || st.text}</Text>
                             </View>
                           ))
                         )}
@@ -609,18 +673,27 @@ export default function HomeScreen() {
               marginBottom: 16,
             }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <Text style={styles.insightsTitle}>AI-Powered Insights</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Text style={styles.insightsTitle}>AI-Powered Insights</Text>
+                  <TouchableOpacity 
+                    onPress={() => navigation.navigate('Nora' as never)}
+                    style={{ marginLeft: 8, backgroundColor: theme.primary + '15', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}
+                  >
+                    <Text style={{ color: theme.primary, fontSize: 12, fontWeight: '600' }}>Ask Nora</Text>
+                  </TouchableOpacity>
+                </View>
                 <TouchableOpacity onPress={handleRefreshData}>
-                  <Ionicons name="refresh" size={20} color="#388E3C" />
+                  <Ionicons name="refresh" size={20} color={theme.primary} />
                 </TouchableOpacity>
               </View>
+              
               {userDataLoading ? (
                 <Text style={styles.noTasksText}>Analyzing your study patterns...</Text>
               ) : userDataError ? (
                 <View>
                   <Text style={[styles.noTasksText, { color: '#ef4444' }]}>Error loading insights</Text>
                   <TouchableOpacity onPress={handleRefreshData} style={{ marginTop: 8 }}>
-                    <Text style={{ color: '#388E3C', textAlign: 'center' }}>Try Again</Text>
+                    <Text style={{ color: theme.primary, textAlign: 'center' }}>Try Again</Text>
                   </TouchableOpacity>
                 </View>
               ) : userData?.insights && userData.insights.length > 0 ? (
@@ -629,15 +702,45 @@ export default function HomeScreen() {
                     <Text style={styles.insightTitle}>{insight.insight_type}</Text>
                     <Text style={styles.insightDesc}>{insight.content}</Text>
                     {insight.insight_type === 'Action Needed' && (
-                      <TouchableOpacity style={styles.focusNowBtn} onPress={handleFocusNow}>
-                        <Text style={styles.focusNowText}>Focus now</Text>
-                        <MaterialIcons name="open-in-new" size={16} color="#4CAF50" style={{ marginLeft: 4 }} />
+                      <TouchableOpacity style={[styles.focusNowBtn, { backgroundColor: theme.primary }]} onPress={handleFocusNow}>
+                        <Text style={[styles.focusNowText, { color: '#FFFFFF' }]}>Focus now</Text>
+                        <MaterialIcons name="open-in-new" size={16} color="#FFFFFF" style={{ marginLeft: 4 }} />
                       </TouchableOpacity>
                     )}
                   </View>
                 ))
               ) : (
-                <Text style={styles.noTasksText}>Complete some tasks to get personalized insights!</Text>
+                <View>
+                  <Text style={styles.noTasksText}>Let me help you improve your study habits!</Text>
+                  <View style={{ marginTop: 12, gap: 8 }}>
+                    <TouchableOpacity 
+                      style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.primary + '10', padding: 12, borderRadius: 8 }}
+                      onPress={() => navigation.navigate('Settings' as never)}
+                    >
+                      <Ionicons name="settings-outline" size={20} color={theme.primary} />
+                      <Text style={{ marginLeft: 8, color: theme.text, flex: 1 }}>Adjust your study preferences and goals</Text>
+                      <Ionicons name="chevron-forward" size={16} color={theme.primary} />
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.primary + '10', padding: 12, borderRadius: 8 }}
+                      onPress={() => navigation.navigate('StudySessionScreen' as never, { autoStart: false, manualSelection: true })}
+                    >
+                      <Ionicons name="timer-outline" size={20} color={theme.primary} />
+                      <Text style={{ marginLeft: 8, color: theme.text, flex: 1 }}>Start your first focus session</Text>
+                      <Ionicons name="chevron-forward" size={16} color={theme.primary} />
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.primary + '10', padding: 12, borderRadius: 8 }}
+                      onPress={() => navigation.navigate('Nora' as never)}
+                    >
+                      <Ionicons name="chatbubble-outline" size={20} color={theme.primary} />
+                      <Text style={{ marginLeft: 8, color: theme.text, flex: 1 }}>Chat with Nora for personalized study tips</Text>
+                      <Ionicons name="chevron-forward" size={16} color={theme.primary} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
               )}
             </View>
 

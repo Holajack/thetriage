@@ -38,7 +38,8 @@ export interface Subtask {
   id: string;
   task_id: string;
   user_id: string;
-  text: string;
+  title?: string;  // Optional since actual DB might have 'text' instead
+  text?: string;   // Optional fallback for schema compatibility
   completed: boolean;
   created_at: string;
 }

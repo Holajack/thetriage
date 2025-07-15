@@ -214,6 +214,21 @@ const AchievementsScreen = () => {
     },
   ];
 
+  // Configure header
+  useEffect(() => {
+    navigation.setOptions({
+      title: 'Achievements',
+      headerLeft: () => (
+        <TouchableOpacity 
+          onPress={() => navigation.navigate('Bonuses' as never)} 
+          style={{ marginLeft: 8 }}
+        >
+          <Ionicons name="arrow-back" size={24} color={theme.primary} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, theme]);
+
   // Fetch user stats to calculate achievement progress
   useEffect(() => {
     fetchUserStats();
@@ -334,14 +349,6 @@ const AchievementsScreen = () => {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <View style={[styles.header, { backgroundColor: theme.card }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backButton, { backgroundColor: theme.background }]}>
-          <Ionicons name="arrow-back" size={24} color={theme.primary} />
-        </TouchableOpacity>
-        <Text style={[styles.title, { color: theme.primary }]}>Achievements</Text>
-        <View style={{ width: 40 }} />
-      </View>
-
       <ScrollView 
         style={{ flex: 1 }}
         contentContainerStyle={[styles.scrollContent, { backgroundColor: theme.background }]}

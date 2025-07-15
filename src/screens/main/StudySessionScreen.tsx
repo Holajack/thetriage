@@ -77,6 +77,20 @@ export const StudySessionScreen = () => {
   const userSoundPreference = getSoundPreference(userData);
   const autoPlaySound = getAutoPlaySetting(userData);
   
+  // Debug logging for music preferences
+  useEffect(() => {
+    console.log('🎵 Music Settings Debug:', {
+      userSoundPreference,
+      autoPlaySound,
+      userData: {
+        onboarding: userData?.onboarding?.sound_preference,
+        profile: userData?.profile?.soundpreference,
+        settings: userData?.settings?.sound_enabled,
+        autoPlay: userData?.onboarding?.auto_play_sound
+      }
+    });
+  }, [userSoundPreference, autoPlaySound, userData]);
+  
   // Navigation and route params - must be defined before useState calls
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute();
@@ -96,6 +110,7 @@ export const StudySessionScreen = () => {
   const startTimeRef = useRef<number | null>(null);
   const backgroundTimeRef = useRef<number | null>(null);
   const appStateRef = useRef(AppState.currentState);
+  const musicStartAttemptedRef = useRef<boolean>(false);
   
   // Pre-session selection state - updated logic
   const [showPreSessionModal, setShowPreSessionModal] = useState(() => {
@@ -345,6 +360,7 @@ export const StudySessionScreen = () => {
         setSessionStarted(true);
         
         // 🎵 AUTO-PLAY MUSIC FOR AUTOMATIC MODE
+        console.log('🎵 Auto-play check:', { autoPlaySound, userSoundPreference, audioSupported });
         if (autoPlaySound && userSoundPreference && userSoundPreference !== 'Silence') {
           console.log(`🎵 Auto-starting playlist for automatic session: ${userSoundPreference}`);
           try {
@@ -353,6 +369,12 @@ export const StudySessionScreen = () => {
           } catch (error) {
             console.error('🎵 Failed to start auto-play music for automatic session:', error);
           }
+        } else {
+          console.log('🎵 Auto-play conditions not met:', { 
+            autoPlaySound, 
+            userSoundPreference, 
+            isSilence: userSoundPreference === 'Silence' 
+          });
         }
       }, 500);
     }
@@ -371,6 +393,7 @@ export const StudySessionScreen = () => {
         setSessionStarted(true);
         
         // 🎵 AUTO-PLAY MUSIC FOR GENERAL STUDY
+        console.log('🎵 Auto-play check (general study):', { autoPlaySound, userSoundPreference });
         if (autoPlaySound && userSoundPreference && userSoundPreference !== 'Silence') {
           console.log(`🎵 Auto-starting playlist for general study session: ${userSoundPreference}`);
           try {
@@ -379,10 +402,52 @@ export const StudySessionScreen = () => {
           } catch (error) {
             console.error('🎵 Failed to start auto-play music:', error);
           }
+        } else {
+          console.log('🎵 Auto-play conditions not met (general study):', { 
+            autoPlaySound, 
+            userSoundPreference, 
+            isSilence: userSoundPreference === 'Silence' 
+          });
         }
       }, 500);
     }
   }, [params?.autoStart, userData, sessionStarted, autoPlaySound, userSoundPreference, currentTask]);
+
+  // Separate effect to handle music auto-play when userData loads after session has started
+  useEffect(() => {
+    // Only trigger if session is started, music conditions are met, and we haven't attempted yet
+    if (sessionStarted && 
+        autoPlaySound && 
+        userSoundPreference && 
+        userSoundPreference !== 'Silence' && 
+        !isPlaying && 
+        !musicStartAttemptedRef.current) {
+      
+      console.log('🎵 Starting music after userData loaded:', { 
+        autoPlaySound, 
+        userSoundPreference, 
+        isPlaying,
+        sessionStarted,
+        attemptedBefore: musicStartAttemptedRef.current
+      });
+      
+      musicStartAttemptedRef.current = true;
+      
+      const startMusicDelayed = async () => {
+        try {
+          await startPlaylist(userSoundPreference);
+          console.log(`🎵 Successfully started ${userSoundPreference} playlist after userData load`);
+        } catch (error) {
+          console.error('🎵 Failed to start music after userData load:', error);
+          // Reset the flag on error so user can try again
+          musicStartAttemptedRef.current = false;
+        }
+      };
+      
+      // Small delay to ensure session is fully initialized
+      setTimeout(startMusicDelayed, 1000);
+    }
+  }, [sessionStarted, autoPlaySound, userSoundPreference, isPlaying, startPlaylist]);
 
   // Remove the old handleModeSelection function and replace with this simplified version:
   const handleModeSelection = (mode: 'auto' | 'manual') => {
@@ -420,6 +485,7 @@ export const StudySessionScreen = () => {
       setSessionStarted(true);
       
       // 🎵 AUTO-PLAY MUSIC FOR MANUAL MODE
+      console.log('🎵 Auto-play check (manual mode):', { autoPlaySound, userSoundPreference });
       if (autoPlaySound && userSoundPreference && userSoundPreference !== 'Silence') {
         console.log(`🎵 Auto-starting playlist for manual session: ${userSoundPreference}`);
         try {
@@ -428,6 +494,12 @@ export const StudySessionScreen = () => {
         } catch (error) {
           console.error('🎵 Failed to start auto-play music for manual session:', error);
         }
+      } else {
+        console.log('🎵 Auto-play conditions not met (manual mode):', { 
+          autoPlaySound, 
+          userSoundPreference, 
+          isSilence: userSoundPreference === 'Silence' 
+        });
       }
     }, 100);
   };
@@ -755,7 +827,7 @@ export const StudySessionScreen = () => {
             <Ionicons name="musical-notes" size={16} color="#4CAF50" />
             <View style={styles.trackInfo}>
               <Text style={styles.musicStatusText}>
-                Now Playing: {currentTrack.name}
+                Now Playing: {currentTrack?.name || currentTrack?.title || 'Unknown Track'}
               </Text>
               <Text style={styles.playlistInfo}>
                 {currentTrack?.category} • Track {currentTrackIndex + 1} of {getCurrentPlaylistTracks().length}
