@@ -2,27 +2,22 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../utils/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Timeout wrapper for all network requests
-const withTimeout = <T>(
-  promise: Promise<T>,
-  timeoutMs: number = 6000 // Reduced from 15s to 6s
-): Promise<T> => {
+// Simple timeout wrapper
+const withTimeout = (promise: Promise<any>, timeoutMs: number = 6000): Promise<any> => {
   return Promise.race([
     promise,
-    new Promise<T>((_, reject) =>
+    new Promise((_, reject) =>
       setTimeout(() => reject(new Error('Request timeout')), timeoutMs)
     ),
   ]);
 };
 
-// Add this enhanced version to your AuthContext.tsx:
-
 // Enhanced timeout wrapper with retry capability
-const withTimeoutAndRetry = <T>(
-  promiseFactory: () => Promise<T>,
+const withTimeoutAndRetry = (
+  promiseFactory: () => Promise<any>,
   timeoutMs: number = 6000,
   retries: number = 2
-): Promise<T> => {
+): Promise<any> => {
   return new Promise(async (resolve, reject) => {
     for (let attempt = 1; attempt <= retries + 1; attempt++) {
       try {
@@ -30,7 +25,7 @@ const withTimeoutAndRetry = <T>(
         
         const result = await Promise.race([
           promiseFactory(),
-          new Promise<never>((_, timeoutReject) =>
+          new Promise((_, timeoutReject) =>
             setTimeout(() => timeoutReject(new Error(`Request timeout after ${timeoutMs}ms`)), timeoutMs)
           ),
         ]);
@@ -43,13 +38,11 @@ const withTimeoutAndRetry = <T>(
         console.log(`❌ Attempt ${attempt} failed:`, error.message);
         
         if (attempt === retries + 1) {
-          // Final attempt failed
           reject(new Error(`Network failed after ${retries + 1} attempts: ${error.message}`));
           return;
         }
         
-        // Wait before retry with exponential backoff
-        const delay = 1000 * Math.pow(2, attempt - 1); // 1s, 2s, 4s
+        const delay = 1000 * Math.pow(2, attempt - 1);
         console.log(`⏳ Waiting ${delay}ms before retry...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
@@ -62,11 +55,10 @@ const testNetworkConnectivity = async (): Promise<boolean> => {
   try {
     console.log('🌐 Testing network connectivity...');
     
-    // Test basic Supabase connection with minimal timeout
     await withTimeoutAndRetry(
       () => supabase.from('profiles').select('count').limit(1),
-      3000, // 3 second timeout
-      1     // 1 retry
+      3000,
+      1
     );
     
     console.log('✅ Network connectivity confirmed');
@@ -83,16 +75,19 @@ interface AuthContextType {
   onboarding: any;
   leaderboard: any;
   hasCompletedOnboarding: boolean;
+  setHasCompletedOnboarding: (completed: boolean) => void;
   justLoggedIn: boolean;
   isInitialLoading: boolean;
   hasSeenLanding: boolean;
   setHasSeenLanding: (seen: boolean) => Promise<void>;
-  clearJustLoggedIn: () => void;  // Add this line
+  clearJustLoggedIn: () => void;
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
   signUp: (email: string, password: string, userData: any) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
   updateOnboarding: (data: any) => Promise<void>;
   refreshUserData: () => Promise<void>;
+  isRecentLogin: () => Promise<boolean>;
+  setLastLoginTime: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -118,6 +113,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // Check if user's last login was within 24 hours
+  const isRecentLogin = async (): Promise<boolean> => {
+    try {
+      const lastLoginTime = await AsyncStorage.getItem('lastLoginTime');
+      if (!lastLoginTime) return false;
+      
+      const lastLogin = new Date(lastLoginTime);
+      const now = new Date();
+      const timeDiff = now.getTime() - lastLogin.getTime();
+      const hoursDiff = timeDiff / (1000 * 60 * 60);
+      
+      return hoursDiff < 24;
+    } catch (error) {
+      console.error('Failed to check recent login:', error);
+      return false;
+    }
+  };
+
+  // Set last login time
+  const setLastLoginTime = async () => {
+    try {
+      await AsyncStorage.setItem('lastLoginTime', new Date().toISOString());
+    } catch (error) {
+      console.error('Failed to set last login time:', error);
+    }
+  };
+
   const loadHasSeenLanding = async () => {
     try {
       const stored = await AsyncStorage.getItem('hasSeenLanding');
@@ -134,14 +156,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       if (showLogs) console.log('🔐 AuthContext: Starting session check...');
       
-      // Step 1: Get session with timeout
       const { data: { session }, error: sessionError } = await withTimeout(
         supabase.auth.getSession(),
-        5000 // 5 second timeout for session check
+        5000
       );
 
       if (sessionError) {
         console.error('AuthContext: Session error:', sessionError);
+        
+        // Handle specific refresh token errors
+        if (sessionError.message?.includes('refresh_token_not_found') || 
+            sessionError.message?.includes('Invalid Refresh Token')) {
+          console.log('AuthContext: Invalid refresh token, clearing session...');
+          await supabase.auth.signOut();
+          setUser(null);
+          setOnboarding(null);
+          setLeaderboard(null);
+          setIsAuthenticated(false);
+          setHasCompletedOnboarding(false);
+          return;
+        }
+        
         throw sessionError;
       }
 
@@ -157,10 +192,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (showLogs) console.log('AuthContext: Session found, fetching user data...');
 
-      // Step 2: Fetch user data with timeout and fallback
       const userData = await fetchUserDataWithFallback(session.user, showLogs);
       
-      // Step 3: Set authentication state
       setIsAuthenticated(true);
       setUser(userData.profile);
       setOnboarding(userData.onboarding);
@@ -176,11 +209,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error: any) {
       console.error("AuthContext: Session check failed:", error.message);
       
-      // Don't set authentication to false if it's just a data fetch timeout
-      // This allows users to stay logged in even with network issues
       if (error.message.includes('timeout') || error.message.includes('Network request failed')) {
         console.log('AuthContext: Using cached/fallback data due to network timeout');
-        // Keep existing auth state if available
         if (!isAuthenticated) {
           setIsAuthenticated(false);
           setUser(null);
@@ -188,7 +218,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setLeaderboard(null);
         }
       } else {
-        // For other errors, clear auth state
         setIsAuthenticated(false);
         setUser(null);
         setOnboarding(null);
@@ -224,14 +253,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     try {
-      // Try to fetch profile data with timeout
       if (showLogs) console.log('📊 Fetching profile data...');
       
       let profile;
       try {
         const { data: profileData, error: profileError } = await withTimeout(
           supabase.from('profiles').select('*').eq('id', sessionUser.id).single(),
-          4000 // 4 second timeout
+          4000
         );
 
         if (profileError && profileError.code !== 'PGRST116') {
@@ -245,14 +273,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         profile = fallbackData.profile;
       }
 
-      // Try to fetch onboarding data with timeout
       let onboarding;
       try {
         if (showLogs) console.log('🎯 Fetching onboarding data...');
         
         const { data: onboardingData, error: onboardingError } = await withTimeout(
           supabase.from('onboarding_preferences').select('*').eq('user_id', sessionUser.id).single(),
-          4000 // 4 second timeout
+          4000
         );
 
         if (onboardingError && onboardingError.code !== 'PGRST116') {
@@ -266,14 +293,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         onboarding = fallbackData.onboarding;
       }
 
-      // Try to fetch leaderboard data with timeout
       let leaderboard;
       try {
         if (showLogs) console.log('🏆 Fetching leaderboard data...');
         
         const { data: leaderboardData, error: leaderboardError } = await withTimeout(
           supabase.from('leaderboard_stats').select('*').eq('user_id', sessionUser.id).single(),
-          4000 // 4 second timeout
+          4000
         );
 
         if (leaderboardError && leaderboardError.code !== 'PGRST116') {
@@ -295,13 +321,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Enhanced sign in with comprehensive network handling
+  // Sign in function (simplified, keeping essential parts)
   const signIn = async (email: string, password: string): Promise<{ error?: string }> => {
     try {
-      console.log('🔐 Starting enhanced sign in process...');
-      console.log('📧 Email:', email);
+      console.log('🔐 Starting sign in process...');
       
-      // Step 1: Test network connectivity first
       const networkAvailable = await testNetworkConnectivity();
       if (!networkAvailable) {
         return { 
@@ -309,62 +333,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       }
       
-      // Step 2: Attempt authentication with retry logic
-      console.log('🔑 Attempting authentication with retry logic...');
-      
       const authResult = await withTimeoutAndRetry(
         () => supabase.auth.signInWithPassword({ email, password }),
-        8000, // 8 second timeout per attempt
-        2     // 2 retries = 3 total attempts
+        8000,
+        2
       );
       
       const { data: authData, error: authError } = authResult;
 
       if (authError) {
         console.error('❌ Authentication failed:', authError.message);
-        
-        // Handle specific authentication errors
-        if (authError.message.includes('Invalid login credentials')) {
-          return { error: 'Invalid email or password. Please check your credentials and try again.' };
-        } else if (authError.message.includes('Too many requests')) {
-          return { error: 'Too many login attempts. Please wait a moment and try again.' };
-        } else if (authError.message.includes('Email not confirmed')) {
-          return { error: 'Please check your email and confirm your account before logging in.' };
-        } else {
-          return { error: `Authentication failed: ${authError.message}` };
-        }
+        return { error: `Authentication failed: ${authError.message}` };
       }
 
       if (!authData.user) {
         return { error: 'Authentication failed - no user data returned. Please try again.' };
       }
 
-      console.log('✅ Authentication successful');
-      console.log('👤 User ID:', authData.user.id);
-
-      // Step 3: Set login flag immediately
       setJustLoggedIn(true);
       
-      // Step 4: Fetch user data with fallback (don't let this block authentication)
+      // Set the login timestamp
+      await setLastLoginTime();
+      
       try {
-        console.log('📊 Fetching user data...');
         const userData = await fetchUserDataWithFallback(authData.user, true);
         
-        // Step 5: Update auth state
         setIsAuthenticated(true);
         setUser(userData.profile);
         setOnboarding(userData.onboarding);
         setLeaderboard(userData.leaderboard);
         setHasCompletedOnboarding(userData.onboarding?.is_onboarding_complete || false);
         
-        console.log('🎉 Sign in completed successfully with full data');
         return {};
         
       } catch (dataError: any) {
-        console.log('⚠️ Data fetch failed during login, but authentication succeeded');
-        console.log('📝 Using minimal fallback data to allow user login');
-        
-        // Still set user as authenticated with minimal data
         setIsAuthenticated(true);
         setUser({
           id: authData.user.id,
@@ -386,29 +388,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
         setHasCompletedOnboarding(false);
         
-        console.log('✅ User authenticated with fallback data');
-        return {}; // Success, even with data fetch issues
+        return {};
       }
 
     } catch (error: any) {
       console.error('❌ Sign in failed completely:', error.message);
-      
-      // Provide specific user-friendly error messages
-      let errorMessage = 'Login failed. Please try again.';
-      
-      if (error.message.includes('Network failed after') || error.message.includes('Network request failed')) {
-        errorMessage = 'Network connection failed. Please check your internet connection and try again.';
-      } else if (error.message.includes('timeout') || error.message.includes('Request timeout')) {
-        errorMessage = 'Login is taking too long. Please check your internet connection and try again.';
-      } else if (error.message.includes('fetch')) {
-        errorMessage = 'Unable to connect to the server. Please check your internet connection and try again.';
-      }
-      
-      return { error: errorMessage };
+      return { error: 'Login failed. Please try again.' };
     }
   };
 
-  // Enhanced sign up with timeout
+  // Sign up function
   const signUp = async (email: string, password: string, userData: any): Promise<{ error?: string }> => {
     try {
       console.log('📝 Starting sign up process...');
@@ -418,10 +407,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email,
           password,
           options: {
-            data: userData
+            data: {
+              username: userData.username,
+              full_name: userData.full_name
+            }
           }
         }),
-        10000 // 10 second timeout for sign up
+        10000
       );
 
       if (authError) {
@@ -434,16 +426,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     } catch (error: any) {
       console.error('❌ Sign up error:', error.message);
-      
-      let errorMessage = 'Account creation failed. Please try again.';
-      
-      if (error.message.includes('timeout') || error.message.includes('Request timeout')) {
-        errorMessage = 'Account creation is taking too long. Please check your internet connection and try again.';
-      } else if (error.message.includes('Network request failed')) {
-        errorMessage = 'Network error. Please check your internet connection and try again.';
-      }
-      
-      return { error: errorMessage };
+      return { error: 'Account creation failed. Please try again.' };
     }
   };
 
@@ -457,10 +440,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLeaderboard(null);
       setHasCompletedOnboarding(false);
       setJustLoggedIn(false);
-      console.log('✅ Sign out successful');
     } catch (error) {
       console.error('❌ Sign out error:', error);
-      // Still clear local state even if network request fails
       setIsAuthenticated(false);
       setUser(null);
       setOnboarding(null);
@@ -481,6 +462,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) throw error;
       
       setOnboarding(prev => ({ ...prev, ...data }));
+      
+      // Update hasCompletedOnboarding if the update includes completion status
+      if (data.is_onboarding_complete !== undefined) {
+        setHasCompletedOnboarding(data.is_onboarding_complete);
+      }
+      
       console.log('✅ Onboarding data updated');
     } catch (error) {
       console.error('❌ Update onboarding error:', error);
@@ -515,6 +502,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     initialize();
+
+    // Listen for auth state changes to handle refresh token errors
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('🔄 Auth state change:', event);
+      
+      if (event === 'TOKEN_REFRESHED') {
+        console.log('✅ Token refreshed successfully');
+      } else if (event === 'SIGNED_OUT') {
+        console.log('👋 User signed out');
+        setUser(null);
+        setOnboarding(null);
+        setLeaderboard(null);
+        setIsAuthenticated(false);
+        setHasCompletedOnboarding(false);
+      } else if (event === 'SIGNED_IN' && session) {
+        console.log('👋 User signed in');
+        await checkSession(true);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   // Clear justLoggedIn state after initial load
@@ -523,7 +533,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     const timer = setTimeout(() => {
       setJustLoggedIn(false);
-    }, 3000); // 3 seconds
+    }, 3000);
 
     return () => clearTimeout(timer);
   }, [isInitializing]);
@@ -533,7 +543,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (justLoggedIn) {
       const timer = setTimeout(() => {
         setJustLoggedIn(false);
-      }, 2000); // Clear after 2 seconds
+      }, 2000);
     
       return () => clearTimeout(timer);
     }
@@ -550,16 +560,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     onboarding,
     leaderboard,
     hasCompletedOnboarding,
+    setHasCompletedOnboarding,
     justLoggedIn,
     isInitialLoading: isInitializing,
     hasSeenLanding,
     setHasSeenLanding,
-    clearJustLoggedIn,  // This line is already there
+    clearJustLoggedIn,
     signIn,
     signUp,
     signOut,
     updateOnboarding,
     refreshUserData,
+    isRecentLogin,
+    setLastLoginTime,
   };
 
   return (

@@ -890,9 +890,17 @@ const CommunityScreen = () => {
   useEffect(() => {
     let statusCheckInterval: NodeJS.Timeout;
     let isComponentMounted = true;
+    let lastCheckTime = 0;
 
     const checkNetworkStatus = async () => {
       if (!isComponentMounted) return;
+      
+      // Prevent too frequent checks (debounce)
+      const now = Date.now();
+      if (now - lastCheckTime < 10000) { // Minimum 10 seconds between checks
+        return;
+      }
+      lastCheckTime = now;
       
       try {
         console.log('🌐 Checking network status...');
@@ -925,14 +933,15 @@ const CommunityScreen = () => {
       }
     };
 
-    // Initial check
-    checkNetworkStatus();
+    // Initial check with delay
+    const timeoutId = setTimeout(checkNetworkStatus, 1000);
     
-    // Set up periodic checks
-    statusCheckInterval = setInterval(checkNetworkStatus, 30000); // Every 30 seconds
+    // Set up periodic checks (less frequent)
+    statusCheckInterval = setInterval(checkNetworkStatus, 60000); // Every 60 seconds instead of 30
     
     return () => {
       isComponentMounted = false;
+      clearTimeout(timeoutId);
       if (statusCheckInterval) {
         clearInterval(statusCheckInterval);
       }

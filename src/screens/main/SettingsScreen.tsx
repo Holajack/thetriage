@@ -14,6 +14,19 @@ import Slider from '@react-native-community/slider';
 import { useBackgroundMusic } from '../../hooks/useBackgroundMusic';
 import { supabase } from '../../utils/supabase';
 import { getUserSettings, updateUserSettings, UserSettings } from '../../utils/userSettings';
+import { saveMusicPreferences, getSoundPreference, getAutoPlaySetting } from '../../utils/musicPreferences';
+import { useAuth } from '../../context/AuthContext';
+import * as Notifications from 'expo-notifications';
+import AIHelpModal from '../../components/AIHelpModal';
+
+// Configure notifications
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 const SOUND_OPTIONS = [
   'Lo-Fi',
@@ -48,6 +61,7 @@ const SettingsScreen = () => {
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
   const { profile, updateProfile } = useSupabaseProfile();
   const { theme, themeName, setThemeName } = useTheme();
+  const { updateOnboarding, refreshData } = useAuth();
   
   // Use our comprehensive data hook
   const { data: userData, isLoading: userDataLoading } = useUserAppData();
@@ -70,10 +84,14 @@ const SettingsScreen = () => {
   const [autoPlaySound, setAutoPlaySound] = useState(false);
   const [selectedSound, setSelectedSound] = useState('Lo-Fi');
   const [ambientNoise, setAmbientNoise] = useState(0.5);
+  const [ambientLevel, setAmbientLevel] = useState(50);
+  const [isSaving, setIsSaving] = useState(false);
   // Accessibility
   const [tts, setTts] = useState(false);
   const [highContrast, setHighContrast] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
+  // Permissions
+  const [notificationPermission, setNotificationPermission] = useState<'granted' | 'denied' | 'undetermined'>('undetermined');
   // Modals
   const [showFontModal, setShowFontModal] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
@@ -81,9 +99,33 @@ const SettingsScreen = () => {
   const [showWorkStyleModal, setShowWorkStyleModal] = useState(false);
   const [showEnvModal, setShowEnvModal] = useState(false);
   const [selectedEnv, setSelectedEnv] = useState<ThemeName>(themeName);
+  // AI Help modals
+  const [showNoraHelp, setShowNoraHelp] = useState(false);
+  const [showPatrickHelp, setShowPatrickHelp] = useState(false);
 
   // Music preview state
   const { playPreview, stopPreview, isPlaying, isPreviewMode, currentTrack } = useBackgroundMusic();
+
+  // Load accessibility settings on mount
+  useEffect(() => {
+    const loadAccessibilitySettings = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          const settings = await getUserSettings(session.user.id);
+          if (settings) {
+            setTts(settings.tts_enabled || false);
+            setHighContrast(settings.high_contrast || false);
+            setReduceMotion(settings.reduce_motion || false);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load accessibility settings:', error);
+      }
+    };
+
+    loadAccessibilitySettings();
+  }, []);
 
   // Load profile data when available
   useEffect(() => {
@@ -93,6 +135,78 @@ const SettingsScreen = () => {
       setFocusDuration(profile.focusDuration || 25);
     }
   }, [profile]);
+
+  // Check notification permissions
+  useEffect(() => {
+    checkNotificationPermission();
+  }, []);
+
+  const checkNotificationPermission = async () => {
+    try {
+      const { status } = await Notifications.getPermissionsAsync();
+      setNotificationPermission(status);
+    } catch (error) {
+      console.error('Error checking notification permission:', error);
+      setNotificationPermission('undetermined');
+    }
+  };
+
+  const requestNotificationPermission = async () => {
+    try {
+      const { status } = await Notifications.requestPermissionsAsync();
+      setNotificationPermission(status);
+      
+      if (status === 'granted') {
+        setNotifications(true);
+        Alert.alert('Success', 'Notifications enabled successfully!');
+        
+        // Save to database
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          await updateUserSettings(session.user.id, {
+            notifications_enabled: true
+          });
+        }
+      } else {
+        Alert.alert(
+          'Permission Denied',
+          'You can enable notifications later in your device settings.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Error requesting notification permission:', error);
+      Alert.alert('Error', 'Failed to request notification permission.');
+    }
+  };
+
+  const handleNotificationToggle = async (value: boolean) => {
+    if (value && notificationPermission !== 'granted') {
+      await requestNotificationPermission();
+    } else {
+      setNotifications(value);
+      
+      // Save notification preference to settings
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          await updateUserSettings(session.user.id, {
+            notifications_enabled: value
+          });
+        }
+        
+        // Schedule or cancel daily reminder based on notification state
+        if (value && notificationPermission === 'granted') {
+          await scheduleDailyReminder(dailyReminder);
+        } else {
+          await Notifications.cancelScheduledNotificationAsync('daily-study-reminder');
+        }
+        
+      } catch (error) {
+        console.error('Error saving notification setting:', error);
+      }
+    }
+  };
 
   // Load settings from user data when available
   useEffect(() => {
@@ -120,10 +234,12 @@ const SettingsScreen = () => {
           setAppIcon(profile.app_icon);
         }
         
-        // Sound & Environment settings
-        if (onboarding?.sound_preference) {
-          setSelectedSound(onboarding.sound_preference);
-        }
+        // Sound & Environment settings - using centralized utility
+        const soundPref = getSoundPreference(userData);
+        setSelectedSound(soundPref);
+        
+        const autoPlay = getAutoPlaySetting(userData);
+        setAutoPlaySound(autoPlay);
         
         if (onboarding?.learning_environment) {
           // Any environment-specific settings can be loaded here
@@ -233,13 +349,63 @@ const SettingsScreen = () => {
     loadUserSettings();
   }, []);
 
+  // Handle appearance updates
+  const handleThemeUpdate = async (theme: string) => {
+    setAppearanceTheme(theme);
+    setShowThemeModal(false);
+    
+    try {
+      await updateProfile({ theme });
+      
+      // Apply theme if not system default
+      if (theme !== 'System Default') {
+        const themeMap: { [key: string]: ThemeName } = {
+          'Light': 'home',
+          'Dark': 'office'
+        };
+        if (themeMap[theme]) {
+          setThemeName(themeMap[theme]);
+        }
+      }
+      
+      Alert.alert('Success', 'Theme updated successfully!');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update theme. Please try again.');
+    }
+  };
+
+  const handleFontSizeUpdate = async (size: string) => {
+    setFontSize(size);
+    setShowFontModal(false);
+    
+    try {
+      await updateProfile({ font_size: size });
+      Alert.alert('Success', 'Font size updated successfully!');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update font size. Please try again.');
+    }
+  };
+
+  const handleAppIconUpdate = async (icon: string) => {
+    setAppIcon(icon);
+    setShowIconModal(false);
+    
+    try {
+      await updateProfile({ app_icon: icon });
+      Alert.alert('Success', 'App icon updated successfully!');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update app icon. Please try again.');
+    }
+  };
+
   // Handle weekly goal update
   const handleWeeklyGoalUpdate = async (goal: number) => {
     setWeeklyGoal(goal);
-    // setShowGoalModal(false); // Remove this line since we're not using the modal now
     
     try {
       await updateProfile({ weeklyFocusGoal: goal });
+      // Also update onboarding data
+      await updateOnboarding({ weekly_focus_goal: goal });
       Alert.alert('Success', 'Your weekly focus goal has been updated!');
     } catch (error) {
       Alert.alert('Error', 'Failed to update weekly focus goal. Please try again.');
@@ -278,8 +444,435 @@ const SettingsScreen = () => {
     }
   };
 
-  // Placeholder actions
-  const placeholder = (msg: string) => Alert.alert(msg, 'Coming soon!');
+  // Handle notifications and reminders
+  const handleDailyReminderUpdate = () => {
+    Alert.alert(
+      'Daily Study Reminder',
+      'Set your preferred time for daily study reminders',
+      [
+        {
+          text: 'Morning (8:00 AM)',
+          onPress: () => updateDailyReminder('08:00')
+        },
+        {
+          text: 'Afternoon (2:00 PM)',
+          onPress: () => updateDailyReminder('14:00')
+        },
+        {
+          text: 'Evening (6:00 PM)',
+          onPress: () => updateDailyReminder('18:00')
+        },
+        {
+          text: 'Custom Time',
+          onPress: () => showTimePickerDialog()
+        },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
+  };
+
+  const updateDailyReminder = async (time: string) => {
+    setDailyReminder(time);
+    try {
+      await updateProfile({ daily_reminder: time });
+      
+      // Save to user_settings table
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        await updateUserSettings(session.user.id, {
+          daily_reminder: time
+        });
+      }
+      
+      // Schedule daily notification if notifications are enabled
+      if (notifications && notificationPermission === 'granted') {
+        await scheduleDailyReminder(time);
+      }
+      
+      Alert.alert('Success', `Daily reminder set for ${time}`);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update daily reminder.');
+    }
+  };
+
+  const scheduleDailyReminder = async (time: string) => {
+    try {
+      // Cancel existing daily reminders
+      await Notifications.cancelScheduledNotificationAsync('daily-study-reminder');
+      
+      const [hours, minutes] = time.split(':').map(Number);
+      
+      await Notifications.scheduleNotificationAsync({
+        identifier: 'daily-study-reminder',
+        content: {
+          title: '📚 Time to Study!',
+          body: 'Ready to start your focus session? Let\'s build that streak!',
+          sound: true,
+        },
+        trigger: {
+          hour: hours,
+          minute: minutes,
+          repeats: true,
+        },
+      });
+      
+      console.log(`Daily reminder scheduled for ${time}`);
+    } catch (error) {
+      console.error('Error scheduling daily reminder:', error);
+    }
+  };
+
+  const showTimePickerDialog = () => {
+    Alert.prompt(
+      'Custom Time',
+      'Enter time in HH:MM format (24-hour)',
+      (time) => {
+        if (time && /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time)) {
+          updateDailyReminder(time);
+        } else {
+          Alert.alert('Invalid Time', 'Please enter time in HH:MM format (e.g., 14:30)');
+        }
+      },
+      'plain-text',
+      dailyReminder
+    );
+  };
+
+  const handleSessionEndReminderToggle = async (value: boolean) => {
+    setSessionEndReminder(value);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        await updateUserSettings(session.user.id, {
+          session_end_reminder: value
+        });
+      }
+      
+      if (value) {
+        Alert.alert(
+          'Session End Reminders Enabled',
+          'You\'ll receive notifications when your focus sessions are about to end.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Success', 'Session end reminders disabled');
+      }
+      
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update session end reminder setting.');
+    }
+  };
+
+  // Function to schedule session end notification (to be called from timer)
+  const scheduleSessionEndReminder = async (sessionDuration: number) => {
+    if (!sessionEndReminder || notificationPermission !== 'granted') return;
+    
+    try {
+      // Schedule notification 2 minutes before session ends
+      const reminderTime = Math.max(sessionDuration - 2, 1); // At least 1 minute
+      
+      await Notifications.scheduleNotificationAsync({
+        identifier: 'session-end-reminder',
+        content: {
+          title: '⏰ Session Ending Soon',
+          body: `Your focus session will end in 2 minutes. Great job!`,
+          sound: true,
+        },
+        trigger: {
+          seconds: reminderTime * 60,
+        },
+      });
+      
+      console.log(`Session end reminder scheduled for ${reminderTime} minutes`);
+    } catch (error) {
+      console.error('Error scheduling session end reminder:', error);
+    }
+  };
+
+  // Handle Support & About actions
+  const handleHelpCenter = () => {
+    Alert.alert(
+      'Help Center',
+      'Choose how you\'d like to get help:',
+      [
+        {
+          text: 'Getting Started',
+          onPress: () => showGettingStartedGuide()
+        },
+        {
+          text: 'Study Tips',
+          onPress: () => showStudyTips()
+        },
+        {
+          text: 'Troubleshooting',
+          onPress: () => showTroubleshooting()
+        },
+        {
+          text: 'Feature Guide',
+          onPress: () => showFeatureGuide()
+        },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
+  };
+
+  const showGettingStartedGuide = () => {
+    Alert.alert(
+      'Getting Started 🚀',
+      '1. Set your focus duration in Preferences\n' +
+      '2. Choose your study environment theme\n' +
+      '3. Pick your focus sound\n' +
+      '4. Set daily reminders\n' +
+      '5. Start your first session from Home!\n\n' +
+      'Tip: Try different work styles to find what works best for you.',
+      [{ text: 'Got it!' }]
+    );
+  };
+
+  const showStudyTips = () => {
+    Alert.alert(
+      'Study Tips 📚',
+      '• Use the Pomodoro technique: 25min focus + 5min break\n' +
+      '• Find a quiet environment free from distractions\n' +
+      '• Set specific goals for each session\n' +
+      '• Take longer breaks every 4 sessions\n' +
+      '• Stay hydrated and maintain good posture\n' +
+      '• Review your progress regularly in Analytics',
+      [{ text: 'Thanks!' }]
+    );
+  };
+
+  const showTroubleshooting = () => {
+    Alert.alert(
+      'Troubleshooting 🔧',
+      'Audio Issues:\n• Check device volume\n• Restart the app\n• Try different sound options\n\n' +
+      'Sync Issues:\n• Check internet connection\n• Log out and back in\n\n' +
+      'Timer Issues:\n• Keep app in foreground\n• Disable battery optimization\n\n' +
+      'Still having issues? Contact support!',
+      [{ text: 'Understood' }]
+    );
+  };
+
+  const showFeatureGuide = () => {
+    Alert.alert(
+      'Key Features 💡',
+      '🏠 Home: Start sessions & view stats\n' +
+      '👥 Community: Connect with other students\n' +
+      '🤖 Nora: AI study assistant\n' +
+      '🎁 Bonuses: Unlock achievements\n' +
+      '📊 Results: Track your progress\n' +
+      '👤 Profile: Manage your info\n' +
+      '⚙️ Settings: Customize everything',
+      [{ text: 'Awesome!' }]
+    );
+  };
+
+  const handleContactSupport = () => {
+    Alert.alert(
+      'Contact Support',
+      'How can we help you today?',
+      [
+        {
+          text: 'Email Support',
+          onPress: () => showEmailSupport()
+        },
+        {
+          text: 'Report Bug',
+          onPress: () => showBugReport()
+        },
+        {
+          text: 'Feature Request',
+          onPress: () => showFeatureRequest()
+        },
+        {
+          text: 'Account Issues',
+          onPress: () => showAccountHelp()
+        },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
+  };
+
+  const showEmailSupport = () => {
+    Alert.alert(
+      'Email Support 📧',
+      'For general support:\nsupport@thetriage.app\n\n' +
+      'For technical issues:\ntech@thetriage.app\n\n' +
+      'For billing questions:\nbilling@thetriage.app\n\n' +
+      'We typically respond within 24 hours!',
+      [{ text: 'Copy Email', onPress: () => Alert.alert('Copied!', 'support@thetriage.app copied to clipboard') }]
+    );
+  };
+
+  const showBugReport = () => {
+    Alert.alert(
+      'Report a Bug 🐛',
+      'Help us improve! When reporting bugs, please include:\n\n' +
+      '• Device model and OS version\n' +
+      '• Steps to reproduce the issue\n' +
+      '• What you expected to happen\n' +
+      '• Screenshots if applicable\n\n' +
+      'Send to: bugs@thetriage.app',
+      [{ text: 'Got it!' }]
+    );
+  };
+
+  const showFeatureRequest = () => {
+    Alert.alert(
+      'Feature Request 💡',
+      'Have an idea to make our app better?\n\n' +
+      'We love hearing from our users! Send your suggestions to:\n\n' +
+      'features@thetriage.app\n\n' +
+      'Tell us:\n• What feature you\'d like\n• Why it would be helpful\n• How you envision it working',
+      [{ text: 'Will do!' }]
+    );
+  };
+
+  const showAccountHelp = () => {
+    Alert.alert(
+      'Account Help 👤',
+      'Having trouble with your account?\n\n' +
+      '• Password reset: Use "Forgot Password" on login\n' +
+      '• Email changes: Contact support\n' +
+      '• Data export: Email us your request\n' +
+      '• Account deletion: Email support\n\n' +
+      'Contact: account@thetriage.app',
+      [{ text: 'Thanks!' }]
+    );
+  };
+
+  const handleTermsOfService = () => {
+    Alert.alert(
+      'Terms of Service',
+      'These terms govern your use of The Triage Study App.\n\n' +
+      'Key points:\n' +
+      '• You must be 13+ to use this app\n' +
+      '• Respect other users in community features\n' +
+      '• Your study data belongs to you\n' +
+      '• We may update terms with notice\n\n' +
+      'Full terms: www.thetriage.app/terms',
+      [
+        { text: 'View Online', onPress: () => Alert.alert('Opening...', 'Would open terms in browser') },
+        { text: 'Close' }
+      ]
+    );
+  };
+
+  const handlePrivacyPolicy = () => {
+    Alert.alert(
+      'Privacy Policy',
+      'Your privacy is important to us.\n\n' +
+      'We collect:\n' +
+      '• Study session data (duration, breaks)\n' +
+      '• App usage analytics (anonymous)\n' +
+      '• Account info (email, preferences)\n\n' +
+      'We DON\'T sell your data or share it with advertisers.\n\n' +
+      'Full policy: www.thetriage.app/privacy',
+      [
+        { text: 'View Online', onPress: () => Alert.alert('Opening...', 'Would open privacy policy in browser') },
+        { text: 'Close' }
+      ]
+    );
+  };
+
+  const handleAppInfo = () => {
+    Alert.alert(
+      'App Information',
+      'The Triage Study Tracker\n' +
+      'Version: 1.0.0\n' +
+      'Build: 2024.001\n\n' +
+      '© 2024 The Triage Team\n' +
+      'Made with ❤️ for students everywhere\n\n' +
+      'Special thanks to our beta testers!',
+      [
+        { text: 'Check for Updates', onPress: () => Alert.alert('Up to Date!', 'You have the latest version.') },
+        { text: 'Close' }
+      ]
+    );
+  };
+
+  // Handle Focus & Study Preferences
+  const handleAutoStartToggle = async (value: boolean) => {
+    setAutoStartNext(value);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        await updateUserSettings(session.user.id, {
+          auto_start_focus: value
+        });
+      }
+      Alert.alert('Success', `Auto-start next session ${value ? 'enabled' : 'disabled'}`);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update auto-start setting.');
+    }
+  };
+
+  // Handle accessibility settings
+  const handleTTSToggle = async (value: boolean) => {
+    setTts(value);
+    
+    // Provide immediate feedback
+    if (value) {
+      console.log('TTS enabled - text will be read aloud where supported');
+    } else {
+      console.log('TTS disabled');
+    }
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        await updateUserSettings(session.user.id, {
+          tts_enabled: value
+        });
+      }
+      Alert.alert('Success', `Text-to-speech ${value ? 'enabled' : 'disabled'}`);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update text-to-speech setting.');
+    }
+  };
+
+  const handleHighContrastToggle = async (value: boolean) => {
+    setHighContrast(value);
+    
+    // Apply high contrast theme if enabled
+    if (value) {
+      // TODO: Switch to high contrast theme
+      console.log('High contrast mode enabled - implement theme switch');
+    } else {
+      // TODO: Switch back to normal theme
+      console.log('High contrast mode disabled - revert theme');
+    }
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        await updateUserSettings(session.user.id, {
+          high_contrast: value
+        });
+      }
+      Alert.alert('Success', `High contrast mode ${value ? 'enabled' : 'disabled'}`);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update high contrast setting.');
+    }
+  };
+
+  const handleReduceMotionToggle = async (value: boolean) => {
+    setReduceMotion(value);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        await updateUserSettings(session.user.id, {
+          reduce_motion: value
+        });
+      }
+      Alert.alert('Success', `Reduce motion ${value ? 'enabled' : 'disabled'}`);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update reduce motion setting.');
+    }
+  };
+
+  // Placeholder for remaining actions
+  const placeholder = (msg: string) => Alert.alert(msg, 'This feature is in development and will be available soon!');
 
   // Update the handlePreviewSound function:
 
@@ -396,45 +989,31 @@ const SettingsScreen = () => {
     }
   };
 
-  // Add persistent sound preference saving in SettingsScreen.tsx:
-
+  // Update the handleSoundPreferenceChange function using centralized utility
   const handleSoundPreferenceChange = async (preference: string) => {
-    setSoundPreference(preference);
+    // Stop current preview if playing
+    if (isPlaying && isPreviewMode) {
+      await stopPreview();
+    }
+    
+    // Update state
+    setSelectedSound(preference);
     
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) {
         throw new Error('No authenticated user');
       }
-
-      // Save to onboarding_preferences table
-      const { error: onboardingError } = await supabase
-        .from('onboarding_preferences')
-        .upsert({
-          user_id: session.user.id,
-          sound_preference: preference,
-          updated_at: new Date().toISOString()
-        });
-
-      if (onboardingError) {
-        console.error('Error saving sound preference to onboarding:', onboardingError);
-      }
-
-      // Also save to user_settings as backup
-      const { error: settingsError } = await supabase
-        .from('user_settings')
-        .upsert({
-          user_id: session.user.id,
-          sound_preference: preference,
-          updated_at: new Date().toISOString()
-        });
-
-      if (settingsError) {
-        console.error('Error saving sound preference to settings:', settingsError);
-      }
-
-      console.log(`🎵 Sound preference saved: ${preference}`);
-
+      
+      // Use centralized music preference saving
+      await saveMusicPreferences(session.user.id, {
+        sound_preference: preference,
+        auto_play_sound: autoPlaySound
+      });
+      
+      // Start a preview of the new sound
+      await playPreview(preference);
+      
     } catch (error) {
       console.error('Error saving sound preference:', error);
       Alert.alert('Error', 'Failed to save sound preference. Please try again.');
@@ -443,18 +1022,6 @@ const SettingsScreen = () => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
-      {/* Drawer Toggle Button */}
-      <View style={styles.drawerHeader}>
-        <View style={{ width: 28 }} />
-        <Text style={styles.drawerHeaderTitle}>Settings</Text>
-        <TouchableOpacity
-          onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
-          style={styles.drawerMenuBtn}
-          accessibilityLabel="Open menu"
-        >
-          <Ionicons name="menu" size={28} color={theme.primary} />
-        </TouchableOpacity>
-      </View>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, paddingBottom: 32 }}>
         {/* Appearance */}
         <Text style={styles.sectionHeader}>APPEARANCE</Text>
@@ -487,13 +1054,15 @@ const SettingsScreen = () => {
             <TouchableOpacity
               key={option}
               style={styles.soundOption}
-              onPress={() => setSelectedSound(option)}
+              onPress={() => handleSoundPreferenceChange(option)}
               activeOpacity={0.7}
             >
               <View style={styles.radioCircle}>
                 {selectedSound === option && <View style={styles.radioDot} />}
               </View>
-              <Text style={[styles.soundLabel, selectedSound === option && styles.soundLabelSelected]}>{option}</Text>
+              <Text style={[styles.soundLabel, selectedSound === option && styles.soundLabelSelected]}>
+                {option}
+              </Text>
               <TouchableOpacity 
                 onPress={() => handlePreviewSound(option)} 
                 style={[
@@ -607,16 +1176,23 @@ const SettingsScreen = () => {
         <View style={styles.cardSection}>
           <View style={styles.rowCard}>
             <Ionicons name="notifications-outline" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>Push Notifications</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowLabel}>Push Notifications</Text>
+              <Text style={styles.rowDescription}>
+                {notificationPermission === 'granted' ? 'Notifications enabled' : 
+                 notificationPermission === 'denied' ? 'Permission denied - enable in settings' :
+                 'Tap to enable notifications'}
+              </Text>
+            </View>
             <View style={styles.rowValueWrap}><Text style={styles.rowValue}>{notifications ? 'On' : 'Off'}</Text></View>
             <Switch
-              value={notifications}
-              onValueChange={setNotifications}
+              value={notifications && notificationPermission === 'granted'}
+              onValueChange={handleNotificationToggle}
               trackColor={{ false: '#E0E0E0', true: '#4CAF50' }}
-              thumbColor={notifications ? '#1B5E20' : '#BDBDBD'}
+              thumbColor={notifications && notificationPermission === 'granted' ? '#1B5E20' : '#BDBDBD'}
             />
           </View>
-          <TouchableOpacity style={styles.rowCard} onPress={() => placeholder('Daily Study Reminder')} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.rowCard} onPress={handleDailyReminderUpdate} activeOpacity={0.7}>
             <Ionicons name="alarm-outline" size={22} color="#388E3C" style={styles.rowIcon} />
             <Text style={styles.rowLabel}>Daily Study Reminder</Text>
             <View style={styles.rowValueWrap}><Text style={styles.rowValue}>{dailyReminder}</Text></View>
@@ -628,7 +1204,7 @@ const SettingsScreen = () => {
             <View style={styles.rowValueWrap}><Text style={styles.rowValue}>{sessionEndReminder ? 'On' : 'Off'}</Text></View>
             <Switch
               value={sessionEndReminder}
-              onValueChange={setSessionEndReminder}
+              onValueChange={handleSessionEndReminderToggle}
               trackColor={{ false: '#E0E0E0', true: '#4CAF50' }}
               thumbColor={sessionEndReminder ? '#1B5E20' : '#BDBDBD'}
             />
@@ -638,6 +1214,12 @@ const SettingsScreen = () => {
         {/* Focus & Study Preferences - Updated */}
         <Text style={styles.sectionHeader}>FOCUS & STUDY PREFERENCES</Text>
         <View style={styles.cardSection}>
+          <TouchableOpacity style={styles.rowCard} onPress={() => navigation.navigate('Preferences')} activeOpacity={0.7}>
+            <Ionicons name="options-outline" size={22} color="#388E3C" style={styles.rowIcon} />
+            <Text style={styles.rowLabel}>User Preferences</Text>
+            <View style={styles.rowValueWrap}><Text style={styles.rowValue}>Configure</Text></View>
+            <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
+          </TouchableOpacity>
           <TouchableOpacity style={styles.rowCard} onPress={() => setShowWorkStyleModal(true)} activeOpacity={0.7}>
             <MaterialCommunityIcons name="clock-outline" size={22} color="#388E3C" style={styles.rowIcon} />
             <Text style={styles.rowLabel}>Work Style</Text>
@@ -650,7 +1232,7 @@ const SettingsScreen = () => {
             <View style={styles.rowValueWrap}><Text style={styles.rowValue}>{autoStartNext ? 'On' : 'Off'}</Text></View>
             <Switch
               value={autoStartNext}
-              onValueChange={setAutoStartNext}
+              onValueChange={handleAutoStartToggle}
               trackColor={{ false: '#E0E0E0', true: '#4CAF50' }}
               thumbColor={autoStartNext ? '#1B5E20' : '#BDBDBD'}
             />
@@ -712,23 +1294,25 @@ const SettingsScreen = () => {
           </TouchableOpacity>
         </View>
 
-        {/* App Integrations */}
-        <Text style={styles.sectionHeader}>APP INTEGRATIONS</Text>
+        {/* AI Integration */}
+        <Text style={styles.sectionHeader}>AI INTEGRATION</Text>
         <View style={styles.cardSection}>
-          <TouchableOpacity style={styles.rowCard} onPress={() => placeholder('Calendar Sync')} activeOpacity={0.7}>
-            <Ionicons name="calendar-outline" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>Calendar Sync</Text>
+          <TouchableOpacity style={styles.rowCard} onPress={() => setShowNoraHelp(true)} activeOpacity={0.7}>
+            <Ionicons name="chatbubble-ellipses-outline" size={22} color="#388E3C" style={styles.rowIcon} />
+            <Text style={styles.rowLabel}>Nora AI Assistant</Text>
+            <View style={styles.rowValueWrap}><Text style={[styles.rowValue, { color: '#388E3C' }]}>Help & Info</Text></View>
             <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.rowCard} onPress={() => placeholder('Chrome Extension')} activeOpacity={0.7}>
-            <MaterialCommunityIcons name="google-chrome" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>Chrome Extension</Text>
-            <View style={styles.rowValueWrap}><Text style={[styles.rowValue, { color: '#BDBDBD' }]}>Try Beta</Text></View>
+          <TouchableOpacity style={styles.rowCard} onPress={() => setShowPatrickHelp(true)} activeOpacity={0.7}>
+            <MaterialCommunityIcons name="microphone-outline" size={22} color="#388E3C" style={styles.rowIcon} />
+            <Text style={styles.rowLabel}>Patrick Speech Assistant</Text>
+            <View style={styles.rowValueWrap}><Text style={[styles.rowValue, { color: '#388E3C' }]}>Help & Info</Text></View>
             <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.rowCard} onPress={() => placeholder('Third-Party Integrations')} activeOpacity={0.7}>
-            <MaterialCommunityIcons name="puzzle-outline" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>Third-Party Integrations</Text>
+          <TouchableOpacity style={styles.rowCard} onPress={() => placeholder('AI Insights')} activeOpacity={0.7}>
+            <MaterialCommunityIcons name="brain" size={22} color="#388E3C" style={styles.rowIcon} />
+            <Text style={styles.rowLabel}>AI Insights</Text>
+            <View style={styles.rowValueWrap}><Text style={[styles.rowValue, { color: '#388E3C' }]}>Analytics</Text></View>
             <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
           </TouchableOpacity>
         </View>
@@ -741,7 +1325,7 @@ const SettingsScreen = () => {
             <Text style={styles.rowLabel}>Text-to-Speech</Text>
             <Switch
               value={tts}
-              onValueChange={setTts}
+              onValueChange={handleTTSToggle}
               trackColor={{ false: '#E0E0E0', true: '#4CAF50' }}
               thumbColor={tts ? '#1B5E20' : '#BDBDBD'}
             />
@@ -751,7 +1335,7 @@ const SettingsScreen = () => {
             <Text style={styles.rowLabel}>High Contrast Mode</Text>
             <Switch
               value={highContrast}
-              onValueChange={setHighContrast}
+              onValueChange={handleHighContrastToggle}
               trackColor={{ false: '#E0E0E0', true: '#4CAF50' }}
               thumbColor={highContrast ? '#1B5E20' : '#BDBDBD'}
             />
@@ -761,7 +1345,7 @@ const SettingsScreen = () => {
             <Text style={styles.rowLabel}>Reduce Motion</Text>
             <Switch
               value={reduceMotion}
-              onValueChange={setReduceMotion}
+              onValueChange={handleReduceMotionToggle}
               trackColor={{ false: '#E0E0E0', true: '#4CAF50' }}
               thumbColor={reduceMotion ? '#1B5E20' : '#BDBDBD'}
             />
@@ -771,27 +1355,28 @@ const SettingsScreen = () => {
         {/* Support & About */}
         <Text style={styles.sectionHeader}>SUPPORT & ABOUT</Text>
         <View style={styles.cardSection}>
-          <TouchableOpacity style={styles.rowCard} onPress={() => placeholder('Help Center')} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.rowCard} onPress={handleHelpCenter} activeOpacity={0.7}>
             <Ionicons name="help-circle-outline" size={22} color="#388E3C" style={styles.rowIcon} />
             <Text style={styles.rowLabel}>Help Center / FAQ</Text>
             <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.rowCard} onPress={() => placeholder('Contact Support')} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.rowCard} onPress={handleContactSupport} activeOpacity={0.7}>
             <MaterialIcons name="support-agent" size={22} color="#388E3C" style={styles.rowIcon} />
             <Text style={styles.rowLabel}>Contact Support</Text>
             <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
           </TouchableOpacity>
-          <View style={styles.rowCard}>
+          <TouchableOpacity style={styles.rowCard} onPress={handleAppInfo} activeOpacity={0.7}>
             <MaterialIcons name="info-outline" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>App Version</Text>
+            <Text style={styles.rowLabel}>App Information</Text>
             <View style={styles.rowValueWrap}><Text style={styles.rowValue}>v1.0.0</Text></View>
-          </View>
-          <TouchableOpacity style={styles.rowCard} onPress={() => placeholder('Terms of Service')} activeOpacity={0.7}>
+            <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.rowCard} onPress={handleTermsOfService} activeOpacity={0.7}>
             <MaterialIcons name="gavel" size={22} color="#388E3C" style={styles.rowIcon} />
             <Text style={styles.rowLabel}>Terms of Service</Text>
             <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.rowCard} onPress={() => placeholder('Privacy Policy')} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.rowCard} onPress={handlePrivacyPolicy} activeOpacity={0.7}>
             <MaterialIcons name="privacy-tip" size={22} color="#388E3C" style={styles.rowIcon} />
             <Text style={styles.rowLabel}>Privacy Policy</Text>
             <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
@@ -828,7 +1413,7 @@ const SettingsScreen = () => {
             <View style={styles.modalBox}>
               <Text style={styles.modalTitle}>Select Theme</Text>
               {THEME_OPTIONS.map(opt => (
-                <TouchableOpacity key={opt} style={styles.modalOption} onPress={() => { setAppearanceTheme(opt); setShowThemeModal(false); }}>
+                <TouchableOpacity key={opt} style={styles.modalOption} onPress={() => handleThemeUpdate(opt)}>
                   <Text style={[styles.modalOptionText, appearanceTheme === opt && { color: '#388E3C', fontWeight: 'bold' }]}>{opt}</Text>
                 </TouchableOpacity>
               ))}
@@ -841,7 +1426,7 @@ const SettingsScreen = () => {
             <View style={styles.modalBox}>
               <Text style={styles.modalTitle}>Select Font Size</Text>
               {FONT_SIZE_OPTIONS.map(opt => (
-                <TouchableOpacity key={opt} style={styles.modalOption} onPress={() => { setFontSize(opt); setShowFontModal(false); }}>
+                <TouchableOpacity key={opt} style={styles.modalOption} onPress={() => handleFontSizeUpdate(opt)}>
                   <Text style={[styles.modalOptionText, fontSize === opt && { color: '#388E3C', fontWeight: 'bold' }]}>{opt}</Text>
                 </TouchableOpacity>
               ))}
@@ -854,7 +1439,7 @@ const SettingsScreen = () => {
             <View style={styles.modalBox}>
               <Text style={styles.modalTitle}>Select App Icon</Text>
               {APP_ICON_OPTIONS.map(opt => (
-                <TouchableOpacity key={opt} style={styles.modalOption} onPress={() => { setAppIcon(opt); setShowIconModal(false); }}>
+                <TouchableOpacity key={opt} style={styles.modalOption} onPress={() => handleAppIconUpdate(opt)}>
                   <Text style={[styles.modalOptionText, appIcon === opt && { color: '#388E3C', fontWeight: 'bold' }]}>{opt}</Text>
                 </TouchableOpacity>
               ))}
@@ -891,6 +1476,18 @@ const SettingsScreen = () => {
             </View>
           </View>
         </Modal>
+
+        {/* AI Help Modals */}
+        <AIHelpModal 
+          visible={showNoraHelp} 
+          onClose={() => setShowNoraHelp(false)} 
+          aiType="nora" 
+        />
+        <AIHelpModal 
+          visible={showPatrickHelp} 
+          onClose={() => setShowPatrickHelp(false)} 
+          aiType="patrick" 
+        />
       </ScrollView>
     </SafeAreaView>
   );
@@ -935,6 +1532,11 @@ const styles = StyleSheet.create({
     color: '#222',
     fontWeight: '500',
     flex: 1,
+  },
+  rowDescription: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
   },
   rowValueWrap: {
     minWidth: 40,

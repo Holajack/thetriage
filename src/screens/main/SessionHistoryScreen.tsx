@@ -36,6 +36,30 @@ const SessionHistoryScreen = () => {
   const [error, setError] = useState<string | null>(null);
   const [timeFilter, setTimeFilter] = useState<'all' | 'week' | 'month'>('all');
 
+  const onRefresh = () => {
+    fetchSessionHistory(true);
+  };
+  
+  // Configure header with refresh button
+  useEffect(() => {
+    navigation.setOptions({
+      title: 'Session History',
+      headerLeft: () => (
+        <TouchableOpacity 
+          onPress={() => navigation.navigate('Home' as never)} 
+          style={{ marginLeft: 8 }}
+        >
+          <Ionicons name="arrow-back" size={24} color={theme.primary} />
+        </TouchableOpacity>
+      ),
+      headerRight: () => (
+        <TouchableOpacity onPress={onRefresh} style={{ marginRight: 8 }}>
+          <Ionicons name="refresh" size={24} color={theme.primary} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, theme]);
+
   useEffect(() => {
     if (user) {
       fetchSessionHistory();
@@ -125,10 +149,6 @@ const SessionHistoryScreen = () => {
     }
   };
 
-  const onRefresh = () => {
-    fetchSessionHistory(true);
-  };
-
   const formatDuration = (minutes: number) => {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
@@ -203,7 +223,7 @@ const SessionHistoryScreen = () => {
       <View style={styles.sessionHeader}>
         <View style={styles.sessionTitleRow}>
           <Text style={[styles.sessionTitle, { color: theme.text }]}>
-            {session.task_title || session.subject || `${session.session_type} Session`}
+            {session.task_title || session.subject || <Text>{session.session_type} Session</Text>}
           </Text>
           <View style={[styles.statusBadge, { backgroundColor: getStatusColor(session.status) }]}>
             <Ionicons 
@@ -234,7 +254,7 @@ const SessionHistoryScreen = () => {
           <Ionicons name="calendar-outline" size={16} color={theme.primary} />
           <Text style={[styles.statLabel, { color: theme.text }]}>Type</Text>
           <Text style={[styles.statValue, { color: theme.text }]}>
-            {session.session_type === 'individual' ? 'Solo' : 'Group'}
+            <Text>{session.session_type === 'individual' ? 'Solo' : 'Group'}</Text>
           </Text>
         </View>
 
@@ -285,13 +305,6 @@ const SessionHistoryScreen = () => {
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={theme.primary} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>Session History</Text>
-          <View style={styles.headerSpacer} />
-        </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.primary} />
           <Text style={[styles.loadingText, { color: theme.text }]}>Loading session history...</Text>
@@ -302,16 +315,6 @@ const SessionHistoryScreen = () => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={theme.primary} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>Session History</Text>
-        <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
-          <Ionicons name="refresh" size={24} color={theme.primary} />
-        </TouchableOpacity>
-      </View>
 
       {/* Time Filter */}
       <View style={[styles.filterContainer, { backgroundColor: theme.card }]}>
@@ -329,8 +332,7 @@ const SessionHistoryScreen = () => {
               styles.filterText,
               { color: timeFilter === filter ? '#FFFFFF' : theme.text }
             ]}>
-              {filter === 'all' ? 'All Time' : 
-               filter === 'week' ? 'This Week' : 'This Month'}
+              {filter === 'all' ? 'All Time' : filter === 'week' ? 'This Week' : 'This Month'}
             </Text>
           </TouchableOpacity>
         ))}
@@ -389,7 +391,8 @@ const SessionHistoryScreen = () => {
                 </View>
                 <View style={styles.summaryItem}>
                   <Text style={[styles.summaryValue, { color: theme.primary }]}>
-                    {Math.round(sessions.reduce((total, session) => total + (session.duration_minutes || 0), 0) / 60 * 10) / 10}h
+                    <Text>{Math.round(sessions.reduce((total, session) => total + (session.duration_minutes || 0), 0) / 60 * 10) / 10}</Text>
+                    <Text>h</Text>
                   </Text>
                   <Text style={[styles.summaryLabel, { color: theme.text }]}>Total Time</Text>
                 </View>

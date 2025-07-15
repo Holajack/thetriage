@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Alert, Platform, KeyboardAvoidingView, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -10,11 +10,20 @@ import { useSupabaseProfile, Profile } from '../../utils/supabaseHooks';
 import { useTheme } from '../../context/ThemeContext';
 const { useUserAppData } = require('../../utils/userAppData');
 import { supabase } from '../../utils/supabase';
+import BadgeDisplay from '../../components/BadgeDisplay';
+import { getUserBadges, getUserLevel } from '../../utils/achievementManager';
+import { Badge } from '../../data/achievements';
+import { useAuth } from '../../context/AuthContext';
 
 const ProfileScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<MainTabParamList>>();
+  const { user } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
+  const [userBadges, setUserBadges] = useState<Badge[]>([]);
+  const [userLevel, setUserLevel] = useState(1);
+  const [showBadgeModal, setShowBadgeModal] = useState(false);
+  const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
   const { profile, updateProfile, uploadProfileImage, updateStatus, loading: profileLoading, error: profileError } = useSupabaseProfile();
   // Use the comprehensive data hook
   const { data: userData, isLoading: userDataLoading, error: userDataError, refreshData } = useUserAppData();
@@ -24,6 +33,27 @@ const ProfileScreen = () => {
   const userProfile = userData?.profile || profile;
   const loading = userDataLoading || profileLoading;
   const error = userDataError || profileError;
+
+  // Load user badges and level
+  useEffect(() => {
+    loadUserBadges();
+  }, [user]);
+
+  const loadUserBadges = async () => {
+    if (!user?.id) return;
+    
+    try {
+      const [badges, level] = await Promise.all([
+        getUserBadges(user.id),
+        getUserLevel(user.id)
+      ]);
+      
+      setUserBadges(badges);
+      setUserLevel(level);
+    } catch (error) {
+      console.error('Error loading user badges:', error);
+    }
+  };
 
   const STATUS_OPTIONS = [
     { 
@@ -54,7 +84,6 @@ const ProfileScreen = () => {
     { label: 'Education', icon: 'school-outline', onPress: () => navigation.navigate('Education') },
     { label: 'Location and Time', icon: 'location-outline', onPress: () => navigation.navigate('LocationAndTime') },
     { label: 'Privacy', icon: 'lock-closed-outline', onPress: () => navigation.navigate('Privacy') },
-    { label: 'Preferences', icon: 'options-outline', onPress: () => navigation.navigate('Preferences') },
     { label: 'Stop Service', icon: 'close-circle-outline', onPress: () => {} },
   ];
 
@@ -98,6 +127,11 @@ const ProfileScreen = () => {
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Could not update status.');
     }
+  };
+
+  const handleBadgePress = (badge: Badge) => {
+    setSelectedBadge(badge);
+    setShowBadgeModal(true);
   };
 
   const currentStatus = getCurrentStatus();
@@ -158,6 +192,40 @@ const ProfileScreen = () => {
             </View>
           )}
         </View>
+
+        {/* Badges Section */}
+        <View style={[styles.badgesSection, { backgroundColor: theme.card }]}>
+          <View style={styles.badgesSectionHeader}>
+            <Text style={[styles.badgesSectionTitle, { color: theme.text }]}>
+              Achievements & Badges
+            </Text>
+            <View style={styles.levelBadge}>
+              <Text style={[styles.levelText, { color: theme.primary }]}>
+                Level {userLevel}
+              </Text>
+            </View>
+          </View>
+          
+          <BadgeDisplay 
+            badges={userBadges} 
+            compact={true} 
+            maxDisplay={6}
+            onBadgePress={handleBadgePress}
+          />
+          
+          {userBadges.length > 6 && (
+            <TouchableOpacity 
+              style={styles.viewAllBadgesButton}
+              onPress={() => {/* Navigate to full achievements screen */}}
+            >
+              <Text style={[styles.viewAllBadgesText, { color: theme.primary }]}>
+                View All Achievements
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color={theme.primary} />
+            </TouchableOpacity>
+          )}
+        </View>
+
         <View style={[styles.optionsList, { backgroundColor: theme.card }]}>
           {PROFILE_OPTIONS.map((option, idx) => (
             <TouchableOpacity
@@ -216,6 +284,59 @@ const ProfileScreen = () => {
                   )}
                 </TouchableOpacity>
               ))}
+            </View>
+          </View>
+        </Modal>
+
+        {/* Badge Detail Modal */}
+        <Modal
+          visible={showBadgeModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowBadgeModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
+              {selectedBadge && (
+                <>
+                  <View style={styles.modalHeader}>
+                    <Text style={[styles.modalTitle, { color: theme.text }]}>Badge Details</Text>
+                    <TouchableOpacity onPress={() => setShowBadgeModal(false)}>
+                      <Ionicons name="close" size={24} color={theme.text + '99'} />
+                    </TouchableOpacity>
+                  </View>
+                  
+                  <View style={styles.badgeDetailContainer}>
+                    <View style={[
+                      styles.badgeDetailIcon,
+                      { backgroundColor: selectedBadge.color }
+                    ]}>
+                      <Ionicons 
+                        name={selectedBadge.icon as any} 
+                        size={40} 
+                        color="#FFF" 
+                      />
+                      {selectedBadge.tier >= 5 && (
+                        <View style={styles.badgeDetailTier}>
+                          <Text style={styles.badgeDetailTierText}>{selectedBadge.tier}</Text>
+                        </View>
+                      )}
+                    </View>
+                    
+                    <Text style={[styles.badgeDetailName, { color: selectedBadge.color }]}>
+                      {selectedBadge.name}
+                    </Text>
+                    
+                    <Text style={[styles.badgeDetailTierInfo, { color: theme.text + '99' }]}>
+                      Tier {selectedBadge.tier} • {selectedBadge.category.replace('_', ' ').toUpperCase()}
+                    </Text>
+                    
+                    <Text style={[styles.badgeDetailDescription, { color: theme.text }]}>
+                      {selectedBadge.description}
+                    </Text>
+                  </View>
+                </>
+              )}
             </View>
           </View>
         </Modal>
@@ -426,6 +547,98 @@ const styles = StyleSheet.create({
   },
   uploadingIcon: {
     borderColor: '#FF9800',
+  },
+  badgesSection: {
+    borderRadius: 16,
+    marginHorizontal: 12,
+    marginBottom: 16,
+    padding: 16,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+  },
+  badgesSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  badgesSectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  levelBadge: {
+    backgroundColor: '#F0F8FF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#1B5E20',
+  },
+  levelText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  viewAllBadgesButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    paddingVertical: 8,
+  },
+  viewAllBadgesText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginRight: 4,
+  },
+  badgeDetailContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  badgeDetailIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    position: 'relative',
+  },
+  badgeDetailTier: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#FFD700',
+    borderRadius: 12,
+    minWidth: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFF',
+  },
+  badgeDetailTierText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  badgeDetailName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  badgeDetailTierInfo: {
+    fontSize: 14,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  badgeDetailDescription: {
+    fontSize: 16,
+    lineHeight: 22,
+    textAlign: 'center',
   },
 });
 

@@ -64,7 +64,7 @@ export const RootNavigator = () => {
         navigationRef.current.dispatch(
           CommonActions.reset({
             index: 0,
-            routes: [{ name: 'Main' }],
+            routes: [{ name: 'Main' }], // This should go to MainNavigator with drawer
           })
         );
       } else {

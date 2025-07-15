@@ -17,9 +17,8 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
   const navigation = useNavigation<ProfileCreationNavigationProp>();
   const { focusMethod, email } = route.params || {}; // Handle undefined params
 
-  const [fullName, setFullName] = useState('');
-  const [username, setUsername] = useState('');
   const [profilePicUri, setProfilePicUri] = useState<string | null>(null);
+  const [bio, setBio] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -47,18 +46,8 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
 
   const handleContinue = async () => {
     setError('');
-    if (!fullName.trim() || !username.trim()) {
-      setError('Please fill in your full name and username.');
-      return;
-    }
-    if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
-      setError(
-        'Username must be 3-20 characters long and can only contain letters, numbers, and underscores.'
-      );
-      return;
-    }
-
     setLoading(true);
+    
     try {
       if (!user || !user.id) {
         setError('User session not found. Please try again.');
@@ -67,14 +56,22 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
         return;
       }
 
-      await updateOnboarding({
+      // Only update profile picture and bio if provided
+      const updateData: any = {
         id: user.id,
-        full_name: fullName,
-        username: username,
-        avatar_url: profilePicUri || undefined, // Corrected type
         focus_method: focusMethod,
         onboarding_completed: false, // Onboarding is not yet fully completed
-      });
+      };
+
+      if (profilePicUri) {
+        updateData.avatar_url = profilePicUri;
+      }
+
+      if (bio.trim()) {
+        updateData.bio = bio.trim();
+      }
+
+      await updateOnboarding(updateData);
       setLoading(false);
       navigation.navigate('PrivacySettings', { focusMethod });
     } catch (e: any) {
@@ -100,9 +97,9 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
               <Ionicons name="arrow-back" size={24} color="#E8F5E9" />
               <Text style={styles.backButtonText}>Account Creation</Text>
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Set Up Your Profile</Text>
+            <Text style={styles.headerTitle}>Add Your Profile Photo</Text>
             <Text style={styles.headerSubtitle}>
-              Step 3 of 5 • Personalize your StudyTracker experience.
+              Step 3 of 5 • Optional: Add a photo and bio to personalize your profile.
             </Text>
           </View>
 
@@ -118,29 +115,20 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
               )}
             </TouchableOpacity>
 
-            <Text style={styles.inputLabel}>Full Name</Text>
+            <Text style={styles.inputLabel}>Bio (Optional)</Text>
             <TextInput
-              style={styles.input}
-              placeholder="e.g., Jane Doe"
+              style={[styles.input, styles.bioInput]}
+              placeholder="Tell us a bit about yourself..."
               placeholderTextColor="#B8E6C1"
-              value={fullName}
-              onChangeText={setFullName}
-              autoCapitalize="words"
-              textContentType="name"
+              value={bio}
+              onChangeText={setBio}
+              multiline
+              numberOfLines={3}
+              maxLength={150}
+              textAlignVertical="top"
             />
-
-            <Text style={styles.inputLabel}>Username</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g., janedoe99"
-              placeholderTextColor="#B8E6C1"
-              value={username}
-              onChangeText={setUsername}
-              autoCapitalize="none"
-              textContentType="username"
-            />
-            <Text style={styles.usernameHint}>
-              3-20 characters. Letters, numbers, and underscores only.
+            <Text style={styles.bioHint}>
+              {bio.length}/150 characters
             </Text>
 
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -276,7 +264,11 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(232, 245, 233, 0.2)',
     width: '100%',
   },
-  usernameHint: {
+  bioInput: {
+    height: 80,
+    paddingTop: 15,
+  },
+  bioHint: {
     fontSize: 13,
     color: '#B8E6C1',
     marginTop: 6,

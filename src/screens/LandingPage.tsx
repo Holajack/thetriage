@@ -32,13 +32,31 @@ const TriageLogo = ({ style }: { style?: any }) => (
 
 const LandingPage: React.FC = () => {
   const navigation = useNavigation<LandingNavigationProp>();
-  const { setHasSeenLanding } = useAuth();
+  const { setHasSeenLanding, isAuthenticated, hasCompletedOnboarding, isRecentLogin } = useAuth();
   const logoOpacity = useRef(new Animated.Value(0)).current;
   const logoScale = useRef(new Animated.Value(0.8)).current;
   const titleOpacity = useRef(new Animated.Value(0)).current;
   const taglineOpacity = useRef(new Animated.Value(0)).current;
   const buttonOpacity = useRef(new Animated.Value(0)).current;
   const buttonScale = useRef(new Animated.Value(0.9)).current;
+
+  // Auto-redirect authenticated users who have completed onboarding (only if recent login)
+  useEffect(() => {
+    const checkAutoRedirect = async () => {
+      if (isAuthenticated && hasCompletedOnboarding) {
+        const recentLogin = await isRecentLogin();
+        if (recentLogin) {
+          console.log('LandingPage: Auto-redirecting authenticated user with recent login to Main');
+          navigation.replace('Main');
+        } else {
+          console.log('LandingPage: Login expired (>24h), user needs to re-authenticate');
+          // User needs to sign in again after 24 hours
+        }
+      }
+    };
+    
+    checkAutoRedirect();
+  }, [isAuthenticated, hasCompletedOnboarding, isRecentLogin, navigation]);
 
   useEffect(() => {
     const animationSequence = Animated.sequence([

@@ -2,10 +2,10 @@
   "expo": {
     "name": "Triage System",
     "slug": "thetriage",
-    "version": "1.2.4",
-    "runtimeVersion": "1.2.4",
+    "version": "1.5.0",
+    "runtimeVersion": "1.5.0",
     "orientation": "portrait",
-    "icon": "./assets/icon-ios-solid.png",
+    "icon": "./assets/icon-ios-white-1024.png",
     "updates": {
       "enabled": false,
       "checkAutomatically": "NEVER",
@@ -15,8 +15,8 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.triagesystem.app",
-      "buildNumber": "17",
-      "icon": "./assets/icon-ios-solid.png",
+      "icon": "./assets/icon-ios-white-1024.png",
+      "buildNumber": "13",
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses camera for document scanning",
         "NSMicrophoneUsageDescription": "This app uses microphone for voice features"
@@ -30,6 +30,9 @@
       "eas": {
         "projectId": "8c921112-45b4-48cf-91c3-a1326803d706"
       }
-    }
+    },
+    "plugins": [
+      "expo-localization"
+    ]
   }
 }

@@ -1,7 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, ScrollView } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { useTheme } from '../../context/ThemeContext';
+import InteractiveQuiz from '../../components/InteractiveQuiz';
+import QuizResults from '../../components/QuizResults';
+import { QuizResult } from '../../data/quizData';
+import { getQuizCompletionStatus } from '../../utils/quizStorage';
+import { useAuth } from '../../context/AuthContext';
 
 interface Quiz {
   id: string;
@@ -64,8 +70,70 @@ const QUIZ_DATA: Quiz[] = [
 
 const SelfDiscoveryQuizScreen: React.FC = () => {
   const navigation = useNavigation<any>();
+  const { theme } = useTheme();
+  const { user } = useAuth();
   const [selectedQuiz, setSelectedQuiz] = useState<Quiz | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [showQuiz, setShowQuiz] = useState(false);
+  const [quizResult, setQuizResult] = useState<QuizResult | null>(null);
+  const [showResults, setShowResults] = useState(false);
+  const [quizData, setQuizData] = useState(QUIZ_DATA);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Configure header
+  useEffect(() => {
+    navigation.setOptions({
+      title: 'Self-Discovery Quizzes',
+      headerLeft: () => (
+        <TouchableOpacity 
+          onPress={() => navigation.navigate('Bonuses' as never)} 
+          style={{ marginLeft: 8 }}
+        >
+          <Ionicons name="arrow-back" size={24} color={theme.primary} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, theme]);
+
+  // Load quiz progress
+  useEffect(() => {
+    loadQuizProgress();
+  }, [user]);
+
+  const loadQuizProgress = async () => {
+    if (!user?.id) {
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const updatedQuizData = await Promise.all(
+        QUIZ_DATA.map(async (quiz) => {
+          const quizTypeMap: { [key: string]: string } = {
+            '1': 'study_habits',
+            '4': 'learning_style'
+          };
+          
+          const quizType = quizTypeMap[quiz.id];
+          if (quizType) {
+            const completionStatus = await getQuizCompletionStatus(user.id, quizType);
+            return {
+              ...quiz,
+              progress: completionStatus.completed ? 1.0 : 0.0
+            };
+          }
+          
+          return quiz;
+        })
+      );
+
+      setQuizData(updatedQuizData);
+    } catch (error) {
+      console.error('Error loading quiz progress:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const openQuizDetail = (quiz: Quiz) => {
     setSelectedQuiz(quiz);
@@ -79,8 +147,38 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
 
   const startQuiz = () => {
     closeDetail();
-    // Navigate to quiz implementation or show placeholder
-    console.log('Starting quiz:', selectedQuiz?.name);
+    setShowQuiz(true);
+  };
+
+  const handleQuizComplete = (result: QuizResult) => {
+    setQuizResult(result);
+    setShowQuiz(false);
+    setShowResults(true);
+  };
+
+  const handleCloseQuiz = () => {
+    setShowQuiz(false);
+    setSelectedQuiz(null);
+  };
+
+  const handleCloseResults = () => {
+    setShowResults(false);
+    setQuizResult(null);
+    setSelectedQuiz(null);
+    // Refresh quiz progress to show completion
+    loadQuizProgress();
+  };
+
+  const handleRetakeQuiz = () => {
+    setShowResults(false);
+    setQuizResult(null);
+    setShowQuiz(true);
+  };
+
+  const getQuizType = (quizId: string): 'study_habits' | 'learning_style' => {
+    if (quizId === '1') return 'study_habits';
+    if (quizId === '4') return 'learning_style';
+    return 'study_habits'; // Default fallback
   };
 
   const getProgressColor = (progress: number) => {
@@ -145,16 +243,30 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
     </TouchableOpacity>
   );
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#1B5E20" />
-        </TouchableOpacity>
-        <Text style={styles.title}>Self-Discovery Quizzes</Text>
-        <View style={{ width: 40 }} />
-      </View>
+  // Show quiz interface if quiz is active
+  if (showQuiz && selectedQuiz) {
+    return (
+      <InteractiveQuiz
+        quizType={getQuizType(selectedQuiz.id)}
+        onComplete={handleQuizComplete}
+        onClose={handleCloseQuiz}
+      />
+    );
+  }
 
+  // Show results if quiz is completed
+  if (showResults && quizResult) {
+    return (
+      <QuizResults
+        result={quizResult}
+        onRetake={handleRetakeQuiz}
+        onClose={handleCloseResults}
+      />
+    );
+  }
+
+  return (
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={styles.headerContent}>
         <Text style={styles.subtitle}>
           Discover your unique learning style, study habits, and motivation patterns through our comprehensive self-assessment quizzes.
@@ -164,12 +276,14 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
       <Text style={styles.sectionTitle}>Available Quizzes</Text>
 
       <FlatList
-        data={QUIZ_DATA}
+        data={quizData}
         renderItem={renderQuizCard}
         keyExtractor={(item) => item.id}
         style={styles.quizList}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        refreshing={isLoading}
+        onRefresh={loadQuizProgress}
       />
 
       {/* Quiz Detail Modal */}
@@ -227,12 +341,24 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
                   </View>
                 </View>
 
-                <TouchableOpacity style={styles.startButton} onPress={startQuiz}>
+                <TouchableOpacity 
+                  style={styles.startButton} 
+                  onPress={startQuiz}
+                  disabled={selectedQuiz.id !== '1' && selectedQuiz.id !== '4'}
+                >
                   <Text style={styles.startButtonText}>
-                    {selectedQuiz.progress === 1.0 ? 'Retake Quiz' : 
-                     selectedQuiz.progress > 0 ? 'Continue Quiz' : 'Start Quiz'}
+                    {selectedQuiz.id === '1' || selectedQuiz.id === '4' ? (
+                      selectedQuiz.progress === 1.0 ? 'Retake Quiz' : 
+                      selectedQuiz.progress > 0 ? 'Continue Quiz' : 'Start Quiz'
+                    ) : 'Coming Soon'}
                   </Text>
                 </TouchableOpacity>
+                
+                {(selectedQuiz.id !== '1' && selectedQuiz.id !== '4') && (
+                  <Text style={styles.comingSoonText}>
+                    This quiz will be available in a future update!
+                  </Text>
+                )}
               </>
             )}
           </View>
@@ -466,6 +592,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#FFFFFF',
+  },
+  comingSoonText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 12,
+    fontStyle: 'italic',
   },
 });
 
