@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../utils/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createInitialUserData, ensureUserDataCompleteness } from '../utils/createUserData';
 
 // Simple timeout wrapper
 const withTimeout = (promise: Promise<any>, timeoutMs: number = 6000): Promise<any> => {
@@ -56,14 +57,14 @@ const testNetworkConnectivity = async (): Promise<boolean> => {
     console.log('🌐 Testing network connectivity...');
     
     await withTimeoutAndRetry(
-      () => supabase.from('profiles').select('count').limit(1),
+      () => supabase.from('profiles').select('count').limit(1).then(res => res),
       3000,
       1
     );
     
     console.log('✅ Network connectivity confirmed');
     return true;
-  } catch (error) {
+  } catch (error: any) {
     console.log('❌ Network connectivity failed:', error.message);
     return false;
   }
@@ -258,7 +259,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       let profile;
       try {
         const { data: profileData, error: profileError } = await withTimeout(
-          supabase.from('profiles').select('*').eq('id', sessionUser.id).single(),
+          supabase.from('profiles').select('*').eq('id', sessionUser.id).single().then(res => res),
           4000
         );
 
@@ -268,7 +269,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         profile = profileData || fallbackData.profile;
         if (showLogs) console.log('✅ Profile data loaded');
-      } catch (profileError) {
+      } catch (profileError: any) {
         console.log('⚠️ Profile fetch failed, using fallback:', profileError.message);
         profile = fallbackData.profile;
       }
@@ -278,7 +279,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (showLogs) console.log('🎯 Fetching onboarding data...');
         
         const { data: onboardingData, error: onboardingError } = await withTimeout(
-          supabase.from('onboarding_preferences').select('*').eq('user_id', sessionUser.id).single(),
+          supabase.from('onboarding_preferences').select('*').eq('user_id', sessionUser.id).single().then(res => res),
           4000
         );
 
@@ -288,7 +289,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         onboarding = onboardingData || fallbackData.onboarding;
         if (showLogs) console.log('✅ Onboarding data loaded');
-      } catch (onboardingError) {
+      } catch (onboardingError: any) {
         console.log('⚠️ Onboarding fetch failed, using fallback:', onboardingError.message);
         onboarding = fallbackData.onboarding;
       }
@@ -298,7 +299,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (showLogs) console.log('🏆 Fetching leaderboard data...');
         
         const { data: leaderboardData, error: leaderboardError } = await withTimeout(
-          supabase.from('leaderboard_stats').select('*').eq('user_id', sessionUser.id).single(),
+          supabase.from('leaderboard_stats').select('*').eq('user_id', sessionUser.id).single().then(res => res),
           4000
         );
 
@@ -308,14 +309,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         leaderboard = leaderboardData || fallbackData.leaderboard;
         if (showLogs) console.log('✅ Leaderboard data loaded');
-      } catch (leaderboardError) {
+      } catch (leaderboardError: any) {
         console.log('⚠️ Leaderboard fetch failed, using fallback:', leaderboardError.message);
         leaderboard = fallbackData.leaderboard;
       }
 
       return { profile, onboarding, leaderboard };
 
-    } catch (error) {
+    } catch (error: any) {
       console.log('❌ Critical error in data fetch, using complete fallback:', error.message);
       return fallbackData;
     }
@@ -356,6 +357,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await setLastLoginTime();
       
       try {
+        // Check for incomplete user data and ensure completeness
+        await ensureUserDataCompleteness(authData.user.id);
+        
         const userData = await fetchUserDataWithFallback(authData.user, true);
         
         setIsAuthenticated(true);
@@ -421,7 +425,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { error: authError.message };
       }
 
-      console.log('✅ Sign up successful');
+      if (!authData.user) {
+        return { error: 'Account creation failed - no user data returned. Please try again.' };
+      }
+
+      console.log('✅ Sign up successful, creating database records...');
+      
+      // Immediately create database records for the new user
+      try {
+        const dbResult = await createInitialUserData(authData.user.id, {
+          fullName: userData.full_name,
+          avatarUrl: null
+        });
+        
+        if (!dbResult || !dbResult.success) {
+          console.error('❌ Database setup failed:', dbResult?.error || 'Unknown error');
+          // Don't fail signup if database setup fails - user can recover on login
+          console.log('⚠️ Continuing with signup despite database error');
+        } else {
+          console.log('✅ Database records created successfully');
+        }
+      } catch (dbError: any) {
+        console.error('❌ Database setup error:', dbError.message);
+        // Don't fail signup - user can recover on login
+        console.log('⚠️ Continuing with signup despite database error');
+      }
+
       return {};
 
     } catch (error: any) {
@@ -455,13 +484,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateOnboarding = async (data: any) => {
     try {
       const { error } = await withTimeout(
-        supabase.from('onboarding_preferences').upsert(data),
+        Promise.resolve(supabase.from('onboarding_preferences').upsert(data).select()),
         8000
       );
       
       if (error) throw error;
       
-      setOnboarding(prev => ({ ...prev, ...data }));
+      setOnboarding((prev: any) => ({ ...prev, ...data }));
       
       // Update hasCompletedOnboarding if the update includes completion status
       if (data.is_onboarding_complete !== undefined) {
