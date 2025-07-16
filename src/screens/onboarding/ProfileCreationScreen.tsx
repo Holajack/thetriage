@@ -22,25 +22,65 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const [permissionsGranted, setPermissionsGranted] = useState(false);
+
   useEffect(() => {
     (async () => {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Sorry, we need camera roll permissions to make this work!');
+      try {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status === 'granted') {
+          setPermissionsGranted(true);
+        } else {
+          setPermissionsGranted(false);
+          console.log('⚠️ Photo library permission not granted');
+        }
+      } catch (error) {
+        console.error('❌ Permission request failed:', error);
+        setPermissionsGranted(false);
       }
     })();
   }, []);
 
   const pickImage = async () => {
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.5,
-    });
+    if (!permissionsGranted) {
+      Alert.alert(
+        'Permission Required',
+        'To add a profile photo, we need access to your photo library. You can still continue without adding a photo.',
+        [
+          { text: 'Continue Without Photo', style: 'cancel' },
+          { 
+            text: 'Grant Permission', 
+            onPress: async () => {
+              try {
+                const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                if (status === 'granted') {
+                  setPermissionsGranted(true);
+                  pickImage(); // Recursively call after permission granted
+                }
+              } catch (error) {
+                console.error('❌ Permission request failed:', error);
+              }
+            }
+          }
+        ]
+      );
+      return;
+    }
 
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      setProfilePicUri(result.assets[0].uri);
+    try {
+      let result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.5,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setProfilePicUri(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('❌ Image picker failed:', error);
+      Alert.alert('Error', 'Failed to pick image. Please try again.');
     }
   };
 
