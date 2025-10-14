@@ -1044,26 +1044,148 @@ const SettingsScreen = () => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, paddingBottom: 32 }}>
-        {/* Pro Trekker Banner */}
+      {/* Settings Title */}
+      <View style={[styles.settingsHeader, { backgroundColor: theme.background }]}>
         <TouchableOpacity
-          style={[styles.proTrekkerBanner, { backgroundColor: '#3D9AE2' }]}
+          style={styles.closeButton}
+          onPress={() => navigation.goBack()}
+        >
+          <View style={[styles.closeButtonCircle, { backgroundColor: theme.primary + '30' }]}>
+            <Ionicons name="close" size={24} color={theme.primary} />
+          </View>
+        </TouchableOpacity>
+        <Text style={[styles.settingsTitle, { color: theme.primary }]}>Settings</Text>
+        <View style={styles.headerSpacer} />
+      </View>
+
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, paddingBottom: 32 }}>
+        {/* Pro Trekker Illustrated Card */}
+        <TouchableOpacity
+          style={styles.proTrekkerCard}
           onPress={() => navigation.navigate('ProTrekker' as any)}
           activeOpacity={0.9}
         >
-          <View style={styles.proTrekkerContent}>
-            <View style={styles.proTrekkerBadge}>
-              <Ionicons name="star" size={24} color="#FFA726" />
+          <View style={styles.proTrekkerImageContainer}>
+            <Text style={styles.proTrekkerCardTitle}>Become a professional traveller</Text>
+            <Text style={styles.proTrekkerCardSubtitle}>Pomodoro mode, customizable focus time</Text>
+            {/* Using placeholder - in real app, use the hiking illustration */}
+            <View style={styles.illustrationPlaceholder}>
+              <Ionicons name="trail-sign" size={60} color="#FF6B35" />
+              <Ionicons name="person-outline" size={50} color="#4A90E2" style={{ marginLeft: 20 }} />
+              <Ionicons name="flower-outline" size={40} color="#E91E63" style={{ marginLeft: 15 }} />
             </View>
-            <View style={styles.proTrekkerText}>
-              <Text style={styles.proTrekkerTitle}>Become Professional Trekker</Text>
-              <Text style={styles.proTrekkerSubtitle}>Unlock all premium features</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={24} color="#FFF" />
           </View>
         </TouchableOpacity>
 
-        {/* Appearance */}
+        {/* Timer Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <Ionicons name="time-outline" size={24} color={theme.primary} />
+            <Text style={[styles.sectionTitle, { color: theme.primary }]}>Timer</Text>
+          </View>
+
+          <View style={[styles.settingRow, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
+            <Text style={[styles.settingLabel, { color: theme.text }]}>Default Timer</Text>
+            <Text style={[styles.settingValue, { color: theme.primary }]}>15 Minutes</Text>
+          </View>
+
+          <View style={[styles.settingRow, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
+            <Text style={[styles.settingLabel, { color: theme.text }]}>Rest Time</Text>
+            <Text style={[styles.settingValue, { color: theme.primary }]}></Text>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.settingRow, { backgroundColor: theme.card, borderBottomColor: theme.border }]}
+            onPress={() => setShowWorkStyleModal(true)}
+          >
+            <Text style={[styles.settingLabel, { color: theme.text }]}>Pomodoro Timer</Text>
+            <Ionicons name="chevron-forward" size={20} color={theme.primary} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Music Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <Ionicons name="musical-notes-outline" size={24} color={theme.primary} />
+            <Text style={[styles.sectionTitle, { color: theme.primary }]}>Music</Text>
+          </View>
+
+          <View style={[styles.settingRow, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
+            <Text style={[styles.settingLabel, { color: theme.text }]}>Focus Music</Text>
+            <Switch
+              value={autoPlaySound}
+              onValueChange={handleAutoPlayToggle}
+              trackColor={{ false: '#E0E0E0', true: theme.primary }}
+              thumbColor={autoPlaySound ? '#FFF' : '#FFF'}
+            />
+          </View>
+
+          <View style={[styles.settingRow, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
+            <Text style={[styles.settingLabel, { color: theme.text }]}>Home Music</Text>
+            <Switch
+              value={sound}
+              onValueChange={(value) => setSound(value)}
+              trackColor={{ false: '#E0E0E0', true: theme.primary }}
+              thumbColor={sound ? '#FFF' : '#FFF'}
+            />
+          </View>
+        </View>
+
+        {/* System Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <Ionicons name="settings-outline" size={24} color={theme.primary} />
+            <Text style={[styles.sectionTitle, { color: theme.primary }]}>System</Text>
+          </View>
+
+          <View style={[styles.settingRow, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
+            <Text style={[styles.settingLabel, { color: theme.text }]}>Notification</Text>
+            <Switch
+              value={notifications && notificationPermission === 'granted'}
+              onValueChange={handleNotificationToggle}
+              trackColor={{ false: '#E0E0E0', true: theme.primary }}
+              thumbColor={notifications && notificationPermission === 'granted' ? '#FFF' : '#FFF'}
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[styles.settingRow, { backgroundColor: theme.card, borderBottomColor: theme.border }]}
+            onPress={() => setShowThemeModal(true)}
+          >
+            <Text style={[styles.settingLabel, { color: theme.text }]}>Change App Icon</Text>
+            <View style={styles.appIconPreview}>
+              <Ionicons name="apps" size={24} color={theme.primary} />
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.settingRow, { backgroundColor: theme.card, borderBottomColor: theme.border }]}
+            onPress={() => navigation.navigate('ProTrekker' as any)}
+          >
+            <Text style={[styles.settingLabel, { color: theme.text }]}>Become Pro Traveller</Text>
+            <View style={styles.proIcon}>
+              <Ionicons name="star" size={20} color="#FFA726" />
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.settingRow, { backgroundColor: theme.card, borderBottomColor: 'transparent' }]}
+            onPress={() => navigation.navigate('Subscription' as any)}
+          >
+            <Text style={[styles.settingLabel, { color: theme.text }]}>Switch Pro Plan</Text>
+            <Text style={[styles.settingValue, { color: theme.primary }]}></Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.settingRow, { backgroundColor: theme.card, borderBottomColor: 'transparent' }]}
+          >
+            <Text style={[styles.settingLabel, { color: theme.text }]}>Restore Purchased</Text>
+            <Text style={[styles.settingValue, { color: theme.primary }]}></Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* OLD APPEARANCE SECTION - REMOVE */}
+        <View style={{ display: 'none' }}>
         <Text style={[styles.sectionHeader, { fontSize: fontSize * 0.9, color: theme.primary }]}>APPEARANCE</Text>
         <View style={[styles.cardSection, { backgroundColor: theme.card }]}>
           <TouchableOpacity style={styles.rowCard} onPress={() => setShowThemeModal(true)} activeOpacity={0.7}>
@@ -1554,15 +1676,34 @@ const SettingsScreen = () => {
         </Modal>
 
         {/* AI Help Modals */}
-        <AIHelpModal 
-          visible={showNoraHelp} 
-          onClose={() => setShowNoraHelp(false)} 
-          aiType="nora" 
+        {/* Rating Card */}
+        <View style={[styles.ratingCard, { backgroundColor: '#8BB5D8' }]}>
+          <View style={styles.ratingContent}>
+            <Ionicons name="person" size={50} color="#4A90E2" />
+            <View style={styles.ratingTextContainer}>
+              <Text style={styles.ratingTitle}>Does Focus{'\n'}Traveller Help?</Text>
+              <Text style={styles.ratingSubtitle}>Give Us 5 Stars!</Text>
+              <View style={styles.starsContainer}>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <Ionicons key={star} name="star" size={32} color="#FFA726" />
+                ))}
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* App Version */}
+        <Text style={[styles.versionText, { color: theme.text + '66' }]}>v1.0.0 (517) (506)</Text>
+
+        <AIHelpModal
+          visible={showNoraHelp}
+          onClose={() => setShowNoraHelp(false)}
+          aiType="nora"
         />
-        <AIHelpModal 
-          visible={showPatrickHelp} 
-          onClose={() => setShowPatrickHelp(false)} 
-          aiType="patrick" 
+        <AIHelpModal
+          visible={showPatrickHelp}
+          onClose={() => setShowPatrickHelp(false)}
+          aiType="patrick"
         />
       </ScrollView>
     </SafeAreaView>
@@ -1753,43 +1894,150 @@ const styles = StyleSheet.create({
   previewButtonActive: {
     backgroundColor: '#FFEBEE',
   },
-  proTrekkerBanner: {
-    marginHorizontal: 12,
+  settingsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 10,
+  },
+  settingsTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  closeButtonCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerSpacer: {
+    width: 48,
+  },
+  proTrekkerCard: {
+    marginHorizontal: 16,
     marginTop: 16,
     marginBottom: 24,
+    borderRadius: 20,
+    backgroundColor: '#8BB5D8',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  proTrekkerImageContainer: {
+    padding: 20,
+    paddingBottom: 100,
+  },
+  proTrekkerCardTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1A3A52',
+    marginBottom: 4,
+  },
+  proTrekkerCardSubtitle: {
+    fontSize: 14,
+    color: '#2C5F7F',
+    marginBottom: 20,
+  },
+  illustrationPlaceholder: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    paddingTop: 20,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 12,
+    gap: 8,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+  },
+  settingLabel: {
+    fontSize: 16,
+    flex: 1,
+  },
+  settingValue: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  appIconPreview: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  proIcon: {
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ratingCard: {
+    marginHorizontal: 16,
+    marginTop: 24,
+    marginBottom: 16,
     borderRadius: 20,
     padding: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 6,
   },
-  proTrekkerContent: {
+  ratingContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 16,
   },
-  proTrekkerBadge: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#FFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  proTrekkerText: {
+  ratingTextContainer: {
     flex: 1,
   },
-  proTrekkerTitle: {
-    fontSize: 18,
+  ratingTitle: {
+    fontSize: 16,
     fontWeight: 'bold',
-    color: '#FFF',
+    color: '#1A3A52',
     marginBottom: 4,
   },
-  proTrekkerSubtitle: {
+  ratingSubtitle: {
     fontSize: 14,
-    color: '#E3F2FD',
+    fontWeight: '600',
+    color: '#1A3A52',
+    marginBottom: 8,
+  },
+  starsContainer: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  versionText: {
+    textAlign: 'center',
+    fontSize: 12,
+    marginTop: 8,
+    marginBottom: 24,
   },
 });
 
