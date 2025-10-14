@@ -10,7 +10,11 @@ import { LogBox } from 'react-native';
 import { StartupErrorBoundary } from './src/components/StartupErrorBoundary';
 
 // Ignore specific warnings
-LogBox.ignoreLogs(['Warning: useInsertionEffect must not schedule updates.']);
+LogBox.ignoreLogs([
+  'Warning: useInsertionEffect must not schedule updates.',
+  'ViewManagerAdapter_ExpoLinearGradient',
+  'useInsertionEffect must not schedule updates'
+]);
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();

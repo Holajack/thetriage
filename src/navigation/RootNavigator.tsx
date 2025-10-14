@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import { NavigationContainer, NavigationContainerRef, CommonActions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
+// import { FloatingNoraProvider } from '../context/FloatingNoraContext'; // Disabled - using modal instead
 import { MainNavigator } from './MainNavigator';
 import { AuthNavigator } from './AuthNavigator';
 import { OnboardingNavigator } from './OnboardingNavigator';
@@ -87,7 +88,7 @@ export const RootNavigator = () => {
     // Handle logout - only if user was on an authenticated screen
     else if (!isAuthenticated && currentRoute && 
         (['Main', 'Onboarding'].includes(currentRoute.name as string))) {
-      console.log("RootNavigator: User logged out, returning to Landing");
+      console.log("RootNavigator: User logged out, returning to Landing page with sign-in/get started options");
       navigationRef.current.dispatch(
         CommonActions.reset({
           index: 0,

@@ -322,7 +322,7 @@ export const useBackgroundMusic = () => {
 
   const playTrackAtIndex = useCallback(async (index: number, playlist?: MusicTrack[]) => {
     const tracksToUse = playlist || currentPlaylist;
-    
+
     if (!tracksToUse || index >= tracksToUse.length || index < 0) {
       console.warn('Invalid track index or empty playlist');
       return;
@@ -332,9 +332,16 @@ export const useBackgroundMusic = () => {
     console.log(`🎵 Playing track ${index + 1} of ${tracksToUse.length}: ${track.displayName}`);
 
     try {
+      // Stop and unload previous track before playing new one
+      if (primarySound.current) {
+        await primarySound.current.stopAsync();
+        await primarySound.current.unloadAsync();
+        primarySound.current = null;
+      }
+
       const { sound } = await Audio.Sound.createAsync(
         { uri: track.url },
-        { 
+        {
           shouldPlay: true,
           isLooping: false,
           volume: volume

@@ -1,4 +1,3 @@
-
 /**
  * User Data Creation Utilities
  * 
@@ -10,334 +9,333 @@ import { supabase } from './supabase';
 
 /**
  * Creates initial data for a new user across all required tables
- * This is called after user registration to populate their account
- * @param {string} userId - The user's ID from Supabase Auth
- * @param {Object} profileData - Basic profile information
- * @returns {Promise<Object>} - Result of data creation
+ * Enhanced with better error handling for iOS
  */
 export async function createInitialUserData(userId, profileData = {}) {
   console.log(`Creating initial data for user: ${userId}`);
   
+  const results = {
+    success: true,
+    created: [],
+    failed: [],
+    errors: []
+  };
+  
   try {
-    // 1. Create user profile
-    const profileResult = await createUserProfile(userId, profileData);
+    // 1. Create user profile (CRITICAL - this must succeed)
+    console.log('Creating user profile...');
+    try {
+      // Check if profile exists first
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (!existingProfile) {
+        const profileResult = await supabase
+          .from('profiles')
+          .insert({
+            id: userId,
+            full_name: profileData.fullName || 'New User',
+            username: profileData.username || profileData.fullName || 'New User',
+            email: profileData.email || null,
+            avatar_url: profileData.avatarUrl || null,
+            university: profileData.university || null,
+            major: profileData.major || null,
+            status: 'active',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (profileResult.error) throw profileResult.error;
+        results.created.push('profile');
+        console.log('✅ Profile created successfully');
+      } else {
+        results.created.push('profile');
+        console.log('✅ Profile already exists, skipping creation');
+      }
+    } catch (profileError) {
+      console.error('❌ Profile creation failed:', profileError);
+      results.failed.push('profile');
+      results.errors.push(`Profile: ${profileError.message}`);
+      // Don't fail completely - continue with other records
+    }
     
     // 2. Create onboarding data
-    const onboardingResult = await createUserOnboarding(userId);
-    
+    console.log('Creating onboarding data...');
+    try {
+      const onboardingResult = await supabase
+        .from('onboarding_preferences')
+        .insert({
+          user_id: userId,
+          is_onboarding_complete: false,
+          weekly_focus_goal: 5,
+          welcome_completed: false, // Start with onboarding needed
+          goals_set: false,
+          first_session_completed: false,
+          profile_customized: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+      
+      if (onboardingResult.error) throw onboardingResult.error;
+      results.created.push('onboarding');
+      console.log('✅ Onboarding data created successfully');
+    } catch (onboardingError) {
+      console.error('❌ Onboarding creation failed:', onboardingError);
+      results.failed.push('onboarding');
+      results.errors.push(`Onboarding: ${onboardingError.message}`);
+    }
+
     // 3. Create settings
-    const settingsResult = await createUserSettings(userId);
-    
+    console.log('Creating user settings...');
+    try {
+      const settingsResult = await supabase
+        .from('user_settings')
+        .insert({
+          user_id: userId,
+          theme: 'auto',
+          notifications_enabled: true,
+          study_reminders: true,
+          break_reminders: true,
+          daily_goal_minutes: 120,
+          preferred_session_length: 25,
+          preferred_break_length: 5,
+          sound_enabled: true,
+          auto_play_sound: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+      
+      if (settingsResult.error) throw settingsResult.error;
+      results.created.push('settings');
+      console.log('✅ Settings created successfully');
+    } catch (settingsError) {
+      console.error('❌ Settings creation failed:', settingsError);
+      results.failed.push('settings');
+      results.errors.push(`Settings: ${settingsError.message}`);
+    }
+
     // 4. Create initial leaderboard stats
-    const leaderboardResult = await createInitialLeaderboardStats(userId);
-    
+    console.log('Creating leaderboard stats...');
+    try {
+      const leaderboardResult = await supabase
+        .from('leaderboard_stats')
+        .upsert({
+          user_id: userId,
+          total_focus_time: 0,
+          weekly_focus_time: 0,
+          monthly_focus_time: 0,
+          current_streak: 0,
+          longest_streak: 0,
+          total_sessions: 0,
+          level: 1,
+          points: 0,
+          rank_position: null,
+          achievements_count: 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id' })
+        .select()
+        .single();
+      
+      if (leaderboardResult.error) throw leaderboardResult.error;
+      results.created.push('leaderboard');
+      console.log('✅ Leaderboard stats created successfully');
+    } catch (leaderboardError) {
+      console.error('❌ Leaderboard creation failed:', leaderboardError);
+      results.failed.push('leaderboard');
+      results.errors.push(`Leaderboard: ${leaderboardError.message}`);
+    }
+
     // 5. Create initial learning metrics
-    const metricsResult = await createInitialLearningMetrics(userId);
-    
-    // 6. Create welcome tasks
-    const tasksResult = await createWelcomeTasks(userId);
-    
-    // 7. Create initial achievements
-    const achievementsResult = await createInitialAchievements(userId);
-    
-    // 8. Create welcome insights
-    const insightsResult = await createWelcomeInsights(userId);
-    
-    return {
-      success: true,
-      userId,
-      results: {
-        profile: profileResult,
-        onboarding: onboardingResult,
-        settings: settingsResult,
-        leaderboard: leaderboardResult,
-        metrics: metricsResult,
-        tasks: tasksResult,
-        achievements: achievementsResult,
-        insights: insightsResult
+    console.log('Creating learning metrics...');
+    try {
+      const metricsResult = await supabase
+        .from('learning_metrics')
+        .insert({
+          user_id: userId,
+          total_study_time: 0,
+          average_session_length: 0,
+          focus_score: 0,
+          productivity_trend: 'stable',
+          weekly_goal: 300, // 5 hours per week
+          weekly_progress: 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+      
+      if (metricsResult.error) throw metricsResult.error;
+      results.created.push('metrics');
+      console.log('✅ Learning metrics created successfully');
+    } catch (metricsError) {
+      console.error('❌ Learning metrics creation failed:', metricsError);
+      results.failed.push('metrics');
+      results.errors.push(`Metrics: ${metricsError.message}`);
+    }
+
+    // Return success if at least profile was created
+    if (results.created.includes('profile')) {
+      console.log(`✅ User data creation completed. Created: ${results.created.join(', ')}`);
+      if (results.failed.length > 0) {
+        console.log(`⚠️ Some records failed: ${results.failed.join(', ')}`);
       }
-    };
+      return { success: true, results };
+    } else {
+      console.log('❌ Critical failure: Profile creation failed');
+      return { success: false, error: 'Profile creation failed', results };
+    }
     
   } catch (error) {
-    console.error('Error creating user data:', error);
+    console.error('❌ Critical error in createInitialUserData:', error);
     return {
       success: false,
-      error: error.message
+      error: error.message || 'Unknown error occurred during user data creation',
+      results
     };
   }
 }
 
 /**
- * Creates user profile entry
- */
-async function createUserProfile(userId, profileData) {
-  const { data, error } = await supabase
-    .from('user_profiles')
-    .insert({
-      user_id: userId,
-      full_name: profileData.fullName || 'New User',
-      avatar_url: profileData.avatarUrl || null,
-      current_streak: 0,
-      longest_streak: 0,
-      total_focus_time: 0,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    })
-    .select()
-    .single();
-  
-  if (error) throw error;
-  return data;
-}
-
-/**
- * Creates user onboarding data
- */
-async function createUserOnboarding(userId) {
-  const { data, error } = await supabase
-    .from('user_onboarding')
-    .insert({
-      user_id: userId,
-      welcome_completed: true,
-      goals_set: false,
-      first_session_completed: false,
-      profile_customized: false,
-      completed_at: new Date().toISOString()
-    })
-    .select()
-    .single();
-  
-  if (error) throw error;
-  return data;
-}
-
-/**
- * Creates user settings with defaults
- */
-async function createUserSettings(userId) {
-  const { data, error } = await supabase
-    .from('user_settings')
-    .insert({
-      user_id: userId,
-      notifications_enabled: true,
-      daily_goal_minutes: 60,
-      preferred_session_length: 25,
-      break_length: 5,
-      theme: 'light',
-      sound_enabled: true,
-      reminder_frequency: 'daily',
-      privacy_mode: false,
-      auto_start_breaks: true,
-      show_motivational_quotes: true
-    })
-    .select()
-    .single();
-  
-  if (error) throw error;
-  return data;
-}
-
-/**
- * Creates initial leaderboard stats
- */
-async function createInitialLeaderboardStats(userId) {
-  const { data, error } = await supabase
-    .from('user_leaderboard_stats')
-    .insert({
-      user_id: userId,
-      total_focus_time: 0,
-      sessions_completed: 0,
-      current_streak: 0,
-      achievements_unlocked: 0,
-      rank_position: 1000, // Start with a high rank
-      weekly_focus_time: 0,
-      monthly_focus_time: 0,
-      updated_at: new Date().toISOString()
-    })
-    .select()
-    .single();
-  
-  if (error) throw error;
-  return data;
-}
-
-/**
- * Creates initial learning metrics
- */
-async function createInitialLearningMetrics(userId) {
-  const { data, error } = await supabase
-    .from('learning_metrics')
-    .insert({
-      user_id: userId,
-      total_study_time: 0,
-      average_session_length: 0,
-      focus_score: 0,
-      productivity_rating: 0,
-      subjects_studied: 0,
-      goals_completed: 0,
-      week_start: new Date().toISOString().split('T')[0],
-      updated_at: new Date().toISOString()
-    })
-    .select()
-    .single();
-  
-  if (error) throw error;
-  return data;
-}
-
-/**
- * Creates welcome/onboarding tasks
- */
-async function createWelcomeTasks(userId) {
-  const welcomeTasks = [
-    {
-      user_id: userId,
-      title: 'Complete your first focus session',
-      description: 'Start with a 25-minute Pomodoro session to get familiar with the timer',
-      priority: 'high',
-      status: 'pending',
-      due_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // Tomorrow
-      category: 'onboarding',
-      estimated_minutes: 25,
-      created_at: new Date().toISOString()
-    },
-    {
-      user_id: userId,
-      title: 'Set your daily study goals',
-      description: 'Define how much time you want to study each day',
-      priority: 'medium',
-      status: 'pending',
-      due_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      category: 'setup',
-      estimated_minutes: 10,
-      created_at: new Date().toISOString()
-    },
-    {
-      user_id: userId,
-      title: 'Explore the app features',
-      description: 'Take a look at analytics, leaderboards, and brain mapping',
-      priority: 'low',
-      status: 'pending',
-      due_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days
-      category: 'exploration',
-      estimated_minutes: 15,
-      created_at: new Date().toISOString()
-    }
-  ];
-  
-  const { data, error } = await supabase
-    .from('tasks')
-    .insert(welcomeTasks)
-    .select();
-  
-  if (error) throw error;
-  return data;
-}
-
-/**
- * Creates initial achievements for new users
- */
-async function createInitialAchievements(userId) {
-  const welcomeAchievement = {
-    user_id: userId,
-    achievement_type: 'welcome',
-    title: 'Welcome to Study Tracker!',
-    description: 'You\'ve successfully joined the Study Tracker community',
-    icon: '🎉',
-    points_awarded: 10,
-    unlocked_at: new Date().toISOString(),
-    category: 'milestone'
-  };
-  
-  const { data, error } = await supabase
-    .from('achievements')
-    .insert(welcomeAchievement)
-    .select()
-    .single();
-  
-  if (error) throw error;
-  return data;
-}
-
-/**
- * Creates welcome insights for new users
- */
-async function createWelcomeInsights(userId) {
-  const welcomeInsights = [
-    {
-      user_id: userId,
-      insight_type: 'tip',
-      title: 'Welcome to Study Tracker!',
-      content: 'Start with short 25-minute focus sessions and gradually increase as you build your concentration muscle.',
-      priority: 'high',
-      category: 'onboarding',
-      created_at: new Date().toISOString()
-    },
-    {
-      user_id: userId,
-      insight_type: 'recommendation',
-      title: 'Set Your Daily Goal',
-      content: 'Research shows that setting specific daily goals increases productivity by 25%. Start with a goal that feels achievable.',
-      priority: 'medium',
-      category: 'productivity',
-      created_at: new Date().toISOString()
-    }
-  ];
-  
-  const { data, error } = await supabase
-    .from('ai_insights')
-    .insert(welcomeInsights)
-    .select();
-  
-  if (error) throw error;
-  return data;
-}
-
-/**
  * Checks if user has all required data, creates missing pieces
- * This is useful for existing users who might be missing some table entries
+ * This fixes the login issue for users with incomplete profiles
  */
 export async function ensureUserDataCompleteness(userId) {
-  console.log(`Checking data completeness for user: ${userId}`);
+  console.log(`🔍 Checking data completeness for user: ${userId}`);
   
   try {
     const missingData = [];
+    const results = { created: [], failed: [], success: true };
     
-    // Check each table and create missing data
-    const tables = [
-      { name: 'user_profiles', createFn: createUserProfile },
-      { name: 'user_onboarding', createFn: createUserOnboarding },
-      { name: 'user_settings', createFn: createUserSettings },
-      { name: 'user_leaderboard_stats', createFn: createInitialLeaderboardStats },
-      { name: 'learning_metrics', createFn: createInitialLearningMetrics }
-    ];
+    // Check profile exists
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
     
-    for (const table of tables) {
-      const { data, error } = await supabase
-        .from(table.name)
-        .select('*')
-        .eq('user_id', userId)
-        .single();
-      
-      if (error && error.code === 'PGRST116') { // No rows returned
-        console.log(`Creating missing ${table.name} for user ${userId}`);
-        await table.createFn(userId);
-        missingData.push(table.name);
+    if (profileError && profileError.code === 'PGRST116') {
+      console.log('❌ Missing profile - creating basic profile...');
+      try {
+        const { error: createProfileError } = await supabase
+          .from('profiles')
+          .insert({
+            id: userId,
+            full_name: 'User',
+            username: `user_${userId.slice(0, 8)}`,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+        
+        if (createProfileError) {
+          console.error('❌ Profile creation failed:', createProfileError);
+          results.failed.push('profile');
+          results.success = false;
+        } else {
+          console.log('✅ Profile created');
+          results.created.push('profile');
+        }
+      } catch (error) {
+        console.error('❌ Profile creation error:', error);
+        results.failed.push('profile');
+        results.success = false;
       }
+    } else if (profile) {
+      console.log('✅ Profile exists');
     }
     
-    return {
-      success: true,
-      hadMissingData: missingData.length > 0,
-      createdTables: missingData
-    };
+    // Check onboarding exists
+    const { data: onboarding, error: onboardingError } = await supabase
+      .from('onboarding_preferences')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+    
+    if (onboardingError && onboardingError.code === 'PGRST116') {
+      console.log('❌ Missing onboarding - creating...');
+      try {
+        const { error: createOnboardingError } = await supabase
+          .from('onboarding_preferences')
+          .insert({
+            user_id: userId,
+            is_onboarding_complete: false,
+            weekly_focus_goal: 5,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+        
+        if (createOnboardingError) {
+          console.error('❌ Onboarding creation failed:', createOnboardingError);
+          results.failed.push('onboarding');
+        } else {
+          console.log('✅ Onboarding created');
+          results.created.push('onboarding');
+        }
+      } catch (error) {
+        console.error('❌ Onboarding creation error:', error);
+        results.failed.push('onboarding');
+      }
+    } else if (onboarding) {
+      console.log('✅ Onboarding exists');
+    }
+    
+    // Check leaderboard stats exist
+    const { data: leaderboard, error: leaderboardError } = await supabase
+      .from('leaderboard_stats')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+    
+    if (leaderboardError && leaderboardError.code === 'PGRST116') {
+      console.log('❌ Missing leaderboard stats - creating...');
+      try {
+        const { error: createLeaderboardError } = await supabase
+          .from('leaderboard_stats')
+          .insert({
+            user_id: userId,
+            total_focus_time: 0,
+            weekly_focus_time: 0,
+            current_streak: 0,
+            level: 1,
+            points: 0,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+        
+        if (createLeaderboardError) {
+          console.error('❌ Leaderboard creation failed:', createLeaderboardError);
+          results.failed.push('leaderboard');
+        } else {
+          console.log('✅ Leaderboard stats created');
+          results.created.push('leaderboard');
+        }
+      } catch (error) {
+        console.error('❌ Leaderboard creation error:', error);
+        results.failed.push('leaderboard');
+      }
+    } else if (leaderboard) {
+      console.log('✅ Leaderboard stats exist');
+    }
+    
+    console.log(`✅ Data completeness check finished. Created: ${results.created.join(', ')}`);
+    if (results.failed.length > 0) {
+      console.log(`⚠️ Failed to create: ${results.failed.join(', ')}`);
+    }
+    
+    return results;
     
   } catch (error) {
-    console.error('Error ensuring data completeness:', error);
-    return {
-      success: false,
-      error: error.message
-    };
+    console.error('❌ Error checking user data completeness:', error);
+    return { success: false, error: error.message, created: [], failed: [] };
   }
 }
 

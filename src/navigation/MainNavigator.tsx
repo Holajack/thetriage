@@ -3,6 +3,7 @@ import { createDrawerNavigator, DrawerContentScrollView, DrawerItem } from '@rea
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
+import { useNavigation, CommonActions } from '@react-navigation/native';
 
 // Import screens directly 
 import HomeScreen from '../screens/main/HomeScreen';
@@ -14,8 +15,12 @@ import LeaderboardScreen from '../screens/main/LeaderboardScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
 import SettingsScreen from '../screens/main/SettingsScreen';
 import SubscriptionScreen from '../screens/main/SubscriptionScreen';
+import ProTrekkerScreen from '../screens/main/ProTrekkerScreen';
 import SessionHistoryScreen from '../screens/main/SessionHistoryScreen';
 import PDFViewerScreen from '../screens/main/PDFViewerScreen';
+import AIIntegrationScreen from '../screens/main/AIIntegrationScreen';
+import FocusPreparationScreen from '../screens/main/FocusPreparationScreen';
+import { StudySessionScreen } from '../screens/main/StudySessionScreen';
 
 // Hidden screens accessible through Bonuses
 import EBooksScreen from '../screens/main/EBooksScreen';
@@ -37,6 +42,40 @@ const Drawer = createDrawerNavigator();
 function CustomDrawerContent(props: any) {
   const { signOut, user } = useAuth();
   const navigation = props.navigation;
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      // Navigate to Landing page after successful logout
+      // We need to navigate to the root level, not just within the drawer
+      const rootNavigation = navigation.getParent();
+      if (rootNavigation) {
+        rootNavigation.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: 'Landing' }],
+          })
+        );
+      } else {
+        // Fallback if we can't get the parent navigator
+        navigation.navigate('Landing' as never);
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Even if signOut fails, try to navigate to Landing
+      const rootNavigation = navigation.getParent();
+      if (rootNavigation) {
+        rootNavigation.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: 'Landing' }],
+          })
+        );
+      } else {
+        navigation.navigate('Landing' as never);
+      }
+    }
+  };
   
   return (
     <DrawerContentScrollView {...props} contentContainerStyle={{ flex: 1, backgroundColor: '#FFF' }}>
@@ -118,7 +157,7 @@ function CustomDrawerContent(props: any) {
       <DrawerItem
         label="Logout"
         icon={({ color, size }) => <Ionicons name="log-out-outline" size={size} color="#ff4444" />}
-        onPress={signOut}
+        onPress={handleLogout}
         labelStyle={{ color: '#ff4444', fontWeight: 'bold' }}
         style={{ marginBottom: 16 }}
       />
@@ -157,7 +196,13 @@ export const MainNavigator = () => {
       drawerContent={props => <CustomDrawerContent {...props} />}
     >
       {/* Main screens - use the existing header with drawer toggle */}
-      <Drawer.Screen name="Home" component={HomeScreen} />
+      <Drawer.Screen 
+        name="Home" 
+        component={HomeScreen} 
+        options={{ 
+          headerShown: false // Hide header for full screen design
+        }} 
+      />
       <Drawer.Screen name="Community" component={CommunityScreen} />
       <Drawer.Screen 
         name="NoraScreen" 
@@ -174,6 +219,15 @@ export const MainNavigator = () => {
       <Drawer.Screen name="Settings" component={SettingsScreen} />
       <Drawer.Screen name="SessionHistory" component={SessionHistoryScreen} options={{ title: 'Session History' }} />
       <Drawer.Screen name="Subscription" component={SubscriptionScreen} />
+      <Drawer.Screen
+        name="ProTrekker"
+        component={ProTrekkerScreen}
+        options={{
+          drawerItemStyle: { display: 'none' },
+          headerShown: false,
+          title: 'Become Pro Trekker'
+        }}
+      />
       <Drawer.Screen 
         name="PDFViewer" 
         component={PDFViewerScreen} 
@@ -254,6 +308,34 @@ export const MainNavigator = () => {
         options={{ 
           drawerItemStyle: { display: 'none' }, // Hide from drawer
           title: 'Preferences'
+        }} 
+      />
+      
+      {/* Focus and Session screens - hidden from drawer */}
+      <Drawer.Screen 
+        name="FocusPreparation" 
+        component={FocusPreparationScreen} 
+        options={{ 
+          drawerItemStyle: { display: 'none' }, // Hide from drawer
+          headerShown: false // Let screen handle its own header
+        }} 
+      />
+      <Drawer.Screen 
+        name="StudySessionScreen" 
+        component={StudySessionScreen} 
+        options={{ 
+          drawerItemStyle: { display: 'none' }, // Hide from drawer
+          headerShown: false // Let screen handle its own header
+        }} 
+      />
+
+      {/* Settings sub-screens - hidden from drawer */}
+      <Drawer.Screen 
+        name="AIIntegration" 
+        component={AIIntegrationScreen} 
+        options={{ 
+          drawerItemStyle: { display: 'none' }, // Hide from drawer
+          title: 'AI Integration'
         }} 
       />
     </Drawer.Navigator>

@@ -6,9 +6,16 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useSupabaseFriends, useSupabaseStudyRooms } from '../../utils/supabaseHooks';
 import { supabase } from '../../utils/supabase';
+import * as FriendService from '../../utils/friendRequestService';
+import * as MessageService from '../../utils/messagingService';
+import * as StudyRoomService from '../../utils/studyRoomService';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { useTheme } from '../../context/ThemeContext';
+import FriendRequestNotification from '../../components/FriendRequestNotification';
+import MessageNotification from '../../components/MessageNotification';
+import StudyRoomInvitations from '../../components/StudyRoomInvitations';
+import { BottomTabBar } from '../../components/BottomTabBar';
 
 const TABS = ['Friends', 'Messages', 'All Users', 'Study Rooms'];
 const MOCK_FRIENDS = [
@@ -123,6 +130,15 @@ const CommunityScreen = () => {
   const [userConversations, setUserConversations] = useState<any[]>([]);
   const { theme } = useTheme();
   const [networkStatus, setNetworkStatus] = useState<'online' | 'offline' | 'slow'>('online');
+  const [incomingFriendRequests, setIncomingFriendRequests] = useState<FriendService.FriendRequest[]>([]);
+  const [outgoingFriendRequests, setOutgoingFriendRequests] = useState<FriendService.FriendRequest[]>([]);
+  const [friendsList, setFriendsList] = useState<FriendService.Friend[]>([]);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
+  const [showFriendRequestNotification, setShowFriendRequestNotification] = useState(false);
+  const [showMessageNotification, setShowMessageNotification] = useState(false);
+  const [showStudyRoomInvitations, setShowStudyRoomInvitations] = useState(false);
+  const [pendingStudyRoomInvitations, setPendingStudyRoomInvitations] = useState<StudyRoomService.StudyRoomInvitation[]>([]);
 
   // Helper for faded primary color
   const fadedPrimary = theme.primary + '22'; // 13% opacity hex fallback
@@ -136,6 +152,60 @@ const CommunityScreen = () => {
     };
     fetchUserAndSession();
   }, []);
+
+  // Load friend requests and friends data
+  const loadFriendsData = async () => {
+    if (!currentUser) return;
+
+    try {
+      // Load incoming friend requests
+      const incomingResult = await FriendService.getPendingFriendRequests();
+      if (incomingResult.success) {
+        setIncomingFriendRequests(incomingResult.data || []);
+        // Don't automatically show notification - let user control when to view
+      }
+
+      // Load outgoing friend requests
+      const outgoingResult = await FriendService.getSentFriendRequests();
+      if (outgoingResult.success) {
+        setOutgoingFriendRequests(outgoingResult.data || []);
+      }
+
+      // Load friends list
+      const friendsResult = await FriendService.getFriendsList();
+      if (friendsResult.success) {
+        setFriendsList(friendsResult.data || []);
+      }
+
+      // Load unread message count
+      const unreadResult = await MessageService.getUnreadMessageCount();
+      if (unreadResult.success) {
+        setUnreadMessageCount(unreadResult.count || 0);
+        // Show message notification if there are unread messages
+        if ((unreadResult.count || 0) > 0) {
+          setShowMessageNotification(true);
+        }
+      }
+
+      // Load study room invitations
+      const invitationsResult = await StudyRoomService.getPendingStudyRoomInvitations();
+      if (invitationsResult.success) {
+        setPendingStudyRoomInvitations(invitationsResult.data || []);
+        // Show study room invitations if there are pending invitations
+        if ((invitationsResult.data || []).length > 0) {
+          setShowStudyRoomInvitations(true);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading friends data:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (currentUser) {
+      loadFriendsData();
+    }
+  }, [currentUser]);
 
   // Fetch user conversations with last messages
   useEffect(() => {
@@ -425,45 +495,34 @@ const CommunityScreen = () => {
     }
     
     try {
-      // 1. Insert new room
-      const { data: roomData, error: roomError } = await supabase
-        .from('study_rooms')
-        .insert([{
-          name: newRoomName.trim(),
-          topic: newTopic.trim(),
-          description: newDescription.trim(),
-          schedule: newSchedule.trim(),
-          duration: newDuration.trim(),
-          creator_id: currentUser.id,
-          max_participants: Number(participantLimit) || 5,
-          current_participants: 1
-        }])
-        .select()
-        .single();
+      const result = await StudyRoomService.createStudyRoom({
+        name: newRoomName.trim(),
+        description: newDescription.trim(),
+        subject: newTopic.trim(),
+        max_participants: Number(participantLimit) || 5,
+        session_duration: 25,
+        break_duration: 5,
+        is_public: true
+      });
 
-      if (roomError) throw roomError;
+      if (result.success && result.data) {
+        // Reset form and close modal
+        setNewRoomName('');
+        setNewTopic('');
+        setNewDescription('');
+        setNewSchedule('');
+        setNewDuration('');
+        setParticipantLimit('5');
+        setShowCreateModal(false);
 
-      // 2. Add creator as participant
-      const { error: participantError } = await supabase
-        .from('study_room_participants')
-        .insert([{
-          room_id: roomData.id,
-          user_id: currentUser.id
-        }]);
-
-      if (participantError) throw participantError;
-
-      // 3. Reset form and close modal
-      setNewRoomName('');
-      setNewTopic('');
-      setNewDescription('');
-      setNewSchedule('');
-      setNewDuration('');
-      setParticipantLimit('5');
-      setShowCreateModal(false);
-
-      // 4. Navigate to the new room
-      navigation.navigate('StudyRoomScreen', { room: roomData });
+        // Navigate to the new room
+        navigation.navigate('StudyRoomScreen', { room: result.data });
+        
+        // Refresh study rooms list
+        loadUserStudyRooms();
+      } else {
+        Alert.alert('Error', result.error || 'Failed to create study room');
+      }
     } catch (error: any) {
       console.error('Error creating study room:', error);
       Alert.alert('Error', 'Failed to create study room. Please try again.');
@@ -475,56 +534,23 @@ const CommunityScreen = () => {
     if (!currentUser) return;
 
     try {
-      // 1. Check if user is already a participant
-      const { data: existingParticipant, error: checkError } = await supabase
-        .from('study_room_participants')
-        .select('*')
-        .eq('room_id', room.id)
-        .eq('user_id', currentUser.id)
-        .single();
-
-      if (checkError && checkError.code !== 'PGRST116') {
-        // PGRST116 means no rows found, which is what we want
-        throw checkError;
+      const result = await StudyRoomService.joinStudyRoom(room.id);
+      
+      if (result.success) {
+        navigation.navigate('StudyRoomScreen', { room: result.data || room });
+        // Refresh study rooms list
+        loadUserStudyRooms();
+      } else {
+        if (result.error === 'You are already in this study room') {
+          // User is already in the room, just navigate to it
+          navigation.navigate('StudyRoomScreen', { room });
+        } else {
+          Alert.alert('Error', result.error || 'Failed to join study room');
+        }
       }
-
-      if (existingParticipant) {
-        // User is already in the room, just navigate to it
-        navigation.navigate('StudyRoomScreen', { room });
-        return;
-      }
-
-      // 2. Add user as participant
-      const { error: participantError } = await supabase
-        .from('study_room_participants')
-        .insert([{
-          room_id: room.id,
-          user_id: currentUser.id
-        }]);
-
-      if (participantError) throw participantError;
-
-      // 3. Update participant count
-      const { error: updateError } = await supabase
-        .from('study_rooms')
-        .update({ current_participants: room.current_participants + 1 })
-        .eq('id', room.id);
-
-      if (updateError) throw updateError;
-
-      // 4. Navigate to room
-      navigation.navigate('StudyRoomScreen', { room });
     } catch (error: any) {
       console.error('Error joining study room:', error);
-      
-      // Handle specific error cases
-      if (error.code === '23505') {
-        // Duplicate key error - user already in room
-        navigation.navigate('StudyRoomScreen', { room });
-      } else {
-        // Show generic error to user
-        Alert.alert('Error', 'Failed to join study room. Please try again.');
-      }
+      Alert.alert('Error', 'Failed to join study room. Please try again.');
     }
   };
 
@@ -568,95 +594,78 @@ const CommunityScreen = () => {
       // Add to pending state immediately for UI feedback
       setPendingFriendRequestIds(prev => [...prev, friendId]);
 
-      // Check network connectivity first
-      try {
-        await withTimeout(
-          supabase.from('profiles').select('count').limit(1),
-          3000
-        );
-      } catch (connError) {
-        throw new Error('Network connection failed. Please check your internet connection.');
-      }
-
-      // Check if request already exists
-      console.log('🔍 Checking for existing friend request...');
-      let existingCheck;
-      try {
-        existingCheck = await fetchWithRetry(async () => {
-          return await supabase
-            .from('friend_requests')
-            .select('id, status')
-            .or(`and(sender_id.eq.${currentUser.id},recipient_id.eq.${friendId}),and(sender_id.eq.${friendId},recipient_id.eq.${currentUser.id})`)
-            .maybeSingle();
-        }, 2);
-
-        if (existingCheck.data) {
-          Alert.alert('Info', 'Friend request already exists');
-          setPendingFriendRequestIds(prev => prev.filter(id => id !== friendId));
-          return;
-        }
-      } catch (checkError) {
-        console.log('⚠️ Could not check existing requests, proceeding anyway');
-      }
-
-      // Send friend request
-      console.log('📤 Sending friend request...');
-      await fetchWithRetry(async () => {
-        const { error: requestError } = await supabase
-          .from('friend_requests')
-          .insert({
-            sender_id: currentUser.id,
-            recipient_id: friendId,
-            status: 'pending',
-            created_at: new Date().toISOString()
-          });
-
-        if (requestError) throw requestError;
-        return { error: null };
-      }, 2);
-
-      // Also add to friends table
-      console.log('👥 Adding to friends table...');
-      await fetchWithRetry(async () => {
-        const { error: friendError } = await supabase
-          .from('friends')
-          .insert({
-            user_id: currentUser.id,
-            friend_id: friendId,
-            status: 'pending',
-            created_at: new Date().toISOString()
-          });
-
-        if (friendError) throw friendError;
-        return { error: null };
-      }, 2);
-
-      Alert.alert('Success', 'Friend request sent!');
-      console.log('✅ Friend request sent successfully');
-
-      // Refresh data after successful operation
-      setTimeout(() => {
-        refreshData();
-      }, 1000);
-
-    } catch (err: any) {
-      console.error('❌ Friend request failed:', err);
+      // Use the new friend service
+      const result = await FriendService.sendFriendRequest(friendId);
       
-      // Remove from pending state
+      if (result.success) {
+        Alert.alert('Success', 'Friend request sent!');
+        // Refresh the data
+        await loadFriendsData();
+      } else {
+        // Remove from pending state on error
+        setPendingFriendRequestIds(prev => prev.filter(id => id !== friendId));
+        Alert.alert('Error', result.error || 'Failed to send friend request');
+      }
+    } catch (error: any) {
+      // Remove from pending state on error
       setPendingFriendRequestIds(prev => prev.filter(id => id !== friendId));
+      console.error('Error sending friend request:', error);
+      Alert.alert('Error', 'Failed to send friend request');
+    }
+  };
+
+  // Handler for accepting friend requests
+  const handleAcceptFriendRequest = async (requestId: string) => {
+    try {
+      const result = await FriendService.respondToFriendRequest(requestId, 'accepted');
       
-      // Show user-friendly error message
-      let errorMessage = 'Failed to send friend request. Please try again.';
-      
-      if (err.message.includes('Network connection failed') || err.message.includes('check your internet')) {
-        errorMessage = err.message;
-      } else if (err.message.includes('timeout') || err.message.includes('Request timeout')) {
-        errorMessage = 'Request timed out. Please check your internet connection and try again.';
-      } else if (err.message.includes('Network request failed')) {
-        errorMessage = 'Network error. Please check your internet connection and try again.';
+      if (result.success) {
+        Alert.alert('Success', 'Friend request accepted!');
+        await loadFriendsData();
+      } else {
+        Alert.alert('Error', result.error || 'Failed to accept friend request');
       }
+    } catch (error) {
+      console.error('Error accepting friend request:', error);
+      Alert.alert('Error', 'Failed to accept friend request');
+    }
+  };
+
+  // Handler for declining friend requests
+  const handleDeclineFriendRequest = async (requestId: string) => {
+    try {
+      const result = await FriendService.respondToFriendRequest(requestId, 'declined');
       
-      Alert.alert('Network Error', errorMessage);
+      if (result.success) {
+        Alert.alert('Success', 'Friend request declined');
+        await loadFriendsData();
+      } else {
+        Alert.alert('Error', result.error || 'Failed to decline friend request');
+      }
+    } catch (error) {
+      console.error('Error declining friend request:', error);
+      Alert.alert('Error', 'Failed to decline friend request');
+    }
+  };
+
+  // Handler for searching users
+  const handleSearchUsers = async (query: string) => {
+    if (query.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    try {
+      const result = await FriendService.searchUsers(query.trim());
+      if (result.success) {
+        setSearchResults(result.data || []);
+      } else {
+        console.error('Search error:', result.error);
+        setSearchResults([]);
+      }
+    } catch (error) {
+      console.error('Error searching users:', error);
+      setSearchResults([]);
     }
   };
 
@@ -717,74 +726,16 @@ const CommunityScreen = () => {
     }
   }, [roomsData]);
 
+  // Load user's study rooms - now handled by useSupabaseStudyRooms hook
+  const loadUserStudyRooms = async () => {
+    // This function is kept for compatibility but the actual loading 
+    // is handled by the useSupabaseStudyRooms hook and the useEffect above
+    console.log('Study rooms loading handled by hook');
+  };
+
   // Fetch user's study rooms
   useEffect(() => {
-    const fetchUserStudyRooms = async () => {
-      if (!currentUser) return;
-      
-      try {
-        // Fetch rooms where user is a participant - use specific relationship name
-        const { data: participations, error: partError } = await supabase
-          .from('study_room_participants')
-          .select(`
-            room_id,
-            study_rooms!fk_study_room_participants_rooms (
-              id,
-              name,
-              description,
-              topic,
-              current_participants,
-              max_participants,
-              creator_id,
-              created_at,
-              creator:creator_id (
-                id,
-                full_name,
-                username,
-                email
-              )
-            )
-          `)
-          .eq('user_id', currentUser.id);
-
-        if (partError) throw partError;
-
-        // Extract rooms from participations - flatten the structure properly
-        const rooms = participations?.map(p => p.study_rooms).filter(Boolean).flat() || [];
-        
-        // Also fetch rooms created by the user
-        const { data: createdRooms, error: createError } = await supabase
-          .from('study_rooms')
-          .select(`
-            *,
-            creator:creator_id (
-              id,
-              full_name,
-              username,
-              email
-            )
-          `)
-          .eq('creator_id', currentUser.id);
-
-        if (createError) throw createError;
-
-        // Combine and deduplicate rooms
-        const allRooms = [...rooms];
-        if (createdRooms && Array.isArray(createdRooms)) {
-          createdRooms.forEach(room => {
-            if (!allRooms.find(r => r.id === room.id)) {
-              allRooms.push(room);
-            }
-          });
-        }
-
-        setStudyRooms(allRooms);
-      } catch (err) {
-        console.error('Error fetching study rooms:', err);
-      }
-    };
-
-    fetchUserStudyRooms();
+    loadUserStudyRooms();
   }, [currentUser]);
 
   // Filter users based on search
@@ -984,9 +935,21 @@ const CommunityScreen = () => {
     <View style={{ flex: 1 }}>
       <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.background }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <SafeAreaView style={styles.container}>
-          {/* Remove the header section entirely */}
-          
-          {/* Search Bar - move up to replace header */}
+          {/* Header with X button and Title */}
+          <View style={[styles.navHeader, { backgroundColor: theme.background }]}>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => navigation.navigate('Home')}
+            >
+              <View style={[styles.closeButtonCircle, { backgroundColor: theme.text + '20' }]}>
+                <Ionicons name="close" size={24} color={theme.text} />
+              </View>
+            </TouchableOpacity>
+            <Text style={[styles.navHeaderTitle, { color: theme.text }]}>Traveller</Text>
+            <View style={styles.headerSpacer} />
+          </View>
+
+          {/* Search Bar with Friend Request Button */}
           <View style={[styles.searchContainer, { backgroundColor: theme.card, marginTop: 20 }]}>
             <Ionicons name="search" size={20} color={theme.primary} style={{ marginRight: 6 }} />
             <TextInput
@@ -996,6 +959,18 @@ const CommunityScreen = () => {
               value={search}
               onChangeText={setSearch}
             />
+            {/* Friend Request Button */}
+            {incomingFriendRequests.length > 0 && (
+              <TouchableOpacity
+                style={styles.friendRequestButton}
+                onPress={() => setShowFriendRequestNotification(!showFriendRequestNotification)}
+              >
+                <Ionicons name="person-add" size={20} color={theme.primary} />
+                <View style={[styles.badge, { backgroundColor: theme.primary }]}>
+                  <Text style={styles.badgeText}>{incomingFriendRequests.length}</Text>
+                </View>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Tab Navigation */}
@@ -1436,12 +1411,35 @@ const CommunityScreen = () => {
           </Text>
         </View>
       )}
+
+      {/* Friend Request Notification */}
+      <FriendRequestNotification
+        visible={showFriendRequestNotification}
+        onClose={() => setShowFriendRequestNotification(false)}
+        onUpdate={loadFriendsData}
+      />
+
+      {/* Message Notification */}
+      <MessageNotification
+        visible={showMessageNotification}
+        onClose={() => setShowMessageNotification(false)}
+      />
+
+      {/* Study Room Invitations */}
+      <StudyRoomInvitations
+        visible={showStudyRoomInvitations}
+        onClose={() => setShowStudyRoomInvitations(false)}
+        onUpdate={loadFriendsData}
+      />
+
+      {/* Bottom Tab Bar */}
+      <BottomTabBar currentRoute="Community" />
     </View>
   );
 };
 
 // Timeout wrapper for network requests
-const withTimeout = <T>(
+const withTimeout = <T extends any>(
   promise: Promise<T>,
   timeoutMs: number = 10000
 ): Promise<T> => {
@@ -1455,11 +1453,37 @@ const withTimeout = <T>(
 
 // Add the missing styles to your existing styles object:
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1 
+  container: {
+    flex: 1
   },
-  header: { 
-    paddingHorizontal: 20, 
+  navHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 10,
+  },
+  closeButton: {
+    padding: 4,
+  },
+  closeButtonCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navHeaderTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  headerSpacer: {
+    width: 48,
+  },
+  header: {
+    paddingHorizontal: 20,
     paddingTop: 20, // Reduced padding
     paddingBottom: 16,
     borderBottomWidth: 1,
@@ -2003,6 +2027,28 @@ const styles = StyleSheet.create({
     color: '#F57C00',
     fontWeight: '600',
     marginLeft: 2,
+  },
+  
+  // Friend request button and badge
+  friendRequestButton: {
+    position: 'relative',
+    padding: 8,
+    marginLeft: 8,
+  },
+  badge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   
   // ...rest of existing styles...

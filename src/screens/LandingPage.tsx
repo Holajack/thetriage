@@ -10,10 +10,12 @@ import {
   SafeAreaView,
   Image
 } from 'react-native';
+import { ThemedImage } from '../components/ThemedImage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import type { RootStackParamList } from '../navigation/types';
 
 type LandingNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Landing'>;
@@ -22,10 +24,11 @@ const { width, height } = Dimensions.get('window');
 
 const TriageLogo = ({ style }: { style?: any }) => (
   <View style={[styles.logoContainer, style]}>
-    <Image 
+    <ThemedImage 
       source={require('../assets/transparent-triage.png')} 
       style={styles.logoImage}
       resizeMode="contain"
+      applyFilter={true}
     />
   </View>
 );
@@ -33,6 +36,7 @@ const TriageLogo = ({ style }: { style?: any }) => (
 const LandingPage: React.FC = () => {
   const navigation = useNavigation<LandingNavigationProp>();
   const { setHasSeenLanding, isAuthenticated, hasCompletedOnboarding, isRecentLogin } = useAuth();
+  const { theme } = useTheme();
   const logoOpacity = useRef(new Animated.Value(0)).current;
   const logoScale = useRef(new Animated.Value(0.8)).current;
   const titleOpacity = useRef(new Animated.Value(0)).current;
@@ -132,13 +136,24 @@ const LandingPage: React.FC = () => {
     navigation.navigate('Auth', { screen: 'Login' });
   };
 
+  // Dynamic colors based on theme
+  const gradientColors = theme.isDark 
+    ? ['#000000', '#1a1a1a', '#2a2a2a', '#1a1a1a']
+    : ['#0F2419', '#1B4A3A', '#2E5D4F', '#1B4A3A'];
+  
+  const textColor = theme.isDark ? theme.text : '#E8F5E9';
+  const secondaryTextColor = theme.isDark ? theme.textSecondary : '#B8E6C1';
+  const buttonGradientColors = theme.isDark
+    ? [theme.primary, theme.secondary || theme.primary, theme.primary]
+    : ['#4CAF50', '#66BB6A', '#4CAF50'];
+
   return (
     <LinearGradient
-      colors={['#0F2419', '#1B4A3A', '#2E5D4F', '#1B4A3A']}
+      colors={gradientColors}
       locations={[0, 0.3, 0.7, 1]}
       style={styles.container}
     >
-      <StatusBar barStyle="light-content" backgroundColor="#1B4A3A" />
+      <StatusBar barStyle="light-content" backgroundColor={theme.isDark ? '#000000' : '#1B4A3A'} />
       
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.content}>
@@ -162,8 +177,8 @@ const LandingPage: React.FC = () => {
               { opacity: titleOpacity },
             ]}
           >
-            <Text style={styles.title}>TRIAGE</Text>
-            <Text style={styles.subtitle}>SYSTEM</Text>
+            <Text style={[styles.title, { color: textColor }]}>TRIAGE</Text>
+            <Text style={[styles.subtitle, { color: textColor }]}>SYSTEM</Text>
           </Animated.View>
 
           {/* Tagline Section */}
@@ -173,8 +188,8 @@ const LandingPage: React.FC = () => {
               { opacity: taglineOpacity },
             ]}
           >
-            <Text style={styles.tagline}>Focus Starts Here</Text>
-            <Text style={styles.description}>
+            <Text style={[styles.tagline, { color: textColor }]}>Focus Starts Here</Text>
+            <Text style={[styles.description, { color: secondaryTextColor }]}>
               Transform your study sessions with focused learning and community support
             </Text>
           </Animated.View>
@@ -195,7 +210,7 @@ const LandingPage: React.FC = () => {
               activeOpacity={0.8}
             >
               <LinearGradient
-                colors={['#4CAF50', '#66BB6A', '#4CAF50']}
+                colors={buttonGradientColors}
                 locations={[0, 0.5, 1]}
                 style={styles.buttonGradient}
               >
@@ -204,11 +219,11 @@ const LandingPage: React.FC = () => {
             </TouchableOpacity>
 
             <TouchableOpacity 
-              style={styles.secondaryButton}
+              style={[styles.secondaryButton, { borderColor: textColor }]}
               onPress={handleSignIn}
               activeOpacity={0.7}
             >
-              <Text style={styles.secondaryButtonText}>Sign In</Text>
+              <Text style={[styles.secondaryButtonText, { color: textColor }]}>Sign In</Text>
             </TouchableOpacity>
           </Animated.View>
 
@@ -220,16 +235,16 @@ const LandingPage: React.FC = () => {
             ]}
           >
             <View style={styles.featureItem}>
-              <View style={styles.featureDot} />
-              <Text style={styles.featureText}>Study Room Collaboration</Text>
+              <View style={[styles.featureDot, { backgroundColor: theme.primary }]} />
+              <Text style={[styles.featureText, { color: secondaryTextColor }]}>Study Room Collaboration</Text>
             </View>
             <View style={styles.featureItem}>
-              <View style={styles.featureDot} />
-              <Text style={styles.featureText}>Focus Session Tracking</Text>
+              <View style={[styles.featureDot, { backgroundColor: theme.primary }]} />
+              <Text style={[styles.featureText, { color: secondaryTextColor }]}>Focus Session Tracking</Text>
             </View>
             <View style={styles.featureItem}>
-              <View style={styles.featureDot} />
-              <Text style={styles.featureText}>Community Leaderboards</Text>
+              <View style={[styles.featureDot, { backgroundColor: theme.primary }]} />
+              <Text style={[styles.featureText, { color: secondaryTextColor }]}>Community Leaderboards</Text>
             </View>
           </Animated.View>
         </View>
@@ -270,7 +285,6 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 42,
     fontWeight: '700',
-    color: '#E8F5E9',
     letterSpacing: 8,
     textAlign: 'center',
     marginBottom: 5,
@@ -278,7 +292,6 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 24,
     fontWeight: '300',
-    color: '#E8F5E9',
     letterSpacing: 6,
     textAlign: 'center',
   },
@@ -289,7 +302,6 @@ const styles = StyleSheet.create({
   },
   tagline: {
     fontSize: 24,
-    color: '#E8F5E9',
     fontWeight: '400',
     letterSpacing: 2,
     textAlign: 'center',
@@ -297,7 +309,6 @@ const styles = StyleSheet.create({
   },
   description: {
     fontSize: 16,
-    color: '#B8E6C1',
     fontWeight: '300',
     textAlign: 'center',
     lineHeight: 24,
@@ -335,11 +346,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 30,
     paddingVertical: 12,
     borderWidth: 1.5,
-    borderColor: '#E8F5E9',
     borderRadius: 25,
   },
   secondaryButtonText: {
-    color: '#E8F5E9',
     fontSize: 16,
     fontWeight: '500',
     letterSpacing: 0.5,
@@ -358,11 +367,9 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#4CAF50',
     marginRight: 12,
   },
   featureText: {
-    color: '#B8E6C1',
     fontSize: 14,
     fontWeight: '400',
   },

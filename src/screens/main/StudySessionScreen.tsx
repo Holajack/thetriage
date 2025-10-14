@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView, Alert, AppState, BackHandler } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView, Alert, AppState, BackHandler, ImageBackground, Animated, Image } from 'react-native';
+import { ThemedImage, ThemedImageBackground } from '../../components/ThemedImage';
+import Svg, { Rect, G, LinearGradient, Stop, Defs, Filter, FeOffset, FeGaussianBlur, FeColorMatrix, FeBlend, Ellipse, Circle, Line, Polygon, Text as SvgText, TSpan, Pattern, Path } from 'react-native-svg';
+import * as Haptics from 'expo-haptics';
+import { Gesture } from 'react-native-gesture-handler';
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
@@ -10,7 +14,9 @@ import { supabase } from '../../utils/supabase';
 import { useSupabaseFocusSession, Task } from '../../utils/supabaseHooks';
 import { useBackgroundMusic } from '../../hooks/useBackgroundMusic';
 import { getSoundPreference, getAutoPlaySetting } from '../../utils/musicPreferences';
+import { useTheme } from '../../context/ThemeContext';
 const { useUserAppData } = require('../../utils/userAppData');
+
 
 // Work Style Focus Durations (in seconds)
 const getWorkStyleDuration = (focusMethod?: string) => {
@@ -55,6 +61,8 @@ const TESTING_MODE = false; // Set to false for production
 const TEST_DURATION = 10; // 10 seconds for testing
 
 export const StudySessionScreen = () => {
+  const { theme } = useTheme();
+  const environmentColors = theme;
   const { data: userData } = useUserAppData();
   const { 
     startPlaylist,
@@ -449,6 +457,38 @@ export const StudySessionScreen = () => {
     }
   }, [sessionStarted, autoPlaySound, userSoundPreference, isPlaying, startPlaylist]);
 
+  // Auto-play music when entering the screen (before session starts)
+  useEffect(() => {
+    // Start music immediately when entering screen if user has music preference
+    if (userData && 
+        userSoundPreference && 
+        userSoundPreference !== 'Silence' && 
+        !isPlaying && 
+        !musicStartAttemptedRef.current) {
+      
+      console.log('🎵 Starting music on screen entry:', { 
+        userSoundPreference, 
+        isPlaying 
+      });
+      
+      musicStartAttemptedRef.current = true;
+      
+      const startMusicOnEntry = async () => {
+        try {
+          await startPlaylist(userSoundPreference);
+          console.log(`🎵 Successfully started ${userSoundPreference} playlist on screen entry`);
+        } catch (error) {
+          console.error('🎵 Failed to start music on screen entry:', error);
+          // Reset the flag on error so user can try again
+          musicStartAttemptedRef.current = false;
+        }
+      };
+      
+      // Small delay to ensure everything is loaded
+      setTimeout(startMusicOnEntry, 500);
+    }
+  }, [userData, userSoundPreference, isPlaying, startPlaylist]);
+
   // Remove the old handleModeSelection function and replace with this simplified version:
   const handleModeSelection = (mode: 'auto' | 'manual') => {
     setSelectionMode(mode);
@@ -659,17 +699,17 @@ export const StudySessionScreen = () => {
     }, [sessionStarted, timer])
   );
 
-  const handlePause = () => {
-    setIsPaused(prev => {
-      const newPaused = !prev;
-      if (newPaused) {
-        updateTimerFromBackground();
-      } else {
-        startTimeRef.current = Date.now();
-      }
-      return newPaused;
-    });
-  };
+  // const handlePause = () => {
+  //   setIsPaused(prev => {
+  //     const newPaused = !prev;
+  //     if (newPaused) {
+  //       updateTimerFromBackground();
+  //     } else {
+  //       startTimeRef.current = Date.now();
+  //     }
+  //     return newPaused;
+  //   });
+  // };
 
   const handleEndSession = () => {
     setIsPaused(true);
@@ -769,6 +809,7 @@ export const StudySessionScreen = () => {
     navigation.navigate('BreakTimerScreen', { sessionData });
   };
 
+
   const handleTimerCustomization = () => {
     if (selectionMode === 'manual') {
       setShowTimerCustomization(true);
@@ -789,119 +830,137 @@ export const StudySessionScreen = () => {
     }
   };
 
-  // Enhanced music rendering with full audio features
-  const renderMusicSettings = () => (
-    <View style={styles.musicSection}>
-      <View style={styles.musicHeader}>
-        <Text style={styles.sectionTitle}>Background Music</Text>
-        <View style={styles.musicControls}>
-          {isPlaying && (
-            <>
-              <TouchableOpacity onPress={previousTrack} style={styles.musicControlBtn}>
-                <Ionicons name="play-skip-back" size={20} color="#4CAF50" />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={pausePlayback} style={styles.musicControlBtn}>
-                <Ionicons name="pause" size={20} color="#E57373" />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={nextTrack} style={styles.musicControlBtn}>
-                <Ionicons name="play-skip-forward" size={20} color="#4CAF50" />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={stopPlayback} style={styles.stopButton}>
-                <Ionicons name="stop-circle" size={24} color="#E57373" />
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-      </View>
-      
-      <View style={styles.currentMusicDisplay}>
-        {!audioSupported ? (
-          <View style={styles.musicStatus}>
-            <Ionicons name="musical-notes-outline" size={16} color="#999" />
-            <Text style={styles.musicStatusText}>
-              Audio not available - install expo-av to enable music
-            </Text>
-          </View>
-        ) : currentTrack ? (
-          <View style={styles.musicStatus}>
-            <Ionicons name="musical-notes" size={16} color="#4CAF50" />
-            <View style={styles.trackInfo}>
-              <Text style={styles.musicStatusText}>
-                Now Playing: {currentTrack?.name || currentTrack?.title || 'Unknown Track'}
-              </Text>
-              <Text style={styles.playlistInfo}>
-                {currentTrack?.category} • Track {currentTrackIndex + 1} of {getCurrentPlaylistTracks().length}
-              </Text>
-            </View>
-            <Text style={styles.volumeText}>
-              Volume: {Math.round(volume * 100)}%
-            </Text>
-          </View>
-        ) : userSoundPreference && userSoundPreference !== 'Silence' ? (
-          <View style={styles.musicStatus}>
-            <Ionicons name="musical-notes-outline" size={16} color="#666" />
-            <Text style={styles.musicStatusText}>
-              Ready to play: {userSoundPreference}
-            </Text>
-            <Text style={styles.autoPlayStatus}>
-              {autoPlaySound ? 'Auto-play enabled' : 'Manual start required'}
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.musicStatus}>
-            <Ionicons name="volume-mute-outline" size={16} color="#999" />
-            <Text style={styles.musicStatusText}>
-              No music selected (Silence mode)
-            </Text>
-          </View>
-        )}
-        
-        {/* Manual Play Button - only show if auto-play is OFF or music isn't playing */}
-        {!autoPlaySound && !isPlaying && userSoundPreference !== 'Silence' && (
-          <TouchableOpacity 
-            onPress={async () => {
-              console.log(`🎵 Manual start playlist for: ${userSoundPreference}`);
-              try {
-                await startPlaylist(userSoundPreference);
-                console.log(`🎵 Successfully started ${userSoundPreference} playlist manually`);
-              } catch (error) {
-                console.error('🎵 Failed to start manual music:', error);
-                Alert.alert('Music Error', 'Unable to start music playback');
-              }
-            }}
-            style={styles.playButton}
-          >
-            <Ionicons name="play-circle-outline" size={20} color="#4CAF50" />
-            <Text style={styles.playButtonText}>Play Music</Text>
-          </TouchableOpacity>
-        )}
+  // Music controls are now integrated into the new UI design
 
-        {/* Volume Control */}
-        {isPlaying && (
-          <View style={styles.volumeControl}>
-            <Text style={styles.volumeLabel}>Volume</Text>
-            <View style={styles.volumeSliderContainer}>
-              <TouchableOpacity onPress={() => setVolume(Math.max(0, volume - 0.1))}>
-                <Ionicons name="volume-low" size={20} color="#666" />
-              </TouchableOpacity>
-              <View style={styles.volumeSlider}>
-                <View style={[styles.volumeTrack, { width: '100%' }]} />
-                <View style={[styles.volumeFill, { width: `${volume * 100}%` }]} />
-              </View>
-              <TouchableOpacity onPress={() => setVolume(Math.min(1, volume + 0.1))}>
-                <Ionicons name="volume-high" size={20} color="#666" />
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-      </View>
-    </View>
-  );
+  const [showMusicControls, setShowMusicControls] = useState(false);
+  const [showTaskInfo, setShowTaskInfo] = useState(false);
+  const [longPressTimeout, setLongPressTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [musicEnabled, setMusicEnabled] = useState(true);
+  
+  // Music control functions
+  const handlePlayPause = () => {
+    if (!audioSupported) {
+      return;
+    }
+    // If we already have a playlist, toggle pause/resume.
+    if (currentPlaylist && currentPlaylist.length > 0) {
+      pausePlayback();
+    } else {
+      // Otherwise start a playlist based on user preference, fallback to ambient.
+      const category = (userSoundPreference as any) || 'ambient';
+      startPlaylist(category);
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+  
+  const handleNextTrack = () => {
+    nextTrack();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+  
+  const handlePreviousTrack = () => {
+    previousTrack();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+  
+  // Bottom sheet animation refs
+  const bottomSheetTranslateY = useRef(new Animated.Value(400)).current;
+  const bottomSheetOpacity = useRef(new Animated.Value(0)).current;
+  
+  // Bottom sheet animation functions
+  const openMusicModal = () => {
+    console.log('🎵 Opening music modal...');
+    console.log('🔄 Starting animation...');
+    console.log('📏 Initial translateY:', bottomSheetTranslateY);
+    setShowMusicControls(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Animated.parallel([
+      Animated.timing(bottomSheetOpacity, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: false,
+      }),
+      Animated.spring(bottomSheetTranslateY, {
+        toValue: 0,
+        damping: 20,
+        stiffness: 90,
+        useNativeDriver: false,
+      }),
+    ]).start(() => {
+      console.log('🎵 Music modal animation complete');
+      console.log('✅ Animation finished successfully');
+    });
+  };
+  
+  const closeMusicModal = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Animated.parallel([
+      Animated.timing(bottomSheetOpacity, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: false,
+      }),
+      Animated.timing(bottomSheetTranslateY, {
+        toValue: 400,
+        duration: 250,
+        useNativeDriver: false,
+      }),
+    ]).start(() => {
+      setShowMusicControls(false);
+    });
+  };
+  
+  // Pan gesture for swipe-to-dismiss
+  const panGesture = Gesture.Pan()
+    .onChange((event) => {
+      if (event.translationY > 0) {
+        bottomSheetTranslateY.setValue(event.translationY);
+      }
+    })
+    .onEnd((event) => {
+      if (event.translationY > 100 || event.velocityY > 500) {
+        closeMusicModal();
+      } else {
+        Animated.spring(bottomSheetTranslateY, {
+          toValue: 0,
+          damping: 20,
+          stiffness: 90,
+          useNativeDriver: false,
+        }).start();
+      }
+    });
+
+  const handleLongPressStart = () => {
+    // Start one long continuous haptic feedback
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    
+    // Set timeout for modal
+    const timeout = setTimeout(() => {
+      // Final strong haptic for modal
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      setShowEndModal(true);
+    }, 800); // 800ms long press
+    setLongPressTimeout(timeout);
+  };
+
+  const handleLongPressEnd = () => {
+    if (longPressTimeout) {
+      clearTimeout(longPressTimeout);
+      setLongPressTimeout(null);
+    }
+  };
+
+  // const getCurrentModeText = () => {
+  //   if (selectionMode === 'manual') {
+  //     return 'Manual Mode - Choose task order';
+  //   }
+  //   return 'Automatic Mode - Tasks organized by priority';
+  // };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Pre-Session Selection Modal - Only for Manual/Custom Setup */}
-      <Modal visible={showPreSessionModal} transparent animationType="slide">
+        {/* Pre-Session Selection Modal - Only for Manual/Custom Setup */}
+        <Modal visible={showPreSessionModal} transparent animationType="slide">
         <View style={modalStyles.overlay}>
           <View style={[modalStyles.modalBox, { maxHeight: '85%' }]}>
             <ScrollView showsVerticalScrollIndicator={false}>
@@ -1072,164 +1131,403 @@ export const StudySessionScreen = () => {
         </View>
       </Modal>
 
-      {/* Rest of the component - timer interface */}
+      {/* New Focus Screen Layout - Full Screen Background */}
       {(sessionStarted || params?.autoStart) && (
         <>
-          {/* Timer Interface */}
-          <View style={styles.headerRow}>
-            <TouchableOpacity style={styles.iconBtn} onPress={handleBack}>
-              <Ionicons name="arrow-back" size={24} color="#222" />
+          <ThemedImageBackground 
+            source={require('../../../assets/nora-walking-cute.png')} 
+            style={styles.fullScreenBackgroundFixed}
+            resizeMode="cover"
+            applyFilter={true}
+          />
+          <View style={styles.newContainer}>
+
+          {/* Top Controls Bar - Matches IMG_0022.PNG */}
+          <View style={styles.topControlsBar}>
+            {/* Music Button (Top Left) */}
+            <TouchableOpacity 
+              style={[styles.musicButton, { backgroundColor: environmentColors.primary }]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                openMusicModal();
+              }}
+            >
+              <Ionicons name="musical-notes" size={24} color={environmentColors.card} />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>
-              {currentTask?.title || 'General Study'}
-            </Text>
-            <TouchableOpacity style={styles.iconBtn} onPress={handleTimerCustomization}>
-              <Ionicons name="settings-outline" size={24} color="#222" />
+
+            {/* Small Discrete Timer (Top Center) - Matches IMG_0022.PNG */}
+            <View style={styles.discreteTimerContainer}>
+              <Text style={styles.discreteTimerText}>{formatTime(timer)}</Text>
+            </View>
+
+            {/* Long-press End Session Button (Top Right) */}
+            <TouchableOpacity
+              style={[styles.endSessionButton, { backgroundColor: environmentColors.primary }]}
+              onPressIn={handleLongPressStart}
+              onPressOut={handleLongPressEnd}
+              onPress={() => {}} // Empty onPress to prevent accidental taps
+            >
+              <Ionicons name="checkmark" size={24} color={environmentColors.card} />
             </TouchableOpacity>
           </View>
 
-          {/* Session Type Banner */}
-          <View style={styles.sessionTypeBanner}>
-            <MaterialIcons 
-              name={selectionMode === 'manual' ? "tune" : "autorenew"} 
-              size={18} 
-              color="#4CAF50" 
-            />
-            <Text style={styles.sessionTypeText}>
-              {getSessionTypeDisplay()}
+          {/* Task Info Icon (Left Side, Further Down) */}
+          <TouchableOpacity 
+            style={[styles.taskInfoIcon, { backgroundColor: environmentColors.primary }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              setShowTaskInfo(true);
+            }}
+          >
+            <Ionicons name="information-circle-outline" size={28} color={environmentColors.card} />
+          </TouchableOpacity>
+
+          {/* Mode Notification for Full Screen */}
+          <View style={styles.modeNotificationFullScreen}>
+            <Text style={styles.modeNotificationFullScreenText}>
+              {selectionMode === 'manual' ? 'Manual Mode' : 'Auto Mode'}
             </Text>
-            {selectionMode === 'manual' && (
-              <Text style={styles.timerAdjustText}>Timer Adjustable</Text>
-            )}
           </View>
 
-          {/* Main Content */}
-          <View style={styles.container}>
-            {/* Timer */}
-            <View style={styles.timerBox}>
-              <Text style={styles.timerText}>{formatTime(timer)}</Text>
-              {selectedSubject && (
-                <Text style={styles.subjectText}>Subject: {selectedSubject}</Text>
-              )}
-            </View>
-
-            {/* Controls */}
-            <View style={styles.controlsRow}>
-              <TouchableOpacity style={styles.pauseBtn} onPress={handlePause}>
-                <Ionicons name={isPaused ? 'play' : 'pause'} size={22} color="#222" />
-                <Text style={styles.pauseBtnText}>{isPaused ? 'Resume' : 'Pause'}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.endBtn} onPress={handleEndSession}>
-                <Ionicons name="stop" size={22} color="#222" />
-                <Text style={styles.endBtnText}>End Session</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Enhanced Current Task Card with Real Data */}
-            <View style={styles.taskCard}>
-              {currentTask ? (
-                <>
-                  <Text style={styles.taskCardLabel}>
-                    {selectionMode === 'manual' ? 'Current Task (Custom Order)' : 'Auto-Selected Task (Highest Priority)'}
-                  </Text>
-                  <Text style={styles.taskTitle}>{currentTask.title}</Text>
-                  <Text style={styles.taskDescription}>
-                    {currentTask.description || 'No description provided'}
-                  </Text>
-                  
-                  {/* Task metadata */}
-                  <View style={styles.taskMeta}>
-                    <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor(currentTask.priority) }]}>
-                      <Text style={styles.priorityText}>{currentTask.priority || 'Medium'}</Text>
-                    </View>
-                    
-                    {currentTask.subtasks && currentTask.subtasks.length > 0 && (
-                      <View style={styles.subTaskBadge}>
-                        <MaterialIcons name="list" size={12} color="#2196F3" />
-                        <Text style={styles.subTaskText}>{currentTask.subtasks.length} subtasks</Text>
+          {/* Music Bottom Sheet Modal - Matches IMG_0025.PNG */}
+          <Modal 
+            visible={showMusicControls} 
+            transparent 
+            animationType="none"
+            onRequestClose={closeMusicModal}
+          >
+            <Animated.View 
+              style={[
+                {
+                  flex: 1,
+                  backgroundColor: 'rgba(0, 0, 0, 0.4)',
+                  justifyContent: 'flex-end',
+                },
+                { opacity: bottomSheetOpacity }
+              ]}
+            >
+              <TouchableOpacity 
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                }}
+                activeOpacity={1}
+                onPress={closeMusicModal}
+              />
+              <Animated.View
+                style={[
+                  modalStyles.musicBottomSheet,
+                  { 
+                    backgroundColor: environmentColors.card,
+                    height: '58%',
+                    width: '100%',
+                    position: 'absolute',
+                    bottom: 0,
+                    transform: [{ translateY: bottomSheetTranslateY }]
+                  }
+                ]}
+              >
+                <View style={{ flex: 1 }}>
+                      {/* Handle Bar */}
+                      <View style={[modalStyles.modalHandle, { backgroundColor: environmentColors.textSecondary }]} />
+                      
+                      {/* Focus Music Header - Condensed */}
+                      <View style={[modalStyles.focusMusicHeader, { marginBottom: 8 }]}>
+                        <Text style={[modalStyles.focusMusicTitle, { color: environmentColors.text, fontSize: 18 }]}>Focus Music</Text>
+                        <TouchableOpacity 
+                          style={[modalStyles.focusToggle, { backgroundColor: musicEnabled ? '#007AFF' : 'rgba(120, 120, 128, 0.16)' }]}
+                          onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            setMusicEnabled(!musicEnabled);
+                          }}
+                        >
+                          <View style={[modalStyles.toggleKnob, { 
+                            backgroundColor: '#FFFFFF',
+                            alignSelf: musicEnabled ? 'flex-end' : 'flex-start'
+                          }]} />
+                        </TouchableOpacity>
                       </View>
-                    )}
-                    
-                    {currentTask.due_date && (
-                      <View style={styles.dueDateBadge}>
-                        <MaterialIcons name="schedule" size={12} color="#F57C00" />
-                        <Text style={styles.dueDateText}>
-                          Due: {new Date(currentTask.due_date).toLocaleDateString()}
-                        </Text>
+
+                      {/* Interactive Walkman UI - Condensed */}
+                      <View style={[modalStyles.musicPlayerSection, { backgroundColor: 'transparent', padding: 0, marginBottom: 8, width: '100%', height: 220 }]}>
+                        <Svg width="100%" height="100%" viewBox="0 0 1280 680" preserveAspectRatio="xMidYMin meet" style={{ backgroundColor: 'transparent' }}>
+                          <Defs>
+                            <LinearGradient id="bodyGrad" x1="0" y1="0" x2="0" y2="1">
+                              <Stop offset="0%" stopColor="#efe7d8"/>
+                              <Stop offset="100%" stopColor="#e7dcc6"/>
+                            </LinearGradient>
+                            <LinearGradient id="bevel" x1="0" y1="0" x2="1" y2="1">
+                              <Stop offset="0%" stopColor="#ffffff" stopOpacity="0.7"/>
+                              <Stop offset="100%" stopColor="#c7b99f" stopOpacity="0.4"/>
+                            </LinearGradient>
+                            <LinearGradient id="glass" x1="0" y1="0" x2="1" y2="1">
+                              <Stop offset="0%" stopColor="#ffffff" stopOpacity="0.35"/>
+                              <Stop offset="100%" stopColor="#cfd6df" stopOpacity="0.15"/>
+                            </LinearGradient>
+                            <Pattern id="microStripes" width="6" height="6" patternUnits="userSpaceOnUse">
+                              <Rect width="6" height="6" fill="none"/>
+                              <Rect width="6" height="1" y="0" fill="#e9dfcc" opacity="0.6"/>
+                              <Rect width="6" height="1" y="3" fill="#e9dfcc" opacity="0.4"/>
+                            </Pattern>
+                          </Defs>
+
+                          <G id="device">
+                            {/* Base body */}
+                            <Rect x="30" y="30" width="1220" height="700" rx="56" ry="56" fill="url(#bodyGrad)" stroke="#d1c2a7" strokeWidth="5"/>
+                            <Rect x="30" y="30" width="1220" height="700" rx="56" ry="56" fill="url(#microStripes)" opacity="0.35"/>
+
+                            {/* Right-side volume wheel */}
+                            <G transform="translate(1230,380)">
+                              <Ellipse rx="18" ry="90" fill="#b49f82" stroke="#8f7d63" strokeWidth="3"/>
+                              <G fill="#8f7d63" opacity="0.6">
+                                <Rect x="-20" y="-80" width="4" height="12"/>
+                                <Rect x="-20" y="-60" width="4" height="12"/>
+                                <Rect x="-20" y="-40" width="4" height="12"/>
+                                <Rect x="-20" y="-20" width="4" height="12"/>
+                                <Rect x="-20" y="0" width="4" height="12"/>
+                                <Rect x="-20" y="20" width="4" height="12"/>
+                                <Rect x="-20" y="40" width="4" height="12"/>
+                                <Rect x="-20" y="60" width="4" height="12"/>
+                              </G>
+                            </G>
+
+                            {/* Top details: jack & HOLD slider */}
+                            <G transform="translate(180,30)">
+                              <Circle cx="0" cy="0" r="16" fill="#7c8b98" stroke="#5a6a76" strokeWidth="3"/>
+                              <Circle cx="0" cy="0" r="7" fill="#1a1f24"/>
+                              <SvgText x="-38" y="-12" fontSize="18" fill="#6a6460" fontFamily="ui-monospace, Menlo, Consolas, monospace">PHONES</SvgText>
+                              
+                              <G transform="translate(200,-8)">
+                                <Rect x="0" y="0" width="180" height="30" rx="10" ry="10" fill="#d7dfe6" stroke="#aeb9c3" strokeWidth="3"/>
+                                <Rect x="14" y="5" width="42" height="20" rx="8" fill="#9fb6c8" stroke="#7c92a3" strokeWidth="2"/>
+                                <SvgText x="64" y="21" fontSize="18" fill="#6a6460" fontFamily="ui-monospace, Menlo, Consolas, monospace">HOLD</SvgText>
+                              </G>
+                            </G>
+
+                            {/* Branding badge */}
+                            <G transform="translate(980,70)">
+                              <Rect width="240" height="44" rx="10" fill="#2f3b48"/>
+                              <SvgText x="120" y="30" textAnchor="middle" fontSize="16" fontWeight="700" letterSpacing="0.18em" fill="#eae6df">HIKE•WISE</SvgText>
+                            </G>
+
+                            {/* Album art window */}
+                            <G>
+                              <Rect x="100" y="220" width="360" height="340" rx="28" ry="28" fill="#cfd9e3" stroke="#a7b3bf" strokeWidth="6"/>
+                              <Rect x="110" y="230" width="340" height="320" rx="22" ry="22" fill="#dde6ec" stroke="#b7c2cc" strokeWidth="5"/>
+                              <Path d="M110,230 h340 v50 l-320,0 z" fill="url(#glass)" opacity="0.7"/>
+                              
+                              {/* Album art placeholder */}
+                              <G transform="translate(120,240)" opacity="0.3">
+                                <Rect width="320" height="300" rx="18" fill="#4CAF50"/>
+                                <Circle cx="160" cy="150" r="60" fill="#FFFFFF" opacity="0.8"/>
+                                <SvgText x="160" y="165" textAnchor="middle" fontSize="48" fill="#4CAF50" fontWeight="bold">♪</SvgText>
+                              </G>
+                            </G>
+
+                            {/* Right information screen */}
+                            <G>
+                              <Rect x="500" y="150" width="700" height="320" rx="26" ry="26" fill="#edf2f7" stroke="#c0cad4" strokeWidth="5"/>
+                              
+                              {/* Top grille */}
+                              <G transform="translate(530,172)" fill="#cad4de">
+                                <Rect width="66" height="16" rx="7"/>
+                                <Rect x="86" width="132" height="16" rx="7"/>
+                                <Rect x="238" width="200" height="16" rx="7"/>
+                              </G>
+                              
+                              <Line x1="520" y1="214" x2="1180" y2="214" stroke="#9aa9b8" strokeWidth="2" opacity="0.6"/>
+                              
+                              {/* Dynamic title */}
+                              <SvgText x="520" y="274" fontSize="48" fontWeight="800" letterSpacing="1px" fill="#2a3a4a">
+                                Hike Wise Focus
+                              </SvgText>
+                              
+                              <Line x1="520" y1="300" x2="1180" y2="300" stroke="#9aa9b8" strokeWidth="2" opacity="0.6"/>
+                              
+                              {/* Dynamic subtitle */}
+                              <SvgText x="520" y="352" fontSize="32" opacity="0.9" fill="#2a3a4a">
+                                {currentTrack?.title || 'No track selected'}
+                              </SvgText>
+
+                              {/* Power LED */}
+                              <Circle cx="1188" cy="164" r="8" fill={isPlaying ? "#36d736" : "#2c3e50"} stroke="#aab6c1" strokeWidth="3"/>
+                            </G>
+
+                            {/* Speaker grill */}
+                            <G transform="translate(100,580)">
+                              <Rect width="260" height="80" rx="14" fill="#d8e0e6" stroke="#b3bec8" strokeWidth="4"/>
+                              <G fill="#8fa1af" opacity="0.9">
+                                <Circle cx="30" cy="26" r="4"/><Circle cx="62" cy="26" r="4"/><Circle cx="94" cy="26" r="4"/><Circle cx="126" cy="26" r="4"/><Circle cx="158" cy="26" r="4"/><Circle cx="190" cy="26" r="4"/><Circle cx="222" cy="26" r="4"/>
+                                <Circle cx="30" cy="50" r="4"/><Circle cx="62" cy="50" r="4"/><Circle cx="94" cy="50" r="4"/><Circle cx="126" cy="50" r="4"/><Circle cx="158" cy="50" r="4"/><Circle cx="190" cy="50" r="4"/><Circle cx="222" cy="50" r="4"/>
+                                <Circle cx="30" cy="74" r="4"/><Circle cx="62" cy="74" r="4"/><Circle cx="94" cy="74" r="4"/><Circle cx="126" cy="74" r="4"/><Circle cx="158" cy="74" r="4"/><Circle cx="190" cy="74" r="4"/><Circle cx="222" cy="74" r="4"/>
+                              </G>
+                            </G>
+
+                            {/* Control buttons - Repositioned for better visibility */}
+                            {/* Previous button (icon_prev.svg) */}
+                            <G transform="translate(520,490)">
+                              <Rect width="140" height="100" rx="20" ry="20" fill="#ffffff" stroke="#465a6b" strokeWidth="4" onPress={handlePreviousTrack}/>
+                              {/* Previous track icon - matches icon_prev.svg */}
+                              <G transform="translate(22,12)" fill="#465a6b">
+                                <Polygon points="52,20 52,76 20,48" />
+                                <Rect x="64" y="20" width="8" height="56" rx="2" />
+                              </G>
+                            </G>
+
+                            {/* Play/Pause button (icon_play.svg / icon_pause.svg) */}
+                            <G transform="translate(740,490)">
+                              <Rect width="140" height="100" rx="20" ry="20" fill="#ffffff" stroke="#465a6b" strokeWidth="4" onPress={handlePlayPause}/>
+                              {/* Play/Pause icon - matches SVG files */}
+                              <G transform="translate(22,12)" fill="#465a6b">
+                                {isPlaying ? (
+                                  <G>
+                                    <Rect x="30" y="18" width="14" height="60" rx="3" />
+                                    <Rect x="52" y="18" width="14" height="60" rx="3" />
+                                  </G>
+                                ) : (
+                                  <Polygon points="34,18 34,78 76,48" />
+                                )}
+                              </G>
+                            </G>
+
+                            {/* Next button (icon_next.svg) */}
+                            <G transform="translate(960,490)">
+                              <Rect width="140" height="100" rx="20" ry="20" fill="#ffffff" stroke="#465a6b" strokeWidth="4" onPress={handleNextTrack}/>
+                              {/* Next track icon - matches icon_next.svg */}
+                              <G transform="translate(22,12)" fill="#465a6b">
+                                <Polygon points="44,20 44,76 76,48" />
+                                <Rect x="24" y="20" width="8" height="56" rx="2" />
+                              </G>
+                            </G>
+                          </G>
+                        </Svg>
                       </View>
-                    )}
-                    
-                    <Text style={styles.timeRemaining}>
-                      {formatTime(timer)} remaining
-                    </Text>
-                  </View>
-                  
-                  {/* Show subtasks if available */}
-                  {currentTask.subtasks && currentTask.subtasks.length > 0 && (
-                    <View style={styles.subtasksList}>
-                      <Text style={styles.subtasksTitle}>Subtasks ({currentTask.subtasks.length}):</Text>
-                      {currentTask.subtasks.slice(0, 3).map((subtask: any, index: number) => (
-                        <View key={subtask.id || index} style={styles.subtaskItem}>
-                          <Ionicons 
-                            name={subtask.completed ? "checkmark-circle" : "ellipse-outline"} 
-                            size={16} 
-                            color={subtask.completed ? "#4CAF50" : "#666"} 
-                          />
-                          <Text style={[
-                            styles.subtaskText, 
-                            subtask.completed && styles.subtaskCompleted
-                          ]}>
-                            {subtask.title || subtask.text}
-                          </Text>
+
+                      {/* Compact Music Services - Condensed */}
+                      <View style={[modalStyles.musicServicesSection, { marginBottom: 8 }]}>
+                        <TouchableOpacity style={[modalStyles.musicServiceOption, { paddingVertical: 8 }]}>
+                          <Ionicons name="musical-notes" size={18} color={environmentColors.text} />
+                          <Text style={[modalStyles.serviceOptionText, { color: environmentColors.text, fontSize: 12 }]}>Default Music</Text>
+                          <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity style={[modalStyles.musicServiceOption, { paddingVertical: 8 }]}>
+                          <Ionicons name="logo-apple" size={18} color={environmentColors.text} />
+                          <Text style={[modalStyles.serviceOptionText, { color: environmentColors.text, fontSize: 12 }]}>Apple Music</Text>
+                          <TouchableOpacity style={[modalStyles.connectButton, { backgroundColor: '#007AFF', paddingHorizontal: 8, paddingVertical: 4 }]}>
+                            <Text style={[modalStyles.connectButtonText, { color: '#FFFFFF', fontSize: 10 }]}>Connect</Text>
+                          </TouchableOpacity>
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity style={[modalStyles.musicServiceOption, { paddingVertical: 8 }]}>
+                          <Text style={{ fontSize: 18, color: '#1DB954' }}>♪</Text>
+                          <Text style={[modalStyles.serviceOptionText, { color: environmentColors.text, fontSize: 12 }]}>Spotify</Text>
+                          <TouchableOpacity style={[modalStyles.installButton, { backgroundColor: '#1DB954', paddingHorizontal: 8, paddingVertical: 4 }]}>
+                            <Text style={[modalStyles.installButtonText, { color: '#FFFFFF', fontSize: 10 }]}>Install</Text>
+                          </TouchableOpacity>
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* Compact Environment Sounds - Condensed */}
+                      <View style={[modalStyles.environmentSoundsContainer, { gap: 6 }]}>
+                        <TouchableOpacity style={[modalStyles.environmentSoundBtn, { alignItems: 'center', padding: 6 }]}>
+                          <Ionicons name="leaf" size={20} color="#4CAF50" />
+                          <Text style={[modalStyles.environmentSoundLabel, { color: environmentColors.textSecondary, fontSize: 9 }]}>Forest</Text>
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity style={[modalStyles.environmentSoundBtn, { alignItems: 'center', padding: 6 }]}>
+                          <Ionicons name="rainy" size={20} color="#2196F3" />
+                          <Text style={[modalStyles.environmentSoundLabel, { color: environmentColors.textSecondary, fontSize: 9 }]}>Rain</Text>
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity style={[modalStyles.environmentSoundBtn, { alignItems: 'center', padding: 6 }]}>
+                          <Ionicons name="radio" size={20} color="#9E9E9E" />
+                          <Text style={[modalStyles.environmentSoundLabel, { color: environmentColors.textSecondary, fontSize: 9 }]}>Noise</Text>
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity style={[modalStyles.environmentSoundBtn, { alignItems: 'center', padding: 6 }]}>
+                          <Ionicons name="flower" size={20} color="#9C27B0" />
+                          <Text style={[modalStyles.environmentSoundLabel, { color: environmentColors.textSecondary, fontSize: 9 }]}>Zen</Text>
+                        </TouchableOpacity>
+                      </View>
+                </View>
+              </Animated.View>
+            </Animated.View>
+          </Modal>
+
+          {/* Task Information Overlay */}
+          <Modal visible={showTaskInfo} transparent animationType="slide">
+            <View style={styles.taskInfoOverlay}>
+              <View style={styles.taskInfoContainer}>
+                <View style={styles.taskInfoHeader}>
+                  <Text style={styles.taskInfoTitle}>Task Details</Text>
+                  <TouchableOpacity onPress={() => setShowTaskInfo(false)}>
+                    <Ionicons name="close" size={24} color="#333" />
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView style={styles.taskInfoContent}>
+                  {currentTask ? (
+                    <>
+                      <Text style={styles.taskInfoTaskTitle}>{currentTask.title}</Text>
+                      <Text style={styles.taskInfoDescription}>
+                        {currentTask.description || 'No description available'}
+                      </Text>
+                      
+                      <View style={styles.taskInfoMeta}>
+                        <View style={[styles.taskInfoPriorityBadge, { backgroundColor: getPriorityColor(currentTask.priority) }]}>
+                          <Text style={styles.taskInfoPriorityText}>{currentTask.priority}</Text>
                         </View>
-                      ))}
-                      {currentTask.subtasks.length > 3 && (
-                        <Text style={styles.moreSubtasks}>
-                          +{currentTask.subtasks.length - 3} more subtasks
-                        </Text>
-                      )}
-                    </View>
-                  )}
-                  
-                  {selectionMode === 'auto' && (
-                    <View style={styles.selectionReason}>
-                      <MaterialIcons name="auto-awesome" size={14} color="#4CAF50" />
-                      <Text style={styles.selectionReasonText}>
-                        Auto-selected: {currentTask.priority} priority, {currentTask.subtasks?.length || 0} subtasks
-                        {currentTask.due_date && ', due soon'}
-                      </Text>
-                    </View>
-                  )}
-                  
-                  {/* Show remaining tasks in manual mode */}
-                  {selectionMode === 'manual' && taskOrder.length > 1 && (
-                    <View style={styles.remainingTasks}>
-                      <Text style={styles.remainingTasksLabel}>
-                        Next Tasks: {taskOrder.slice(1).map(t => t.title).join(', ')}
-                      </Text>
-                    </View>
-                  )}
-                </>
-              ) : (
-                <>
-                  <Text style={styles.taskCardLabel}>General Study Session</Text>
-                  <Text style={styles.taskTitle}>No Active Tasks Found</Text>
-                  <Text style={styles.taskDescription}>
-                    Focus on your studies without a specific task assignment.
-                  </Text>
-                  <View style={styles.generalStudyHint}>
-                    <MaterialIcons name="lightbulb-outline" size={16} color="#F57C00" />
-                    <Text style={styles.generalStudyHintText}>
-                      Create tasks on the Home screen to get automatic task selection based on priority, due dates, and complexity.
-                    </Text>
-                  </View>
-                </>
-              )}
-            </View>
+                        
+                        {currentTask.due_date && (
+                          <Text style={styles.taskInfoDueDate}>
+                            Due: {new Date(currentTask.due_date).toLocaleDateString()}
+                          </Text>
+                        )}
+                      </View>
 
-            {/* Enhanced Music Selection Section - Only in Manual Mode */}
-            {selectionMode === 'manual' && renderMusicSettings()}
-          </View>
+                      {currentTask.subtasks && currentTask.subtasks.length > 0 && (
+                        <View style={styles.taskInfoSubtasks}>
+                          <Text style={styles.taskInfoSubtasksTitle}>
+                            Subtasks ({currentTask.subtasks.length}):
+                          </Text>
+                          {currentTask.subtasks.map((subtask: any, index: number) => (
+                            <View key={index} style={styles.taskInfoSubtaskItem}>
+                              <Ionicons 
+                                name={subtask.completed ? "checkmark-circle" : "ellipse-outline"} 
+                                size={16} 
+                                color={subtask.completed ? "#4CAF50" : "#666"} 
+                              />
+                              <Text style={styles.taskInfoSubtaskText}>
+                                {subtask.title || subtask.text}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+
+                      <View style={styles.taskInfoSession}>
+                        <Text style={styles.taskInfoSessionTitle}>Session Info:</Text>
+                        <Text style={styles.taskInfoSessionText}>Subject: {selectedSubject}</Text>
+                        <Text style={styles.taskInfoSessionText}>Mode: {selectionMode === 'manual' ? 'Manual' : 'Automatic'}</Text>
+                        <Text style={styles.taskInfoSessionText}>Time Remaining: {formatTime(timer)}</Text>
+                      </View>
+                    </>
+                  ) : (
+                    <View style={styles.taskInfoEmpty}>
+                      <Text style={styles.taskInfoEmptyTitle}>General Study Session</Text>
+                      <Text style={styles.taskInfoEmptyText}>
+                        No specific task selected. Focus on your general studies.
+                      </Text>
+                    </View>
+                  )}
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
 
           {/* Timer Customization Modal - Only available in manual mode */}
           <Modal visible={showTimerCustomization} transparent animationType="slide">
@@ -1402,6 +1700,7 @@ export const StudySessionScreen = () => {
               </View>
             </View>
           </Modal>
+        </View>
         </>
       )}
     </SafeAreaView>
@@ -1409,7 +1708,7 @@ export const StudySessionScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F8FCF8' },
+  safeArea: { flex: 1, backgroundColor: 'transparent', zIndex: 1 },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
   iconBtn: { padding: 4 },
   headerTitle: { fontSize: 22, fontWeight: 'bold', color: '#4CAF50', flex: 1, textAlign: 'center' },
@@ -1553,10 +1852,6 @@ const styles = StyleSheet.create({
   },
   
   // Missing styles for music controls
-  trackInfo: {
-    flex: 1,
-    marginLeft: 8,
-  },
   volumeText: {
     fontSize: 12,
     color: '#666',
@@ -1620,6 +1915,389 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginTop: 4,
     marginLeft: 24,
+  },
+
+  // New Focus Screen Styles (IMG_0022.PNG Layout)
+  newContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  absoluteFullScreen: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    zIndex: 0,
+  },
+  fullScreenBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+  },
+  fullScreenBackgroundFixed: {
+    position: 'absolute',
+    top: -100,
+    left: 0,
+    right: 0,
+    bottom: -100,
+    width: '100%',
+    height: '120%',
+    zIndex: -1,
+  },
+  backgroundImageContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+  },
+  topControlsBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 50,
+    paddingBottom: 10,
+  },
+  musicButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modeNotification: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  modeNotificationText: {
+    fontSize: 12,
+    color: '#2E7D32',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  endSessionButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  discreteTimerContainer: {
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  discreteTimerText: {
+    fontSize: 16,
+    color: '#fff',
+    fontWeight: '600',
+    letterSpacing: 1,
+  },
+  taskInfoIcon: {
+    position: 'absolute',
+    left: 30,
+    bottom: 120,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modeNotificationFullScreen: {
+    position: 'absolute',
+    top: 120,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  modeNotificationFullScreenText: {
+    fontSize: 12,
+    color: '#fff',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  timerSection: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 50,
+  },
+  timerCircle: {
+    width: 250,
+    height: 250,
+    borderRadius: 125,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 8,
+    marginBottom: 30,
+  },
+  newTimerText: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: '#2E7D32',
+    letterSpacing: 2,
+  },
+  newSubjectText: {
+    fontSize: 16,
+    color: '#4CAF50',
+    marginTop: 8,
+    fontWeight: '600',
+  },
+  pauseResumeButton: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  taskInfoButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+    alignSelf: 'center',
+    marginBottom: 30,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  taskInfoButtonText: {
+    fontSize: 14,
+    color: '#2E7D32',
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  
+  // Music Controls Overlay
+  musicControlsOverlay: {
+    position: 'absolute',
+    top: 100,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(46, 125, 50, 0.95)',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  musicControlsContainer: {
+    alignItems: 'center',
+  },
+  musicControlsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 10,
+  },
+  currentTrackText: {
+    fontSize: 14,
+    color: '#fff',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  musicButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 20,
+    marginBottom: 15,
+  },
+  musicControlButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeMusicButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 15,
+  },
+  closeMusicButtonText: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '600',
+  },
+
+  // Task Info Modal Styles
+  taskInfoOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'flex-end',
+  },
+  taskInfoContainer: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
+    paddingBottom: 20,
+  },
+  taskInfoHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  taskInfoTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  taskInfoContent: {
+    padding: 20,
+  },
+  taskInfoTaskTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2E7D32',
+    marginBottom: 10,
+  },
+  taskInfoDescription: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 15,
+    lineHeight: 22,
+  },
+  taskInfoMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+    gap: 10,
+  },
+  taskInfoPriorityBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 15,
+  },
+  taskInfoPriorityText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  taskInfoDueDate: {
+    fontSize: 14,
+    color: '#F57C00',
+    fontWeight: '600',
+  },
+  taskInfoSubtasks: {
+    marginBottom: 20,
+  },
+  taskInfoSubtasksTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 10,
+  },
+  taskInfoSubtaskItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  taskInfoSubtaskText: {
+    fontSize: 14,
+    color: '#333',
+    marginLeft: 10,
+    flex: 1,
+  },
+  taskInfoSession: {
+    backgroundColor: '#F5F5F5',
+    padding: 15,
+    borderRadius: 10,
+  },
+  taskInfoSessionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 10,
+  },
+  taskInfoSessionText: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 5,
+  },
+  taskInfoEmpty: {
+    alignItems: 'center',
+    padding: 40,
+  },
+  taskInfoEmptyTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 10,
+  },
+  taskInfoEmptyText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 22,
   },
 });
 
@@ -2116,10 +2794,6 @@ const modalStyles = StyleSheet.create({
     borderColor: '#E0E0E0',
     marginTop: 12,
   },
-  trackInfo: {
-    flex: 1,
-    marginLeft: 8,
-  },
   volumeControl: {
     marginTop: 12,
     alignItems: 'center',
@@ -2200,35 +2874,205 @@ const modalStyles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
   },
-  
-  // Common modal styles
-  modalTitle: { 
-    fontSize: 22, 
-    fontWeight: 'bold', 
-    color: '#1B5E20',
-    textAlign: 'center',
+
+  // Music Bottom Sheet Modal Styles - Matches IMG_0025.PNG
+  musicModalOverlay: {
     flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'flex-end',
   },
-  modalDesc: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
+  overlayTouchable: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  musicBottomSheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 50,
+    maxHeight: '85%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 15,
+  },
+  modalHandle: {
+    width: 50,
+    height: 5,
+    borderRadius: 3,
+    alignSelf: 'center',
     marginBottom: 24,
-    lineHeight: 24,
+    opacity: 0.7,
   },
-  closeBtn: { 
-    padding: 8,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 20,
+  focusMusicHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
   },
-  iconCircle: {
+  focusMusicTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+  },
+  focusToggle: {
+    width: 54,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    paddingHorizontal: 3,
+  },
+  toggleKnob: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  musicPlayerSection: {
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+  },
+  albumSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  albumArt: {
     width: 80,
     height: 80,
-    borderRadius: 40,
-    backgroundColor: '#E8F5E9',
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    alignSelf: 'center',
-    marginBottom: 20,
+    marginRight: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  trackInfo: {
+    flex: 1,
+  },
+  trackTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  trackSubtitle: {
+    fontSize: 15,
+    opacity: 0.8,
+  },
+  playerControls: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 24,
+    marginBottom: 16,
+  },
+  playerBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  trackProgressBar: {
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  trackProgress: {
+    height: '100%',
+    width: '35%',
+    borderRadius: 3,
+  },
+  musicServicesSection: {
+    marginBottom: 24,
+  },
+  musicServiceOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 18,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.08)',
+  },
+  serviceOptionText: {
+    fontSize: 17,
+    fontWeight: '500',
+    flex: 1,
+    marginLeft: 16,
+  },
+  connectButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  connectButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  installButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  installButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  environmentSoundsTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 16,
+    textAlign: 'left',
+  },
+  environmentSoundsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+  },
+  environmentSoundBtn: {
+    width: 70,
+    height: 70,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 5,
+    elevation: 5,
+  },
+  environmentSoundLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 4,
+    textAlign: 'center',
   },
 });

@@ -11,6 +11,7 @@ export type OnboardingStackParamList = {
   FocusMethodIntro: undefined;
   AccountCreation: { focusMethod?: string } | undefined;
   ProfileCreation: { focusMethod?: string; email?: string } | undefined;
+  StudyPreferences: { focusMethod?: string } | undefined;
   PrivacySettings: { focusMethod?: string } | undefined;
   AppTutorial: { focusMethod?: string } | undefined;
 };
@@ -133,6 +134,8 @@ export type MainTabParamList = {
   BrainMapping: undefined;
   Quizzes: undefined;
   SessionReport: undefined;
+  ProTrekker: undefined;
+  Subscription: undefined;
 };
 
 export type MessageContact = {

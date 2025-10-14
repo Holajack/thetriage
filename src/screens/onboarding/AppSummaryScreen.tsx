@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, CommonActions, useRoute, RouteProp } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { OnboardingStackParamList, RootStackParamList } from '../../navigation/types';
 
@@ -53,7 +54,8 @@ const APP_FEATURES: AppFeature[] = [
 export default function AppSummaryScreen() {
   const navigation = useNavigation<AppSummaryNavigationProp>();
   const route = useRoute<AppSummaryRouteProp>();
-  const { updateOnboarding, setHasCompletedOnboarding } = useAuth();
+  const { updateOnboarding, setHasCompletedOnboarding, user } = useAuth();
+  const { theme } = useTheme();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
@@ -78,13 +80,20 @@ export default function AppSummaryScreen() {
 
   const handleComplete = async () => {
     try {
+      console.log('🎯 Completing onboarding from AppSummary with focus method:', focusMethod);
+      
       await updateOnboarding({ 
         is_onboarding_complete: true,
-        focus_method: focusMethod 
+        focus_method: focusMethod,
+        welcome_completed: true,
+        goals_set: true,
+        profile_customized: true,
+        completed_at: new Date().toISOString()
       });
       
       // Update local state immediately
       setHasCompletedOnboarding(true);
+      console.log('✅ Onboarding completed successfully from AppSummary');
       
       // Show welcome modal first
       setShowWelcomeModal(true);
@@ -107,7 +116,30 @@ export default function AppSummaryScreen() {
       
     } catch (error) {
       console.error('AppSummaryScreen: Error completing onboarding:', error);
-      // Still show welcome modal even if database update fails
+      
+      // Try a fallback approach - directly update the database
+      try {
+        console.log('🔄 Attempting fallback onboarding completion from AppSummary...');
+        const { supabase } = await import('../../utils/supabase');
+        
+        if (user?.id) {
+          await supabase
+            .from('onboarding_preferences')
+            .upsert({
+              user_id: user.id,
+              is_onboarding_complete: true,
+              focus_method: focusMethod,
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'user_id' });
+          
+          console.log('✅ Fallback onboarding completion successful from AppSummary');
+        }
+      } catch (fallbackError) {
+        console.error('❌ Fallback onboarding completion also failed:', fallbackError);
+      }
+      
+      // Still update local state and show welcome modal
+      setHasCompletedOnboarding(true);
       setShowWelcomeModal(true);
     }
   };
@@ -125,20 +157,20 @@ export default function AppSummaryScreen() {
   };
 
   const renderFeature = (feature: AppFeature) => (
-    <View key={feature.id} style={styles.featureCard}>
+    <View key={feature.id} style={[styles.featureCard, { backgroundColor: theme.isDark ? theme.card : 'rgba(255, 255, 255, 0.05)' }]}>
       <View style={[styles.featureIcon, { backgroundColor: feature.color + '20' }]}>
         <Ionicons name={feature.icon} size={24} color={feature.color} />
       </View>
       <View style={styles.featureContent}>
-        <Text style={styles.featureTitle}>{feature.title}</Text>
-        <Text style={styles.featureDescription}>{feature.description}</Text>
+        <Text style={[styles.featureTitle, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>{feature.title}</Text>
+        <Text style={[styles.featureDescription, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>{feature.description}</Text>
       </View>
     </View>
   );
 
   return (
     <LinearGradient
-      colors={['#0F2419', '#1B4A3A', '#2E5D4F', '#1B4A3A']}
+      colors={theme.isDark ? ['#000000', '#1a1a1a', '#2a2a2a', '#1a1a1a'] : ['#0F2419', '#1B4A3A', '#2E5D4F', '#1B4A3A']}
       locations={[0, 0.3, 0.7, 1]}
       style={styles.container}
     >
@@ -146,12 +178,12 @@ export default function AppSummaryScreen() {
         <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
           <View style={styles.header}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-              <Ionicons name="arrow-back" size={24} color="#E8F5E9" />
+              <Ionicons name="arrow-back" size={24} color={theme.isDark ? theme.text : '#E8F5E9'} />
             </TouchableOpacity>
             <View style={styles.headerTextContainer}>
-              <Text style={styles.headerTitle}>You're All Set!</Text>
-              <Text style={styles.headerSubtitle}>
-                Step 5 of 5 • Ready to transform your study experience
+              <Text style={[styles.headerTitle, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>You're All Set!</Text>
+              <Text style={[styles.headerSubtitle, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>
+                Step 6 of 6 • Ready to transform your study experience
               </Text>
             </View>
             <View style={{ width: 24 }} />
@@ -166,43 +198,43 @@ export default function AppSummaryScreen() {
               <View style={styles.welcomeIcon}>
                 <Ionicons name="school-outline" size={40} color="#4CAF50" />
               </View>
-              <Text style={styles.welcomeTitle}>Welcome to The Triage System</Text>
-              <Text style={styles.welcomeText}>
+              <Text style={[styles.welcomeTitle, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>Welcome to The Triage System</Text>
+              <Text style={[styles.welcomeText, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>
                 Your personalized study companion designed to maximize focus, productivity, and learning outcomes through proven techniques and AI-powered insights.
               </Text>
             </View>
 
             <View style={styles.featuresSection}>
-              <Text style={styles.sectionTitle}>What You Can Do</Text>
+              <Text style={[styles.sectionTitle, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>What You Can Do</Text>
               {APP_FEATURES.map(renderFeature)}
             </View>
 
             <View style={styles.howToSection}>
-              <Text style={styles.sectionTitle}>How to Get Started</Text>
+              <Text style={[styles.sectionTitle, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>How to Get Started</Text>
               <View style={styles.stepsList}>
                 <View style={styles.stepItem}>
                   <View style={styles.stepNumber}>
                     <Text style={styles.stepNumberText}>1</Text>
                   </View>
-                  <Text style={styles.stepText}>Tap the "Home" tab to access your study dashboard</Text>
+                  <Text style={[styles.stepText, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>Tap the "Home" tab to access your study dashboard</Text>
                 </View>
                 <View style={styles.stepItem}>
                   <View style={styles.stepNumber}>
                     <Text style={styles.stepNumberText}>2</Text>
                   </View>
-                  <Text style={styles.stepText}>Start your first focus session with your chosen method</Text>
+                  <Text style={[styles.stepText, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>Start your first focus session with your chosen method</Text>
                 </View>
                 <View style={styles.stepItem}>
                   <View style={styles.stepNumber}>
                     <Text style={styles.stepNumberText}>3</Text>
                   </View>
-                  <Text style={styles.stepText}>Explore the community and connect with other students</Text>
+                  <Text style={[styles.stepText, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>Explore the community and connect with other students</Text>
                 </View>
                 <View style={styles.stepItem}>
                   <View style={styles.stepNumber}>
                     <Text style={styles.stepNumberText}>4</Text>
                   </View>
-                  <Text style={styles.stepText}>Check your progress and celebrate your achievements</Text>
+                  <Text style={[styles.stepText, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>Check your progress and celebrate your achievements</Text>
                 </View>
               </View>
             </View>
@@ -225,6 +257,7 @@ export default function AppSummaryScreen() {
               <View style={[styles.progressDot, styles.progressDotCompleted]} />
               <View style={[styles.progressDot, styles.progressDotCompleted]} />
               <View style={[styles.progressDot, styles.progressDotCompleted]} />
+              <View style={[styles.progressDot, styles.progressDotCompleted]} />
               <View style={[styles.progressDot, styles.progressDotActive]} />
             </View>
           </View>
@@ -239,7 +272,7 @@ export default function AppSummaryScreen() {
         onRequestClose={() => setShowWelcomeModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { backgroundColor: theme.isDark ? theme.card : '#1B4A3A' }]}>
             {/* Confetti Animation */}
             <Animated.View 
               style={[
@@ -264,14 +297,14 @@ export default function AppSummaryScreen() {
               <Ionicons name="star-outline" size={50} color="#FFD700" />
             </View>
             
-            <Text style={styles.modalTitle}>Welcome, Beta Tester!</Text>
-            <Text style={styles.modalSubtitle}>Thank you for being part of our journey</Text>
+            <Text style={[styles.modalTitle, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>Welcome, Beta Tester!</Text>
+            <Text style={[styles.modalSubtitle, { color: theme.isDark ? '#FFD700' : '#FFD700' }]}>Thank you for being part of our journey</Text>
             
-            <Text style={styles.modalText}>
+            <Text style={[styles.modalText, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>
               You're among the first to experience The Triage System. Your feedback and usage will help us create a world-class study app that empowers students everywhere.
             </Text>
             
-            <Text style={styles.modalText}>
+            <Text style={[styles.modalText, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>
               We're excited to have you on board as we build something amazing together! 🚀
             </Text>
             
@@ -312,13 +345,11 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#E8F5E9',
     textAlign: 'center',
     marginBottom: 8,
   },
   headerSubtitle: {
     fontSize: 16,
-    color: '#B8E6C1',
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -337,13 +368,11 @@ const styles = StyleSheet.create({
   welcomeTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#E8F5E9',
     textAlign: 'center',
     marginBottom: 12,
   },
   welcomeText: {
     fontSize: 16,
-    color: '#B8E6C1',
     textAlign: 'center',
     lineHeight: 24,
     paddingHorizontal: 10,
@@ -354,12 +383,10 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#E8F5E9',
     marginBottom: 16,
   },
   featureCard: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
@@ -379,12 +406,10 @@ const styles = StyleSheet.create({
   featureTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#E8F5E9',
     marginBottom: 4,
   },
   featureDescription: {
     fontSize: 14,
-    color: '#B8E6C1',
     lineHeight: 20,
   },
   howToSection: {
@@ -415,7 +440,6 @@ const styles = StyleSheet.create({
   stepText: {
     flex: 1,
     fontSize: 15,
-    color: '#B8E6C1',
     lineHeight: 22,
   },
   bottomContainer: {
@@ -469,7 +493,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   modalContent: {
-    backgroundColor: '#1B4A3A',
     borderRadius: 20,
     padding: 30,
     alignItems: 'center',
@@ -496,7 +519,6 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#E8F5E9',
     textAlign: 'center',
     marginBottom: 8,
   },
@@ -509,7 +531,6 @@ const styles = StyleSheet.create({
   },
   modalText: {
     fontSize: 16,
-    color: '#B8E6C1',
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 16,

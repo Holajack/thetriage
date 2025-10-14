@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Animated, Alert, Modal, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -51,46 +51,105 @@ const NoraScreen = () => {
   const { theme } = useTheme();
   const navigation = useNavigation();
   
-  const handleNewChat = () => {
+  const handleNewChat = useCallback(() => {
+    console.log('NoraScreen: Starting new chat - clearing current state');
     setChat([]);
     setInput('');
     setShowLandingScreen(true);
     setSelectedMode(null);
     setSelectedPdf(null);
-  };
+    setIsFirstLoad(false); // Don't show loading screen for new chat
+    setIsLoading(false); // Clear any loading state
+    console.log('NoraScreen: New chat initialized');
+  }, []);
 
   // Configure header
   useEffect(() => {
     navigation.setOptions({
       title: 'Nora Assistant',
       headerShown: true,
+      headerStyle: {
+        backgroundColor: theme.surface,
+        elevation: 0,
+        shadowOpacity: 0,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(123, 97, 255, 0.1)',
+      },
+      headerTitleStyle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: theme.text,
+      },
+      headerTintColor: theme.text,
       headerLeft: () => (
         <TouchableOpacity 
           onPress={() => navigation.navigate('Home' as never)} 
-          style={{ marginLeft: 16 }}
+          activeOpacity={0.7}
+          style={{
+            marginLeft: 16,
+            padding: 8,
+            borderRadius: 8,
+            backgroundColor: 'rgba(123, 97, 255, 0.1)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            borderWidth: 1,
+            borderColor: 'rgba(123, 97, 255, 0.2)',
+          }}
         >
-          <Ionicons name="arrow-back" size={24} color={theme.primary} />
+          <Ionicons name="arrow-back" size={20} color={theme.primary} />
         </TouchableOpacity>
       ),
       headerRight: () => (
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 8 }}>
           <TouchableOpacity 
             onPress={() => navigation.navigate('Settings' as never)}
-            style={{ marginRight: 8 }}
+            activeOpacity={0.7}
+            style={{
+              marginRight: 8,
+              padding: 8,
+              borderRadius: 8,
+              backgroundColor: 'rgba(123, 97, 255, 0.1)',
+              justifyContent: 'center',
+              alignItems: 'center',
+              borderWidth: 1,
+              borderColor: 'rgba(123, 97, 255, 0.2)',
+            }}
           >
-            <Ionicons name="help-circle-outline" size={24} color={theme.primary} />
+            <Ionicons name="help-circle-outline" size={20} color={theme.primary} />
           </TouchableOpacity>
           <TouchableOpacity 
             onPress={() => setShowChatDrawer(true)}
-            style={{ marginRight: 8 }}
+            activeOpacity={0.7}
+            style={{
+              marginRight: 8,
+              padding: 8,
+              borderRadius: 8,
+              backgroundColor: 'rgba(123, 97, 255, 0.1)',
+              justifyContent: 'center',
+              alignItems: 'center',
+              borderWidth: 1,
+              borderColor: 'rgba(123, 97, 255, 0.2)',
+            }}
           >
-            <Ionicons name="menu-outline" size={24} color={theme.primary} />
+            <Ionicons name="menu-outline" size={20} color={theme.primary} />
           </TouchableOpacity>
           <TouchableOpacity 
             onPress={handleNewChat}
-            style={{ marginRight: 8 }}
+            activeOpacity={0.8}
+            style={{
+              padding: 8,
+              borderRadius: 8,
+              backgroundColor: theme.primary,
+              justifyContent: 'center',
+              alignItems: 'center',
+              shadowColor: theme.primary,
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.3,
+              shadowRadius: 4,
+              elevation: 3,
+            }}
           >
-            <Ionicons name="add" size={24} color={theme.primary} />
+            <Ionicons name="add" size={20} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
       ),
@@ -126,14 +185,22 @@ const NoraScreen = () => {
     }
   }, [chat, showLandingScreen]);
 
+  // Development helper - call this function manually if you need to reset onboarding for testing
+  // This is NOT called automatically - only when manually invoked
+  const resetNoraOnboardingForTesting = async () => {
+    if (!user) return;
+    try {
+      await AsyncStorage.removeItem(`nora_onboarding_${user.id}`);
+      console.log('NoraScreen: DEVELOPMENT - Onboarding reset for user', user.id);
+    } catch (error) {
+      console.error('Failed to reset Nora onboarding:', error);
+    }
+  };
+
   const checkNoraOnboardingStatus = async () => {
     if (!user) return;
     
     try {
-      // TEMPORARY: Reset onboarding for testing - remove this in production
-      await AsyncStorage.removeItem(`nora_onboarding_${user.id}`);
-      console.log('NoraScreen: Reset onboarding for testing');
-      
       const hasSeenOnboarding = await AsyncStorage.getItem(`nora_onboarding_${user.id}`);
       console.log('NoraScreen: Checking onboarding status for user', user.id, 'hasSeenOnboarding:', hasSeenOnboarding);
       
@@ -293,16 +360,25 @@ const NoraScreen = () => {
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
+        console.error('NoraScreen: No active session found');
         throw new Error('No active session');
       }
+      
+      if (!session.access_token) {
+        console.error('NoraScreen: Session exists but no access token');
+        throw new Error('No access token in session');
+      }
+      
+      console.log('NoraScreen: Session valid, access_token present:', !!session.access_token);
 
       // Send message to enhanced Nora assistant edge function
-      const response = await fetch('https://ucculvnodabrfwbkzsnx.supabase.co/functions/v1/nora-assistant', {
+      console.log('NoraScreen: Making API call to nora-chat-auth-fix with userId:', user.id);
+      const response = await fetch('https://ucculvnodabrfwbkzsnx.supabase.co/functions/v1/nora-chat-auth-fix', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
-          'apikey': process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '',
+          'apikey': process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVjY3Vsdm5vZGFicmZ3Ymt6c254Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDIyNDQxODksImV4cCI6MjA1NzgyMDE4OX0._tWjZyUAafkMNi5fAOmrgJZu3yuzz_G--S0Wi0qVF1A',
         },
         body: JSON.stringify({
           message: textToSend,
@@ -491,8 +567,10 @@ const NoraScreen = () => {
     if (!user) return;
     
     try {
+      console.log('NoraScreen: Saving onboarding completion for user', user.id);
       await AsyncStorage.setItem(`nora_onboarding_${user.id}`, 'true');
       setShowNoraOnboarding(false);
+      console.log('NoraScreen: Onboarding completed and saved successfully');
     } catch (error) {
       console.error('Failed to save Nora onboarding completion:', error);
       setShowNoraOnboarding(false);
@@ -503,8 +581,10 @@ const NoraScreen = () => {
     if (!user) return;
     
     try {
+      console.log('NoraScreen: Saving onboarding skip for user', user.id);
       await AsyncStorage.setItem(`nora_onboarding_${user.id}`, 'true');
       setShowNoraOnboarding(false);
+      console.log('NoraScreen: Onboarding skipped and saved successfully');
     } catch (error) {
       console.error('Failed to save Nora onboarding skip:', error);
       setShowNoraOnboarding(false);
@@ -549,6 +629,8 @@ const NoraScreen = () => {
         style={styles.messagesContainer}
         contentContainerStyle={styles.messagesContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         {chat.map((message, index) => renderMessage(message, index))}
         
@@ -583,7 +665,8 @@ const NoraScreen = () => {
       <KeyboardAvoidingView 
         style={styles.contentContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 20}
+        enabled={true}
       >
         {showLandingScreen ? renderLandingScreen() : renderChatScreen()}
 
@@ -594,18 +677,27 @@ const NoraScreen = () => {
         }]}>
           <TextInput
             style={[styles.textInput, { 
-              backgroundColor: theme.background,
-              color: theme.text,
-              borderColor: theme.border 
+              backgroundColor: '#FFFFFF',
+              color: '#000000',
+              borderColor: '#7B61FF',
+              borderWidth: 2,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 4,
+              elevation: 3,
             }]}
             placeholder={showLandingScreen ? "Ask Anything" : "Type your message..."}
-            placeholderTextColor={theme.textSecondary}
+            placeholderTextColor="#666666"
             value={input}
             onChangeText={setInput}
             multiline={true}
             maxLength={500}
             returnKeyType="send"
             onSubmitEditing={() => handleSend()}
+            autoCorrect={true}
+            spellCheck={true}
+            selectionColor="#7B61FF"
           />
           
           {/* Action Buttons */}
@@ -872,7 +964,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     marginBottom: 12,
     maxHeight: 100,
+    minHeight: 44,
     fontSize: 16,
+    fontWeight: '400',
+    textAlignVertical: 'top',
   },
   actionButtons: {
     flexDirection: 'row',

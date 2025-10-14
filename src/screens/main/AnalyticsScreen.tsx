@@ -1,427 +1,326 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 const { useUserAppData } = require('../../utils/userAppData');
+import { BottomTabBar } from '../../components/BottomTabBar';
+import { CircularChart } from '../../components/CircularChart';
 
-interface StudyData {
-  totalHours: number;
-  averageSessionLength: number;
-  mostProductiveTime: string;
-  mostStudiedSubject: string;
-  studyDays: number;
-  consistencyScore: number;
-}
-
-interface WeeklyDataPoint {
-  day: string;
-  hours: number;
-}
-
-interface SubjectDataPoint {
-  subject: string;
-  hours: number;
-  percentage: number;
-}
+const { width } = Dimensions.get('window');
 
 const AnalyticsScreen = () => {
-  const { user, isLoading: authLoading } = useAuth();
+  const navigation = useNavigation();
+  const { user } = useAuth();
   const { theme } = useTheme();
-  const [timeRange, setTimeRange] = useState('week');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  
-  // Use our comprehensive data hook
-  const { data: userData, isLoading: userDataLoading, error: userDataError, refreshData } = useUserAppData();
-  
-  // Analytics Data
-  const [studyData, setStudyData] = useState<StudyData>({
-    totalHours: 0,
-    averageSessionLength: 0,
-    mostProductiveTime: 'Not available',
-    mostStudiedSubject: 'Not available',
-    studyDays: 0,
-    consistencyScore: 0,
-  });
-  const [weeklyData, setWeeklyData] = useState<WeeklyDataPoint[]>([]);
-  const [subjectData, setSubjectData] = useState<SubjectDataPoint[]>([]);
+  const [timeRange, setTimeRange] = useState('year');
+  const [currentDate, setCurrentDate] = useState(new Date());
 
-  // Update data when userData changes
-  useEffect(() => {
-    if (userData && !userDataLoading) {
-      processUserAppData(userData);
-    }
-  }, [userData, userDataLoading, timeRange]);
-  // Process userData to extract analytics information
-  const processUserAppData = (userData: any) => {
-    try {
-      if (!userData) {
-        console.error('No user data available');
-        return;
-      }
+  const { data: userData, isLoading } = useUserAppData();
 
-      const { sessions, metrics, tasks } = userData;
+  // Calculate real stats from user data
+  const sessions = userData?.sessions || [];
+  const totalSessions = sessions.length;
+  const totalMinutes = userData?.leaderboard?.total_focus_time || 0;
+  const totalHours = Math.floor(totalMinutes / 60);
+  const remainingMinutes = totalMinutes % 60;
 
-      // Get current date for filtering
-      const now = new Date();
-      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const startOfWeek = new Date(startOfDay);
-      startOfWeek.setDate(startOfDay.getDate() - startOfDay.getDay()); // Start of week (Sunday)
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  // Count session types: Deep Work, Balanced, Sprint
+  const deepWorkCount = sessions.filter((s: any) => s.session_type === 'deep_work' || s.session_type === 'individual').length;
+  const balancedCount = sessions.filter((s: any) => s.session_type === 'balanced').length;
+  const sprintCount = sessions.filter((s: any) => s.session_type === 'sprint').length;
 
-      // Filter sessions based on timeRange
-      let filteredSessions = sessions || [];
-      
-      if (timeRange === 'day') {
-        // Filter for current day only
-        filteredSessions = sessions?.filter((session: any) => {
-          if (!session.created_at) return false;
-          const sessionDate = new Date(session.created_at);
-          return sessionDate >= startOfDay && sessionDate < new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
-        }) || [];
-      } else if (timeRange === 'week') {
-        // Filter for current week (7 days)
-        filteredSessions = sessions?.filter((session: any) => {
-          if (!session.created_at) return false;
-          const sessionDate = new Date(session.created_at);
-          return sessionDate >= startOfWeek && sessionDate <= now;
-        }) || [];
-      } else if (timeRange === 'month') {
-        // Filter for current month
-        filteredSessions = sessions?.filter((session: any) => {
-          if (!session.created_at) return false;
-          const sessionDate = new Date(session.created_at);
-          return sessionDate >= startOfMonth && sessionDate <= now;
-        }) || [];
-      }
-
-      console.log(`Analytics: Processing ${filteredSessions.length} sessions for ${timeRange} view`);
-
-      // Calculate total hours from filtered sessions
-      const totalMinutes = filteredSessions
-        .filter((session: any) => session.duration_minutes)
-        .reduce((sum: number, session: any) => sum + (session.duration_minutes || 0), 0);
-      const totalHours = totalMinutes / 60;
-
-      // Calculate average session length from filtered sessions
-      const completedSessions = filteredSessions.filter((session: any) => session.duration_minutes > 0);
-      const averageSessionLength = completedSessions.length > 0 
-        ? Math.round(completedSessions.reduce((sum: number, session: any) => sum + (session.duration_minutes || 0), 0) / completedSessions.length)
-        : 0;
-
-      // Find most productive hour (from all sessions, not filtered by time range)
-      const hourCountMap: { [key: string]: number } = {};
-      (sessions || []).forEach((session: any) => {
-        if (session.created_at) {
-          const hour = new Date(session.created_at).getHours().toString();
-          hourCountMap[hour] = (hourCountMap[hour] || 0) + 1;
-        }
-      });
-
-      const mostProductiveHour = Object.entries(hourCountMap).sort((a, b) => b[1] - a[1])[0]?.[0];
-      const mostProductiveTime = mostProductiveHour 
-        ? `${mostProductiveHour}:00 - ${parseInt(mostProductiveHour) + 1}:00`
-        : 'Not available';
-
-      // Find most studied subject from tasks or sessions
-      const subjectCountMap: { [key: string]: number } = {};
-      
-      // If we have tasks with subjects/categories
-      if (tasks?.length > 0) {
-        tasks.forEach((task: any) => {
-          if (task.title) {
-            // Extract subject from task title (basic approach)
-            const subject = task.title.split(' ')[0] || 'General';
-            subjectCountMap[subject] = (subjectCountMap[subject] || 0) + 1;
-          }
-        });
-      }
-
-      const mostStudiedSubject = Object.entries(subjectCountMap).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Not enough data';
-
-      // Calculate study days from filtered sessions
-      const studyDaysSet = new Set(
-        filteredSessions
-          .filter((session: any) => session.created_at)
-          .map((session: any) => new Date(session.created_at).toDateString())
-      );
-      const studyDays = studyDaysSet.size;
-
-      // Calculate consistency score based on time range
-      let maxPossibleDays = 1;
-      if (timeRange === 'day') {
-        maxPossibleDays = 1;
-      } else if (timeRange === 'week') {
-        maxPossibleDays = 7;
-      } else if (timeRange === 'month') {
-        const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-        maxPossibleDays = Math.min(daysInMonth, now.getDate()); // Only count days that have passed
-      }
-      
-      const consistencyScore = Math.min(100, Math.round((studyDays / maxPossibleDays) * 100));
-
-      // Generate weekly data for chart (always show 7 days for week view)
-      const weeklyChartData = generateWeeklyDataFromSessions(filteredSessions);
-
-      // Generate subject data for chart
-      const subjectChartData = generateSubjectData(subjectCountMap);
-
-      // Update state with processed data
-      setStudyData({
-        totalHours: Math.round(totalHours * 10) / 10,
-        averageSessionLength: Math.round(averageSessionLength),
-        mostProductiveTime,
-        mostStudiedSubject,
-        studyDays,
-        consistencyScore
-      });
-
-      setWeeklyData(weeklyChartData);
-      setSubjectData(subjectChartData);
-      setError(null);
-      setLoading(false);
-
-    } catch (error) {
-      console.error('Error processing user data for analytics:', error);
-      setError('Failed to process analytics data');
-      setLoading(false);
-    }
-  };
-
-  const generateWeeklyDataFromSessions = (sessions: any[]) => {
-    const weeklyData: WeeklyDataPoint[] = [];
-    const now = new Date();
-    
-    if (timeRange === 'week') {
-      // Show last 7 days
-      for (let i = 6; i >= 0; i--) {
-        const date = new Date(now);
-        date.setDate(now.getDate() - i);
-        const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
-        const dateString = date.toDateString();
-        
-        const dayHours = sessions
-          .filter((session: any) => session.created_at && new Date(session.created_at).toDateString() === dateString)
-          .reduce((sum: number, session: any) => sum + (session.duration_minutes || 0), 0) / 60;
-        
-        weeklyData.push({
-          day: dayName,
-          hours: Math.round(dayHours * 10) / 10
-        });
-      }
+  // Generate chart data based on time range
+  const getChartData = () => {
+    if (timeRange === 'year') {
+      return ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
     } else if (timeRange === 'month') {
-      // Show weeks in current month
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const weeksInMonth = Math.ceil((now.getDate() + startOfMonth.getDay()) / 7);
-      
-      for (let week = 1; week <= weeksInMonth; week++) {
-        const weekStart = new Date(startOfMonth);
-        weekStart.setDate(1 + (week - 1) * 7 - startOfMonth.getDay());
-        const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekStart.getDate() + 6);
-        
-        const weekHours = sessions
-          .filter((session: any) => {
-            if (!session.created_at) return false;
-            const sessionDate = new Date(session.created_at);
-            return sessionDate >= weekStart && sessionDate <= weekEnd;
-          })
-          .reduce((sum: number, session: any) => sum + (session.duration_minutes || 0), 0) / 60;
-        
-        weeklyData.push({
-          day: `W${week}`,
-          hours: Math.round(weekHours * 10) / 10
-        });
-      }
+      // Only show odd numbered days to avoid cramping
+      return Array.from({ length: 31 }, (_, i) => i + 1)
+        .filter(day => day % 2 === 1)
+        .map(day => day.toString());
+    } else if (timeRange === 'week') {
+      return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     } else {
-      // Day view - show hours of the day
-      for (let hour = 0; hour < 24; hour += 3) { // Show every 3 hours
-        const hourSessions = sessions.filter((session: any) => {
-          if (!session.created_at) return false;
-          const sessionHour = new Date(session.created_at).getHours();
-          return sessionHour >= hour && sessionHour < hour + 3;
-        });
-        
-        const hours = hourSessions.reduce((sum: number, session: any) => sum + (session.duration_minutes || 0), 0) / 60;
-        
-        weeklyData.push({
-          day: `${hour}:00`,
-          hours: Math.round(hours * 10) / 10
-        });
-      }
+      // Day view - every 2 hours
+      return ['0', '2', '4', '6', '8', '10', '12', '14', '16', '18', '20', '22'];
     }
-    
-    return weeklyData;
   };
 
-  const generateSubjectData = (subjectCountMap: { [key: string]: number }): SubjectDataPoint[] => {
-    const totalCount = Object.values(subjectCountMap).reduce((sum, count) => sum + count, 0);
-    
-    if (totalCount === 0) return [];
+  // Calculate actual bar heights from user session data
+  const getBarHeights = () => {
+    const now = currentDate;
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const date = now.getDate();
 
-    return Object.entries(subjectCountMap)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5) // Top 5 subjects
-      .map(([subject, count]) => ({
-        subject,
-        hours: Math.round(count * 10) / 10, // Approximate hours
-        percentage: Math.round((count / totalCount) * 100)
-      }));
+    if (timeRange === 'year') {
+      // Calculate hours per month for the current year
+      return Array.from({ length: 12 }, (_, monthIndex) => {
+        const monthSessions = sessions.filter((s: any) => {
+          if (!s.created_at) return false;
+          const sessionDate = new Date(s.created_at);
+          return sessionDate.getFullYear() === year && sessionDate.getMonth() === monthIndex;
+        });
+        return monthSessions.reduce((sum: number, s: any) => sum + (s.duration_minutes || 0), 0) / 60;
+      });
+    } else if (timeRange === 'month') {
+      // Calculate hours per day for current month (only odd days)
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      return Array.from({ length: 31 }, (_, dayIndex) => {
+        const day = dayIndex + 1;
+        if (day % 2 === 0 || day > daysInMonth) return 0; // Skip even days and invalid days
+
+        const daySessions = sessions.filter((s: any) => {
+          if (!s.created_at) return false;
+          const sessionDate = new Date(s.created_at);
+          return sessionDate.getFullYear() === year &&
+                 sessionDate.getMonth() === month &&
+                 sessionDate.getDate() === day;
+        });
+        return daySessions.reduce((sum: number, s: any) => sum + (s.duration_minutes || 0), 0) / 60;
+      }).filter((_, i) => (i + 1) % 2 === 1); // Only keep odd indexed items
+    } else if (timeRange === 'week') {
+      // Calculate hours per day for current week
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - now.getDay());
+
+      return Array.from({ length: 7 }, (_, dayIndex) => {
+        const day = new Date(startOfWeek);
+        day.setDate(startOfWeek.getDate() + dayIndex);
+
+        const daySessions = sessions.filter((s: any) => {
+          if (!s.created_at) return false;
+          const sessionDate = new Date(s.created_at);
+          return sessionDate.toDateString() === day.toDateString();
+        });
+        return daySessions.reduce((sum: number, s: any) => sum + (s.duration_minutes || 0), 0) / 60;
+      });
+    } else {
+      // Day view - hours per 2-hour block
+      return Array.from({ length: 12 }, (_, blockIndex) => {
+        const hour = blockIndex * 2;
+        const daySessions = sessions.filter((s: any) => {
+          if (!s.created_at) return false;
+          const sessionDate = new Date(s.created_at);
+          const sessionHour = sessionDate.getHours();
+          return sessionDate.toDateString() === now.toDateString() &&
+                 sessionHour >= hour && sessionHour < hour + 2;
+        });
+        return daySessions.reduce((sum: number, s: any) => sum + (s.duration_minutes || 0), 0) / 60;
+      });
+    }
   };
 
-  if (authLoading || userDataLoading) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.primary} />
-          <Text style={[styles.loadingText, { color: theme.text }]}>Loading analytics...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  const chartLabels = getChartData();
+  const barHeights = getBarHeights();
+  const maxHeight = Math.max(...barHeights, 1);
 
-  if (error || userDataError) {
-    const errorMessage = error || (userDataError as Error)?.message || 'Error loading analytics data';
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={48} color="#FF5252" />
-          <Text style={[styles.errorText, { color: theme.text }]}>{errorMessage}</Text>
-          <TouchableOpacity 
-            style={[styles.retryButton, { backgroundColor: theme.primary }]} 
-            onPress={refreshData}
-          >
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  // Format date display
+  const getDateDisplay = () => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.toLocaleDateString('en-US', { month: 'long' });
+    const monthNum = currentDate.getMonth() + 1;
+    const day = currentDate.getDate();
+
+    if (timeRange === 'year') {
+      return year.toString();
+    } else if (timeRange === 'month') {
+      return `${month}, ${year}`;
+    } else if (timeRange === 'week') {
+      const startOfWeek = new Date(currentDate);
+      startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6);
+
+      return `${year}.${String(monthNum).padStart(2, '0')}.${String(startOfWeek.getDate()).padStart(2, '0')} - ${year}.${String(monthNum).padStart(2, '0')}.${String(endOfWeek.getDate()).padStart(2, '0')}`;
+    } else {
+      return `${year}.${String(monthNum).padStart(2, '0')}.${String(day).padStart(2, '0')}`;
+    }
+  };
+
+  // Navigate date
+  const navigateDate = (direction: 'prev' | 'next') => {
+    const newDate = new Date(currentDate);
+
+    if (timeRange === 'year') {
+      newDate.setFullYear(newDate.getFullYear() + (direction === 'next' ? 1 : -1));
+    } else if (timeRange === 'month') {
+      newDate.setMonth(newDate.getMonth() + (direction === 'next' ? 1 : -1));
+    } else if (timeRange === 'week') {
+      newDate.setDate(newDate.getDate() + (direction === 'next' ? 7 : -7));
+    } else {
+      newDate.setDate(newDate.getDate() + (direction === 'next' ? 1 : -1));
+    }
+
+    setCurrentDate(newDate);
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <ScrollView style={{ flex: 1, backgroundColor: theme.background }}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: theme.text }]}>Analytics</Text>
-          
-          {/* Time Range Selector */}
-          <View style={styles.timeRangeContainer}>
-            {['day', 'week', 'month'].map((range) => (
-              <TouchableOpacity
-                key={range}
-                style={[
-                  styles.timeRangeButton,
-                  timeRange === range && { backgroundColor: theme.primary },
-                  { borderColor: theme.primary }
-                ]}
-                onPress={() => setTimeRange(range)}
-              >
-                <Text style={[
-                  styles.timeRangeText,
-                  { color: timeRange === range ? '#FFFFFF' : theme.text }
-                ]}>
-                  {range.charAt(0).toUpperCase() + range.slice(1)}
-                </Text>
-              </TouchableOpacity>
-            ))}
+      {/* Header */}
+      <View style={[styles.navHeader, { backgroundColor: theme.background }]}>
+        <TouchableOpacity
+          style={styles.closeButton}
+          onPress={() => navigation.navigate('Home')}
+        >
+          <View style={[styles.closeButtonCircle, { backgroundColor: theme.text + '20' }]}>
+            <Ionicons name="close" size={24} color={theme.text} />
           </View>
+        </TouchableOpacity>
+        <Text style={[styles.navHeaderTitle, { color: theme.text }]}>Traveller</Text>
+        <View style={styles.headerSpacer} />
+      </View>
+
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }}>
+        {/* Time Range Selector */}
+        <View style={styles.timeRangeContainer}>
+          {['Day', 'Week', 'Month', 'Year'].map((range) => (
+            <TouchableOpacity
+              key={range}
+              style={[
+                styles.timeRangeButton,
+                timeRange === range.toLowerCase() && [styles.timeRangeButtonActive, { backgroundColor: 'transparent' }]
+              ]}
+              onPress={() => setTimeRange(range.toLowerCase())}
+            >
+              <Text style={[
+                styles.timeRangeText,
+                { color: timeRange === range.toLowerCase() ? theme.primary : theme.text + '66' }
+              ]}>
+                {range}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
-        {/* Summary Cards - Updated to show only 3 cards */}
-        <View style={styles.summaryContainer}>
-          <View style={[styles.summaryCard, { backgroundColor: theme.card }]}>
-            <Ionicons name="time" size={24} color={theme.primary} />
-            <Text style={[styles.summaryValue, { color: theme.text }]}>{studyData.totalHours}h</Text>
-            <Text style={[styles.summaryLabel, { color: theme.text }]}>Total Hours</Text>
-          </View>
-          
-          <View style={[styles.summaryCard, { backgroundColor: theme.card }]}>
-            <Ionicons name="timer" size={24} color={theme.primary} />
-            <Text style={[styles.summaryValue, { color: theme.text }]}>{studyData.averageSessionLength}m</Text>
-            <Text style={[styles.summaryLabel, { color: theme.text }]}>Avg Session</Text>
-          </View>
-          
-          <View style={[styles.summaryCard, { backgroundColor: theme.card }]}>
-            <Ionicons name="trending-up" size={24} color={theme.primary} />
-            <Text style={[styles.summaryValue, { color: theme.text }]}>{studyData.consistencyScore}%</Text>
-            <Text style={[styles.summaryLabel, { color: theme.text }]}>Consistency</Text>
-          </View>
-        </View>
-
-        {/* Weekly Study Chart - Updated title */}
-        <View style={[styles.chartContainer, { backgroundColor: theme.card, borderColor: theme.primary }]}>
-          <Text style={[styles.chartTitle, { color: theme.text }]}>
-            {timeRange === 'day' ? 'Daily Study Hours' : 
-             timeRange === 'week' ? 'Weekly Study Hours' : 
-             'Monthly Study Hours'}
+        {/* Date Display */}
+        <View style={styles.dateContainer}>
+          <TouchableOpacity onPress={() => navigateDate('prev')}>
+            <Ionicons name="chevron-back" size={24} color={theme.primary} />
+          </TouchableOpacity>
+          <Text style={[styles.dateText, { color: theme.primary }]}>
+            {getDateDisplay()}
           </Text>
-          <View style={styles.chart}>
-            {weeklyData.map((day, index) => {
-              const maxHours = Math.max(...weeklyData.map(d => d.hours), 1);
-              const heightPercentage = (day.hours / maxHours) * 100;
-              
-              return (
-                <View key={index} style={styles.chartBarContainer}>
-                  <View style={[styles.chartBar, { height: `${heightPercentage}%`, backgroundColor: theme.primary }]} />
-                  <Text style={[styles.chartLabel, { color: theme.text }]}>{day.day}</Text>
-                  <Text style={[styles.chartValue, { color: theme.text }]}>{day.hours}h</Text>
-                </View>
-              );
-            })}
+          <TouchableOpacity onPress={() => navigateDate('next')}>
+            <Ionicons name="chevron-forward" size={24} color={theme.primary} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Stats Cards Row - Session Types */}
+        <View style={styles.statsRow}>
+          <View style={[styles.smallStatCard, { backgroundColor: theme.card }]}>
+            <View style={styles.smallStatIcon}>
+              <Ionicons name="bulb" size={28} color="#9C27B0" />
+            </View>
+            <Text style={[styles.smallStatNumber, { color: theme.text }]}>{deepWorkCount}</Text>
+            <Text style={[styles.smallStatLabel, { color: theme.primary }]}>Deep Work</Text>
+          </View>
+
+          <View style={[styles.smallStatCard, { backgroundColor: theme.card }]}>
+            <View style={styles.smallStatIcon}>
+              <Ionicons name="fitness" size={28} color="#FF9800" />
+            </View>
+            <Text style={[styles.smallStatNumber, { color: theme.text }]}>{balancedCount}</Text>
+            <Text style={[styles.smallStatLabel, { color: theme.primary }]}>Balanced</Text>
+          </View>
+
+          <View style={[styles.smallStatCard, { backgroundColor: theme.card }]}>
+            <View style={styles.smallStatIcon}>
+              <Ionicons name="flash" size={28} color="#2196F3" />
+            </View>
+            <Text style={[styles.smallStatNumber, { color: theme.text }]}>{sprintCount}</Text>
+            <Text style={[styles.smallStatLabel, { color: theme.primary }]}>Sprint</Text>
           </View>
         </View>
-        
-        {/* Subject Distribution */}
-        {subjectData.length > 0 && (
-          <View style={[styles.subjectContainer, { backgroundColor: theme.card, borderColor: theme.primary }]}>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>Subject Distribution</Text>
-            {subjectData.map((subject, index) => (
-              <View key={index} style={styles.subjectRow}>
-                <View style={styles.subjectInfo}>
-                  <Text style={[styles.subjectName, { color: theme.text }]}>{subject.subject}</Text>
-                  <Text style={[styles.subjectHours, { color: theme.text }]}>{subject.hours}h</Text>
-                </View>
-                <View style={styles.subjectProgressContainer}>
-                  <View style={[styles.subjectProgressBar, { width: `${subject.percentage}%`, backgroundColor: theme.primary }]} />
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
 
-        {/* Insights */}
+        {/* Bar Chart */}
+        <View style={[styles.chartContainer, { backgroundColor: theme.card }]}>
+          {/* Y-axis label */}
+          <View style={styles.yAxisContainer}>
+            <Text style={[styles.axisLabel, { color: theme.text + '88' }]}>Hours</Text>
+          </View>
+
+          <View style={styles.chartWithAxis}>
+            {/* Chart bars */}
+            <View style={styles.chartBars}>
+              {barHeights.map((height, index) => (
+                <View key={index} style={styles.barColumn}>
+                  <View style={styles.barWrapper}>
+                    <View
+                      style={[
+                        styles.bar,
+                        {
+                          height: `${(height / maxHeight) * 100}%`,
+                          backgroundColor: theme.primary,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <Text style={[styles.barLabel, { color: theme.primary }]}>
+                    {chartLabels[index]}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* X-axis label */}
+          <Text style={[styles.xAxisLabel, { color: theme.text + '88' }]}>
+            {timeRange === 'year' ? 'Months' :
+             timeRange === 'month' ? 'Days' :
+             timeRange === 'week' ? 'Days of Week' :
+             'Hours'}
+          </Text>
+
+          <Text style={[styles.chartTotal, { color: theme.primary }]}>
+            Total: {totalHours}h {remainingMinutes}m
+          </Text>
+        </View>
+
+        {/* Circular Chart - Subject Distribution */}
+        <View style={[styles.circularChartContainer, { backgroundColor: theme.card }]}>
+          <CircularChart
+            percentage={100}
+            totalHours={totalHours}
+            totalMinutes={remainingMinutes}
+            color="#FF6B35"
+            size={180}
+            strokeWidth={18}
+          />
+          <View style={styles.legendContainer}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#FF6B35' }]} />
+              <Text style={[styles.legendText, { color: theme.text }]}>The triage</Text>
+              <Text style={[styles.legendValue, { color: theme.text }]}>
+                {totalHours}h {remainingMinutes}m
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Insights Section */}
         <View style={[styles.insightsContainer, { backgroundColor: theme.card }]}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Insights</Text>
-          
-          <View style={styles.insightRow}>
-            <Ionicons name="sunny" size={20} color={theme.primary} />
+          <Text style={[styles.insightsTitle, { color: theme.text }]}>Insights</Text>
+          <View style={styles.insightItem}>
+            <Ionicons name="bulb" size={20} color={theme.primary} style={{ marginRight: 12 }} />
             <Text style={[styles.insightText, { color: theme.text }]}>
-              Most productive time: {studyData.mostProductiveTime}
+              You're doing great! Keep up the consistent study sessions.
             </Text>
           </View>
-          
-          <View style={styles.insightRow}>
-            <Ionicons name="book" size={20} color={theme.primary} />
+          <View style={styles.insightItem}>
+            <Ionicons name="trending-up" size={20} color={theme.primary} style={{ marginRight: 12 }} />
             <Text style={[styles.insightText, { color: theme.text }]}>
-              Most studied subject: {studyData.mostStudiedSubject}
-            </Text>
-          </View>
-          
-          <View style={styles.insightRow}>
-            <Ionicons name="trophy" size={20} color={theme.primary} />
-            <Text style={[styles.insightText, { color: theme.text }]}>
-              Consistency score: {studyData.consistencyScore}% - {
-                studyData.consistencyScore >= 80 ? 'Excellent!' :
-                studyData.consistencyScore >= 60 ? 'Good!' :
-                studyData.consistencyScore >= 40 ? 'Improving!' : 'Keep going!'
-              }
+              Your focus time has increased by 15% this week!
             </Text>
           </View>
         </View>
       </ScrollView>
+
+      {/* Bottom Tab Bar */}
+      <BottomTabBar currentRoute="Results" />
     </SafeAreaView>
   );
 };
@@ -430,244 +329,199 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  scrollView: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  navHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 10,
   },
-  loadingText: {
-    fontSize: 16,
-    color: '#4CAF50',
-    marginTop: 16,
+  closeButton: {
+    padding: 4,
   },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  closeButtonCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
-    padding: 20,
+    justifyContent: 'center',
   },
-  errorText: {
-    fontSize: 16,
-    color: '#FF5252',
-    textAlign: 'center',
-    marginVertical: 16,
-  },
-  retryButton: {
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  header: {
-    padding: 20,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#C8E6C9',
-  },
-  title: {
-    fontSize: 24,
+  navHeaderTitle: {
+    fontSize: 22,
     fontWeight: 'bold',
-    color: '#1B5E20',
+    textAlign: 'center',
   },
-  subtitle: {
-    fontSize: 16,
-    color: '#388E3C',
-    marginTop: 5,
+  headerSpacer: {
+    width: 48,
   },
   timeRangeContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 15,
-    backgroundColor: '#FFF',
-    marginTop: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#C8E6C9',
+    justifyContent: 'space-around',
+    paddingHorizontal: 40,
+    paddingVertical: 12,
+    marginTop: 8,
   },
   timeRangeButton: {
     paddingVertical: 8,
-    paddingHorizontal: 15,
-    borderRadius: 20,
-    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 12,
   },
-  activeTimeRange: {
-    backgroundColor: '#4CAF50',
+  timeRangeButtonActive: {
+    borderBottomWidth: 2,
+    borderBottomColor: '#4CAF50',
   },
   timeRangeText: {
-    color: '#1B5E20',
-    fontWeight: '500',
+    fontSize: 16,
+    fontWeight: '600',
   },
-  activeTimeRangeText: {
-    color: '#FFF',
-  },
-  summaryContainer: {
+  dateContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 15,
-    backgroundColor: '#FFF',
-    marginTop: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#C8E6C9',
-  },
-  summaryCard: {
-    flex: 1,
     alignItems: 'center',
-    padding: 10,
-    backgroundColor: '#E8F5E9',
-    borderRadius: 8,
-    marginHorizontal: 5,
+    justifyContent: 'center',
+    paddingVertical: 16,
   },
-  summaryValue: {
-    fontSize: 18,
+  dateText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginHorizontal: 16,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    gap: 12,
+    marginBottom: 16,
+  },
+  smallStatCard: {
+    flex: 1,
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(76, 175, 80, 0.3)',
+  },
+  smallStatIcon: {
+    marginBottom: 4,
+  },
+  smallStatNumber: {
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#1B5E20',
-    marginTop: 5,
+    marginBottom: 2,
   },
-  summaryLabel: {
-    fontSize: 12,
-    color: '#388E3C',
-    marginTop: 5,
-    textAlign: 'center',
+  smallStatLabel: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   chartContainer: {
-    backgroundColor: '#FFF',
-    padding: 15,
-    marginTop: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#C8E6C9',
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: 'rgba(76, 175, 80, 0.3)',
   },
-  chartTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1B5E20',
-    marginBottom: 15,
+  yAxisContainer: {
+    marginBottom: 8,
   },
-  chart: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    height: 150,
-  },
-  chartBarContainer: {
-    alignItems: 'center',
-    width: '12%',
-  },
-  chartBar: {
-    width: '100%',
-    backgroundColor: '#4CAF50',
-    borderTopLeftRadius: 4,
-    borderTopRightRadius: 4,
-    minHeight: 2,
-  },
-  chartLabel: {
+  axisLabel: {
     fontSize: 12,
-    color: '#388E3C',
-    marginTop: 5,
+    fontWeight: '600',
+    textAlign: 'center',
   },
-  chartValue: {
-    fontSize: 10,
-    color: '#1B5E20',
-    marginTop: 2,
+  chartWithAxis: {
+    marginVertical: 4,
   },
-  subjectContainer: {
-    backgroundColor: '#FFF',
-    padding: 15,
-    marginTop: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#C8E6C9',
+  chartBars: {
+    flexDirection: 'row',
+    height: 140,
+    marginBottom: 8,
   },
-  sectionTitle: {
+  barColumn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  barWrapper: {
+    width: '60%',
+    height: '80%',
+    justifyContent: 'flex-end',
+  },
+  bar: {
+    width: '100%',
+    borderRadius: 4,
+  },
+  barLabel: {
+    fontSize: 9,
+    marginTop: 4,
+    fontWeight: '600',
+  },
+  xAxisLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  chartTotal: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#1B5E20',
-    marginBottom: 15,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginTop: 4,
   },
-  subjectRow: {
-    flexDirection: 'row',
+  circularChartContainer: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 12,
+    padding: 20,
     alignItems: 'center',
-    marginBottom: 10,
+    borderWidth: 2,
+    borderColor: 'rgba(76, 175, 80, 0.3)',
   },
-  subjectInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '40%',
+  legendContainer: {
+    marginTop: 16,
+    width: '100%',
   },
-  subjectName: {
-    fontSize: 14,
-    color: '#1B5E20',
-  },
-  subjectHours: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#388E3C',
-  },
-  subjectProgressContainer: {
-    flex: 1,
-    height: 8,
-    backgroundColor: '#E8F5E9',
-    borderRadius: 4,
-    marginHorizontal: 10,
-  },
-  subjectProgressBar: {
-    height: '100%',
-    backgroundColor: '#4CAF50',
-    borderRadius: 4,
-  },
-  subjectPercentage: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1B5E20',
-    width: '15%',
-    textAlign: 'right',
-  },
-  insightsContainer: {
-    backgroundColor: '#FFF',
-    padding: 15,
-    marginTop: 10,
-    marginBottom: 20,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#C8E6C9',
-  },
-  insightCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 10,
-    backgroundColor: '#E8F5E9',
-    borderRadius: 8,
-    marginBottom: 10,
-  },
-  insightIcon: {
-    marginRight: 10,
-  },
-  insightContent: {
-    flex: 1,
-  },
-  insightTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1B5E20',
-  },
-  insightText: {
-    fontSize: 14,
-    color: '#388E3C',
-    marginTop: 2,
-  },
-  insightRow: {
+  legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 8,
+  },
+  legendDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 8,
+  },
+  legendText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  legendValue: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  insightsContainer: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: 'rgba(76, 175, 80, 0.3)',
+  },
+  insightsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 12,
+  },
+  insightItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  insightText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
   },
 });
 

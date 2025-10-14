@@ -8,7 +8,7 @@ import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { useSupabaseProfile } from '../../utils/supabaseHooks';
 import { useTheme } from '../../context/ThemeContext';
-import { themePalettes, ThemeName } from '../../context/ThemeContext';
+import { themePalettes, ThemeName, ThemeMode, lightThemePalettes } from '../../context/ThemeContext';
 const { useUserAppData } = require('../../utils/userAppData');
 import Slider from '@react-native-community/slider';
 import { useBackgroundMusic } from '../../hooks/useBackgroundMusic';
@@ -60,15 +60,14 @@ const THEME_ICONS = {
 const SettingsScreen = () => {
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
   const { profile, updateProfile } = useSupabaseProfile();
-  const { theme, themeName, setThemeName } = useTheme();
+  const { theme, themeName, themeMode, fontSize, setThemeName, setThemeMode, setFontSize } = useTheme();
   const { updateOnboarding, refreshData } = useAuth();
   
   // Use our comprehensive data hook
   const { data: userData, isLoading: userDataLoading } = useUserAppData();
   
-  // Appearance
-  const [appearanceTheme, setAppearanceTheme] = useState('System Default');
-  const [fontSize, setFontSize] = useState('Medium');
+  // Appearance - use theme context values instead of local state
+  const [localFontSize, setLocalFontSize] = useState('Medium');
   const [appIcon, setAppIcon] = useState('Default');
   // Notifications
   const [notifications, setNotifications] = useState(true);
@@ -78,6 +77,7 @@ const SettingsScreen = () => {
   const [focusDuration, setFocusDuration] = useState(25);
   const [workStyle, setWorkStyle] = useState('Balanced');
   const [autoStartNext, setAutoStartNext] = useState(false);
+  const [autoDND, setAutoDND] = useState(false);
   const [weeklyGoal, setWeeklyGoal] = useState(10);
   // Sound & Environment
   const [sound, setSound] = useState(true);
@@ -323,6 +323,7 @@ const SettingsScreen = () => {
           setAmbientNoise(userSettings.music_volume || 0.5);
           setNotifications(userSettings.notifications_enabled !== undefined ? userSettings.notifications_enabled : true);
           setAutoStartNext(userSettings.auto_start_focus !== undefined ? userSettings.auto_start_focus : false);
+          setAutoDND(userSettings.auto_dnd_focus !== undefined ? userSettings.auto_dnd_focus : false);
           
           console.log('🎵 User settings loaded from database');
         } else {
@@ -350,38 +351,43 @@ const SettingsScreen = () => {
   }, []);
 
   // Handle appearance updates
-  const handleThemeUpdate = async (theme: string) => {
-    setAppearanceTheme(theme);
+  const handleThemeUpdate = async (selectedThemeMode: ThemeMode) => {
     setShowThemeModal(false);
     
     try {
-      await updateProfile({ theme });
+      // Update theme context
+      setThemeMode(selectedThemeMode);
       
-      // Apply theme if not system default
-      if (theme !== 'System Default') {
-        const themeMap: { [key: string]: ThemeName } = {
-          'Light': 'home',
-          'Dark': 'office'
-        };
-        if (themeMap[theme]) {
-          setThemeName(themeMap[theme]);
-        }
-      }
+      // Save to user profile
+      await updateProfile({ theme_mode: selectedThemeMode });
       
       Alert.alert('Success', 'Theme updated successfully!');
     } catch (error) {
+      console.error('Theme update error:', error);
       Alert.alert('Error', 'Failed to update theme. Please try again.');
     }
   };
 
   const handleFontSizeUpdate = async (size: string) => {
-    setFontSize(size);
+    setLocalFontSize(size);
     setShowFontModal(false);
     
     try {
+      // Convert string to number for theme context
+      const fontSizeMap = {
+        'Small': 14,
+        'Medium': 16, 
+        'Large': 18
+      };
+      
+      const numericSize = fontSizeMap[size as keyof typeof fontSizeMap] || 16;
+      setFontSize(numericSize);
+      
+      // Save to user profile
       await updateProfile({ font_size: size });
       Alert.alert('Success', 'Font size updated successfully!');
     } catch (error) {
+      console.error('Font size update error:', error);
       Alert.alert('Error', 'Failed to update font size. Please try again.');
     }
   };
@@ -807,6 +813,22 @@ const SettingsScreen = () => {
     }
   };
 
+  // Handle auto-DND toggle
+  const handleAutoDNDToggle = async (value: boolean) => {
+    setAutoDND(value);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        await updateUserSettings(session.user.id, {
+          auto_dnd_focus: value
+        });
+      }
+      Alert.alert('Success', `Auto Do Not Disturb ${value ? 'enabled' : 'disabled'}`);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update auto-DND setting.');
+    }
+  };
+
   // Handle accessibility settings
   const handleTTSToggle = async (value: boolean) => {
     setTts(value);
@@ -1023,20 +1045,49 @@ const SettingsScreen = () => {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, paddingBottom: 32 }}>
+        {/* Pro Trekker Banner */}
+        <TouchableOpacity
+          style={[styles.proTrekkerBanner, { backgroundColor: '#3D9AE2' }]}
+          onPress={() => navigation.navigate('ProTrekker' as any)}
+          activeOpacity={0.9}
+        >
+          <View style={styles.proTrekkerContent}>
+            <View style={styles.proTrekkerBadge}>
+              <Ionicons name="star" size={24} color="#FFA726" />
+            </View>
+            <View style={styles.proTrekkerText}>
+              <Text style={styles.proTrekkerTitle}>Become Professional Trekker</Text>
+              <Text style={styles.proTrekkerSubtitle}>Unlock all premium features</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={24} color="#FFF" />
+          </View>
+        </TouchableOpacity>
+
         {/* Appearance */}
-        <Text style={styles.sectionHeader}>APPEARANCE</Text>
-        <View style={styles.cardSection}>
+        <Text style={[styles.sectionHeader, { fontSize: fontSize * 0.9, color: theme.primary }]}>APPEARANCE</Text>
+        <View style={[styles.cardSection, { backgroundColor: theme.card }]}>
           <TouchableOpacity style={styles.rowCard} onPress={() => setShowThemeModal(true)} activeOpacity={0.7}>
-            <Ionicons name="color-palette-outline" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>Theme</Text>
-            <View style={styles.rowValueWrap}><Text style={styles.rowValue}>{appearanceTheme}</Text></View>
-            <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
+            <Ionicons name="color-palette-outline" size={22} color={theme.primary} style={styles.rowIcon} />
+            <Text style={[styles.rowLabel, { fontSize: fontSize, color: theme.text }]}>Theme</Text>
+            <View style={styles.rowValueWrap}><Text style={[styles.rowValue, { fontSize: fontSize * 0.9, color: theme.primary }]}>{themeMode}</Text></View>
+            <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
           </TouchableOpacity>
+          
+          {/* Environment Selection - Only show when Light mode is selected */}
+          {themeMode === 'Light' && (
+            <TouchableOpacity style={styles.rowCard} onPress={() => setShowEnvModal(true)} activeOpacity={0.7}>
+              <Ionicons name="globe-outline" size={22} color={theme.primary} style={styles.rowIcon} />
+              <Text style={[styles.rowLabel, { fontSize: fontSize, color: theme.text }]}>Environment</Text>
+              <View style={styles.rowValueWrap}><Text style={[styles.rowValue, { fontSize: fontSize * 0.9, color: theme.primary }]}>{lightThemePalettes[themeName].name}</Text></View>
+              <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
+            </TouchableOpacity>
+          )}
+          
           <TouchableOpacity style={styles.rowCard} onPress={() => setShowFontModal(true)} activeOpacity={0.7}>
-            <MaterialIcons name="format-size" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>Font Size</Text>
-            <View style={styles.rowValueWrap}><Text style={styles.rowValue}>{fontSize}</Text></View>
-            <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
+            <MaterialIcons name="format-size" size={22} color={theme.primary} style={styles.rowIcon} />
+            <Text style={[styles.rowLabel, { fontSize: fontSize, color: theme.text }]}>Font Size</Text>
+            <View style={styles.rowValueWrap}><Text style={[styles.rowValue, { fontSize: fontSize * 0.9, color: theme.primary }]}>{localFontSize}</Text></View>
+            <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.rowCard} onPress={() => setShowIconModal(true)} activeOpacity={0.7}>
             <MaterialCommunityIcons name="apps" size={22} color="#388E3C" style={styles.rowIcon} />
@@ -1238,6 +1289,17 @@ const SettingsScreen = () => {
             />
           </View>
           <View style={styles.rowCard}>
+            <MaterialIcons name="do-not-disturb" size={22} color="#388E3C" style={styles.rowIcon} />
+            <Text style={styles.rowLabel}>Auto Do Not Disturb</Text>
+            <View style={styles.rowValueWrap}><Text style={styles.rowValue}>{autoDND ? 'On' : 'Off'}</Text></View>
+            <Switch
+              value={autoDND}
+              onValueChange={handleAutoDNDToggle}
+              trackColor={{ false: '#E0E0E0', true: '#4CAF50' }}
+              thumbColor={autoDND ? '#1B5E20' : '#BDBDBD'}
+            />
+          </View>
+          <View style={styles.rowCard}>
             <MaterialCommunityIcons name="target" size={22} color="#388E3C" style={styles.rowIcon} />
             <View style={{ flex: 1 }}>
               <Text style={styles.rowLabel}>Weekly Focus Goal</Text>
@@ -1297,22 +1359,14 @@ const SettingsScreen = () => {
         {/* AI Integration */}
         <Text style={styles.sectionHeader}>AI INTEGRATION</Text>
         <View style={styles.cardSection}>
-          <TouchableOpacity style={styles.rowCard} onPress={() => setShowNoraHelp(true)} activeOpacity={0.7}>
-            <Ionicons name="chatbubble-ellipses-outline" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>Nora AI Assistant</Text>
-            <View style={styles.rowValueWrap}><Text style={[styles.rowValue, { color: '#388E3C' }]}>Help & Info</Text></View>
-            <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.rowCard} onPress={() => setShowPatrickHelp(true)} activeOpacity={0.7}>
-            <MaterialCommunityIcons name="microphone-outline" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>Patrick Speech Assistant</Text>
-            <View style={styles.rowValueWrap}><Text style={[styles.rowValue, { color: '#388E3C' }]}>Help & Info</Text></View>
-            <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.rowCard} onPress={() => placeholder('AI Insights')} activeOpacity={0.7}>
+          <TouchableOpacity 
+            style={styles.rowCard} 
+            onPress={() => (navigation as any).navigate('AIIntegration')} 
+            activeOpacity={0.7}
+          >
             <MaterialCommunityIcons name="brain" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>AI Insights</Text>
-            <View style={styles.rowValueWrap}><Text style={[styles.rowValue, { color: '#388E3C' }]}>Analytics</Text></View>
+            <Text style={styles.rowLabel}>AI Settings</Text>
+            <View style={styles.rowValueWrap}><Text style={[styles.rowValue, { color: '#388E3C' }]}>Manage AIs</Text></View>
             <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
           </TouchableOpacity>
         </View>
@@ -1410,14 +1464,36 @@ const SettingsScreen = () => {
         {/* Modals for pickers */}
         <Modal visible={showThemeModal} transparent animationType="fade" onRequestClose={() => setShowThemeModal(false)}>
           <View style={styles.modalOverlay}>
-            <View style={styles.modalBox}>
-              <Text style={styles.modalTitle}>Select Theme</Text>
-              {THEME_OPTIONS.map(opt => (
-                <TouchableOpacity key={opt} style={styles.modalOption} onPress={() => handleThemeUpdate(opt)}>
-                  <Text style={[styles.modalOptionText, appearanceTheme === opt && { color: '#388E3C', fontWeight: 'bold' }]}>{opt}</Text>
+            <View style={[styles.modalBox, { backgroundColor: theme.card }]}>
+              <Text style={[styles.modalTitle, { fontSize: fontSize * 1.25, color: theme.primary }]}>Select Theme</Text>
+              
+              {/* Theme Mode Options */}
+              {(['System Default', 'Light', 'Dark'] as ThemeMode[]).map(mode => (
+                <TouchableOpacity 
+                  key={mode} 
+                  style={styles.modalOption} 
+                  onPress={() => handleThemeUpdate(mode)}
+                >
+                  <View style={{ alignItems: 'center' }}>
+                    <Text style={[
+                      styles.modalOptionText, 
+                      { fontSize: fontSize, color: theme.text },
+                      themeMode === mode && { color: theme.primary, fontWeight: 'bold' }
+                    ]}>
+                      {mode}
+                    </Text>
+                    <Text style={[styles.modalOptionDescription, { fontSize: fontSize * 0.8, color: theme.textSecondary }]}>
+                      {mode === 'System Default' && 'Follow device setting'}
+                      {mode === 'Light' && 'Light theme with environment colors'}
+                      {mode === 'Dark' && 'Dark theme (ignores environment)'}
+                    </Text>
+                  </View>
                 </TouchableOpacity>
               ))}
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowThemeModal(false)}><Text style={styles.modalCancelText}>Cancel</Text></TouchableOpacity>
+              
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowThemeModal(false)}>
+                <Text style={[styles.modalCancelText, { fontSize: fontSize, color: theme.textSecondary }]}>Cancel</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>
@@ -1427,7 +1503,7 @@ const SettingsScreen = () => {
               <Text style={styles.modalTitle}>Select Font Size</Text>
               {FONT_SIZE_OPTIONS.map(opt => (
                 <TouchableOpacity key={opt} style={styles.modalOption} onPress={() => handleFontSizeUpdate(opt)}>
-                  <Text style={[styles.modalOptionText, fontSize === opt && { color: '#388E3C', fontWeight: 'bold' }]}>{opt}</Text>
+                  <Text style={[styles.modalOptionText, localFontSize === opt && { color: '#388E3C', fontWeight: 'bold' }]}>{opt}</Text>
                 </TouchableOpacity>
               ))}
               <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowFontModal(false)}><Text style={styles.modalCancelText}>Cancel</Text></TouchableOpacity>
@@ -1620,6 +1696,12 @@ const styles = StyleSheet.create({
     fontSize: 17,
     color: '#222',
   },
+  modalOptionDescription: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 2,
+    textAlign: 'center',
+  },
   modalCancelBtn: {
     marginTop: 10,
     alignItems: 'center',
@@ -1670,6 +1752,44 @@ const styles = StyleSheet.create({
   },
   previewButtonActive: {
     backgroundColor: '#FFEBEE',
+  },
+  proTrekkerBanner: {
+    marginHorizontal: 12,
+    marginTop: 16,
+    marginBottom: 24,
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  proTrekkerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  proTrekkerBadge: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#FFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  proTrekkerText: {
+    flex: 1,
+  },
+  proTrekkerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFF',
+    marginBottom: 4,
+  },
+  proTrekkerSubtitle: {
+    fontSize: 14,
+    color: '#E3F2FD',
   },
 });
 

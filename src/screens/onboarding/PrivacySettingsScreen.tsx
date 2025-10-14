@@ -7,6 +7,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { OnboardingStackParamList } from '../../navigation/types';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 
 type PrivacySettingsNavigationProp = NativeStackNavigationProp<OnboardingStackParamList, 'PrivacySettings'>;
 type PrivacySettingsRouteProp = RouteProp<OnboardingStackParamList, 'PrivacySettings'>;
@@ -52,6 +53,7 @@ export default function PrivacySettingsScreen() {
   const navigation = useNavigation<PrivacySettingsNavigationProp>();
   const route = useRoute<PrivacySettingsRouteProp>();
   const { updateOnboarding } = useAuth();
+  const { theme } = useTheme();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
 
@@ -121,21 +123,21 @@ export default function PrivacySettingsScreen() {
     const isEnabled = settings[setting.id];
     
     return (
-      <View key={setting.id} style={styles.settingCard}>
+      <View key={setting.id} style={[styles.settingCard, { backgroundColor: theme.isDark ? theme.card : 'rgba(255, 255, 255, 0.05)', borderColor: theme.isDark ? theme.border : 'rgba(232, 245, 233, 0.2)' }]}>
         <View style={styles.settingHeaderContainer}>
-          <View style={[styles.settingIconContainer, { backgroundColor: isEnabled ? '#4CAF5020' : 'rgba(232, 245, 233, 0.1)'}]}>
-            <Ionicons name={setting.icon} size={20} color={isEnabled ? '#4CAF50' : '#B8E6C1'} />
+          <View style={[styles.settingIconContainer, { backgroundColor: isEnabled ? '#4CAF5020' : (theme.isDark ? theme.cardHover : 'rgba(232, 245, 233, 0.1)')}]}>
+            <Ionicons name={setting.icon} size={20} color={isEnabled ? '#4CAF50' : (theme.isDark ? theme.textSecondary : '#B8E6C1')} />
           </View>
           <View style={styles.settingInfo}>
-            <Text style={styles.settingTitle}>{setting.title}</Text>
-            <Text style={styles.settingDescription}>{setting.description}</Text>
+            <Text style={[styles.settingTitle, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>{setting.title}</Text>
+            <Text style={[styles.settingDescription, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>{setting.description}</Text>
           </View>
           <Switch
             value={isEnabled}
             onValueChange={() => toggleSetting(setting.id)}
-            trackColor={{ false: 'rgba(232, 245, 233, 0.2)', true: 'rgba(76, 175, 80, 0.4)' }}
-            thumbColor={isEnabled ? '#4CAF50' : '#E8F5E9'}
-            ios_backgroundColor="rgba(232, 245, 233, 0.2)"
+            trackColor={{ false: theme.isDark ? theme.border : 'rgba(232, 245, 233, 0.2)', true: 'rgba(76, 175, 80, 0.4)' }}
+            thumbColor={isEnabled ? '#4CAF50' : (theme.isDark ? theme.text : '#E8F5E9')}
+            ios_backgroundColor={theme.isDark ? theme.border : 'rgba(232, 245, 233, 0.2)'}
             style={{ transform: [{ scaleX: 0.9 }, { scaleY: 0.9 }] }}
           />
         </View>
@@ -148,11 +150,11 @@ export default function PrivacySettingsScreen() {
     
     return (
       <View key={category} style={styles.categorySection}>
-        <View style={styles.categoryHeader}>
-          <View style={styles.categoryIconContainer}>
+        <View style={[styles.categoryHeader, { borderBottomColor: theme.isDark ? theme.border : 'rgba(232, 245, 233, 0.2)' }]}>
+          <View style={[styles.categoryIconContainer, { backgroundColor: theme.isDark ? theme.primary + '30' : 'rgba(76, 175, 80, 0.2)' }]}>
             <Ionicons name={CATEGORY_ICONS[category]} size={18} color="#4CAF50" />
           </View>
-          <Text style={styles.categoryTitle}>{CATEGORY_TITLES[category]}</Text>
+          <Text style={[styles.categoryTitle, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>{CATEGORY_TITLES[category]}</Text>
         </View>
         {categorySettings.map(renderSettingCard)}
       </View>
@@ -161,7 +163,7 @@ export default function PrivacySettingsScreen() {
 
   return (
     <LinearGradient
-      colors={['#0F2419', '#1B4A3A', '#2E5D4F', '#1B4A3A']}
+      colors={theme.isDark ? ['#000000', '#1a1a1a', '#2a2a2a', '#1a1a1a'] : ['#0F2419', '#1B4A3A', '#2E5D4F', '#1B4A3A']}
       locations={[0, 0.3, 0.7, 1]} // Updated gradient colors
       style={styles.container}
     >
@@ -177,12 +179,12 @@ export default function PrivacySettingsScreen() {
         >
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-              <Ionicons name="arrow-back" size={24} color="#E8F5E9" />
+              <Ionicons name="arrow-back" size={24} color={theme.isDark ? theme.text : '#E8F5E9'} />
             </TouchableOpacity>
             <View style={styles.headerTextContainer}>
-              <Text style={styles.headerTitle}>Privacy Settings</Text>
-              <Text style={styles.headerSubtitle}>
-                Step 4 of 5 • Control how your information is shared
+              <Text style={[styles.headerTitle, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>Privacy Settings</Text>
+              <Text style={[styles.headerSubtitle, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>
+                Step 5 of 6 • Control how your information is shared
               </Text>
             </View>
             {/* Placeholder for potential right-side header element if needed */}
@@ -194,13 +196,13 @@ export default function PrivacySettingsScreen() {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 20 }}
           >
-            <View style={styles.privacyNotice}>
-              <View style={styles.noticeIcon}>
+            <View style={[styles.privacyNotice, { backgroundColor: theme.isDark ? theme.cardHover : 'rgba(76, 175, 80, 0.1)', borderColor: theme.isDark ? theme.primary + '40' : 'rgba(76, 175, 80, 0.3)' }]}>
+              <View style={[styles.noticeIcon, { backgroundColor: theme.isDark ? theme.primary + '30' : 'rgba(76, 175, 80, 0.2)' }]}>
                 <Ionicons name="shield-checkmark-outline" size={24} color="#4CAF50" />
               </View>
               <View style={styles.noticeContent}>
-                <Text style={styles.noticeTitle}>Your Privacy Matters</Text>
-                <Text style={styles.noticeText}>
+                <Text style={[styles.noticeTitle, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>Your Privacy Matters</Text>
+                <Text style={[styles.noticeText, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>
                   You can change these settings anytime in your profile. We are committed to protecting your privacy.
                 </Text>
               </View>
@@ -211,7 +213,7 @@ export default function PrivacySettingsScreen() {
             )}
           </ScrollView>
           
-          <View style={styles.bottomContainer}>
+          <View style={[styles.bottomContainer, { borderTopColor: theme.isDark ? theme.border : 'rgba(232, 245, 233, 0.1)' }]}>
             <TouchableOpacity 
               style={styles.continueButton}
               onPress={handleContinue}
@@ -228,6 +230,7 @@ export default function PrivacySettingsScreen() {
             </TouchableOpacity>
             
             <View style={styles.progressIndicator}>
+              <View style={[styles.progressDot, styles.progressDotCompleted]} />
               <View style={[styles.progressDot, styles.progressDotCompleted]} />
               <View style={[styles.progressDot, styles.progressDotCompleted]} />
               <View style={[styles.progressDot, styles.progressDotCompleted]} />
@@ -262,37 +265,32 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 28, // Matched FocusMethodIntroScreen
     fontWeight: 'bold',
-    color: '#E8F5E9',
     textAlign: 'center',
     marginBottom: 8,
   },
   headerSubtitle: {
     fontSize: 16, // Matched FocusMethodIntroScreen
-    color: '#B8E6C1',
     textAlign: 'center',
     lineHeight: 22,
     paddingHorizontal: 10, // Matched FocusMethodIntroScreen
   },
   settingsList: { flex: 1 },
   privacyNotice: {
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
     borderRadius: 16,
     padding: 20,
     marginBottom: 24,
     flexDirection: 'row',
     borderWidth: 2,
-    borderColor: 'rgba(76, 175, 80, 0.3)',
     alignItems: 'center',
   },
   noticeIcon: { 
     marginRight: 16,
-    backgroundColor: 'rgba(76, 175, 80, 0.2)',
     padding: 8,
     borderRadius: 20,
   },
   noticeContent: { flex: 1 },
-  noticeTitle: { fontSize: 17, fontWeight: '600', color: '#E8F5E9', marginBottom: 5 }, // Adjusted size/weight
-  noticeText: { fontSize: 14, color: '#B8E6C1', lineHeight: 20 }, // Adjusted line height
+  noticeTitle: { fontSize: 17, fontWeight: '600', marginBottom: 5 }, // Adjusted size/weight
+  noticeText: { fontSize: 14, lineHeight: 20 }, // Adjusted line height
   categorySection: { marginBottom: 24 },
   categoryHeader: {
     flexDirection: 'row',
@@ -300,13 +298,11 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(232, 245, 233, 0.2)',
   },
   categoryIconContainer: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(76, 175, 80, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -314,15 +310,12 @@ const styles = StyleSheet.create({
   categoryTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#E8F5E9',
   },
   settingCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     borderWidth: 2,
-    borderColor: 'rgba(232, 245, 233, 0.2)',
   },
   settingHeaderContainer: { // Renamed from settingHeader for clarity
     flexDirection: 'row', 
@@ -336,19 +329,16 @@ const styles = StyleSheet.create({
   settingTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#E8F5E9',
     marginBottom: 4,
   },
   settingDescription: {
     fontSize: 14,
-    color: '#B8E6C1',
     lineHeight: 20,
   },
   bottomContainer: { 
     paddingTop: 20, 
     paddingBottom: Platform.OS === 'ios' ? 20 : 25, // Consistent padding
     borderTopWidth: 1, // Add a subtle separator
-    borderTopColor: 'rgba(232, 245, 233, 0.1)',
   },
   continueButton: {
     borderRadius: 12, // Consistent rounding

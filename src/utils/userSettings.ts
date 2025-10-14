@@ -12,23 +12,39 @@ export interface UserSettings {
   break_reminders?: boolean;
   auto_start_breaks?: boolean;
   auto_start_focus?: boolean;
+  auto_dnd_focus?: boolean;
   daily_goal_minutes?: number;
   preferred_session_length?: number;
   preferred_break_length?: number;
   timezone?: string;
   language?: string;
   vibration_enabled?: boolean;
+  workStyle?: string; // Add work style field
+  focus_duration?: number; // Add focus duration
+  break_duration?: number; // Add break duration
 }
 
 /**
  * Get user settings from database
  */
-export async function getUserSettings(userId: string): Promise<UserSettings | null> {
+export async function getUserSettings(userId?: string): Promise<UserSettings | null> {
   try {
+    let currentUserId = userId;
+    
+    // If no userId provided, get it from current session
+    if (!currentUserId) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        console.warn('No authenticated user found');
+        return null;
+      }
+      currentUserId = session.user.id;
+    }
+
     const { data, error } = await supabase
       .from('user_settings')
       .select('*')
-      .eq('user_id', userId)
+      .eq('user_id', currentUserId)
       .single();
 
     if (error && error.code !== 'PGRST116') {
@@ -109,6 +125,7 @@ export async function createInitialUserSettings(userId: string): Promise<boolean
       break_reminders: true,
       auto_start_breaks: false,
       auto_start_focus: false,
+      auto_dnd_focus: false,
       daily_goal_minutes: 120,
       preferred_session_length: 25,
       preferred_break_length: 5,

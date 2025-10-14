@@ -1,9 +1,10 @@
 {
   "expo": {
-    "name": "Triage System",
-    "slug": "thetriage",
-    "version": "1.5.0",
-    "runtimeVersion": "1.5.0",
+    "name": "Hike Wise",
+    "slug": "hikewise",
+    "version": "1.6.0",
+    "runtimeVersion": "1.6.0",
+    "sdkVersion": "54.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon-ios-white-1024.png",
     "updates": {
@@ -14,17 +15,17 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.triagesystem.app",
+      "bundleIdentifier": "com.hikewise.app",
       "icon": "./assets/icon-ios-white-1024.png",
-      "buildNumber": "13",
+      "buildNumber": "14",
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses camera for document scanning",
         "NSMicrophoneUsageDescription": "This app uses microphone for voice features"
       }
     },
     "android": {
-      "package": "com.triagesystem.app",
-      "versionCode": 17
+      "package": "com.hikewise.app",
+      "versionCode": 18
     },
     "extra": {
       "eas": {
@@ -32,7 +33,8 @@
       }
     },
     "plugins": [
-      "expo-localization"
+      "expo-localization",
+      "expo-asset"
     ]
   }
 }

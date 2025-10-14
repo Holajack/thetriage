@@ -5,6 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { supabase } from '../../utils/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
+import * as MessageService from '../../utils/messagingService';
 
 interface Message {
   id: string;
@@ -29,13 +31,15 @@ const MessageScreen = () => {
   const route = useRoute();
   const navigation = useNavigation();
   const { user } = useAuth();
+  const { theme } = useTheme();
   const { contact } = route.params as RouteParams;
   
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<MessageService.Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+  const unsubscribeRef = useRef<(() => void) | null>(null);
 
   // Get recipient ID from contact
   const recipientId = contact.id || '';
@@ -46,48 +50,47 @@ const MessageScreen = () => {
 
     const fetchMessages = async () => {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('messages')
-        .select(`
-          *,
-          sender:sender_id(id, full_name, avatar_url)
-        `)
-        .or(`and(sender_id.eq.${user.id},recipient_id.eq.${recipientId}),and(sender_id.eq.${recipientId},recipient_id.eq.${user.id})`)
-        .order('created_at', { ascending: true });
-
-      if (data) {
-        setMessages(data);
-        // Mark messages as read
-        await supabase
-          .from('messages')
-          .update({ is_read: true })
-          .eq('recipient_id', user.id)
-          .eq('sender_id', recipientId);
+      
+      try {
+        const result = await MessageService.getConversation(recipientId);
+        if (result.success) {
+          setMessages(result.data || []);
+          // Mark messages as read
+          await MessageService.markMessagesAsRead(recipientId);
+        } else {
+          console.error('Error fetching messages:', result.error);
+        }
+      } catch (error) {
+        console.error('Error fetching messages:', error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     fetchMessages();
 
-    // Set up real-time subscription using the new API
-    const channel = supabase
-      .channel('messages-changes')
-      .on('postgres_changes', 
-        { 
-          event: 'INSERT', 
-          schema: 'public', 
-          table: 'messages',
-          filter: `or(and(sender_id.eq.${user.id},recipient_id.eq.${recipientId}),and(sender_id.eq.${recipientId},recipient_id.eq.${user.id}))`
-        },
-        (payload) => {
-          setMessages(prev => [...prev, payload.new as Message]);
-          flatListRef.current?.scrollToEnd({ animated: true });
+    // Set up real-time subscription
+    if (user?.id) {
+      unsubscribeRef.current = MessageService.subscribeToConversation(
+        recipientId,
+        (newMessage) => {
+          setMessages((prev) => [...prev, newMessage]);
+          // Mark as read if it's from the other user
+          if (newMessage.sender_id === recipientId) {
+            MessageService.markMessagesAsRead(recipientId);
+          }
+          // Scroll to bottom
+          setTimeout(() => {
+            flatListRef.current?.scrollToEnd({ animated: true });
+          }, 100);
         }
-      )
-      .subscribe();
+      );
+    }
 
     return () => {
-      supabase.removeChannel(channel);
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+      }
     };
   }, [user?.id, recipientId]);
 
@@ -95,20 +98,26 @@ const MessageScreen = () => {
     if (!inputText.trim() || !user?.id || !recipientId) return;
 
     setSending(true);
-    const { error } = await supabase
-      .from('messages')
-      .insert([{
-        sender_id: user.id,
-        recipient_id: recipientId,
-        content: inputText.trim(),
-        is_read: false
-      }]);
-
-    if (!error) {
-      setInputText('');
-      flatListRef.current?.scrollToEnd({ animated: true });
+    const messageContent = inputText.trim();
+    setInputText('');
+    
+    try {
+      const result = await MessageService.sendMessage(recipientId, messageContent);
+      if (result.success) {
+        // Message will be added via real-time subscription
+        flatListRef.current?.scrollToEnd({ animated: true });
+      } else {
+        console.error('Error sending message:', result.error);
+        // Restore the input text if sending failed
+        setInputText(messageContent);
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+      // Restore the input text if sending failed
+      setInputText(messageContent);
+    } finally {
+      setSending(false);
     }
-    setSending(false);
   };
 
   const renderMessage = ({ item }: { item: Message }) => {
@@ -117,15 +126,15 @@ const MessageScreen = () => {
     return (
       <View style={[
         styles.messageContainer,
-        isMyMessage ? styles.myMessage : styles.theirMessage
+        isMyMessage ? [styles.myMessage, { backgroundColor: theme.primary }] : [styles.theirMessage, { backgroundColor: theme.card }]
       ]}>
         <Text style={[
           styles.messageText,
-          isMyMessage ? styles.myMessageText : styles.theirMessageText
+          isMyMessage ? styles.myMessageText : [styles.theirMessageText, { color: theme.text }]
         ]}>
           {item.content}
         </Text>
-        <Text style={styles.timestamp}>
+        <Text style={[styles.timestamp, { color: isMyMessage ? 'rgba(255,255,255,0.7)' : theme.textSecondary }]}>
           {new Date(item.created_at).toLocaleTimeString([], { 
             hour: '2-digit', 
             minute: '2-digit' 
@@ -136,15 +145,15 @@ const MessageScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <View style={styles.headerInfo}>
-          <Text style={styles.contactName}>{contact.name}</Text>
-          <Text style={styles.status}>{contact.status || 'Offline'}</Text>
+          <Text style={[styles.contactName, { color: theme.text }]}>{contact.name}</Text>
+          <Text style={[styles.status, { color: theme.textSecondary }]}>{contact.status || 'Offline'}</Text>
         </View>
       </View>
 
@@ -152,11 +161,11 @@ const MessageScreen = () => {
       <KeyboardAvoidingView 
         style={styles.messagesContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={90}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
       >
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#4CAF50" />
+            <ActivityIndicator size="large" color={theme.primary} />
           </View>
         ) : (
           <FlatList
@@ -170,19 +179,19 @@ const MessageScreen = () => {
         )}
 
         {/* Input Area */}
-        <View style={styles.inputContainer}>
+        <View style={[styles.inputContainer, { backgroundColor: theme.card, borderTopColor: theme.border }]}>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { backgroundColor: theme.background, color: theme.text }]}
             value={inputText}
             onChangeText={setInputText}
             placeholder="Type a message..."
-            placeholderTextColor="#999"
+            placeholderTextColor={theme.textSecondary}
             multiline
             maxLength={500}
           />
           <TouchableOpacity 
             onPress={sendMessage} 
-            style={[styles.sendButton, { opacity: inputText.trim() && !sending ? 1 : 0.5 }]}
+            style={[styles.sendButton, { backgroundColor: theme.primary, opacity: inputText.trim() && !sending ? 1 : 0.5 }]}
             disabled={!inputText.trim() || sending}
           >
             <Ionicons name="send" size={20} color="#fff" />
@@ -196,16 +205,13 @@ const MessageScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
   },
   backButton: {
     marginRight: 16,
@@ -216,11 +222,9 @@ const styles = StyleSheet.create({
   contactName: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
   },
   status: {
     fontSize: 14,
-    color: '#666',
     marginTop: 2,
   },
   messagesContainer: {
@@ -243,11 +247,9 @@ const styles = StyleSheet.create({
   },
   myMessage: {
     alignSelf: 'flex-end',
-    backgroundColor: '#4CAF50',
   },
   theirMessage: {
     alignSelf: 'flex-start',
-    backgroundColor: '#fff',
   },
   messageText: {
     fontSize: 16,
@@ -256,7 +258,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   theirMessageText: {
-    color: '#333',
+    // Color will be set dynamically
   },
   timestamp: {
     fontSize: 12,
@@ -267,10 +269,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
+    paddingVertical: 8, // Reduced from 12 to 8
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
   },
   input: {
     flex: 1,
@@ -278,7 +278,6 @@ const styles = StyleSheet.create({
     maxHeight: 120,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: '#f5f5f5',
     borderRadius: 20,
     fontSize: 16,
     marginRight: 12,
@@ -287,7 +286,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#4CAF50',
     justifyContent: 'center',
     alignItems: 'center',
   },
