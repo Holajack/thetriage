@@ -203,7 +203,11 @@ export const MainNavigator = () => {
           headerShown: false // Hide header for full screen design
         }} 
       />
-      <Drawer.Screen name="Community" component={CommunityScreen} />
+      <Drawer.Screen
+        name="Community"
+        component={CommunityScreen}
+        options={{ headerShown: false }}
+      />
       <Drawer.Screen 
         name="NoraScreen" 
         component={NoraScreen} 
@@ -212,12 +216,31 @@ export const MainNavigator = () => {
           headerShown: false // Let NoraScreen handle its own header with custom buttons
         }} 
       />
-      <Drawer.Screen name="Bonuses" component={BonusesScreen} />
-      <Drawer.Screen name="Results" component={ResultsScreen} />
+      <Drawer.Screen
+        name="Bonuses"
+        component={BonusesScreen}
+        options={{ headerShown: false }}
+      />
+      <Drawer.Screen
+        name="Results"
+        component={ResultsScreen}
+        options={{ headerShown: false }}
+      />
       <Drawer.Screen name="Leaderboard" component={LeaderboardScreen} />
-      <Drawer.Screen name="Profile" component={ProfileScreen} />
+      <Drawer.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{ headerShown: false }}
+      />
       <Drawer.Screen name="Settings" component={SettingsScreen} />
-      <Drawer.Screen name="SessionHistory" component={SessionHistoryScreen} options={{ title: 'Session History' }} />
+      <Drawer.Screen
+        name="SessionHistory"
+        component={SessionHistoryScreen}
+        options={{
+          title: 'Session History',
+          headerShown: false
+        }}
+      />
       <Drawer.Screen name="Subscription" component={SubscriptionScreen} />
       <Drawer.Screen
         name="ProTrekker"
