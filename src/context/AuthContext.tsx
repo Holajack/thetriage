@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../utils/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createInitialUserData, ensureUserDataCompleteness } from '../utils/createUserData';
+import * as Network from 'expo-network';
 
 // Simple timeout wrapper
 const withTimeout = (promise: Promise<any>, timeoutMs: number = 6000): Promise<any> => {
@@ -51,23 +52,48 @@ const withTimeoutAndRetry = (
   });
 };
 
-// Network connectivity test
+// In src/context/AuthContext.tsx - Update the timeout values
+const NETWORK_TIMEOUT = 15000; // Increase from 8000ms to 15000ms
+const MAX_RETRIES = 5; // Increase from 3 to 5 retries
+const RETRY_DELAYS = [1000, 2000, 3000, 5000, 8000]; // Progressive backoff
+
+// Enhanced network connectivity test
 const testNetworkConnectivity = async (): Promise<boolean> => {
-  try {
-    console.log('🌐 Testing network connectivity...');
-    
-    await withTimeoutAndRetry(
-      () => supabase.from('profiles').select('count').limit(1).then(res => res),
-      3000,
-      1
-    );
-    
-    console.log('✅ Network connectivity confirmed');
-    return true;
-  } catch (error: any) {
-    console.log('❌ Network connectivity failed:', error.message);
-    return false;
+  console.log('🌐 Testing network connectivity...');
+  
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      console.log(`🔄 Network attempt ${attempt}/${MAX_RETRIES}`);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), NETWORK_TIMEOUT);
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('count')
+        .limit(1)
+        .abortSignal(controller.signal);
+        
+      clearTimeout(timeoutId);
+      
+      if (!error) {
+        console.log('✅ Network connectivity confirmed');
+        return true;
+      }
+      
+    } catch (error) {
+      console.log(`❌ Attempt ${attempt} failed:`, error.message);
+      
+      if (attempt < MAX_RETRIES) {
+        const delay = RETRY_DELAYS[attempt - 1];
+        console.log(`⏳ Waiting ${delay}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
   }
+  
+  console.log('❌ Network connectivity test failed after all attempts');
+  return false;
 };
 
 interface AuthContextType {
@@ -89,6 +115,7 @@ interface AuthContextType {
   refreshUserData: () => Promise<void>;
   isRecentLogin: () => Promise<boolean>;
   setLastLoginTime: () => Promise<void>;
+  isOffline: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -102,6 +129,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [justLoggedIn, setJustLoggedIn] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const [hasSeenLanding, setHasSeenLandingState] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
 
   // Landing page state management
   const setHasSeenLanding = async (seen: boolean) => {
@@ -157,9 +186,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       if (showLogs) console.log('🔐 AuthContext: Starting session check...');
       
+      // First check network status
+      const networkAvailable = await testNetworkConnectivity();
+      if (!networkAvailable) {
+        console.log('⚠️ No network connectivity - working in offline mode');
+        setIsOffline(true);
+        
+        // Try to load cached session data
+        try {
+          const cachedUser = await AsyncStorage.getItem('cachedUser');
+          const cachedOnboarding = await AsyncStorage.getItem('cachedOnboarding');
+          
+          if (cachedUser) {
+            console.log('📦 Using cached user data for offline mode');
+            setUser(JSON.parse(cachedUser));
+            setOnboarding(cachedOnboarding ? JSON.parse(cachedOnboarding) : null);
+            setIsAuthenticated(true);
+            setHasCompletedOnboarding(cachedOnboarding ? JSON.parse(cachedOnboarding)?.is_onboarding_complete || false : false);
+            return;
+          }
+        } catch (cacheError) {
+          console.log('⚠️ Could not load cached data:', cacheError);
+        }
+        
+        // No cached data, stay signed out
+        setIsAuthenticated(false);
+        setUser(null);
+        setOnboarding(null);
+        setLeaderboard(null);
+        setHasCompletedOnboarding(false);
+        setJustLoggedIn(false);
+        return;
+      }
+      
+      setIsOffline(false);
+      
       const { data: { session }, error: sessionError } = await withTimeout(
         supabase.auth.getSession(),
-        5000
+        8000
       );
 
       if (sessionError) {
@@ -167,9 +231,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         // Handle specific refresh token errors
         if (sessionError.message?.includes('refresh_token_not_found') || 
-            sessionError.message?.includes('Invalid Refresh Token')) {
+            sessionError.message?.includes('Invalid Refresh Token') ||
+            sessionError.message?.includes('Refresh Token Not Found')) {
           console.log('AuthContext: Invalid refresh token, clearing session...');
-          await supabase.auth.signOut();
+          try {
+            await supabase.auth.signOut();
+          } catch (signOutError) {
+            console.log('AuthContext: Sign out failed, continuing with cleanup');
+          }
           setUser(null);
           setOnboarding(null);
           setLeaderboard(null);
@@ -188,6 +257,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLeaderboard(null);
         setIsAuthenticated(false);
         setHasCompletedOnboarding(false);
+        setJustLoggedIn(false);
         return;
       }
 
@@ -195,11 +265,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const userData = await fetchUserDataWithFallback(session.user, showLogs);
       
+      // Only set authenticated if we have real data, not fallback
+      if (userData.usingFallback) {
+        console.log('⚠️ Using fallback data - keeping user signed out');
+        setIsAuthenticated(false);
+        setUser(null);
+        setOnboarding(null);
+        setLeaderboard(null);
+        setHasCompletedOnboarding(false);
+        setJustLoggedIn(false);
+        return;
+      }
+      
       setIsAuthenticated(true);
       setUser(userData.profile);
       setOnboarding(userData.onboarding);
       setLeaderboard(userData.leaderboard);
       setHasCompletedOnboarding(userData.onboarding?.is_onboarding_complete || false);
+
+      // Cache user data for offline mode
+      try {
+        await AsyncStorage.setItem('cachedUser', JSON.stringify(userData.profile));
+        await AsyncStorage.setItem('cachedOnboarding', JSON.stringify(userData.onboarding));
+        console.log('💾 User data cached for offline use');
+      } catch (cacheError) {
+        console.log('⚠️ Failed to cache user data:', cacheError);
+      }
 
       if (showLogs) {
         console.log('✅ AuthContext: User authenticated successfully');
@@ -211,19 +302,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error("AuthContext: Session check failed:", error.message);
       
       if (error.message.includes('timeout') || error.message.includes('Network request failed')) {
-        console.log('AuthContext: Using cached/fallback data due to network timeout');
-        if (!isAuthenticated) {
-          setIsAuthenticated(false);
-          setUser(null);
-          setOnboarding(null);
-          setLeaderboard(null);
-        }
+        console.log('AuthContext: Network error during session check - signing out user');
+        setIsAuthenticated(false);
+        setUser(null);
+        setOnboarding(null);
+        setLeaderboard(null);
+        setHasCompletedOnboarding(false);
+        setJustLoggedIn(false);
       } else {
         setIsAuthenticated(false);
         setUser(null);
         setOnboarding(null);
         setLeaderboard(null);
         setHasCompletedOnboarding(false);
+        setJustLoggedIn(false);
       }
     }
   };
@@ -253,6 +345,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
 
+    let usingFallback = false;
+
     try {
       if (showLogs) console.log('📊 Fetching profile data...');
       
@@ -272,6 +366,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (profileError: any) {
         console.log('⚠️ Profile fetch failed, using fallback:', profileError.message);
         profile = fallbackData.profile;
+        usingFallback = true;
       }
 
       let onboarding;
@@ -292,6 +387,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (onboardingError: any) {
         console.log('⚠️ Onboarding fetch failed, using fallback:', onboardingError.message);
         onboarding = fallbackData.onboarding;
+        usingFallback = true;
       }
 
       let leaderboard;
@@ -312,13 +408,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (leaderboardError: any) {
         console.log('⚠️ Leaderboard fetch failed, using fallback:', leaderboardError.message);
         leaderboard = fallbackData.leaderboard;
+        usingFallback = true;
       }
 
-      return { profile, onboarding, leaderboard };
+      return { profile, onboarding, leaderboard, usingFallback };
 
     } catch (error: any) {
       console.log('❌ Critical error in data fetch, using complete fallback:', error.message);
-      return fallbackData;
+      return { ...fallbackData, usingFallback: true };
     }
   };
 
@@ -336,14 +433,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       const authResult = await withTimeoutAndRetry(
         () => supabase.auth.signInWithPassword({ email, password }),
-        8000,
-        2
+        10000,
+        3
       );
       
       const { data: authData, error: authError } = authResult;
 
       if (authError) {
         console.error('❌ Authentication failed:', authError.message);
+        
+        // Provide more user-friendly error messages
+        if (authError.message.includes('Network request failed')) {
+          return { error: 'Network connection failed. Please check your internet connection and try again.' };
+        } else if (authError.message.includes('Invalid login credentials')) {
+          return { error: 'Invalid email or password. Please check your credentials and try again.' };
+        } else if (authError.message.includes('Email not confirmed')) {
+          return { error: 'Please verify your email address before signing in.' };
+        } else if (authError.message.includes('Too many requests')) {
+          return { error: 'Too many login attempts. Please wait a moment and try again.' };
+        }
+        
         return { error: `Authentication failed: ${authError.message}` };
       }
 
@@ -401,27 +510,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Sign up function
+  // Enhanced sign up function with better iOS error handling
   const signUp = async (email: string, password: string, userData: any): Promise<{ error?: string }> => {
     try {
       console.log('📝 Starting sign up process...');
       
-      const { data: authData, error: authError } = await withTimeout(
-        supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              username: userData.username,
-              full_name: userData.full_name
-            }
+      const networkAvailable = await testNetworkConnectivity();
+      if (!networkAvailable) {
+        return { 
+          error: 'No internet connection. Please check your network and try again.' 
+        };
+      }
+      
+      // Step 1: Create the auth account
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            username: userData.username,
+            full_name: userData.full_name
           }
-        }),
-        10000
-      );
+        }
+      });
 
       if (authError) {
         console.error('❌ Sign up failed:', authError.message);
+        
+        if (authError.message.includes('Network request failed')) {
+          return { error: 'Network connection failed. Please check your internet connection and try again.' };
+        } else if (authError.message.includes('User already registered')) {
+          return { error: 'An account with this email already exists. Please try signing in instead.' };
+        } else if (authError.message.includes('Invalid email')) {
+          return { error: 'Please enter a valid email address.' };
+        } else if (authError.message.includes('Password should be at least')) {
+          return { error: 'Password must be at least 6 characters long.' };
+        }
+        
         return { error: authError.message };
       }
 
@@ -429,28 +554,66 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { error: 'Account creation failed - no user data returned. Please try again.' };
       }
 
-      console.log('✅ Sign up successful, creating database records...');
+      console.log('✅ Auth account created, setting up database records...');
       
-      // Immediately create database records for the new user
+      // Step 2: Create database records (with enhanced error handling)
       try {
         const dbResult = await createInitialUserData(authData.user.id, {
           fullName: userData.full_name,
+          username: userData.username,
+          email: email,
           avatarUrl: null
         });
         
-        if (!dbResult || !dbResult.success) {
+        if (!dbResult?.success) {
           console.error('❌ Database setup failed:', dbResult?.error || 'Unknown error');
-          // Don't fail signup if database setup fails - user can recover on login
-          console.log('⚠️ Continuing with signup despite database error');
+          
+          // Check if at least profile was created
+          if (dbResult?.results?.created?.includes('profile')) {
+            console.log('✅ Profile exists, user can login normally');
+          } else {
+            console.log('❌ No profile created - this will cause login issues');
+            return { 
+              error: 'Account was created but setup is incomplete. Please contact support or try signing in.' 
+            };
+          }
         } else {
           console.log('✅ Database records created successfully');
         }
       } catch (dbError: any) {
         console.error('❌ Database setup error:', dbError.message);
-        // Don't fail signup - user can recover on login
-        console.log('⚠️ Continuing with signup despite database error');
+        
+        // Try to ensure at least a basic profile exists
+        try {
+          console.log('🔧 Attempting to create minimal profile...');
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .insert({
+              id: authData.user.id,
+              email: email,
+              full_name: userData.full_name,
+              username: userData.username,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            });
+          
+          if (profileError && !profileError.message.includes('already exists')) {
+            console.error('❌ Minimal profile creation failed:', profileError);
+            return { 
+              error: 'Account was created but profile setup failed. Please try signing in or contact support.' 
+            };
+          } else {
+            console.log('✅ Minimal profile created successfully');
+          }
+        } catch (minimalProfileError) {
+          console.error('❌ Could not create minimal profile:', minimalProfileError);
+          return { 
+            error: 'Account was created but profile setup failed. Please try signing in or contact support.' 
+          };
+        }
       }
 
+      console.log('🎉 Account creation process completed');
       return {};
 
     } catch (error: any) {
@@ -483,23 +646,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Update onboarding
   const updateOnboarding = async (data: any) => {
     try {
+      if (!user?.id) {
+        console.error('❌ Cannot update onboarding: no user ID available');
+        return;
+      }
+
+      // Ensure user_id is included in the data
+      const updateData = {
+        user_id: user.id,
+        ...data,
+        updated_at: new Date().toISOString()
+      };
+
+      console.log('🔄 Updating onboarding with data:', updateData);
+      
       const { error } = await withTimeout(
-        Promise.resolve(supabase.from('onboarding_preferences').upsert(data).select()),
+        Promise.resolve(supabase.from('onboarding_preferences').upsert(updateData, { 
+          onConflict: 'user_id' 
+        }).select()),
         8000
       );
       
       if (error) throw error;
       
-      setOnboarding((prev: any) => ({ ...prev, ...data }));
+      setOnboarding((prev: any) => ({ ...prev, ...updateData }));
       
       // Update hasCompletedOnboarding if the update includes completion status
       if (data.is_onboarding_complete !== undefined) {
         setHasCompletedOnboarding(data.is_onboarding_complete);
+        console.log('✅ Onboarding completion status updated:', data.is_onboarding_complete);
       }
       
-      console.log('✅ Onboarding data updated');
+      console.log('✅ Onboarding data updated successfully');
     } catch (error) {
       console.error('❌ Update onboarding error:', error);
+      throw error; // Re-throw so calling code can handle the error
     }
   };
 
@@ -602,6 +783,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     refreshUserData,
     isRecentLogin,
     setLastLoginTime,
+    isOffline,
   };
 
   return (

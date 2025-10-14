@@ -8,6 +8,7 @@ import { OnboardingStackParamList } from '../../navigation/types';
 import { useAuth } from '../../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { useTheme } from '../../context/ThemeContext';
 
 type ProfileCreationNavigationProp = NativeStackNavigationProp<OnboardingStackParamList, 'ProfileCreation'>;
 type ProfileCreationRouteProp = RouteProp<OnboardingStackParamList, 'ProfileCreation'>;
@@ -16,6 +17,7 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
   const { updateOnboarding, updateProfile, user } = useAuth();
   const navigation = useNavigation<ProfileCreationNavigationProp>();
   const { focusMethod, email } = route.params || {}; // Handle undefined params
+  const { theme } = useTheme();
 
   const [profilePicUri, setProfilePicUri] = useState<string | null>(null);
   const [bio, setBio] = useState('');
@@ -113,7 +115,7 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
 
       await updateOnboarding(updateData);
       setLoading(false);
-      navigation.navigate('PrivacySettings', { focusMethod });
+      navigation.navigate('StudyPreferences', { focusMethod });
     } catch (e: any) {
       setLoading(false);
       setError(e.message || 'Failed to update profile.');
@@ -123,7 +125,7 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
 
   return (
     <LinearGradient
-      colors={['#0F2419', '#1B4A3A', '#2E5D4F', '#1B4A3A']}
+      colors={theme.isDark ? ['#000000', '#1a1a1a', '#2a2a2a', '#1a1a1a'] : ['#0F2419', '#1B4A3A', '#2E5D4F', '#1B4A3A']}
       locations={[0, 0.3, 0.7, 1]}
       style={styles.container}
     >
@@ -134,32 +136,32 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
               onPress={() => navigation.goBack()} 
               style={styles.backButton}
             >
-              <Ionicons name="arrow-back" size={24} color="#E8F5E9" />
-              <Text style={styles.backButtonText}>Account Creation</Text>
+              <Ionicons name="arrow-back" size={24} color={theme.isDark ? theme.text : '#E8F5E9'} />
+              <Text style={[styles.backButtonText, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>Account Creation</Text>
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Add Your Profile Photo</Text>
-            <Text style={styles.headerSubtitle}>
-              Step 3 of 5 • Optional: Add a photo and bio to personalize your profile.
+            <Text style={[styles.headerTitle, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>Add Your Profile Photo</Text>
+            <Text style={[styles.headerSubtitle, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>
+              Step 3 of 6 • Optional: Add a photo and bio to personalize your profile.
             </Text>
           </View>
 
           <View style={styles.formContainer}>
-            <TouchableOpacity style={styles.avatarContainer} onPress={pickImage}>
+            <TouchableOpacity style={[styles.avatarContainer, { backgroundColor: theme.isDark ? theme.card : 'rgba(255, 255, 255, 0.1)', borderColor: theme.isDark ? theme.border : 'rgba(232, 245, 233, 0.3)' }]} onPress={pickImage}>
               {profilePicUri ? (
                 <Image source={{ uri: profilePicUri }} style={styles.avatarImage} />
               ) : (
                 <View style={styles.avatarPlaceholder}>
-                  <Ionicons name="camera-outline" size={40} color="#B8E6C1" />
-                  <Text style={styles.avatarPlaceholderText}>Add Photo</Text>
+                  <Ionicons name="camera-outline" size={40} color={theme.isDark ? theme.textSecondary : '#B8E6C1'} />
+                  <Text style={[styles.avatarPlaceholderText, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>Add Photo</Text>
                 </View>
               )}
             </TouchableOpacity>
 
-            <Text style={styles.inputLabel}>Bio (Optional)</Text>
+            <Text style={[styles.inputLabel, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>Bio (Optional)</Text>
             <TextInput
-              style={[styles.input, styles.bioInput]}
+              style={[styles.input, styles.bioInput, { backgroundColor: theme.isDark ? theme.card : 'rgba(255, 255, 255, 0.05)', color: theme.isDark ? theme.text : '#E8F5E9', borderColor: theme.isDark ? theme.border : 'rgba(232, 245, 233, 0.2)' }]}
               placeholder="Tell us a bit about yourself..."
-              placeholderTextColor="#B8E6C1"
+              placeholderTextColor={theme.isDark ? theme.textSecondary : '#B8E6C1'}
               value={bio}
               onChangeText={setBio}
               multiline
@@ -167,15 +169,15 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
               maxLength={150}
               textAlignVertical="top"
             />
-            <Text style={styles.bioHint}>
+            <Text style={[styles.bioHint, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>
               {bio.length}/150 characters
             </Text>
 
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            {error ? <Text style={[styles.errorText, { backgroundColor: theme.isDark ? 'rgba(255, 107, 107, 0.15)' : 'rgba(255, 107, 107, 0.1)', borderColor: theme.isDark ? 'rgba(255, 107, 107, 0.4)' : 'rgba(255, 107, 107, 0.3)' }]}>{error}</Text> : null}
           </View>
         </ScrollView>
 
-        <View style={styles.bottomContainer}>
+        <View style={[styles.bottomContainer, { backgroundColor: theme.isDark ? theme.background + 'CC' : 'rgba(15, 36, 25, 0.8)', borderTopColor: theme.isDark ? theme.border : 'rgba(232, 245, 233, 0.1)' }]}>
           <TouchableOpacity
             style={[styles.continueButton, loading && styles.continueButtonDisabled]}
             onPress={handleContinue}
@@ -199,6 +201,7 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
             <View style={styles.progressDot} />
             <View style={styles.progressDot} />
             <View style={[styles.progressDot, styles.progressDotActive]} />
+            <View style={styles.progressDot} />
             <View style={styles.progressDot} />
             <View style={styles.progressDot} />
           </View>
@@ -234,7 +237,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   backButtonText: {
-    color: '#E8F5E9',
     fontSize: 16,
     marginLeft: 6,
     fontWeight: '500',
@@ -242,14 +244,12 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#E8F5E9',
     textAlign: 'center',
     marginTop: 40, 
     marginBottom: 8,
   },
   headerSubtitle: {
     fontSize: 16,
-    color: '#B8E6C1',
     textAlign: 'center',
     lineHeight: 22,
     paddingHorizontal: 10,
@@ -263,12 +263,10 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 30,
     borderWidth: 2,
-    borderColor: 'rgba(232, 245, 233, 0.3)',
     overflow: 'hidden',
   },
   avatarImage: {
@@ -280,28 +278,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatarPlaceholderText: {
-    color: '#B8E6C1',
     marginTop: 8,
     fontSize: 14,
   },
   inputLabel: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#E8F5E9',
     marginBottom: 8,
     marginTop: 16,
     alignSelf: 'flex-start',
     width: '100%',
   },
   input: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    color: '#E8F5E9',
     paddingVertical: 15,
     paddingHorizontal: 20,
     borderRadius: 12,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: 'rgba(232, 245, 233, 0.2)',
     width: '100%',
   },
   bioInput: {
@@ -310,7 +303,6 @@ const styles = StyleSheet.create({
   },
   bioHint: {
     fontSize: 13,
-    color: '#B8E6C1',
     marginTop: 6,
     marginLeft: 4,
     alignSelf: 'flex-start',
@@ -322,12 +314,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 15,
     marginBottom: 10,
-    backgroundColor: 'rgba(255, 107, 107, 0.1)',
     paddingVertical: 10,
     paddingHorizontal: 15,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 107, 107, 0.3)',
     width: '100%',
   },
   bottomContainer: {
@@ -338,9 +328,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 25, 
-    backgroundColor: 'rgba(15, 36, 25, 0.8)',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(232, 245, 233, 0.1)',
   },
   continueButton: {
     borderRadius: 12,

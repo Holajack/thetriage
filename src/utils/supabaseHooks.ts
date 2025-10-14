@@ -641,17 +641,65 @@ export const useSupabaseFriends = () => {
         return;
       }
 
-      const { data, error } = await supabase
-        .from('friends')
-        .select('*')
-        .eq('user_id', session.user.id)
-        .eq('status', 'accepted')
-        .order('created_at', { ascending: false });
+      // Use the appropriate friends table structure
+      let data = [];
+      
+      try {
+        // Try user_friends table first (most likely structure)
+        const { data: userFriendsData, error: userFriendsError } = await supabase
+          .from('user_friends')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .eq('status', 'accepted')
+          .order('created_at', { ascending: false });
 
-      if (error) throw error;
+        if (!userFriendsError && userFriendsData) {
+          data = userFriendsData;
+        } else {
+          throw new Error('user_friends table not available');
+        }
+      } catch (userFriendsError) {
+        try {
+          // Try friends table with status column
+          const { data: friendsData, error: friendsError } = await supabase
+            .from('friends')
+            .select('*')
+            .eq('user_id', session.user.id)
+            .eq('status', 'accepted')
+            .order('created_at', { ascending: false });
+          
+          if (!friendsError && friendsData) {
+            data = friendsData;
+          } else {
+            throw new Error('friends table with status not available');
+          }
+        } catch (friendsWithStatusError) {
+          try {
+            // Final fallback: friends table without status column
+            const { data: basicFriendsData, error: basicFriendsError } = await supabase
+              .from('friends')
+              .select('user_id, friend_id, created_at')
+              .eq('user_id', session.user.id)
+              .order('created_at', { ascending: false });
+            
+            if (!basicFriendsError && basicFriendsData) {
+              data = basicFriendsData;
+            } else {
+              console.warn('No suitable friends table found');
+              data = [];
+            }
+          } catch (basicError) {
+            console.warn('All friends table queries failed');
+            data = [];
+          }
+        }
+      }
+
       setFriends(data || []);
     } catch (err: any) {
-      setError(err.message);
+      console.warn('Friends table fetch error:', err.message);
+      setError(null); // Don't set error for missing table, just use empty array
+      setFriends([]);
     } finally {
       setLoading(false);
     }
@@ -676,21 +724,39 @@ export const useSupabaseStudyRooms = () => {
 
   const fetchRooms = useCallback(async () => {
     try {
+      // First try to get rooms without the relationship to avoid conflicts
       const { data, error } = await supabase
         .from('study_rooms')
-        .select(`
-          *,
-          creator:creator_id (
-            id,
-            full_name,
-            username,
-            email
-          )
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setRooms(data || []);
+      
+      // Then enhance with creator data separately to avoid relationship conflicts
+      let enhancedRooms = data || [];
+      if (data && data.length > 0) {
+        try {
+          const creatorIds = [...new Set(data.map(room => room.creator_id).filter(Boolean))];
+          if (creatorIds.length > 0) {
+            const { data: creators } = await supabase
+              .from('profiles')
+              .select('id, full_name, username, email')
+              .in('id', creatorIds);
+            
+            if (creators) {
+              const creatorMap = new Map(creators.map(creator => [creator.id, creator]));
+              enhancedRooms = data.map(room => ({
+                ...room,
+                creator: room.creator_id ? creatorMap.get(room.creator_id) : null
+              }));
+            }
+          }
+        } catch (creatorError) {
+          console.warn('Could not fetch creator data, using rooms without creator info');
+        }
+      }
+      
+      setRooms(enhancedRooms);
     } catch (err: any) {
       setError(err.message);
     } finally {

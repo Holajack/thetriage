@@ -3,10 +3,12 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 
 export default function LoginScreen() {
   const { signIn } = useAuth();
+  const { theme } = useTheme();
   const navigation = useNavigation<any>();
 
   // Login state
@@ -29,49 +31,59 @@ export default function LoginScreen() {
     // Do not navigate; RootNavigator will handle the switch
   };
 
+  // Dynamic colors based on theme
+  const gradientColors = theme.isDark 
+    ? ['#000000', '#1a1a1a', '#2a2a2a', '#1a1a1a']
+    : ['#0F2419', '#1B4A3A', '#2E5D4F', '#1B4A3A'];
+  
+  const textColor = theme.isDark ? theme.text : '#E8F5E9';
+  const secondaryTextColor = theme.isDark ? theme.textSecondary : '#B8E6C1';
+  const inputBorderColor = theme.isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(232, 245, 233, 0.3)';
+  const inputBackground = theme.isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.1)';
+
   return (
     <LinearGradient
-      colors={['#0F2419', '#1B4A3A', '#2E5D4F', '#1B4A3A']}
+      colors={gradientColors}
       locations={[0, 0.3, 0.7, 1]}
       style={styles.container}
     >
       <SafeAreaView style={styles.safeArea}>
         <TouchableOpacity onPress={() => navigation.dispatch(CommonActions.navigate('Landing'))} style={styles.backButton}>
-          <Text style={styles.backArrow}>{'<'} </Text>
-          <Text style={styles.backText}>Back to Landing Page</Text>
+          <Text style={[styles.backArrow, { color: textColor }]}>{'<'} </Text>
+          <Text style={[styles.backText, { color: textColor }]}>Back to Landing Page</Text>
         </TouchableOpacity>
-        <Text style={styles.header}>Welcome Back</Text>
-        <Text style={styles.subheader}>Log in to continue your focus journey.</Text>
+        <Text style={[styles.header, { color: textColor }]}>Welcome Back</Text>
+        <Text style={[styles.subheader, { color: secondaryTextColor }]}>Log in to continue your focus journey.</Text>
 
         <View style={{ marginTop: 24 }}>
-          <Text style={styles.inputLabel}>Email</Text>
+          <Text style={[styles.inputLabel, { color: textColor }]}>Email</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: inputBackground, borderColor: inputBorderColor, color: textColor }]}
             placeholder="Enter your email"
-            placeholderTextColor="#B8E6C1"
+            placeholderTextColor={secondaryTextColor}
             value={loginEmail}
             onChangeText={setLoginEmail}
           autoCapitalize="none"
           keyboardType="email-address"
         />
-          <Text style={styles.inputLabel}>Password</Text>
+          <Text style={[styles.inputLabel, { color: textColor }]}>Password</Text>
           <View style={styles.passwordRow}>
             <TextInput
-              style={[styles.input, { flex: 1 }]}
+              style={[styles.input, { flex: 1, backgroundColor: inputBackground, borderColor: inputBorderColor, color: textColor }]}
               placeholder="Enter your password"
-              placeholderTextColor="#B8E6C1"
+              placeholderTextColor={secondaryTextColor}
               value={loginPassword}
               onChangeText={setLoginPassword}
               secureTextEntry={!showPassword}
               autoCapitalize="none"
             />
             <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: 12, top: 12 }}>
-              <Text style={{ fontSize: 18, color: '#B8E6C1' }}>{showPassword ? '🙈' : '👁️'}</Text>
+              <Text style={{ fontSize: 18, color: secondaryTextColor }}>{showPassword ? '🙈' : '👁️'}</Text>
             </TouchableOpacity>
           </View>
           {loginError ? <Text style={styles.errorText}>{loginError}</Text> : null}
           <TouchableOpacity
-            style={[styles.primaryButton, loading && styles.primaryButtonDisabled]}
+            style={[styles.primaryButton, { backgroundColor: theme.primary }, loading && [styles.primaryButtonDisabled, { backgroundColor: theme.primary + '80' }]]}
             onPress={handleLogin}
             disabled={loading}
           >
@@ -80,7 +92,7 @@ export default function LoginScreen() {
             </Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')} style={{ marginTop: 12, alignSelf: 'flex-end' }}>
-            <Text style={{ color: '#4CAF50', fontSize: 15, fontWeight: '500' }}>Forgot Password?</Text>
+            <Text style={{ color: theme.primary, fontSize: 15, fontWeight: '500' }}>Forgot Password?</Text>
           </TouchableOpacity>
         </View>
 
@@ -106,11 +118,9 @@ const styles = StyleSheet.create({
   },
   backArrow: {
     fontSize: 20, // Slightly larger arrow
-    color: '#E8F5E9',
     marginRight: 8,
   },
   backText: {
-    color: '#E8F5E9',
     fontWeight: '600', // Bolder
     fontSize: 17, // Slightly larger
   },
@@ -118,12 +128,10 @@ const styles = StyleSheet.create({
     fontSize: 32, // Larger header
     fontWeight: 'bold',
     marginBottom: 12,
-    color: '#E8F5E9',
     textAlign: 'left',
   },
   subheader: {
     fontSize: 17, // Slightly larger subheader
-    color: '#B8E6C1',
     // Removed background, padding, border for a cleaner look under "Welcome Back"
     marginBottom: 24, // Increased margin
     textAlign: 'left', // Align with header
@@ -133,18 +141,14 @@ const styles = StyleSheet.create({
     fontSize: 16, // Slightly larger
     fontWeight: '500',
     marginBottom: 6, // Adjusted margin
-    color: '#E8F5E9',
   },
   input: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     paddingVertical: 16, // Increased padding
     paddingHorizontal: 16,
     borderRadius: 10, // More rounded
     marginBottom: 18, // Adjusted margin
     fontSize: 16,
-    color: '#E8F5E9',
     borderWidth: 1,
-    borderColor: 'rgba(232, 245, 233, 0.3)',
   },
   passwordRow: {
     flexDirection: 'row',
@@ -163,7 +167,6 @@ const styles = StyleSheet.create({
     fontSize: 15, // Slightly larger
   },
   primaryButton: {
-    backgroundColor: '#4CAF50',
     paddingVertical: 18, // Increased padding
     borderRadius: 12,
     alignItems: 'center',
@@ -178,7 +181,6 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   primaryButtonDisabled: {
-    backgroundColor: 'rgba(76, 175, 80, 0.5)',
     shadowOpacity: 0,
     elevation: 0,
   },

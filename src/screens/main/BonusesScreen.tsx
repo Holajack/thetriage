@@ -4,6 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
+import { BottomTabBar } from '../../components/BottomTabBar';
+import { UnifiedHeader } from '../../components/UnifiedHeader';
 
 const BonusesScreen = () => {
   const navigation = useNavigation();
@@ -101,17 +103,12 @@ const BonusesScreen = () => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: theme.card }]}>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>Bonus Features</Text>
-        <Text style={[styles.headerSubtitle, { color: theme.text + '99' }]}>
-          Unlock advanced tools to enhance your study experience
-        </Text>
-      </View>
+      {/* Unified Header */}
+      <UnifiedHeader title="Traveller" onClose={() => navigation.navigate('Home')} />
 
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 100 }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Features Grid */}
@@ -181,6 +178,9 @@ const BonusesScreen = () => {
           </View>
         </View>
       </ScrollView>
+
+      {/* Bottom Tab Bar */}
+      <BottomTabBar currentRoute="Bonuses" />
     </SafeAreaView>
   );
 };
@@ -188,6 +188,32 @@ const BonusesScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  navHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 10,
+  },
+  closeButton: {
+    padding: 4,
+  },
+  closeButtonCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navHeaderTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  headerSpacer: {
+    width: 48,
   },
   header: {
     padding: 20,

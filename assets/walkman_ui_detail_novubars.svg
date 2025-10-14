@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760">
+  <defs>
+    <linearGradient id="bodyGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#efe7d8"/>
+      <stop offset="100%" stop-color="#e7dcc6"/>
+    </linearGradient>
+    <linearGradient id="bevel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity=".7"/>
+      <stop offset="100%" stop-color="#c7b99f" stop-opacity=".4"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity=".35"/>
+      <stop offset="100%" stop-color="#cfd6df" stop-opacity=".15"/>
+    </linearGradient>
+    <pattern id="microStripes" width="6" height="6" patternUnits="userSpaceOnUse">
+      <rect width="6" height="6" fill="none"/>
+      <rect width="6" height="1" y="0" fill="#e9dfcc" opacity=".6"/>
+      <rect width="6" height="1" y="3" fill="#e9dfcc" opacity=".4"/>
+    </pattern>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feOffset dy="10" />
+      <feGaussianBlur stdDeviation="14" result="b"/>
+      <feColorMatrix in="b" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .26 0"/>
+      <feBlend in="SourceGraphic"/>
+    </filter>
+    <style>
+      .label { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial; fill:#2a3a4a; }
+      #titleText { font-size: 48px; font-weight: 800; letter-spacing: 1px; }
+      #subtitleText { font-size: 32px; opacity: .9; }
+      .screenRule { stroke: #9aa9b8; stroke-width: 2; opacity:.6 }
+      .btn { cursor: pointer; }
+      .btn-rect { fill: #e7eef3; stroke: #97a7b6; stroke-width:3; rx:28; ry:28; }
+      .btn-icon { fill:#425563; }
+      .btn:active .btn-rect { filter: brightness(.96); transform: translateY(1px); }
+      .slot { fill:#dde6ec; stroke:#b7c2cc; stroke-width:5; }
+      .screw circle { fill:#9d8e77; }
+      .screw path { fill:url(#bevel); }
+      .engrave { fill:#b49f82; font-weight:700; letter-spacing: .18em; }
+      .smallLabel { fill:#6a6460; font-size:18px; font-family: ui-monospace, Menlo, Consolas, monospace; }
+    </style>
+  </defs>
+
+  <g id="device" filter="url(#shadow)">
+    <!-- Base body -->
+    <rect x="30" y="30" width="1220" height="700" rx="56" ry="56" fill="url(#bodyGrad)" stroke="#d1c2a7" stroke-width="5"/>
+    <rect x="30" y="30" width="1220" height="700" rx="56" ry="56" fill="url(#microStripes)" opacity=".35"/>
+
+    <!-- Right-side volume wheel -->
+    <g id="volumeWheel" transform="translate(1230,380)">
+      <ellipse rx="18" ry="90" fill="#b49f82" stroke="#8f7d63" stroke-width="3"/>
+      <!-- ridges -->
+      <g fill="#8f7d63" opacity=".6">
+        <rect x="-20" y="-80" width="4" height="12"/>
+        <rect x="-20" y="-60" width="4" height="12"/>
+        <rect x="-20" y="-40" width="4" height="12"/>
+        <rect x="-20" y="-20" width="4" height="12"/>
+        <rect x="-20" y="0"   width="4" height="12"/>
+        <rect x="-20" y="20"  width="4" height="12"/>
+        <rect x="-20" y="40"  width="4" height="12"/>
+        <rect x="-20" y="60"  width="4" height="12"/>
+      </g>
+    </g>
+
+    <!-- Top details: jack & HOLD slider -->
+    <g id="topBar" transform="translate(180,30)">
+      <!-- headphone jack -->
+      <circle cx="0" cy="0" r="16" fill="#7c8b98" stroke="#5a6a76" stroke-width="3"/>
+      <circle cx="0" cy="0" r="7" fill="#1a1f24"/>
+      <text x="-38" y="-12" class="smallLabel">PHONES</text>
+
+      <!-- hold slider -->
+      <g transform="translate(200,-8)">
+        <rect x="0" y="0" width="180" height="30" rx="10" ry="10" fill="#d7dfe6" stroke="#aeb9c3" stroke-width="3"/>
+        <rect id="holdThumb" x="14" y="5" width="42" height="20" rx="8" fill="#9fb6c8" stroke="#7c92a3" stroke-width="2"/>
+        <text x="64" y="21" class="smallLabel">HOLD</text>
+      </g>
+    </g>
+
+    <!-- Branding badge -->
+    <g id="badge" transform="translate(980,70)">
+      <rect width="240" height="44" rx="10" fill="#2f3b48"/>
+      <text x="120" y="30" text-anchor="middle" class="engrave" fill="#eae6df">WALK•MATE</text>
+    </g>
+
+    <!-- Screws -->
+    <g id="screws" class="screw" opacity=".9">
+      <g transform="translate(70,70)">
+        <circle r="10"/><path d="M-8,-2 h16 v4 h-16z"/>
+      </g>
+      <g transform="translate(1210,70)">
+        <circle r="10"/><path d="M-8,-2 h16 v4 h-16z"/>
+      </g>
+      <g transform="translate(70,690)">
+        <circle r="10"/><path d="M-8,-2 h16 v4 h-16z"/>
+      </g>
+      <g transform="translate(1210,690)">
+        <circle r="10"/><path d="M-8,-2 h16 v4 h-16z"/>
+      </g>
+    </g>
+
+    <!-- Album art window styled like a cassette window -->
+    <g id="albumArtGroup">
+      <rect x="100" y="220" width="360" height="340" rx="28" ry="28" fill="#cfd9e3" stroke="#a7b3bf" stroke-width="6"/>
+      <rect x="110" y="230" width="340" height="320" rx="22" ry="22" class="slot"/>
+      <!-- glass sheen -->
+      <path d="M110,230 h340 v50 l-320,0 z" fill="url(#glass)" opacity=".7"/>
+      <!-- faux reels (subtle, behind art) -->
+      <g opacity=".20">
+        <circle cx="210" cy="390" r="60" fill="#9fb0bd"/>
+        <circle cx="360" cy="390" r="60" fill="#9fb0bd"/>
+      </g>
+      <!-- placeholder image (remove when injecting <image/>) -->
+      <g id="albumArtPlaceholder" transform="translate(120,240)" opacity=".22">
+        <rect width="320" height="300" rx="18" fill="#90a4ae"/>
+        <circle cx="90" cy="120" r="38" fill="#b0bec5"/>
+        <rect x="40" y="220" width="240" height="28" rx="8" fill="#b0bec5"/>
+      </g>
+    </g>
+
+    <!-- Right information screen with VU meters -->
+    <g id="screen">
+      <rect x="500" y="150" width="700" height="320" rx="26" ry="26" fill="#edf2f7" stroke="#c0cad4" stroke-width="5"/>
+      <!-- top grille -->
+      <g transform="translate(530,172)" fill="#cad4de">
+        <rect width="66" height="16" rx="7"/>
+        <rect x="86" width="132" height="16" rx="7"/>
+        <rect x="238" width="200" height="16" rx="7"/>
+      </g>
+      <line class="screenRule" x1="520" y1="214" x2="1180" y2="214"/>
+      <text id="titleText" class="label" x="520" y="274">TITLE</text>
+      <line class="screenRule" x1="520" y1="300" x2="1180" y2="300"/>
+      <text id="subtitleText" class="label" x="520" y="352">SUBTITLE</text>
+      <!-- VU meters -->
+      <g id="vuMeters" transform="translate(980,236)">
+        <rect width="180" height="116" rx="12" fill="#e6ebf2" stroke="#c4cfdb" stroke-width="3"/>
+        
+      </g>
+      <!-- power LED -->
+      <circle id="ledPower" cx="1188" cy="164" r="8" fill="#2c3e50" stroke="#aab6c1" stroke-width="3"/>
+    </g>
+
+    <!-- Speaker grill (bottom-left) -->
+    <g id="speaker" transform="translate(100,580)">
+      <rect width="260" height="80" rx="14" fill="#d8e0e6" stroke="#b3bec8" stroke-width="4"/>
+      <g fill="#8fa1af" opacity=".9">
+        <!-- 7x3 grid holes -->
+        <circle cx="30" cy="26" r="4"/><circle cx="62" cy="26" r="4"/><circle cx="94" cy="26" r="4"/><circle cx="126" cy="26" r="4"/><circle cx="158" cy="26" r="4"/><circle cx="190" cy="26" r="4"/><circle cx="222" cy="26" r="4"/>
+        <circle cx="30" cy="50" r="4"/><circle cx="62" cy="50" r="4"/><circle cx="94" cy="50" r="4"/><circle cx="126" cy="50" r="4"/><circle cx="158" cy="50" r="4"/><circle cx="190" cy="50" r="4"/><circle cx="222" cy="50" r="4"/>
+        <circle cx="30" cy="74" r="4"/><circle cx="62" cy="74" r="4"/><circle cx="94" cy="74" r="4"/><circle cx="126" cy="74" r="4"/><circle cx="158" cy="74" r="4"/><circle cx="190" cy="74" r="4"/><circle cx="222" cy="74" r="4"/>
+      </g>
+    </g>
+
+    <!-- Control buttons -->
+    <g id="controls" transform="translate(520,520)">
+      <!-- Back -->
+      <g id="btnPrev" class="btn">
+        <rect class="btn-rect" width="190" height="120" rx="28" ry="28"/>
+        <g class="btn-icon" transform="translate(95,60)">
+          <polygon points="-34,-24 -34,24 -78,0" />
+          <rect x="-12" y="-24" width="14" height="48" rx="3"/>
+        </g>
+      </g>
+
+      <!-- Play/Pause -->
+      <g id="btnPlayPause" class="btn" transform="translate(220,0)">
+        <rect class="btn-rect" width="190" height="120" rx="28" ry="28"/>
+        <g id="playIcon" class="btn-icon" transform="translate(95,60)">
+          <polygon points="-22,-30 -22,30 36,0"/>
+        </g>
+        <g id="pauseIcon" class="btn-icon" transform="translate(95,60)" opacity="0">
+          <rect x="-28" y="-30" width="18" height="60" rx="3"/>
+          <rect x="10" y="-30" width="18" height="60" rx="3"/>
+        </g>
+      </g>
+
+      <!-- Next -->
+      <g id="btnNext" class="btn" transform="translate(440,0)">
+        <rect class="btn-rect" width="190" height="120" rx="28" ry="28"/>
+        <g class="btn-icon" transform="translate(95,60)">
+          <polygon points="34,-24 34,24 78,0" />
+          <rect x="-2" y="-24" width="14" height="48" rx="3"/>
+        </g>
+      </g>
+    </g>
+  </g>
+
+  <!-- Dev Notes:
+    - Update text: #titleText and #subtitleText.
+    - Insert album art: append <image href="..." x="110" y="230" width="340" height="320" rx="22" ry="22"/> inside #albumArtGroup.
+    - Toggle play/pause: set opacity on #playIcon/#pauseIcon (1 or 0).
+    - VU bars: #bar1..#bar10 heights 'h' & 'y' can be animated to music.
+    - Power LED: change #ledPower fill to '#36d736' for ON, '#2c3e50' for OFF.
+    - HOLD slider: move #holdThumb 'x' between 14 (off) and 124 (on) to simulate locking.
+    - Buttons groups have ids: #btnPrev, #btnPlayPause, #btnNext.
+  -->
+</svg>

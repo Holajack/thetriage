@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, CommonActions, useRoute, RouteProp } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { OnboardingStackParamList, RootStackParamList } from '../../navigation/types';
 
@@ -84,7 +85,8 @@ const TUTORIAL_STEPS: TutorialStep[] = [
 export default function AppTutorialScreen() {
   const navigation = useNavigation<AppTutorialNavigationProp>();
   const route = useRoute<AppTutorialRouteProp>();
-  const { setHasCompletedOnboarding, updateOnboarding } = useAuth();
+  const { setHasCompletedOnboarding, updateOnboarding, user } = useAuth();
+  const { theme } = useTheme();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
   
@@ -123,14 +125,21 @@ export default function AppTutorialScreen() {
 
   const handleComplete = async () => {
     try {
+      console.log('🎯 Completing onboarding with focus method:', focusMethod);
+      
       await updateOnboarding({ 
         is_onboarding_complete: true,
-        // Ensure focus_method is correctly named as per your Supabase table column
-        // Assuming it's 'focus_method' based on previous context.
-        focus_method: focusMethod 
+        focus_method: focusMethod,
+        welcome_completed: true,
+        goals_set: true,
+        first_session_completed: false,
+        profile_customized: true,
+        completed_at: new Date().toISOString()
       });
       
       setHasCompletedOnboarding(true); // Update local state immediately
+      console.log('✅ Onboarding completed successfully, navigating to Main app');
+      
       // Navigate to main app and reset navigation stack
       navigation.dispatch(
         CommonActions.reset({
@@ -140,7 +149,30 @@ export default function AppTutorialScreen() {
       );
     } catch (error) {
       console.error('AppTutorialScreen: Error completing onboarding:', error);
-      setHasCompletedOnboarding(true); // Still attempt to update local state and navigate
+      
+      // Try a fallback approach - directly update the database
+      try {
+        console.log('🔄 Attempting fallback onboarding completion...');
+        const { supabase } = await import('../../utils/supabase');
+        
+        if (user?.id) {
+          await supabase
+            .from('onboarding_preferences')
+            .upsert({
+              user_id: user.id,
+              is_onboarding_complete: true,
+              focus_method: focusMethod,
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'user_id' });
+          
+          console.log('✅ Fallback onboarding completion successful');
+        }
+      } catch (fallbackError) {
+        console.error('❌ Fallback onboarding completion also failed:', fallbackError);
+      }
+      
+      // Still navigate to main app since user has gone through all the steps
+      setHasCompletedOnboarding(true);
       navigation.dispatch(
         CommonActions.reset({
           index: 0,
@@ -161,8 +193,11 @@ export default function AppTutorialScreen() {
         key={step.id}
         style={[
           styles.stepCard,
-          isActive && styles.activeStepCard,
-          { borderColor: isActive ? step.color : 'rgba(232, 245, 233, 0.2)' }
+          { 
+            backgroundColor: theme.isDark ? theme.card : 'rgba(255, 255, 255, 0.05)',
+            borderColor: isActive ? step.color : (theme.isDark ? theme.border : 'rgba(232, 245, 233, 0.2)')
+          },
+          isActive && [styles.activeStepCard, { backgroundColor: theme.isDark ? theme.cardHover : 'rgba(76, 175, 80, 0.1)' }]
         ]}
         onPress={() => toggleStepExpansion(index)}
         activeOpacity={0.8}
@@ -172,13 +207,13 @@ export default function AppTutorialScreen() {
             <Ionicons name={step.icon} size={24} color={step.color} />
           </View>
           <View style={styles.stepInfoContainer}>
-            <Text style={styles.stepTitle}>{step.title}</Text>
-            <Text style={styles.stepDescription}>{step.description}</Text>
+            <Text style={[styles.stepTitle, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>{step.title}</Text>
+            <Text style={[styles.stepDescription, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>{step.description}</Text>
           </View>
           <Ionicons 
             name={isExpanded ? "chevron-up-circle-outline" : "chevron-down-circle-outline"} // Changed icon for clarity
             size={24} // Slightly larger icon
-            color={isActive ? step.color : '#B8E6C1'} 
+            color={isActive ? step.color : (theme.isDark ? theme.textSecondary : '#B8E6C1')} 
           />
         </View>
         
@@ -190,7 +225,7 @@ export default function AppTutorialScreen() {
                   <View style={styles.detailNumber}>
                     <Text style={styles.detailNumberText}>{detailIndex + 1}</Text>
                   </View>
-                  <Text style={styles.detailText}>{detail}</Text>
+                  <Text style={[styles.detailText, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>{detail}</Text>
                 </View>
               ))}
             </View>
@@ -202,7 +237,7 @@ export default function AppTutorialScreen() {
 
   return (
     <LinearGradient
-      colors={['#0F2419', '#1B4A3A', '#2E5D4F', '#1B4A3A']}
+      colors={theme.isDark ? ['#000000', '#1a1a1a', '#2a2a2a', '#1a1a1a'] : ['#0F2419', '#1B4A3A', '#2E5D4F', '#1B4A3A']}
       locations={[0, 0.3, 0.7, 1]} // Updated gradient colors
       style={styles.container}
     >
@@ -210,11 +245,11 @@ export default function AppTutorialScreen() {
         <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-              <Ionicons name="arrow-back" size={24} color="#E8F5E9" />
+              <Ionicons name="arrow-back" size={24} color={theme.isDark ? theme.text : '#E8F5E9'} />
             </TouchableOpacity>
             <View style={styles.headerTextContainer}>
-              <Text style={styles.headerTitle}>App Tutorial</Text>
-              <Text style={styles.headerSubtitle}>
+              <Text style={[styles.headerTitle, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>App Tutorial</Text>
+              <Text style={[styles.headerSubtitle, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>
                 Step 5 of 5 • Get the most out of your study experience
               </Text>
             </View>
@@ -230,8 +265,8 @@ export default function AppTutorialScreen() {
               <View style={styles.welcomeIcon}>
                 <Ionicons name="school-outline" size={32} color="#4CAF50" />
               </View>
-              <Text style={styles.welcomeTitle}>Welcome to Study Tracker!</Text>
-              <Text style={styles.welcomeText}>
+              <Text style={[styles.welcomeTitle, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>Welcome to Study Tracker!</Text>
+              <Text style={[styles.welcomeText, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>
                 You're all set! Here's a quick guide to help you get started.
               </Text>
             </View>
@@ -241,14 +276,14 @@ export default function AppTutorialScreen() {
             <View style={styles.tipsCard}>
               <View style={styles.tipsHeader}>
                 <Ionicons name="bulb-outline" size={20} color="#FF9800" />
-                <Text style={styles.tipsTitle}>Pro Tips</Text>
+                <Text style={[styles.tipsTitle, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>Pro Tips</Text>
               </View>
               <View style={styles.tipsList}>
-                <Text style={styles.tipItem}>• Start with shorter sessions and gradually increase duration.</Text>
-                <Text style={styles.tipItem}>• Join study groups in your field of interest.</Text>
-                <Text style={styles.tipItem}>• Use Patrick AI for personalized study recommendations.</Text>
-                <Text style={styles.tipItem}>• Set daily study goals to track your progress.</Text>
-                <Text style={styles.tipItem}>• Don't forget to take breaks and stay hydrated!</Text>
+                <Text style={[styles.tipItem, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>• Start with shorter sessions and gradually increase duration.</Text>
+                <Text style={[styles.tipItem, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>• Join study groups in your field of interest.</Text>
+                <Text style={[styles.tipItem, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>• Use Patrick AI for personalized study recommendations.</Text>
+                <Text style={[styles.tipItem, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>• Set daily study goals to track your progress.</Text>
+                <Text style={[styles.tipItem, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>• Don't forget to take breaks and stay hydrated!</Text>
               </View>
             </View>
           </ScrollView>
@@ -300,13 +335,11 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 28, // Matched FocusMethodIntroScreen
     fontWeight: 'bold',
-    color: '#E8F5E9',
     textAlign: 'center',
     marginBottom: 8,
   },
   headerSubtitle: {
     fontSize: 16, // Matched FocusMethodIntroScreen
-    color: '#B8E6C1',
     textAlign: 'center',
     lineHeight: 22,
     paddingHorizontal: 10, // Matched FocusMethodIntroScreen
@@ -327,19 +360,15 @@ const styles = StyleSheet.create({
     padding: 10, 
     borderRadius: 25, // Circular background
   },
-  welcomeTitle: { fontSize: 22, fontWeight: 'bold', color: '#E8F5E9', marginBottom: 8, textAlign: 'center' }, // Larger title
-  welcomeText: { fontSize: 15, color: '#B8E6C1', textAlign: 'center', lineHeight: 22 }, // Adjusted size/lineHeight
+  welcomeTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 8, textAlign: 'center' }, // Larger title
+  welcomeText: { fontSize: 15, textAlign: 'center', lineHeight: 22 }, // Adjusted size/lineHeight
   stepCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)', // Consistent card background
     borderRadius: 16, // Consistent rounding
     padding: 16, // Match FocusMethodIntroScreen
     marginBottom: 12, // Match FocusMethodIntroScreen
     borderWidth: 2, 
-    borderColor: 'rgba(232, 245, 233, 0.2)', // Default border
   },
-  activeStepCard: { 
-    backgroundColor: 'rgba(76, 175, 80, 0.1)', // Active card background, consistent with FocusMethodIntro
-  }, 
+  activeStepCard: {}, // Empty - will be handled dynamically 
   stepHeaderContainer: { // Renamed from stepHeader
     flexDirection: 'row', 
     alignItems: 'center' 
@@ -349,8 +378,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center', marginRight: 16, // Consistent margin
   },
   stepInfoContainer: { flex: 1 }, // Renamed from stepInfo
-  stepTitle: { fontSize: 18, fontWeight: 'bold', color: '#E8F5E9', marginBottom: 4 }, // Consistent title
-  stepDescription: { fontSize: 14, color: '#B8E6C1', lineHeight: 20 }, // Consistent description
+  stepTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 4 }, // Consistent title
+  stepDescription: { fontSize: 14, lineHeight: 20 }, // Consistent description
   stepDetailsContainer: { // Renamed from stepDetails
     marginTop: 16, 
     paddingTop: 16, 
@@ -365,16 +394,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center', marginRight: 12, marginTop: 1,
   },
   detailNumberText: { fontSize: 12, fontWeight: 'bold', color: '#4CAF50' },
-  detailText: { flex: 1, fontSize: 14, color: '#B8E6C1', lineHeight: 20 },
+  detailText: { flex: 1, fontSize: 14, lineHeight: 20 },
   tipsCard: {
     backgroundColor: 'rgba(255, 152, 0, 0.08)', // Subtle orange background
     borderRadius: 16, padding: 16, marginTop: 12, marginBottom: 20, // Match standard padding
     borderWidth: 2, borderColor: 'rgba(255, 152, 0, 0.25)', // Match border width pattern
   },
   tipsHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  tipsTitle: { fontSize: 18, fontWeight: 'bold', color: '#E8F5E9', marginLeft: 8 },
+  tipsTitle: { fontSize: 18, fontWeight: 'bold', marginLeft: 8 },
   tipsList: { gap: 8 },
-  tipItem: { fontSize: 14, color: '#B8E6C1', lineHeight: 20 },
+  tipItem: { fontSize: 14, lineHeight: 20 },
   bottomContainer: { 
     paddingTop: 20, 
     paddingBottom: 10, // Match FocusMethodIntroScreen

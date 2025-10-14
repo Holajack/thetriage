@@ -6,6 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { supabase } from '../../utils/supabase';
+import { BottomTabBar } from '../../components/BottomTabBar';
 
 interface SessionHistoryItem {
   id: string;
@@ -305,16 +306,45 @@ const SessionHistoryScreen = () => {
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+        {/* Header with X button and Title */}
+        <View style={[styles.header, { backgroundColor: theme.background }]}>
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={() => navigation.navigate('Home')}
+          >
+            <View style={[styles.closeButtonCircle, { backgroundColor: theme.text + '20' }]}>
+              <Ionicons name="close" size={24} color={theme.text} />
+            </View>
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>Traveller</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.primary} />
           <Text style={[styles.loadingText, { color: theme.text }]}>Loading session history...</Text>
         </View>
+
+        <BottomTabBar currentRoute="SessionHistory" />
       </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      {/* Header with X button and Title */}
+      <View style={[styles.header, { backgroundColor: theme.background }]}>
+        <TouchableOpacity
+          style={styles.closeButton}
+          onPress={() => navigation.navigate('Home')}
+        >
+          <View style={[styles.closeButtonCircle, { backgroundColor: theme.text + '20' }]}>
+            <Ionicons name="close" size={24} color={theme.text} />
+          </View>
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>Traveller</Text>
+        <View style={styles.headerSpacer} />
+      </View>
 
       {/* Time Filter */}
       <View style={[styles.filterContainer, { backgroundColor: theme.card }]}>
@@ -410,6 +440,9 @@ const SessionHistoryScreen = () => {
           </>
         )}
       </ScrollView>
+
+      {/* Bottom Tab Bar */}
+      <BottomTabBar currentRoute="SessionHistory" />
     </SafeAreaView>
   );
 };
@@ -423,22 +456,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 10,
+  },
+  closeButton: {
+    padding: 4,
+  },
+  closeButtonCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  headerSpacer: {
+    width: 48,
   },
   backButton: {
     padding: 8,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#2C2C2C',
-  },
-  headerSpacer: {
-    width: 40,
   },
   refreshButton: {
     padding: 8,

@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700">
+  <defs>
+    <linearGradient id="bodyGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#efe8db"/>
+      <stop offset="100%" stop-color="#e6decd"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feOffset dx="0" dy="8" result="off"/>
+      <feGaussianBlur in="off" stdDeviation="12" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.25 0"/>
+      <feBlend in="SourceGraphic" mode="normal"/>
+    </filter>
+    <style>
+      .label { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; fill:#2c3e50; }
+      #titleText { font-size: 44px; font-weight: 700; letter-spacing: 1px; }
+      #subtitleText { font-size: 30px; opacity: .85; }
+      .screenRule { stroke: #98a2b3; stroke-width: 2; opacity:.5 }
+      .btn { cursor: pointer; }
+      .btn-rect { fill: #e7eef3; stroke: #a3b1bd; stroke-width:3; rx:26; ry:26; }
+      .btn-icon { fill:#465a6b; }
+      .btn:hover .btn-rect { filter: brightness(1.03); }
+      .slot { fill:#dfe6ea; stroke:#b4c0c9; stroke-width:4; }
+    </style>
+  </defs>
+
+  <!-- Device body -->
+  <g id="device" filter="url(#shadow)">
+    <rect x="40" y="40" width="1120" height="620" rx="50" ry="50" fill="url(#bodyGrad)" stroke="#d7cdb8" stroke-width="4"/>
+    <!-- Side knob -->
+    <g id="volumeKnob">
+      <ellipse cx="1150" cy="350" rx="16" ry="70" fill="#b9a991" stroke="#9b8b74" stroke-width="3"/>
+    </g>
+
+    <!-- Album art window (left) -->
+    <g id="albumArtGroup">
+      <rect id="albumArtSlot" class="slot" x="90" y="210" width="320" height="320" rx="24" ry="24"/>
+      <!-- Optional placeholder icon -->
+      <g id="albumArtPlaceholder" transform="translate(210,330)" opacity="0.25">
+        <circle r="60" fill="#95a5a6"/>
+        <rect x="-70" y="50" width="140" height="30" rx="8" fill="#95a5a6"/>
+      </g>
+    </g>
+
+    <!-- Screen (right) -->
+    <g id="screen">
+      <rect x="450" y="130" width="670" height="300" rx="24" ry="24" fill="#edf2f7" stroke="#c2ccd6" stroke-width="4"/>
+      <!-- top bars -->
+      <g transform="translate(480,160)">
+        <rect width="60" height="16" rx="6" fill="#cbd5df"/>
+        <rect x="80" width="120" height="16" rx="6" fill="#cbd5df"/>
+        <rect x="220" width="180" height="16" rx="6" fill="#cbd5df"/>
+      </g>
+      <line class="screenRule" x1="470" y1="210" x2="1090" y2="210"/>
+      <text id="titleText" class="label" x="470" y="270">TITLE</text>
+      <line class="screenRule" x1="470" y1="295" x2="1090" y2="295"/>
+      <text id="subtitleText" class="label" x="470" y="345">SUBTITLE</text>
+    </g>
+
+    <!-- Buttons row -->
+    <g id="controls" transform="translate(450,470)">
+      <!-- Back -->
+      <g id="btnPrev" class="btn">
+        <rect class="btn-rect" width="170" height="110" rx="26" ry="26"/>
+        <g class="btn-icon" transform="translate(85,55)">
+          <polygon points="-30,-22 -30,22 -70,0" />
+          <rect x="-10" y="-22" width="12" height="44" rx="3"/>
+        </g>
+      </g>
+
+      <!-- Play/Pause -->
+      <g id="btnPlayPause" class="btn" transform="translate(200,0)">
+        <rect class="btn-rect" width="170" height="110" rx="26" ry="26"/>
+        <g id="playIcon" class="btn-icon" transform="translate(85,55)">
+          <polygon points="-18,-28 -18,28 32,0"/>
+        </g>
+        <g id="pauseIcon" class="btn-icon" transform="translate(85,55)" opacity="0">
+          <rect x="-25" y="-28" width="16" height="56" rx="3"/>
+          <rect x="9" y="-28" width="16" height="56" rx="3"/>
+        </g>
+      </g>
+
+      <!-- Next -->
+      <g id="btnNext" class="btn" transform="translate(400,0)">
+        <rect class="btn-rect" width="170" height="110" rx="26" ry="26"/>
+        <g class="btn-icon" transform="translate(85,55)">
+          <polygon points="30,-22 30,22 70,0" />
+          <rect x="-2" y="-22" width="12" height="44" rx="3"/>
+        </g>
+      </g>
+    </g>
+  </g>
+
+  <!-- Developer notes (safe to keep): 
+    - Update title/subtitle by changing textContent of #titleText and #subtitleText.
+    - Replace album art by placing an <image> inside #albumArtGroup and set x,y,width,height to cover #albumArtSlot.
+    - Toggle play/pause by setting #playIcon or #pauseIcon opacity to 1/0.
+    - Buttons have ids: #btnPrev, #btnPlayPause, #btnNext for attaching events.
+  -->
+</svg>

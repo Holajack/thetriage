@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Dimensions, StatusBar, Image, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { ThemedImage } from './ThemedImage';
 import * as ExpoSplashScreen from 'expo-splash-screen';
 
 const { width, height } = Dimensions.get('window');
@@ -11,10 +12,11 @@ interface SplashScreenProps {
 
 const TriageLogo = ({ style }: { style?: any }) => (
   <View style={[styles.logoContainer, style]}>
-    <Image 
+    <ThemedImage 
       source={require('../assets/transparent-triage.png')} 
       style={styles.logoImage}
       resizeMode="contain"
+      applyFilter={true}
     />
   </View>
 );

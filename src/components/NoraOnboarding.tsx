@@ -121,27 +121,43 @@ export default function NoraOnboarding({
     console.log('NoraOnboarding: visible prop changed to:', visible);
     if (visible) {
       setIsVisible(true);
+      // Reset animations to ensure they start from the right values
+      fadeAnim.setValue(0);
+      slideAnim.setValue(50);
+      scaleAnim.setValue(0.9);
+      
       console.log('NoraOnboarding: Setting isVisible to true, starting animations');
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          tension: 100,
-          friction: 8,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        console.log('NoraOnboarding: Animations completed');
-      });
+      // Add a small delay to ensure modal is rendered before animations start
+      setTimeout(() => {
+        Animated.parallel([
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 400,
+            useNativeDriver: true,
+          }),
+          Animated.timing(slideAnim, {
+            toValue: 0,
+            duration: 400,
+            useNativeDriver: true,
+          }),
+          Animated.spring(scaleAnim, {
+            toValue: 1,
+            tension: 100,
+            friction: 8,
+            useNativeDriver: true,
+          }),
+        ]).start(() => {
+          console.log('NoraOnboarding: Animations completed');
+        });
+        
+        // Fallback to ensure visibility after animation duration
+        setTimeout(() => {
+          fadeAnim.setValue(1);
+          scaleAnim.setValue(1);
+          slideAnim.setValue(0);
+          console.log('NoraOnboarding: Fallback animation values set');
+        }, 600);
+      }, 50);
     } else {
       console.log('NoraOnboarding: visible false, hiding modal');
       Animated.parallel([
@@ -354,6 +370,8 @@ export default function NoraOnboarding({
                 { translateY: slideAnim },
                 { scale: scaleAnim },
               ],
+              // Ensure minimum visibility to prevent grey overlay issue
+              minHeight: 400,
             },
           ]}
         >
