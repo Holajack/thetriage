@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { supabase } from '../../utils/supabase';
 import { BottomTabBar } from '../../components/BottomTabBar';
+import { UnifiedHeader } from '../../components/UnifiedHeader';
 
 interface SessionHistoryItem {
   id: string;
@@ -332,19 +333,8 @@ const SessionHistoryScreen = () => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* Header with X button and Title */}
-      <View style={[styles.header, { backgroundColor: theme.background }]}>
-        <TouchableOpacity
-          style={styles.closeButton}
-          onPress={() => navigation.navigate('Home')}
-        >
-          <View style={[styles.closeButtonCircle, { backgroundColor: theme.text + '20' }]}>
-            <Ionicons name="close" size={24} color={theme.text} />
-          </View>
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>Traveller</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      {/* Unified Header */}
+      <UnifiedHeader title="Traveller" onClose={() => navigation.navigate('Home')} />
 
       {/* Time Filter */}
       <View style={[styles.filterContainer, { backgroundColor: theme.card }]}>

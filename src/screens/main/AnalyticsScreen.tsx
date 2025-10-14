@@ -8,6 +8,7 @@ import { useTheme } from '../../context/ThemeContext';
 const { useUserAppData } = require('../../utils/userAppData');
 import { BottomTabBar } from '../../components/BottomTabBar';
 import { CircularChart } from '../../components/CircularChart';
+import { UnifiedHeader } from '../../components/UnifiedHeader';
 
 const { width } = Dimensions.get('window');
 
@@ -160,19 +161,8 @@ const AnalyticsScreen = () => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* Header */}
-      <View style={[styles.navHeader, { backgroundColor: theme.background }]}>
-        <TouchableOpacity
-          style={styles.closeButton}
-          onPress={() => navigation.navigate('Home')}
-        >
-          <View style={[styles.closeButtonCircle, { backgroundColor: theme.text + '20' }]}>
-            <Ionicons name="close" size={24} color={theme.text} />
-          </View>
-        </TouchableOpacity>
-        <Text style={[styles.navHeaderTitle, { color: theme.text }]}>Traveller</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      {/* Unified Header */}
+      <UnifiedHeader title="Traveller" onClose={() => navigation.navigate('Home')} />
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }}>
         {/* Time Range Selector */}

@@ -16,6 +16,7 @@ import FriendRequestNotification from '../../components/FriendRequestNotificatio
 import MessageNotification from '../../components/MessageNotification';
 import StudyRoomInvitations from '../../components/StudyRoomInvitations';
 import { BottomTabBar } from '../../components/BottomTabBar';
+import { UnifiedHeader } from '../../components/UnifiedHeader';
 
 const TABS = ['Friends', 'Messages', 'All Users', 'Study Rooms'];
 const MOCK_FRIENDS = [
@@ -935,19 +936,8 @@ const CommunityScreen = () => {
     <View style={{ flex: 1 }}>
       <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.background }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <SafeAreaView style={styles.container}>
-          {/* Header with X button and Title */}
-          <View style={[styles.navHeader, { backgroundColor: theme.background }]}>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => navigation.navigate('Home')}
-            >
-              <View style={[styles.closeButtonCircle, { backgroundColor: theme.text + '20' }]}>
-                <Ionicons name="close" size={24} color={theme.text} />
-              </View>
-            </TouchableOpacity>
-            <Text style={[styles.navHeaderTitle, { color: theme.text }]}>Traveller</Text>
-            <View style={styles.headerSpacer} />
-          </View>
+          {/* Unified Header */}
+          <UnifiedHeader title="Traveller" onClose={() => navigation.navigate('Home')} />
 
           {/* Search Bar with Friend Request Button */}
           <View style={[styles.searchContainer, { backgroundColor: theme.card, marginTop: 20 }]}>
