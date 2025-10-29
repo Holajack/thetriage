@@ -1,4 +1,4 @@
 <resources>
-  <string name="app_name">Hike Wise</string>
-  <string name="expo_runtime_version">1.6.0</string>
+  <string name="app_name">HikeWise</string>
+  <string name="expo_runtime_version">1.7.0</string>
 </resources>

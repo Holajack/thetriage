@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList, Image, Modal, KeyboardAvoidingView, Platform, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import { useSupabaseFriends, useSupabaseStudyRooms } from '../../utils/supabaseHooks';
+import { useSupabaseStudyRooms } from '../../utils/supabaseHooks';
 import { supabase } from '../../utils/supabase';
 import * as FriendService from '../../utils/friendRequestService';
 import * as MessageService from '../../utils/messagingService';
@@ -93,9 +93,26 @@ interface User {
 
 interface FriendRequest {
   id: string;
-  user_id: string;
-  friend_id: string;
-  status: 'pending' | 'accepted';
+  sender_id: string;
+  recipient_id: string;
+  status: 'pending' | 'accepted' | 'declined';
+  created_at?: string;
+  sender?: {
+    id: string;
+    full_name?: string;
+    username?: string;
+    avatar_url?: string;
+    email?: string;
+    status?: string;
+  };
+  recipient?: {
+    id: string;
+    full_name?: string;
+    username?: string;
+    avatar_url?: string;
+    email?: string;
+    status?: string;
+  };
 }
 
 const CommunityScreen = () => {
@@ -112,9 +129,6 @@ const CommunityScreen = () => {
   const [newSchedule, setNewSchedule] = useState('');
   const [newDuration, setNewDuration] = useState('');
   const [createdRooms, setCreatedRooms] = useState<any[]>([]);
-  const { friends, loading: friendsLoading, error: friendsError } = useSupabaseFriends();
-  const [friendProfiles, setFriendProfiles] = useState<any[]>([]);
-  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [pendingFriendRequestIds, setPendingFriendRequestIds] = useState<string[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [addFriendEmail, setAddFriendEmail] = useState('');
@@ -140,6 +154,56 @@ const CommunityScreen = () => {
   const [showMessageNotification, setShowMessageNotification] = useState(false);
   const [showStudyRoomInvitations, setShowStudyRoomInvitations] = useState(false);
   const [pendingStudyRoomInvitations, setPendingStudyRoomInvitations] = useState<StudyRoomService.StudyRoomInvitation[]>([]);
+
+  const acceptedFriendIds = useMemo(
+    () => new Set(friendsList.map(friend => friend.friend_id)),
+    [friendsList]
+  );
+  const incomingFriendRequestIds = useMemo(
+    () => new Set(incomingFriendRequests.map(request => request.sender_id)),
+    [incomingFriendRequests]
+  );
+  const outgoingFriendRequestIds = useMemo(
+    () => new Set(outgoingFriendRequests.map(request => request.recipient_id)),
+    [outgoingFriendRequests]
+  );
+  const userProfileMap = useMemo(() => {
+    const map = new Map<string, Partial<User>>();
+
+    users.forEach(user => {
+      map.set(user.id, user);
+    });
+
+    friendsList.forEach(friend => {
+      if (friend.friend_profile?.id) {
+        map.set(friend.friend_profile.id, {
+          ...map.get(friend.friend_profile.id),
+          ...friend.friend_profile,
+        });
+      }
+    });
+
+    incomingFriendRequests.forEach(request => {
+      if (request.sender?.id) {
+        map.set(request.sender.id, {
+          ...map.get(request.sender.id),
+          ...request.sender,
+        });
+      }
+    });
+
+    outgoingFriendRequests.forEach(request => {
+      if ((request as any).recipient?.id) {
+        const recipient = (request as any).recipient;
+        map.set(recipient.id, {
+          ...map.get(recipient.id),
+          ...recipient,
+        });
+      }
+    });
+
+    return map;
+  }, [users, friendsList, incomingFriendRequests, outgoingFriendRequests]);
 
   // Helper for faded primary color
   const fadedPrimary = theme.primary + '22'; // 13% opacity hex fallback
@@ -260,70 +324,6 @@ const CommunityScreen = () => {
     fetchUserConversations();
   }, [currentUser]);
 
-  // Fetch friend profiles
-  useEffect(() => {
-    const fetchProfiles = async () => {
-      if (!friends || friends.length === 0) { setFriendProfiles([]); return; }
-      const ids = friends.map(f => f.friend_id);
-      const { data, error } = await supabase.from('profiles').select('*').in('id', ids);
-      setFriendProfiles(data || []);
-    };
-    fetchProfiles();
-  }, [friends]);
-
-  // Fetch pending friend requests
-  useEffect(() => {
-    const fetchPending = async () => {
-      const user = currentUser;
-      if (!user) return;
-      const res = await fetch('https://ucculvnodabrfwbkzsnx.supabase.co/functions/v1/get_friend_requests', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken || ''}` },
-        body: JSON.stringify({ user_id: user.id }),
-      });
-      const json = await res.json();
-      setPendingRequests(json?.pending || []);
-    };
-    fetchPending();
-  }, [currentUser, accessToken]);
-
-  // Fetch all users and friends
-  useEffect(() => {
-    const fetchUsersAndFriends = async () => {
-      if (!currentUser) return;
-      
-      setLoading(true);
-      try {
-        // Fetch all users
-        const { data: usersData, error: usersError } = await supabase
-          .from('profiles')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (usersError) throw usersError;
-
-        // Fetch current user's friends
-        const { data: friendsData, error: friendsError } = await supabase
-          .from('friends')
-          .select('friend_id')
-          .eq('user_id', currentUser.id)
-          .eq('status', 'accepted');
-
-        if (friendsError) throw friendsError;
-
-        setUsers(usersData || []);
-        // Note: we don't need setFriends here since friends is from the hook
-      } catch (err) {
-        console.error('Error fetching users:', err);
-        setError(err instanceof Error ? err.message : 'Failed to fetch users');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUsersAndFriends();
-  }, [currentUser]);
-
   // Fetch all users and friend requests
   useEffect(() => {
     const fetchUsersAndRequests = async () => {
@@ -382,9 +382,9 @@ const CommunityScreen = () => {
         try {
           requestsResult = await fetchWithRetry(async () => {
             return await supabase
-              .from('friends')
-              .select('id, user_id, friend_id, status, created_at')
-              .or(`user_id.eq.${currentUser.id},friend_id.eq.${currentUser.id}`)
+              .from('friend_requests')
+              .select('id, sender_id, recipient_id, status, created_at')
+              .or(`sender_id.eq.${currentUser.id},recipient_id.eq.${currentUser.id}`)
               .limit(100);
           }, 2);
 
@@ -438,13 +438,23 @@ const CommunityScreen = () => {
 
     // Set up real-time subscription using the new API
     const channel = supabase
-      .channel('friends-changes')
-      .on('postgres_changes', 
+      .channel('community-changes')
+      .on(
+        'postgres_changes',
         { event: '*', schema: 'public', table: 'friends' },
-        (payload) => {
-          console.log('Change received!', payload);
-          // Refresh the data when changes occur
+        payload => {
+          console.log('Friends change received!', payload);
           fetchUsersAndRequests();
+          loadFriendsData();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'friend_requests' },
+        payload => {
+          console.log('Friend request change received!', payload);
+          fetchUsersAndRequests();
+          loadFriendsData();
         }
       )
       .subscribe();
@@ -469,9 +479,9 @@ const CommunityScreen = () => {
       if (usersError) throw usersError;
 
       const { data: requestsData, error: requestsError } = await supabase
-        .from('friends')
+        .from('friend_requests')
         .select('*')
-        .or(`user_id.eq.${currentUser.id},friend_id.eq.${currentUser.id}`);
+        .or(`sender_id.eq.${currentUser.id},recipient_id.eq.${currentUser.id}`);
 
       if (requestsError) throw requestsError;
 
@@ -602,6 +612,7 @@ const CommunityScreen = () => {
         Alert.alert('Success', 'Friend request sent!');
         // Refresh the data
         await loadFriendsData();
+        setPendingFriendRequestIds(prev => prev.filter(id => id !== friendId));
       } else {
         // Remove from pending state on error
         setPendingFriendRequestIds(prev => prev.filter(id => id !== friendId));
@@ -787,30 +798,44 @@ const CommunityScreen = () => {
 
   // Check if a friend request exists
   const getFriendStatus = (userId: string) => {
-    const request = friendRequests.find(
-      r => (r.user_id === currentUser?.id && r.friend_id === userId) ||
-           (r.user_id === userId && r.friend_id === currentUser?.id)
+    if (!currentUser) return null;
+
+    if (acceptedFriendIds.has(userId)) {
+      return 'accepted';
+    }
+    if (incomingFriendRequestIds.has(userId)) {
+      return 'incoming';
+    }
+    if (outgoingFriendRequestIds.has(userId)) {
+      return 'pending';
+    }
+
+    const legacyRequest = friendRequests.find(
+      r =>
+        ('sender_id' in r
+          ? (r as any).sender_id === currentUser.id && (r as any).recipient_id === userId
+          : (r as any).user_id === currentUser.id && (r as any).friend_id === userId) ||
+        ('sender_id' in r
+          ? (r as any).sender_id === userId && (r as any).recipient_id === currentUser.id
+          : (r as any).user_id === userId && (r as any).friend_id === currentUser.id)
     );
-    return request?.status || null;
+
+    if (!legacyRequest) {
+      return null;
+    }
+
+    if ((legacyRequest as any).status === 'accepted') {
+      return 'accepted';
+    }
+
+    if ('sender_id' in legacyRequest) {
+      return (legacyRequest as any).sender_id === currentUser.id ? 'pending' : 'incoming';
+    }
+
+    return legacyRequest.status || null;
   };
 
   // Accept/decline friend request
-  const handleUpdateRequest = async (requestId: string, action: 'accept' | 'decline') => {
-    if (action === 'accept') {
-      await supabase
-        .from('friends')
-        .update({ status: 'accepted' })
-        .eq('id', requestId);
-    } else {
-      await supabase
-        .from('friends')
-        .delete()
-        .eq('id', requestId);
-    }
-    setPendingRequests(prev => prev.filter(r => r.id !== requestId));
-    await refreshData();
-  };
-
   // Add these network-safe functions to CommunityScreen.tsx:
 
   // Network-safe fetch with retry logic - ENHANCED VERSION
@@ -923,6 +948,11 @@ const CommunityScreen = () => {
         const fallbackData = getOfflineFallbackData();
         setUsers(fallbackData.users);
         setFriendRequests(fallbackData.friendRequests);
+        setFriendsList([]);
+        setIncomingFriendRequests([]);
+        setOutgoingFriendRequests([]);
+        setStudyRooms([]);
+        setUserConversations([]);
         setError('App is running in offline mode. Some features may be limited.');
       }
     };
@@ -937,7 +967,7 @@ const CommunityScreen = () => {
       <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.background }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <SafeAreaView style={styles.container}>
           {/* Unified Header */}
-          <UnifiedHeader title="Traveller" onClose={() => navigation.navigate('Home')} />
+          <UnifiedHeader title="Pathfinder" onClose={() => navigation.navigate('Home')} />
 
           {/* Search Bar with Friend Request Button */}
           <View style={[styles.searchContainer, { backgroundColor: theme.card, marginTop: 20 }]}>
@@ -964,11 +994,11 @@ const CommunityScreen = () => {
           </View>
 
           {/* Tab Navigation */}
-          <View style={styles.tabRow}>
+          <View style={[styles.tabRow, { backgroundColor: theme.card }]}>
             {TABS.map(tab => (
               <TouchableOpacity
                 key={tab}
-                style={[styles.tab, activeTab === tab && styles.activeTab]}
+                style={[styles.tab, activeTab === tab && [styles.activeTab, { backgroundColor: theme.primary + '22' }]]}
                 onPress={() => setActiveTab(tab)}
               >
                 <Text style={[styles.tabText, activeTab === tab && styles.activeTabText, { color: activeTab === tab ? theme.primary : theme.text + '99' }]}>
@@ -981,66 +1011,125 @@ const CommunityScreen = () => {
           {/* Content based on active tab */}
           {activeTab === 'Friends' && (
             <>
-              {pendingRequests.length > 0 && (
-                <View style={{ marginHorizontal: 16, marginBottom: 10 }}>
-                  <Text style={{ fontWeight: 'bold', color: theme.primary, marginBottom: 4 }}>
-                    Pending Requests
+              {incomingFriendRequests.length > 0 && (
+                <View style={{ marginHorizontal: 16, marginBottom: 12 }}>
+                  <Text style={{ fontWeight: 'bold', color: theme.primary, marginBottom: 6 }}>
+                    Friend Requests
                   </Text>
-                  {pendingRequests.map(req => (
-                    <View key={req.id} style={[styles.friendCard, { backgroundColor: theme.card, borderColor: theme.primary }]}> 
-                      <Text style={[styles.friendName, { color: theme.text }]}>
-                        {req.email || req.name}
-                      </Text>
-                      <View style={{ flexDirection: 'row', marginLeft: 'auto' }}>
-                        <TouchableOpacity style={styles.friendIconBtn} onPress={() => handleUpdateRequest(req.id, 'accept')}>
-                          <Ionicons name="checkmark" size={22} color={theme.primary} />
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.friendIconBtn} onPress={() => handleUpdateRequest(req.id, 'decline')}>
-                          <Ionicons name="close" size={22} color="#ef4444" />
-                        </TouchableOpacity>
+                  {incomingFriendRequests.map(request => {
+                    const senderProfile =
+                      request.sender ||
+                      userProfileMap.get(request.sender_id) ||
+                      {};
+                    const displayName =
+                      (senderProfile as any).full_name ||
+                      (senderProfile as any).username ||
+                      (senderProfile as any).email ||
+                      'New Study Friend';
+
+                    return (
+                      <View
+                        key={request.id}
+                        style={[
+                          styles.friendCard,
+                          { backgroundColor: theme.card, borderColor: theme.primary },
+                        ]}
+                      >
+                        <View style={styles.avatarCircle}>
+                          {(senderProfile as any).avatar_url ? (
+                            <Image source={{ uri: (senderProfile as any).avatar_url }} style={styles.avatarCircle} />
+                          ) : (
+                            <Text style={[styles.avatarText, { color: theme.primary }]}>
+                              {displayName[0] || '?'}
+                            </Text>
+                          )}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.friendName, { color: theme.text }]}>{displayName}</Text>
+                          <Text style={[styles.friendJoined, { color: theme.text + '99' }]}>
+                            {request.message
+                              ? `"${request.message}"`
+                              : 'sent you a friend request'}
+                          </Text>
+                        </View>
+                        <View style={{ flexDirection: 'row' }}>
+                          <TouchableOpacity
+                            style={styles.friendIconBtn}
+                            onPress={() => handleAcceptFriendRequest(request.id)}
+                          >
+                            <Ionicons name="checkmark" size={22} color={theme.primary} />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.friendIconBtn}
+                            onPress={() => handleDeclineFriendRequest(request.id)}
+                          >
+                            <Ionicons name="close" size={22} color="#ef4444" />
+                          </TouchableOpacity>
+                        </View>
                       </View>
-                    </View>
-                  ))}
+                    );
+                  })}
                 </View>
               )}
+
               <FlatList
-                data={friendProfiles}
+                data={friendsList}
                 keyExtractor={item => item.id}
                 contentContainerStyle={{ paddingBottom: 24 }}
-                renderItem={({ item }) => (
-                  <View style={[styles.friendCard, { backgroundColor: theme.card, borderColor: theme.primary }]}>
-                    <View style={styles.avatarCircle}>
-                      {item.avatar_url ? (
-                        <Image source={{ uri: item.avatar_url }} style={styles.avatarCircle} />
-                      ) : (
-                        <Text style={[styles.avatarText, { color: theme.primary }]}>
-                          {item.full_name ? item.full_name[0] : item.email[0]}
-                        </Text>
-                      )}
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.friendName, { color: theme.text }]}>
-                        {item.full_name || item.username || item.email}
-                      </Text>
-                      <Text style={[styles.friendJoined, { color: theme.text + '99' }]}>
-                        Joined {item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}
-                      </Text>
-                    </View>
-                    <TouchableOpacity 
-                      style={styles.friendIconBtn} 
-                      onPress={() => navigation.navigate('MessageScreen' as any, {
-                        contact: {
-                          id: item.id,
-                          name: item.full_name || item.username || item.email,
-                          avatar: item.avatar_url,
-                          status: getStatusLabel(item.status)
-                        }
-                      })}
+                renderItem={({ item }) => {
+                  const profile =
+                    item.friend_profile ||
+                    userProfileMap.get(item.friend_id) ||
+                    {};
+                  const displayName =
+                    (profile as any).full_name ||
+                    (profile as any).username ||
+                    (profile as any).email ||
+                    'Study Friend';
+
+                  return (
+                    <View
+                      style={[
+                        styles.friendCard,
+                        { backgroundColor: theme.card, borderColor: theme.primary },
+                      ]}
                     >
-                      <Ionicons name="chatbubble-outline" size={22} color={theme.primary} />
-                    </TouchableOpacity>
-                  </View>
-                )}
+                      <View style={styles.avatarCircle}>
+                        {(profile as any).avatar_url ? (
+                          <Image source={{ uri: (profile as any).avatar_url }} style={styles.avatarCircle} />
+                        ) : (
+                          <Text style={[styles.avatarText, { color: theme.primary }]}>
+                            {displayName[0] || '?'}
+                          </Text>
+                        )}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.friendName, { color: theme.text }]}>{displayName}</Text>
+                        <Text style={[styles.friendJoined, { color: theme.text + '99' }]}>
+                          Connected on{' '}
+                          {item.created_at
+                            ? new Date(item.created_at).toLocaleDateString()
+                            : 'recently'}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.friendIconBtn}
+                        onPress={() =>
+                          navigation.navigate('MessageScreen' as any, {
+                            contact: {
+                              id: (profile as any).id || item.friend_id,
+                              name: displayName,
+                              avatar: (profile as any).avatar_url,
+                              status: getStatusLabel((profile as any).status),
+                            },
+                          })
+                        }
+                      >
+                        <Ionicons name="chatbubble-outline" size={22} color={theme.primary} />
+                      </TouchableOpacity>
+                    </View>
+                  );
+                }}
                 refreshing={loading}
                 onRefresh={refreshData}
                 ListEmptyComponent={
@@ -1085,31 +1174,31 @@ const CommunityScreen = () => {
                       });
                     }}
                   >
-                    <View style={styles.friendCard}>
-                      <View style={styles.avatarContainer}>
+                    <View style={[styles.friendCard, { backgroundColor: theme.card, borderColor: theme.primary + '33' }]}>
+                      <View style={[styles.avatarContainer, { backgroundColor: theme.primary + '22' }]}>
                         {partner.avatar_url ? (
                           <Image source={{ uri: partner.avatar_url }} style={styles.avatar} />
                         ) : (
-                          <View style={styles.avatarPlaceholder}>
-                            <Text style={styles.avatarText}>
+                          <View style={[styles.avatarPlaceholder, { backgroundColor: theme.primary + '22' }]}>
+                            <Text style={[styles.avatarText, { color: theme.primary }]}>
                               {partner.full_name?.[0] || partner.username?.[0] || partner.email?.[0] || '?'}
                             </Text>
                           </View>
                         )}
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.friendName}>
+                        <Text style={[styles.friendName, { color: theme.text }]}>
                           {partner.full_name || partner.username || partner.email}
                         </Text>
-                        <Text style={styles.lastMessage} numberOfLines={1}>
+                        <Text style={[styles.lastMessage, { color: theme.text + '99' }]} numberOfLines={1}>
                           {lastMessage.sender_id === currentUser?.id ? 'You: ' : ''}
                           {lastMessage.content}
                         </Text>
                       </View>
                       <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={styles.timeText}>{timeAgo}</Text>
+                        <Text style={[styles.timeText, { color: theme.text + '99' }]}>{timeAgo}</Text>
                         {item.unreadCount > 0 && (
-                          <View style={styles.unreadBadge}>
+                          <View style={[styles.unreadBadge, { backgroundColor: theme.primary }]}>
                             <Text style={styles.unreadText}>{item.unreadCount}</Text>
                           </View>
                         )}
@@ -1120,8 +1209,8 @@ const CommunityScreen = () => {
               }}
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyText}>No conversations yet</Text>
-                  <Text style={styles.emptySubtext}>Start a conversation with someone!</Text>
+                  <Text style={[styles.emptyText, { color: theme.text }]}>No conversations yet</Text>
+                  <Text style={[styles.emptySubtext, { color: theme.text + '99' }]}>Start a conversation with someone!</Text>
                 </View>
               }
             />
@@ -1137,24 +1226,27 @@ const CommunityScreen = () => {
               onRefresh={refreshData}
               renderItem={({ item }) => {
                 const friendStatus = getFriendStatus(item.id);
+                const incomingRequestForUser = incomingFriendRequests.find(
+                  req => req.sender_id === item.id
+                );
                 return (
-                  <View key={item.id} style={styles.userCardCompact}>
+                  <View key={item.id} style={[styles.userCardCompact, { backgroundColor: theme.card, borderColor: theme.primary + '33' }]}>
                     {/* Left: Avatar/Initial and Info */}
                     <View style={styles.userInfoCompact}>
-                      <View style={styles.avatarCircleCompact}>
+                      <View style={[styles.avatarCircleCompact, { backgroundColor: theme.primary + '22' }]}>
                         {item.avatar_url ? (
                           <Image source={{ uri: item.avatar_url }} style={styles.avatarCircleCompact} />
                         ) : (
-                          <Text style={styles.avatarTextCompact}>
+                          <Text style={[styles.avatarTextCompact, { color: theme.primary }]}>
                             {item.full_name ? item.full_name[0] : item.email[0]}
                           </Text>
                         )}
                       </View>
                       <View>
-                        <Text style={styles.userNameCompact}>
+                        <Text style={[styles.userNameCompact, { color: theme.text }]}>
                           {item.full_name || item.username || 'Anonymous User'}
                         </Text>
-                        <Text style={styles.userJoinedCompact}>
+                        <Text style={[styles.userJoinedCompact, { color: theme.text + '99' }]}>
                           Joined {item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}
                         </Text>
                       </View>
@@ -1191,7 +1283,23 @@ const CommunityScreen = () => {
                           <Ionicons name="hourglass-outline" size={18} color="#FF9800" />
                         </View>
                       )}
-                      {friendStatus === 'pending' && (
+                      {friendStatus === 'incoming' && incomingRequestForUser && (
+                        <View style={{ flexDirection: 'row' }}>
+                          <TouchableOpacity
+                            style={styles.addFriendButtonCompact}
+                            onPress={() => handleAcceptFriendRequest(incomingRequestForUser.id)}
+                          >
+                            <Ionicons name="checkmark" size={18} color="#4CAF50" />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.addFriendButtonCompact}
+                            onPress={() => handleDeclineFriendRequest(incomingRequestForUser.id)}
+                          >
+                            <Ionicons name="close" size={18} color="#ef4444" />
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                      {(friendStatus === 'pending' && !pendingFriendRequestIds.includes(item.id)) && (
                         <View style={styles.pendingBadgeCompact}>
                           <Text style={styles.pendingTextCompact}>Pending</Text>
                         </View>
@@ -1211,21 +1319,21 @@ const CommunityScreen = () => {
           {/* Study Rooms Tab */}
           {activeTab === 'Study Rooms' && (
             <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-              <TouchableOpacity style={styles.createRoomBtn} onPress={() => setShowCreateModal(true)}>
-                <Ionicons name="add" size={20} color="#222" />
-                <Text style={styles.createRoomBtnText}>Create Study Room</Text>
+              <TouchableOpacity style={[styles.createRoomBtn, { backgroundColor: theme.card, borderColor: theme.primary }]} onPress={() => setShowCreateModal(true)}>
+                <Ionicons name="add" size={20} color={theme.primary} />
+                <Text style={[styles.createRoomBtnText, { color: theme.text }]}>Create Study Room</Text>
               </TouchableOpacity>
               
               {studyRooms.length === 0 ? (
                 <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyText}>No study rooms yet</Text>
-                  <Text style={styles.emptySubtext}>Create or join a study room to start collaborating!</Text>
+                  <Text style={[styles.emptyText, { color: theme.text }]}>No study rooms yet</Text>
+                  <Text style={[styles.emptySubtext, { color: theme.text + '99' }]}>Create or join a study room to start collaborating!</Text>
                 </View>
               ) : (
                 studyRooms.map(room => (
-                  <View key={room.id} style={styles.studyRoomCard}>
+                  <View key={room.id} style={[styles.studyRoomCard, { backgroundColor: theme.card, borderColor: theme.primary + '33' }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                      <Text style={[styles.studyRoomTitle, { fontWeight: 'bold' }]}>{room.name}</Text>
+                      <Text style={[styles.studyRoomTitle, { fontWeight: 'bold', color: theme.text }]}>{room.name}</Text>
                       {room.current_participants > 0 && (
                         <View style={styles.liveBadge}>
                           <Text style={styles.liveBadgeText}>Active</Text>
@@ -1237,17 +1345,17 @@ const CommunityScreen = () => {
                       </TouchableOpacity>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
-                      <Ionicons name="people-outline" size={16} color="#888" style={{ marginRight: 4 }} />
-                      <Text style={styles.studyRoomParticipants}>
+                      <Ionicons name="people-outline" size={16} color={theme.text + '99'} style={{ marginRight: 4 }} />
+                      <Text style={[styles.studyRoomParticipants, { color: theme.text + '99' }]}>
                         {room.current_participants || 0} participants
                       </Text>
                     </View>
                     {room.description && (
-                      <Text style={styles.studyRoomDescription} numberOfLines={2}>
+                      <Text style={[styles.studyRoomDescription, { color: theme.text + '99' }]} numberOfLines={2}>
                         {room.description}
                       </Text>
                     )}
-                    <Text style={styles.studyRoomCreator}>
+                    <Text style={[styles.studyRoomCreator, { color: theme.text + '99' }]}>
                       Created by {room.creator?.full_name || room.creator?.username || 'Unknown'}
                     </Text>
                   </View>
@@ -1271,54 +1379,59 @@ const CommunityScreen = () => {
                       keyboardShouldPersistTaps="handled"
                       showsVerticalScrollIndicator={false}
                     >
-                      <View style={styles.modalContentLarge}>
+                      <View style={[styles.modalContentLarge, { backgroundColor: theme.card, borderColor: theme.primary + '33' }]}>
                         <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setShowCreateModal(false)}>
-                          <Ionicons name="close" size={26} color="#888" />
+                          <Ionicons name="close" size={26} color={theme.text + '99'} />
                         </TouchableOpacity>
-                        <Text style={styles.modalTitleLarge}>Create Study Room</Text>
-                        <Text style={styles.modalSubtitle}>Create a new study room to collaborate with other students</Text>
-                        
-                        <Text style={styles.modalLabel}>Room Name *</Text>
+                        <Text style={[styles.modalTitleLarge, { color: theme.text }]}>Create Study Room</Text>
+                        <Text style={[styles.modalSubtitle, { color: theme.text + '99' }]}>Create a new study room to collaborate with other students</Text>
+
+                        <Text style={[styles.modalLabel, { color: theme.text }]}>Room Name *</Text>
                         <TextInput
-                          style={styles.modalInputLarge}
+                          style={[styles.modalInputLarge, { borderColor: theme.primary + '33', backgroundColor: theme.background, color: theme.text }]}
                           placeholder="e.g. Math Study Group"
+                          placeholderTextColor={theme.text + '66'}
                           value={newRoomName}
                           onChangeText={setNewRoomName}
                           autoCorrect={false}
                         />
-                        
-                        <Text style={styles.modalLabel}>Topic *</Text>
+
+                        <Text style={[styles.modalLabel, { color: theme.text }]}>Topic *</Text>
                         <TextInput
-                          style={styles.modalInputLarge}
+                          style={[styles.modalInputLarge, { borderColor: theme.primary + '33', backgroundColor: theme.background, color: theme.text }]}
                           placeholder="e.g. Calculus 101"
+                          placeholderTextColor={theme.text + '66'}
                           value={newTopic}
                           onChangeText={setNewTopic}
                           autoCorrect={false}
                         />
-                        
-                        <Text style={styles.modalLabel}>Description</Text>
+
+                        <Text style={[styles.modalLabel, { color: theme.text }]}>Description</Text>
                         <TextInput
-                          style={[styles.modalInputLarge, { height: 80, textAlignVertical: 'top' }]}
+                          style={[styles.modalInputLarge, { height: 80, textAlignVertical: 'top', borderColor: theme.primary + '33', backgroundColor: theme.background, color: theme.text }]}
                           placeholder="Describe what you'll be studying..."
+                          placeholderTextColor={theme.text + '66'}
                           value={newDescription}
                           onChangeText={setNewDescription}
                           multiline
                           autoCorrect={false}
                         />
-                        
-                        <Text style={styles.modalLabel}>Schedule</Text>
+
+                        <Text style={[styles.modalLabel, { color: theme.text }]}>Schedule</Text>
                         <TextInput
-                          style={styles.modalInputLarge}
+                          style={[styles.modalInputLarge, { borderColor: theme.primary + '33', backgroundColor: theme.background, color: theme.text }]}
                           placeholder="e.g. Mondays at 5pm (optional)"
+                          placeholderTextColor={theme.text + '66'}
                           value={newSchedule}
                           onChangeText={setNewSchedule}
                           autoCorrect={false}
                         />
-                        
-                        <Text style={styles.modalLabel}>Duration</Text>
+
+                        <Text style={[styles.modalLabel, { color: theme.text }]}>Duration</Text>
                         <TextInput
-                          style={styles.modalInputLarge}
+                          style={[styles.modalInputLarge, { borderColor: theme.primary + '33', backgroundColor: theme.background, color: theme.text }]}
                           placeholder="e.g. 1 hour (optional)"
+                          placeholderTextColor={theme.text + '66'}
                           value={newDuration}
                           onChangeText={setNewDuration}
                           autoCorrect={false}
@@ -1353,21 +1466,22 @@ const CommunityScreen = () => {
         onRequestClose={() => setShowMessageModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { backgroundColor: theme.card, borderColor: theme.primary + '33' }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>
                 Message {selectedUser?.full_name || selectedUser?.username}
               </Text>
               <TouchableOpacity
                 style={styles.closeButton}
                 onPress={() => setShowMessageModal(false)}
               >
-                <Ionicons name="close" size={24} color="#666" />
+                <Ionicons name="close" size={24} color={theme.text + '99'} />
               </TouchableOpacity>
             </View>
             <TextInput
-              style={styles.messageInput}
+              style={[styles.messageInput, { borderColor: theme.primary + '33', backgroundColor: theme.background, color: theme.text }]}
               placeholder="Type your message..."
+              placeholderTextColor={theme.text + '66'}
               value={messageText}
               onChangeText={setMessageText}
               multiline
@@ -1498,82 +1612,75 @@ const styles = StyleSheet.create({
     fontSize: 15, 
     color: '#222' 
   },
-  friendCard: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: '#E8F5E9', 
-    borderRadius: 14, 
-    marginHorizontal: 16, 
-    marginBottom: 14, 
-    padding: 14, 
-    borderWidth: 1, 
-    borderColor: '#C8E6C9' 
+  friendCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 14,
+    marginHorizontal: 16,
+    marginBottom: 14,
+    padding: 14,
+    borderWidth: 1,
   },
-  avatarCircle: { 
-    width: 40, 
-    height: 40, 
-    borderRadius: 20, 
-    backgroundColor: '#F1F8E9', 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    marginRight: 14 
+  avatarCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14
   },
   avatarText: {
-    color: '#1B5E20',
     fontWeight: 'bold',
     fontSize: 18,
   },
-  friendName: { fontWeight: 'bold', fontSize: 16, color: '#222' },
-  friendJoined: { color: '#888', fontSize: 13, marginTop: 2 },
+  friendName: { fontWeight: 'bold', fontSize: 16 },
+  friendJoined: { fontSize: 13, marginTop: 2 },
   friendIconBtn: { marginLeft: 8, padding: 4 },
-  lastMessage: { color: '#444', fontSize: 14 },
-  timeText: { color: '#888', fontSize: 12, marginBottom: 2 },
-  createRoomBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#C8E6C9', paddingVertical: 10, paddingHorizontal: 18, marginHorizontal: 16, marginBottom: 16, marginTop: 4, alignSelf: 'flex-start' },
-  createRoomBtnText: { color: '#222', fontWeight: 'bold', fontSize: 15, marginLeft: 6 },
-  studyRoomCard: { backgroundColor: '#E8F5E9', borderRadius: 14, marginHorizontal: 16, marginBottom: 18, padding: 16, borderWidth: 1, borderColor: '#C8E6C9' },
-  studyRoomTitle: { fontWeight: 'bold', fontSize: 17, color: '#1B5E20', marginRight: 8 },
+  lastMessage: { fontSize: 14 },
+  timeText: { fontSize: 12, marginBottom: 2 },
+  createRoomBtn: { flexDirection: 'row', alignItems: 'center', borderRadius: 8, borderWidth: 1, paddingVertical: 10, paddingHorizontal: 18, marginHorizontal: 16, marginBottom: 16, marginTop: 4, alignSelf: 'flex-start' },
+  createRoomBtnText: { fontWeight: 'bold', fontSize: 15, marginLeft: 6 },
+  studyRoomCard: { borderRadius: 14, marginHorizontal: 16, marginBottom: 18, padding: 16, borderWidth: 1 },
+  studyRoomTitle: { fontWeight: 'bold', fontSize: 17, marginRight: 8 },
   liveBadge: { backgroundColor: '#2ECC40', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2, marginRight: 8 },
   liveBadgeText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
   joinNowBtn: { backgroundColor: '#1B5E20', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 16 },
   joinNowBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
-  studyRoomParticipants: { color: '#888', fontSize: 14 },
-  studyRoomTopic: { color: '#222', fontSize: 14 },
-  studyRoomCreator: { color: '#888', fontSize: 13, marginTop: 2 },
+  studyRoomParticipants: { fontSize: 14 },
+  studyRoomTopic: { fontSize: 14 },
+  studyRoomCreator: { fontSize: 13, marginTop: 2 },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: 'rgba(0,0,0,0.8)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContentLarge: {
-    backgroundColor: '#fff',
     borderRadius: 18,
     padding: 24,
     width: 360,
     alignItems: 'stretch',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6,
     marginTop: 40,
+    borderWidth: 1,
   },
   modalTitleLarge: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#1B5E20',
     textAlign: 'center',
     marginBottom: 2,
   },
   modalSubtitle: {
     fontSize: 15,
-    color: '#888',
     textAlign: 'center',
     marginBottom: 18,
   },
   modalLabel: {
     fontWeight: 'bold',
-    color: '#222',
     marginBottom: 4,
     marginTop: 8,
     fontSize: 15,
@@ -1581,13 +1688,10 @@ const styles = StyleSheet.create({
   modalInputLarge: {
     width: '100%',
     borderWidth: 1.5,
-    borderColor: '#222',
     borderRadius: 14,
     padding: 12,
     marginBottom: 10,
     fontSize: 16,
-    color: '#222',
-    backgroundColor: '#FAFAFA',
   },
   modalCloseBtn: {
     position: 'absolute',
@@ -1670,13 +1774,11 @@ const styles = StyleSheet.create({
   userCardCompact: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E8F5E9',
     borderRadius: 14,
     marginHorizontal: 16,
     marginBottom: 14,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#C8E6C9',
     justifyContent: 'space-between',
   },
   userInfoCompact: {
@@ -1688,23 +1790,19 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#F1F8E9',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 14,
   },
   avatarTextCompact: {
-    color: '#1B5E20',
     fontWeight: 'bold',
     fontSize: 18,
   },
   userNameCompact: {
     fontWeight: 'bold',
     fontSize: 16,
-    color: '#222',
   },
   userJoinedCompact: {
-    color: '#888',
     fontSize: 13,
     marginTop: 2,
   },
@@ -1744,12 +1842,10 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#222',
     marginBottom: 10,
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#888',
   },
   unreadBadge: {
     backgroundColor: '#4CAF50',
@@ -1766,7 +1862,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   studyRoomDescription: {
-    color: '#222',
     fontSize: 14,
   },
   keyboardAvoidingView: {
@@ -1782,7 +1877,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginHorizontal: 16,
     marginBottom: 16,
-    backgroundColor: '#f5f5f5',
     borderRadius: 8,
     padding: 4,
   },
@@ -1794,11 +1888,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   activeTab: {
-    backgroundColor: '#fff',
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
   },
   tabText: {
     fontSize: 14,
@@ -1826,16 +1915,16 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#F1F8E9',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalContent: {
-    backgroundColor: '#fff',
     borderRadius: 20,
     padding: 24,
     width: '90%',
     maxWidth: 400,
+    borderWidth: 1,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1846,14 +1935,12 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1B5E20',
   },
   closeButton: {
     padding: 4,
   },
   messageInput: {
     borderWidth: 1,
-    borderColor: '#E0E0E0',
     borderRadius: 12,
     padding: 12,
     marginBottom: 16,

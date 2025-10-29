@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput, Alert, Dimensions, ImageBackground, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput, Alert, Dimensions, Animated, KeyboardAvoidingView } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { ThemedImageBackground } from '../../components/ThemedImage';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
@@ -16,6 +16,7 @@ export default function FocusPreparationScreen() {
   const navigation = useNavigation();
   const { theme } = useTheme();
   const { tasks, addTask } = useSupabaseTasks();
+  const insets = useSafeAreaInsets();
   
   // Dynamic styles that depend on theme
   const dynamicStyles = {
@@ -835,7 +836,10 @@ export default function FocusPreparationScreen() {
         animationType="slide"
         onRequestClose={() => setShowNoraChat(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior="height"
+          style={styles.modalOverlay}
+        >
           <View style={[styles.noraChatModal, { backgroundColor: theme.card }]}>
             <View style={styles.modalHeader}>
               <View style={styles.noraHeaderInfo}>
@@ -885,7 +889,15 @@ export default function FocusPreparationScreen() {
             </ScrollView>
 
             {/* Chat Input */}
-            <View style={[styles.chatInputContainer, { borderTopColor: theme.border }]}>
+            <View
+              style={[
+                styles.chatInputContainer,
+                {
+                  borderTopColor: theme.border,
+                  paddingBottom: Math.max(16, insets.bottom / 2),
+                },
+              ]}
+            >
               <TextInput
                 style={[styles.chatInput, { 
                   color: theme.text, 
@@ -912,7 +924,7 @@ export default function FocusPreparationScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Color Fill Animation Overlay */}
@@ -1480,6 +1492,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     maxHeight: 100,
+    textAlignVertical: 'top',
   },
   sendButton: {
     width: 40,

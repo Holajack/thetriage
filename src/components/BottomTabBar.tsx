@@ -50,60 +50,73 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({ currentRoute }) => {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.primary }]}>
-      {tabs.map((tab) => {
-        const isActive = currentRoute === tab.route;
-        return (
-          <TouchableOpacity
-            key={tab.name}
-            style={styles.tabButton}
-            onPress={() => handleTabPress(tab.route)}
-            activeOpacity={0.7}
-          >
-            <Ionicons
-              name={isActive ? tab.icon : `${tab.icon}-outline`}
-              size={24}
-              color="#FFFFFF"
-            />
-            <Text style={[styles.tabLabel, { color: '#FFFFFF' }]}>
-              {tab.label}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
+    <View style={styles.floatingContainer}>
+      <View style={[styles.container, { backgroundColor: theme.primary }]}>
+        {tabs.map((tab) => {
+          const isActive = currentRoute === tab.route;
+          return (
+            <TouchableOpacity
+              key={tab.name}
+              style={styles.tabButton}
+              onPress={() => handleTabPress(tab.route)}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={isActive ? tab.icon : `${tab.icon}-outline`}
+                size={24}
+                color="#FFFFFF"
+              />
+              <Text
+                style={[styles.tabLabel, { color: '#FFFFFF', fontWeight: isActive ? '700' : '600' }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+              >
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
+  floatingContainer: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
+    alignItems: 'center',
+    zIndex: 1000,
+  },
   container: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 30,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 10,
-    height: 70,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 15,
+    width: '100%',
+    maxWidth: 400,
   },
   tabButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 2,
+    paddingVertical: 4,
     paddingHorizontal: 4,
-    minWidth: 55,
     flex: 1,
-    maxWidth: 70,
+    minHeight: 60,
   },
   tabLabel: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '600',
-    marginTop: 2,
+    marginTop: 4,
+    textAlign: 'center',
   },
 });

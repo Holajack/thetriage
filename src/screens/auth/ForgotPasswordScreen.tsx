@@ -16,12 +16,14 @@ const ForgotPasswordScreen = () => {
     setLoading(true);
     setMessage('');
     setError('');
-    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: 'hikewise://reset-password',
+    });
     setLoading(false);
     if (error) {
       setError(error.message);
     } else {
-      setMessage('Password reset email sent! Check your inbox.');
+      setMessage('Password reset email sent! Check your inbox and click the link to reset your password.');
     }
   };
 

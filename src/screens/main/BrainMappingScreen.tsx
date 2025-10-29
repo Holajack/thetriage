@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, ScrollView, Animated, Switch } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, ScrollView, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
 const { useUserAppData } = require('../../utils/userAppData');
-import Svg, { Path, Circle, Text as SvgText } from 'react-native-svg';
-import Brain3D from '../../components/Brain3D';
-import RealisticBrain3D from '../../components/RealisticBrain3D';
+import OBJBrain3D from '../../components/OBJBrain3D';
 import { generateBrainVisualizationData, Brain3DRegion } from '../../utils/brain3DData';
 
 interface BrainActivity {
@@ -88,277 +86,32 @@ const BRAIN_ACTIVITIES: BrainActivity[] = [
 const BrainMappingScreen: React.FC = () => {
   const { theme } = useTheme();
   const navigation = useNavigation<any>();
-  const [selectedActivity, setSelectedActivity] = useState<BrainActivity | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
-  const [is3DMode, setIs3DMode] = useState(false);
-  const [useRealisticModel, setUseRealisticModel] = useState(true);
   const [brain3DData, setBrain3DData] = useState<Brain3DRegion[]>([]);
   const [selectedRegion, setSelectedRegion] = useState<Brain3DRegion | null>(null);
-  const [pulseAnimations] = useState(
-    BRAIN_ACTIVITIES.reduce((acc, activity) => {
-      acc[activity.id] = new Animated.Value(1);
-      return acc;
-    }, {} as Record<string, Animated.Value>)
-  );
-  const [activities, setActivities] = useState<BrainActivity[]>(BRAIN_ACTIVITIES);
+  const [scrollEnabled, setScrollEnabled] = useState(true);
 
   // Get user data from our comprehensive hook
   const { data: userData, isLoading: userDataLoading } = useUserAppData();
 
-  // Configure header
+  // Configure header - hide title and hamburger, keep back button
   useEffect(() => {
     navigation.setOptions({
-      title: 'Brain Activity Mapping',
-      headerLeft: () => (
-        <TouchableOpacity 
-          onPress={() => navigation.navigate('Bonuses' as never)} 
-          style={{ marginLeft: 8 }}
-        >
-          <Ionicons name="arrow-back" size={24} color={theme.primary} />
-        </TouchableOpacity>
-      ),
-      headerRight: () => (
-        <View style={styles.headerRight}>
-          <Text style={[styles.viewModeText, { color: theme.text }]}>
-            {is3DMode ? (useRealisticModel ? 'MRI' : '3D') : '2D'}
-          </Text>
-          <Switch
-            value={is3DMode}
-            onValueChange={setIs3DMode}
-            trackColor={{ false: '#767577', true: theme.primary }}
-            thumbColor={is3DMode ? '#f4f3f4' : '#f4f3f4'}
-          />
-          {is3DMode && (
-            <TouchableOpacity
-              style={[styles.modelToggle, { backgroundColor: theme.primary + '20' }]}
-              onPress={() => setUseRealisticModel(!useRealisticModel)}
-            >
-              <Text style={[styles.modelToggleText, { color: theme.primary }]}>
-                {useRealisticModel ? 'MRI' : 'Simple'}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      ),
+      headerShown: false,
     });
-  }, [navigation, theme, is3DMode, useRealisticModel]);
+  }, [navigation]);
 
-  useEffect(() => {
-    // Create pulsing animations for active brain regions
-    BRAIN_ACTIVITIES.forEach((activity) => {
-      if (activity.activity > 0.6) {
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(pulseAnimations[activity.id], {
-              toValue: 1.3,
-              duration: 1000,
-              useNativeDriver: true,
-            }),
-            Animated.timing(pulseAnimations[activity.id], {
-              toValue: 1,
-              duration: 1000,
-              useNativeDriver: true,
-            }),
-          ])
-        ).start();
-      }
-    });
-  }, []);
 
-  // Process user data to generate brain activity data
+  // Process user data to generate 3D brain activity data
   useEffect(() => {
     if (userData && !userDataLoading) {
-      generateBrainActivityFromUserData(userData);
-      // Generate 3D brain data
       const brain3D = generateBrainVisualizationData(userData);
       setBrain3DData(brain3D);
     }
   }, [userData, userDataLoading]);
 
-  // Generate brain activity data from user subjects and sessions
-  const generateBrainActivityFromUserData = (userData: any) => {
-    try {
-      if (!userData?.sessions || !userData?.tasks) {
-        return;
-      }
-
-      const sessions = userData.sessions || [];
-      const tasks = userData.tasks || [];
-
-      // Extract unique subjects from tasks
-      const subjectMap: Record<string, {
-        time: number,
-        lastActive: Date | null,
-        region: string,
-        description: string,
-        color: string,
-        coordinates: { x: number, y: number },
-        icon: string
-      }> = {};
-
-      // Define brain regions for subjects
-      const brainRegions = [
-        {
-          name: 'Left Prefrontal Cortex',
-          description: 'Critical for planning complex behavior, decision making, and moderating social behavior.',
-          coordinates: { x: 100, y: 100 },
-          color: '#4CAF50'
-        },
-        {
-          name: 'Right Temporal Lobe',
-          description: 'Important for processing auditory information and language comprehension.',
-          coordinates: { x: 180, y: 170 },
-          color: '#FF9800'
-        },
-        {
-          name: 'Left Parietal Lobe',
-          description: 'Responsible for logical reasoning, spatial processing, and mathematical calculations.',
-          coordinates: { x: 120, y: 140 },
-          color: '#2196F3'
-        },
-        {
-          name: 'Occipital Lobe',
-          description: 'Processes visual information essential for understanding diagrams, charts, and structures.',
-          coordinates: { x: 160, y: 210 },
-          color: '#9C27B0'
-        },
-        {
-          name: 'Broca\'s Area',
-          description: 'Involved in speech production and language processing.',
-          coordinates: { x: 90, y: 140 },
-          color: '#F44336'
-        },
-        {
-          name: 'Hippocampus',
-          description: 'Essential for long-term memory formation and recall of information.',
-          coordinates: { x: 140, y: 180 },
-          color: '#00BCD4'
-        }
-      ];
-
-      // Icons for different types of subjects
-      const subjectIcons: Record<string, string> = {
-        'Math': 'calculator',
-        'Science': 'flask',
-        'History': 'book',
-        'English': 'text',
-        'Art': 'color-palette',
-        'Music': 'musical-notes',
-        'Computer': 'code',
-        'Language': 'language',
-        'Physics': 'magnet',
-        'Chemistry': 'flask',
-        'Biology': 'leaf',
-        'Economics': 'cash',
-        'CS': 'code-slash',
-        'Psychology': 'brain',
-        'Geography': 'globe'
-      };
-
-      // Extract subjects from tasks and assign time from sessions
-      tasks.forEach((task: any) => {
-        if (!task.title) return;
-
-        // Extract subject from task name (first word)
-        const subject = task.title.split(' ')[0];
-
-        // Find related session for this task
-        const taskSessions = sessions.filter((session: any) =>
-          session.task_id === task.id
-        );
-
-        // Calculate total time spent on this subject
-        const timeSpent = taskSessions.reduce(
-          (sum: number, session: any) => sum + (session.duration_minutes || 0),
-          0
-        );
-
-        // Find the most recent activity for this subject
-        const latestSession = taskSessions.length > 0
-          ? taskSessions.sort((a: any, b: any) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-          )[0]
-          : null;
-
-        const lastActive = latestSession?.created_at ? new Date(latestSession.created_at) : null;
-
-        // Assign a brain region and other properties
-        if (!subjectMap[subject]) {
-          const regionIndex = Object.keys(subjectMap).length % brainRegions.length;
-          const region = brainRegions[regionIndex];
-
-          subjectMap[subject] = {
-            time: 0,
-            lastActive: null,
-            region: region.name,
-            description: region.description,
-            color: region.color,
-            coordinates: region.coordinates,
-            icon: subjectIcons[subject] || 'book-outline'
-          };
-        }
-
-        // Update time spent and last active
-        subjectMap[subject].time += timeSpent;
-        if (lastActive && (!subjectMap[subject].lastActive || lastActive > subjectMap[subject].lastActive)) {
-          subjectMap[subject].lastActive = lastActive;
-        }
-      });
-
-      // Convert to BrainActivity array for display
-      const newActivities: BrainActivity[] = Object.entries(subjectMap).map(([subject, data], index) => {
-        // Calculate activity level based on time spent (0-1 scale)
-        const maxTime = Math.max(...Object.values(subjectMap).map(s => s.time));
-        const activity = maxTime > 0 ? data.time / maxTime : 0.5;
-
-        // Format last active time
-        let lastActiveStr = 'Never';
-        if (data.lastActive) {
-          const now = new Date();
-          const diffMs = now.getTime() - data.lastActive.getTime();
-          const diffHrs = diffMs / (1000 * 60 * 60);
-
-          if (diffHrs < 1) {
-            lastActiveStr = `${Math.round(diffHrs * 60)} minutes ago`;
-          } else if (diffHrs < 24) {
-            lastActiveStr = `${Math.round(diffHrs)} hours ago`;
-          } else {
-            lastActiveStr = `${Math.round(diffHrs / 24)} days ago`;
-          }
-        }
-
-        return {
-          id: String(index + 1),
-          subject,
-          region: data.region,
-          description: data.description,
-          activity: Math.max(0.3, Math.min(0.95, activity)), // Min 0.3, max 0.95
-          color: data.color,
-          coordinates: data.coordinates,
-          icon: data.icon,
-          lastActive: lastActiveStr,
-          studyTime: data.time
-        };
-      });
-
-      // If we found activities, update state
-      if (newActivities.length > 0) {
-        setActivities(newActivities);
-      }
-
-    } catch (err) {
-      console.error('Error generating brain activity data:', err);
-    }
-  };
-
-  const openActivityDetail = (activity: BrainActivity) => {
-    setSelectedActivity(activity);
-    setModalVisible(true);
-  };
-
   const closeDetail = () => {
     setModalVisible(false);
-    setSelectedActivity(null);
     setSelectedRegion(null);
   };
 
@@ -374,56 +127,10 @@ const BrainMappingScreen: React.FC = () => {
     return 'Low';
   };
 
-  const renderBrainVisualization = () => (
-    <View style={styles.brainContainer}>
-      <Svg height="280" width="280" viewBox="0 0 280 280">
-        {/* Brain outline */}
-        <Path
-          d="M140 40 C200 40, 240 80, 240 140 C240 180, 220 200, 200 220 C180 240, 160 240, 140 240 C120 240, 100 240, 80 220 C60 200, 40 180, 40 140 C40 80, 80 40, 140 40 Z"
-          stroke="#E0E0E0"
-          strokeWidth="2"
-          fill="#F8F8F8"
-        />
-
-        {/* Brain regions */}
-        {activities.map((activity) => (
-          <Animated.View
-            key={activity.id}
-            style={{
-              position: 'absolute',
-              left: activity.coordinates.x - 15,
-              top: activity.coordinates.y - 15,
-              transform: [{ scale: pulseAnimations[activity.id] }],
-            }}
-          >
-            <TouchableOpacity
-              onPress={() => openActivityDetail(activity)}
-              style={[
-                styles.brainRegion,
-                {
-                  backgroundColor: activity.color,
-                  opacity: 0.3 + (activity.activity * 0.7),
-                }
-              ]}
-            >
-              <Ionicons
-                name={activity.icon as any}
-                size={16}
-                color="#FFFFFF"
-              />
-            </TouchableOpacity>
-          </Animated.View>
-        ))}
-      </Svg>
-
-      <Text style={styles.brainLabel}>Interactive Brain Map</Text>
-      <Text style={styles.brainSubLabel}>Tap regions to see activity details</Text>
-    </View>
-  );
 
   const render3DRegionCard = ({ item }: { item: Brain3DRegion }) => (
     <TouchableOpacity
-      style={styles.activityCard}
+      style={[styles.activityCard, { backgroundColor: theme.card }]}
       onPress={() => handle3DRegionPress(item)}
       activeOpacity={0.8}
     >
@@ -437,29 +144,29 @@ const BrainMappingScreen: React.FC = () => {
 
       <View style={styles.activityContent}>
         <View style={styles.activityHeader}>
-          <Text style={styles.activitySubject}>{item.name}</Text>
+          <Text style={[styles.activitySubject, { color: theme.text }]}>{item.name}</Text>
           <Text style={[styles.activityLevel, { color: item.color }]}>
             {getActivityLevel(item.activity)}
           </Text>
         </View>
 
         {item.subject && (
-          <Text style={styles.activityRegion}>Subject: {item.subject}</Text>
+          <Text style={[styles.activityRegion, { color: theme.text + '99' }]}>Subject: {item.subject}</Text>
         )}
 
         <View style={styles.activityMeta}>
           <View style={styles.metaItem}>
             <Ionicons name="time-outline" size={14} color={theme.text + '99'} />
-            <Text style={styles.metaText}>{item.lastActive}</Text>
+            <Text style={[styles.metaText, { color: theme.text + '99' }]}>{item.lastActive}</Text>
           </View>
           <View style={styles.metaItem}>
             <Ionicons name="hourglass-outline" size={14} color={theme.text + '99'} />
-            <Text style={styles.metaText}>{item.studyTime}m studied</Text>
+            <Text style={[styles.metaText, { color: theme.text + '99' }]}>{item.studyTime}m studied</Text>
           </View>
         </View>
 
         <View style={styles.activityProgress}>
-          <View style={styles.progressBar}>
+          <View style={[styles.progressBar, { backgroundColor: theme.background }]}>
             <View
               style={[
                 styles.progressFill,
@@ -470,99 +177,55 @@ const BrainMappingScreen: React.FC = () => {
               ]}
             />
           </View>
-          <Text style={styles.progressText}>{Math.round(item.activity * 100)}% active</Text>
+          <Text style={[styles.progressText, { color: theme.text + '99' }]}>{Math.round(item.activity * 100)}% active</Text>
         </View>
       </View>
     </TouchableOpacity>
   );
 
-  const renderActivityCard = ({ item }: { item: BrainActivity }) => (
-    <TouchableOpacity
-      style={styles.activityCard}
-      onPress={() => openActivityDetail(item)}
-      activeOpacity={0.8}
-    >
-      <View style={[styles.activityIcon, { backgroundColor: `${item.color}15` }]}>
-        <Ionicons
-          name={item.icon as any}
-          size={24}
-          color={item.color}
-        />
-      </View>
-
-      <View style={styles.activityContent}>
-        <View style={styles.activityHeader}>
-          <Text style={styles.activitySubject}>{item.subject}</Text>
-          <Text style={[styles.activityLevel, { color: item.color }]}>
-            {getActivityLevel(item.activity)}
-          </Text>
-        </View>
-
-        <Text style={styles.activityRegion}>{item.region}</Text>
-
-        <View style={styles.activityMeta}>
-          <View style={styles.metaItem}>
-            <Ionicons name="time-outline" size={14} color={theme.text + '99'} />
-            <Text style={styles.metaText}>{item.lastActive}</Text>
-          </View>
-          <View style={styles.metaItem}>
-            <Ionicons name="hourglass-outline" size={14} color={theme.text + '99'} />
-            <Text style={styles.metaText}>{item.studyTime}m studied</Text>
-          </View>
-        </View>
-
-        <View style={styles.activityProgress}>
-          <View style={styles.progressBar}>
-            <View
-              style={[
-                styles.progressFill,
-                {
-                  width: `${item.activity * 100}%`,
-                  backgroundColor: item.color,
-                }
-              ]}
-            />
-          </View>
-          <Text style={styles.progressText}>{Math.round(item.activity * 100)}% active</Text>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      {/* Custom Header */}
+      <View style={[styles.customHeader, { backgroundColor: theme.background }]}>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('Bonuses' as never)}
+          style={styles.backButton}
+        >
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>Brain Activity Mapping</Text>
+        <View style={styles.headerSpacer} />
+      </View>
+
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        scrollEnabled={scrollEnabled}
+      >
         <View style={styles.headerContent}>
-          <Text style={styles.subtitle}>
-            Explore the areas of your brain activated during recent study sessions. Each highlighted region represents a different cognitive function.
+          <Text style={[styles.subtitle, { color: theme.text + '99' }]}>
+            Explore your brain in stunning 3D! Drag to rotate and discover which areas light up during your study sessions. Each region represents a different cognitive function.
           </Text>
         </View>
 
-        {is3DMode ? (
-          <View style={styles.brain3DContainer}>
-            {useRealisticModel ? (
-              <RealisticBrain3D 
-                regions={brain3DData} 
-                onRegionPress={handle3DRegionPress}
-              />
-            ) : (
-              <Brain3D 
-                regions={brain3DData} 
-                onRegionPress={handle3DRegionPress}
-              />
-            )}
-          </View>
-        ) : (
-          renderBrainVisualization()
-        )}
+        <View style={styles.brain3DContainer}>
+          <OBJBrain3D
+            regions={brain3DData}
+            onRegionPress={handle3DRegionPress}
+            autoRotate={true}
+            onInteractionStart={() => setScrollEnabled(false)}
+            onInteractionEnd={() => setScrollEnabled(true)}
+          />
+        </View>
 
         <View style={styles.activitiesSection}>
-          <Text style={styles.sectionTitle}>
-            {is3DMode ? '3D Brain Region Activity' : 'Brain Activity Breakdown'}
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>
+            Brain Region Activity
           </Text>
           <FlatList
-            data={is3DMode ? brain3DData : activities}
-            renderItem={is3DMode ? render3DRegionCard : renderActivityCard}
+            data={brain3DData}
+            renderItem={render3DRegionCard}
             keyExtractor={(item) => item.id}
             scrollEnabled={false}
             showsVerticalScrollIndicator={false}
@@ -570,7 +233,7 @@ const BrainMappingScreen: React.FC = () => {
         </View>
       </ScrollView>
 
-      {/* Activity Detail Modal */}
+      {/* Brain Region Detail Modal */}
       <Modal
         visible={modalVisible}
         transparent
@@ -578,58 +241,58 @@ const BrainMappingScreen: React.FC = () => {
         onRequestClose={closeDetail}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            {(selectedActivity || selectedRegion) && (
+          <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
+            {selectedRegion && (
               <ScrollView showsVerticalScrollIndicator={false}>
                 <View style={styles.modalHeader}>
-                  <View style={[styles.modalIcon, { 
-                    backgroundColor: `${(selectedActivity?.color || selectedRegion?.color)}15` 
+                  <View style={[styles.modalIcon, {
+                    backgroundColor: `${selectedRegion.color}15`
                   }]}>
                     <Ionicons
-                      name={(selectedActivity?.icon || 'pulse-outline') as any}
+                      name="pulse-outline"
                       size={32}
-                      color={selectedActivity?.color || selectedRegion?.color}
+                      color={selectedRegion.color}
                     />
                   </View>
                   <TouchableOpacity style={styles.closeButton} onPress={closeDetail}>
-                    <Ionicons name="close" size={24} color="#666" />
+                    <Ionicons name="close" size={24} color={theme.text + '99'} />
                   </TouchableOpacity>
                 </View>
 
-                <Text style={styles.modalTitle}>
-                  {selectedActivity?.subject || selectedRegion?.name}
+                <Text style={[styles.modalTitle, { color: theme.text }]}>
+                  {selectedRegion.name}
                 </Text>
-                <Text style={styles.modalRegion}>
-                  {selectedActivity?.region || (selectedRegion?.subject ? `Subject: ${selectedRegion.subject}` : 'Brain Region')}
+                <Text style={[styles.modalRegion, { color: theme.text + '99' }]}>
+                  {selectedRegion.subject ? `Subject: ${selectedRegion.subject}` : 'Brain Region'}
                 </Text>
 
                 <View style={styles.modalStats}>
                   <View style={styles.statItem}>
-                    <Text style={styles.statValue}>
-                      {Math.round((selectedActivity?.activity || selectedRegion?.activity || 0) * 100)}%
+                    <Text style={[styles.statValue, { color: theme.text }]}>
+                      {Math.round(selectedRegion.activity * 100)}%
                     </Text>
-                    <Text style={styles.statLabel}>Activity Level</Text>
+                    <Text style={[styles.statLabel, { color: theme.text + '99' }]}>Activity Level</Text>
                   </View>
                   <View style={styles.statItem}>
-                    <Text style={styles.statValue}>
-                      {selectedActivity?.studyTime || selectedRegion?.studyTime || 0}m
+                    <Text style={[styles.statValue, { color: theme.text }]}>
+                      {selectedRegion.studyTime}m
                     </Text>
-                    <Text style={styles.statLabel}>Study Time</Text>
+                    <Text style={[styles.statLabel, { color: theme.text + '99' }]}>Study Time</Text>
                   </View>
                   <View style={styles.statItem}>
-                    <Text style={styles.statValue}>
-                      {selectedActivity?.lastActive || selectedRegion?.lastActive}
+                    <Text style={[styles.statValue, { color: theme.text }]}>
+                      {selectedRegion.lastActive}
                     </Text>
-                    <Text style={styles.statLabel}>Last Active</Text>
+                    <Text style={[styles.statLabel, { color: theme.text + '99' }]}>Last Active</Text>
                   </View>
                 </View>
 
-                <Text style={styles.modalDescription}>
-                  {selectedActivity?.description || selectedRegion?.description}
+                <Text style={[styles.modalDescription, { color: theme.text + '99' }]}>
+                  {selectedRegion.description}
                 </Text>
 
-                <TouchableOpacity style={[styles.viewDetailsButton, { 
-                  backgroundColor: selectedActivity?.color || selectedRegion?.color 
+                <TouchableOpacity style={[styles.viewDetailsButton, {
+                  backgroundColor: selectedRegion.color
                 }]}>
                   <Text style={styles.viewDetailsText}>View Study History</Text>
                 </TouchableOpacity>
@@ -645,7 +308,34 @@ const BrainMappingScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAFAF6',
+    backgroundColor: '#1a1a2e',
+  },
+  customHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 60,
+    paddingBottom: 16,
+    backgroundColor: '#1a1a2e',
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    flex: 1,
+    textAlign: 'center',
+  },
+  headerSpacer: {
+    width: 40,
   },
   header: {
     flexDirection: 'row',
@@ -655,18 +345,10 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: 20,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F0F0F0',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1B5E20',
+    color: '#FFFFFF',
   },
   content: {
     flex: 1,
@@ -677,7 +359,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 16,
-    color: '#666',
+    color: '#B8B8B8',
     lineHeight: 22,
   },
   brainContainer: {
@@ -710,24 +392,27 @@ const styles = StyleSheet.create({
   },
   activitiesSection: {
     paddingHorizontal: 20,
+    paddingBottom: 32,
   },
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#1B5E20',
+    color: '#FFFFFF',
     marginBottom: 16,
   },
   activityCard: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#2a2a3e',
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.3,
     shadowRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   activityIcon: {
     width: 48,
@@ -749,7 +434,7 @@ const styles = StyleSheet.create({
   activitySubject: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#1B5E20',
+    color: '#FFFFFF',
     flex: 1,
   },
   activityLevel: {
@@ -758,7 +443,7 @@ const styles = StyleSheet.create({
   },
   activityRegion: {
     fontSize: 14,
-    color: '#666',
+    color: '#B8B8B8',
     marginBottom: 8,
   },
   activityMeta: {
@@ -772,7 +457,7 @@ const styles = StyleSheet.create({
   },
   metaText: {
     fontSize: 12,
-    color: '#666',
+    color: '#B8B8B8',
     marginLeft: 4,
   },
   activityProgress: {
@@ -782,7 +467,7 @@ const styles = StyleSheet.create({
   progressBar: {
     flex: 1,
     height: 4,
-    backgroundColor: '#E0E0E0',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: 2,
     marginRight: 8,
     overflow: 'hidden',
@@ -793,22 +478,24 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 12,
-    color: '#666',
+    color: '#B8B8B8',
     fontWeight: '500',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
   modalContent: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#2a2a3e',
     borderRadius: 24,
     padding: 24,
     width: '100%',
     maxHeight: '80%',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -827,20 +514,20 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalTitle: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#1B5E20',
+    color: '#FFFFFF',
     marginBottom: 8,
     textAlign: 'center',
   },
   modalRegion: {
     fontSize: 16,
-    color: '#666',
+    color: '#B8B8B8',
     textAlign: 'center',
     marginBottom: 24,
   },
@@ -849,7 +536,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     marginBottom: 24,
     paddingVertical: 16,
-    backgroundColor: '#F8F8F8',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 16,
   },
   statItem: {
@@ -858,16 +545,16 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1B5E20',
+    color: '#FFFFFF',
   },
   statLabel: {
     fontSize: 12,
-    color: '#666',
+    color: '#B8B8B8',
     marginTop: 4,
   },
   modalDescription: {
     fontSize: 16,
-    color: '#666',
+    color: '#B8B8B8',
     lineHeight: 22,
     textAlign: 'center',
     marginBottom: 24,
@@ -882,40 +569,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  viewModeText: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginRight: 8,
-  },
   brain3DContainer: {
-    height: 300,
-    marginHorizontal: 20,
     marginBottom: 24,
-    borderRadius: 16,
-    overflow: 'hidden',
-    backgroundColor: '#F8F8F8',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-  },
-  modelToggle: {
-    marginLeft: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  modelToggleText: {
-    fontSize: 12,
-    fontWeight: '600',
+    alignItems: 'center',
   },
 });
 

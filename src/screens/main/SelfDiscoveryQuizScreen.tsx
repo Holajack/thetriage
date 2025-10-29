@@ -85,13 +85,14 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
     navigation.setOptions({
       title: 'Self-Discovery Quizzes',
       headerLeft: () => (
-        <TouchableOpacity 
-          onPress={() => navigation.navigate('Bonuses' as never)} 
+        <TouchableOpacity
+          onPress={() => navigation.navigate('Bonuses' as never)}
           style={{ marginLeft: 8 }}
         >
           <Ionicons name="arrow-back" size={24} color={theme.primary} />
         </TouchableOpacity>
       ),
+      headerRight: () => null, // Remove hamburger menu
     });
   }, [navigation, theme]);
 
@@ -175,8 +176,10 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
     setShowQuiz(true);
   };
 
-  const getQuizType = (quizId: string): 'study_habits' | 'learning_style' => {
+  const getQuizType = (quizId: string): 'study_habits' | 'learning_style' | 'motivation_profile' | 'focus_type' => {
     if (quizId === '1') return 'study_habits';
+    if (quizId === '2') return 'focus_type';
+    if (quizId === '3') return 'motivation_profile';
     if (quizId === '4') return 'learning_style';
     return 'study_habits'; // Default fallback
   };
@@ -341,24 +344,15 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
                   </View>
                 </View>
 
-                <TouchableOpacity 
-                  style={styles.startButton} 
+                <TouchableOpacity
+                  style={styles.startButton}
                   onPress={startQuiz}
-                  disabled={selectedQuiz.id !== '1' && selectedQuiz.id !== '4'}
                 >
                   <Text style={styles.startButtonText}>
-                    {selectedQuiz.id === '1' || selectedQuiz.id === '4' ? (
-                      selectedQuiz.progress === 1.0 ? 'Retake Quiz' : 
-                      selectedQuiz.progress > 0 ? 'Continue Quiz' : 'Start Quiz'
-                    ) : 'Coming Soon'}
+                    {selectedQuiz.progress === 1.0 ? 'Retake Quiz' :
+                     selectedQuiz.progress > 0 ? 'Continue Quiz' : 'Start Quiz'}
                   </Text>
                 </TouchableOpacity>
-                
-                {(selectedQuiz.id !== '1' && selectedQuiz.id !== '4') && (
-                  <Text style={styles.comingSoonText}>
-                    This quiz will be available in a future update!
-                  </Text>
-                )}
               </>
             )}
           </View>

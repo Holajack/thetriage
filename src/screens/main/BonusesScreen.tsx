@@ -104,7 +104,7 @@ const BonusesScreen = () => {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Unified Header */}
-      <UnifiedHeader title="Traveller" onClose={() => navigation.navigate('Home')} />
+      <UnifiedHeader title="Pathfinder" onClose={() => navigation.navigate('Home')} />
 
       <ScrollView
         style={styles.scrollView}
@@ -116,46 +116,7 @@ const BonusesScreen = () => {
           {bonusFeatures.map(renderFeatureCard)}
         </View>
 
-        {/* Coming Soon Section */}
-        <View style={[styles.comingSoonContainer, { backgroundColor: theme.card }]}>
-          <View style={styles.comingSoonHeader}>
-            <MaterialCommunityIcons 
-              name="rocket-launch" 
-              size={24} 
-              color={theme.primary} 
-            />
-            <Text style={[styles.comingSoonTitle, { color: theme.text }]}>
-              Coming Soon
-            </Text>
-          </View>
-          <Text style={[styles.comingSoonDescription, { color: theme.text + '99' }]}>
-            We're constantly working on new features to help you study more effectively. 
-            Stay tuned for exciting updates!
-          </Text>
-          
-          <View style={styles.upcomingFeatures}>
-            {[
-              'Advanced Study Analytics',
-              'Collaborative Study Sessions',
-              'AI-Powered Study Recommendations',
-              'Virtual Study Environments'
-            ].map((feature, index) => (
-              <View key={index} style={styles.upcomingFeature}>
-                <Ionicons 
-                  name="ellipse" 
-                  size={6} 
-                  color={theme.primary} 
-                  style={styles.bulletPoint}
-                />
-                <Text style={[styles.upcomingFeatureText, { color: theme.text + '88' }]}>
-                  {feature}
-                </Text>
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {/* Stats Card */}
+        {/* Stats Card */}}
         <View style={[styles.statsCard, { backgroundColor: theme.primary + '15' }]}>
           <Text style={[styles.statsTitle, { color: theme.primary }]}>
             Your Progress
@@ -281,43 +242,6 @@ const styles = StyleSheet.create({
   },
   arrowContainer: {
     marginLeft: 12,
-  },
-  comingSoonContainer: {
-    padding: 20,
-    borderRadius: 16,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(76, 175, 80, 0.2)',
-  },
-  comingSoonHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  comingSoonTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginLeft: 8,
-  },
-  comingSoonDescription: {
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 16,
-  },
-  upcomingFeatures: {
-    marginTop: 8,
-  },
-  upcomingFeature: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  bulletPoint: {
-    marginRight: 12,
-  },
-  upcomingFeatureText: {
-    fontSize: 14,
-    flex: 1,
   },
   statsCard: {
     padding: 20,

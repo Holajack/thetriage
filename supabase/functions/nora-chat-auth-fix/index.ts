@@ -1,5 +1,17 @@
-// Enhanced Nora Chat Edge Function with Full App Context and PDF Support
+// Enhanced Nora Chat Edge Function with OpenAI Integration and PDF Support
 import { createClient } from 'npm:@supabase/supabase-js@2.43.0';
+import {
+  checkRateLimit,
+  logAIMessage,
+  getTierLimits,
+  validateMessageLength,
+  validatePDFAccess,
+  shouldEnableFileSearch,
+  estimateTokenCount,
+  estimateCost,
+  getTierUpgradeMessage,
+  sanitizeInput
+} from '../_shared/rateLimiter.ts';
 
 // Define CORS headers
 const corsHeaders = {
@@ -8,8 +20,136 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS'
 };
 
-// Enhanced response generation with full app context
-function generateNoraResponse(message: string, userContext: any, pdfContext: any): string {
+// OpenAI Configuration for Nora
+const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY_NEW_NORA') ?? '';
+const OPENAI_ASSISTANT_ID = Deno.env.get('Nora_Assistant_ID') ?? '';
+const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
+const OPENAI_ASSISTANTS_URL = 'https://api.openai.com/v1';
+
+// OpenAI API headers
+const openAIHeaders = {
+  'Authorization': `Bearer ${OPENAI_API_KEY}`,
+  'Content-Type': 'application/json',
+  'OpenAI-Beta': 'assistants=v2'
+};
+
+const NORA_ASSISTANT_SYSTEM_INSTRUCTIONS = `
+You are Nora, the resident AI study companion inside HikeWise—the academic success platform that keeps students organized, focused, and supported throughout their learning journey. Members rely on you for mentorship, planning, accountability, and motivation across every course and study session.
+
+Mission:
+- Guide each HikeWise student toward consistent progress, stronger study habits, and confident mastery of their subjects.
+- Translate the student’s personal context (learning preferences, schedules, goals, and challenges) into actionable study support.
+
+Persona and tone:
+- Warm, encouraging, and deeply knowledgeable—like an elite academic coach who celebrates wins and keeps students accountable.
+- Stay practical and specific; avoid vague platitudes.
+- Ask clarifying questions when critical details are missing rather than guessing.
+
+Context awareness:
+- Use all profile data provided (focus method, weekly_focus_goal, university, major, recent accomplishments, study streaks).
+- Treat weekly_focus_goal as the target number of focused hours each week.
+- Reference prior plans or commitments in this thread and resume them proactively.
+
+Core responsibilities:
+- Study planning: craft weekly schedules, break down assignments, and plan revision cycles that align with the student’s commitments.
+- Focus enhancement: deliver concentration routines, environment tweaks, and energy-management tips tuned to their focus method.
+- Content mastery: explain concepts, design active-recall prompts, generate quizzes, and suggest practice flows.
+- Document analysis: summarize PDFs, build study guides, extract key arguments, and create targeted question banks.
+- Academic writing: support thesis creation, outline building, evidence integration, and revision strategies.
+- Motivation and accountability: maintain momentum through encouragement, progress reflections, and achievable next steps.
+
+Tools and knowledge handling:
+- When a PDF or attachment is supplied, ALWAYS use the file_search tool to scan through the ENTIRE document.
+- For ANY question about document content, use file_search to retrieve the specific information from the document.
+- Quote retrieved snippets exactly as they appear and cite in plain text (e.g., "[Week 2 Notes, p.3]" or "[Attachment §Study Tips]").
+- Search comprehensively - scan all pages and sections to find relevant information.
+- If the document does not contain the answer after thorough search, state that clearly and offer alternative support or next actions.
+- Never fabricate citations, grades, or institutional policies.
+- IMPORTANT: When users ask for specific information from a document, your PRIMARY task is to search and extract that information using file_search.
+
+Conversation management:
+- Track the ongoing plan in this thread; remind students of prior commitments and follow up on milestones.
+- Summarize key takeaways at natural junctures and confirm the next concrete step.
+
+Safety and boundaries:
+- Follow OpenAI safety policies and HikeWise academic integrity guidelines.
+- Refuse or redirect requests that would constitute cheating or violate school rules.
+- Provide guidance, scaffolding, and examples rather than complete graded work solutions.
+
+Response structure:
+1. Personalized acknowledgement that shows you remember their goals or recent context.
+2. Main guidance organized with clear headings or tight bullet lists.
+3. Action-oriented next steps (checklists, schedules, voltages, or prompts the student can act on immediately).
+4. Optional motivation or accountability nudge tied to their weekly_focus_goal or current progress.
+Keep responses concise yet thorough, prioritizing clarity and usefulness over length.
+
+Additional capabilities:
+- Generate spaced-repetition plans, focus session templates, SMART goals, and reflection prompts.
+- Translate complex concepts into learner-friendly explanations, analogies, or step-by-step walkthroughs.
+- Surface relevant study techniques (Pomodoro, interleaving, Feynman method) and align them with the student’s focus method.
+- Provide quick-glance tables for study schedules, progress tracking, or assignment timelines when helpful.
+
+Identity:
+- Always stay in character as Nora, the HikeWise AI study companion who is fully invested in each student’s academic journey.
+`.trim();
+
+// Build system prompt with user context
+function buildSystemPrompt(userContext: any, pdfContext: any): string {
+  const userName = userContext.profile?.full_name?.split(' ')[0] || 'there';
+  const focusMethod = userContext.onboarding?.focus_method || 'Balanced Focus';
+  const weeklyGoal = userContext.onboarding?.weekly_focus_goal || 5;
+  const university = userContext.profile?.university || 'your university';
+  const major = userContext.profile?.major || 'your studies';
+
+  let systemPrompt = `You are Nora, an advanced AI study companion and academic assistant. You have complete knowledge of the student's academic journey and learning preferences.
+
+**Student Profile:**
+- Name: ${userName}
+- Study Method: ${focusMethod} approach
+- Weekly Focus Goal: ${weeklyGoal} hours
+- University: ${university}
+- Major: ${major}
+
+**Your Capabilities:**
+1. Study Planning: Create custom schedules and goal-setting strategies
+2. Focus Enhancement: Provide concentration techniques optimized for their learning style
+3. Content Mastery: Offer subject-specific learning strategies and practice questions
+4. Document Analysis: Review PDFs, create summaries, and generate study questions
+5. Academic Writing: Give research guidance, structure planning, and revision support
+6. Motivation Support: Deliver personalized strategies to overcome procrastination
+
+**Communication Style:**
+- Friendly, supportive, and encouraging
+- Use emojis sparingly and appropriately
+- Provide actionable, detailed guidance
+- Tailor all advice to the student's ${focusMethod} learning style
+- Reference their ${weeklyGoal}-hour weekly goal when discussing planning
+`;
+
+  if (pdfContext && pdfContext.title) {
+    systemPrompt += `\n**Active PDF Context:**
+The student has attached a PDF titled: "${pdfContext.title}"
+
+**Your Role:**
+- Acknowledge that they've uploaded this PDF for study assistance
+- Provide comprehensive study strategies and support for this material
+- Help them create study plans, practice questions, and learning strategies
+- If they ask specific questions about the PDF content, do your best to help based on the title and typical content for such materials
+- Offer to help with note-taking strategies, summarization techniques, and active recall methods
+- Create practice questions and study guides appropriate for the subject matter indicated by the title
+- Be supportive and helpful even though you don't have the full PDF text extracted yet
+
+**Note:** Full PDF content extraction is being enhanced. Focus on providing excellent academic support based on the document title and general study best practices.
+`;
+  }
+
+  return systemPrompt;
+}
+
+// Call OpenAI API for response generation
+async function generateNoraResponseWithOpenAI(message: string, userContext: any, pdfContext: any): Promise<string> {
+  // Fallback function for when OpenAI is not available
+  const generateFallbackResponse = (message: string, userContext: any, pdfContext: any): string => {
   const lowerMessage = message.toLowerCase();
   const userName = userContext.profile?.full_name?.split(' ')[0] || 'there';
   const focusMethod = userContext.onboarding?.focus_method || 'Balanced Focus';
@@ -238,13 +378,320 @@ What type of academic document are you working on? I can provide specific, actio
 - Receive motivation and productivity tips
 
 What would you like to work on together today? I'm here to provide detailed, actionable guidance tailored to your unique learning profile and current needs.`;
+  };
+
+  // Check if OpenAI API key is available
+  if (!OPENAI_API_KEY || OPENAI_API_KEY === '') {
+    console.warn('OPENAI_API_KEY_NEW_NORA not configured in Supabase secrets, using fallback responses');
+    return generateFallbackResponse(message, userContext, pdfContext);
+  }
+
+  console.log('OpenAI API key configured successfully for Nora');
+
+  try {
+    const systemPrompt = buildSystemPrompt(userContext, pdfContext);
+
+    const hasPdfContent = pdfContext && pdfContext.content && pdfContext.hasContent;
+
+    console.log('Calling OpenAI API for Nora with model: gpt-4-turbo-preview');
+    console.log('PDF context active:', !!pdfContext);
+    console.log('PDF content included:', hasPdfContent);
+    console.log('User message length:', message.length);
+    console.log('System prompt length:', systemPrompt.length);
+
+    const response = await fetch(OPENAI_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4-turbo-preview',
+        messages: [
+          {
+            role: 'system',
+            content: systemPrompt
+          },
+          {
+            role: 'user',
+            content: message
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: hasPdfContent ? 2000 : 1000, // More tokens when analyzing PDFs
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error('OpenAI API error response:', response.status, error);
+      throw new Error(`OpenAI API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const aiResponse = data.choices?.[0]?.message?.content;
+
+    if (!aiResponse) {
+      console.error('OpenAI returned empty response');
+      throw new Error('No response from OpenAI');
+    }
+
+    console.log('OpenAI response received successfully, length:', aiResponse.length);
+    return aiResponse;
+  } catch (error) {
+    console.error('Error calling OpenAI API for Nora:', error);
+    console.log('Falling back to template responses');
+    // Fall back to template responses if OpenAI fails
+    return generateFallbackResponse(message, userContext, pdfContext);
+  }
 }
 
-// Function to extract text content from PDF (placeholder for future implementation)
-async function extractPdfContent(filePath: string): Promise<string> {
-  // TODO: Implement PDF text extraction using a service like pdf-parse or similar
-  // For now, return a placeholder
-  return "PDF content extraction would be implemented here. This would involve reading the PDF file and extracting text content for analysis.";
+// Upload PDF to OpenAI for Assistant processing
+async function uploadPdfToOpenAI(filePath: string, supabaseClient: any): Promise<string | null> {
+  try {
+    console.log('Uploading PDF to OpenAI for processing:', filePath);
+
+    // Download PDF from Supabase Storage
+    const { data: pdfBlob, error: downloadError } = await supabaseClient.storage
+      .from('e-books')
+      .download(filePath);
+
+    if (downloadError) {
+      console.error('Error downloading PDF:', downloadError);
+      return null;
+    }
+
+    console.log('PDF downloaded, size:', pdfBlob.size, 'bytes');
+
+    // Create FormData for OpenAI upload
+    const formData = new FormData();
+    formData.append('file', pdfBlob, filePath.split('/').pop() || 'document.pdf');
+    formData.append('purpose', 'assistants');
+
+    // Upload to OpenAI
+    const uploadResponse = await fetch(`${OPENAI_ASSISTANTS_URL}/files`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: formData,
+    });
+
+    if (!uploadResponse.ok) {
+      const error = await uploadResponse.text();
+      console.error('OpenAI file upload error:', error);
+      return null;
+    }
+
+    const uploadData = await uploadResponse.json();
+    console.log('PDF uploaded to OpenAI successfully. File ID:', uploadData.id);
+
+    return uploadData.id;
+  } catch (error) {
+    console.error('Error uploading PDF to OpenAI:', error);
+    return null;
+  }
+}
+
+// Create or get conversation thread
+async function getOrCreateThread(userId: string, supabaseClient: any): Promise<string | null> {
+  try {
+    // Check if user has existing thread
+    const { data: threadData } = await supabaseClient
+      .from('nora_chat_threads')
+      .select('thread_id')
+      .eq('user_id', userId)
+      .single();
+
+    if (threadData?.thread_id) {
+      console.log('Using existing thread:', threadData.thread_id);
+      return threadData.thread_id;
+    }
+
+    // Create new thread
+    console.log('Creating new thread for user:', userId);
+    const response = await fetch(`${OPENAI_ASSISTANTS_URL}/threads`, {
+      method: 'POST',
+      headers: openAIHeaders,
+      body: JSON.stringify({}),
+    });
+
+    if (!response.ok) {
+      console.error('Failed to create thread');
+      return null;
+    }
+
+    const thread = await response.json();
+    console.log('New thread created:', thread.id);
+
+    // Save thread ID to database
+    await supabaseClient
+      .from('nora_chat_threads')
+      .insert({
+        user_id: userId,
+        thread_id: thread.id,
+        created_at: new Date().toISOString()
+      });
+
+    return thread.id;
+  } catch (error) {
+    console.error('Error managing thread:', error);
+    return null;
+  }
+}
+
+// Use OpenAI Assistant with File Search for PDF analysis
+async function askNoraAssistantWithPdf(
+  message: string,
+  userId: string,
+  userContext: any,
+  pdfFileId: string | null,
+  pdfContext: any,
+  supabaseClient: any
+): Promise<string> {
+  try {
+    console.log('Using OpenAI Assistant for Nora with PDF File Search');
+
+    // Get or create thread
+    const threadId = await getOrCreateThread(userId, supabaseClient);
+    if (!threadId) {
+      throw new Error('Failed to get or create conversation thread');
+    }
+
+    // Prepare message with file attachment if PDF is provided
+    const messagePayload: any = {
+      role: 'user',
+      content: message,
+    };
+
+    if (pdfFileId) {
+      messagePayload.attachments = [{
+        file_id: pdfFileId,
+        tools: [{ type: 'file_search' }]
+      }];
+      console.log('Attaching PDF file to message:', pdfFileId);
+    }
+
+    // Add message to thread
+    const addMessageResponse = await fetch(`${OPENAI_ASSISTANTS_URL}/threads/${threadId}/messages`, {
+      method: 'POST',
+      headers: openAIHeaders,
+      body: JSON.stringify(messagePayload),
+    });
+
+    if (!addMessageResponse.ok) {
+      const error = await addMessageResponse.text();
+      console.error('Failed to add message to thread:', error);
+      throw new Error('Failed to add message to thread');
+    }
+
+    console.log('Message added to thread');
+
+    // Build additional instructions with user context
+    const userName = userContext.profile?.full_name?.split(' ')[0] || 'there';
+    const focusMethod = userContext.onboarding?.focus_method || 'Balanced Focus';
+    const weeklyGoal = userContext.onboarding?.weekly_focus_goal || 5;
+
+    const contextualInstructions = [
+      `Student Profile:\n- Name: ${userName}\n- Study Method: ${focusMethod}\n- Weekly Focus Goal: ${weeklyGoal} hours`,
+    ];
+
+    if (pdfContext && pdfContext.title) {
+      contextualInstructions.push(
+        `Active Document:\n- Title: ${pdfContext.title}\n- OpenAI File ID: ${pdfFileId ?? 'unavailable'}`
+      );
+    } else {
+      contextualInstructions.push('Active Document:\n- No attachment supplied in this message.');
+    }
+
+    contextualInstructions.push('Always incorporate the latest message and historic context held in this thread when crafting your reply.');
+
+    const runPayload: any = {
+      assistant_id: OPENAI_ASSISTANT_ID,
+      instructions: NORA_ASSISTANT_SYSTEM_INSTRUCTIONS,
+      additional_instructions: contextualInstructions.join('\n\n'),
+    };
+
+    // Ensure file_search tool is enabled when PDF is attached
+    if (pdfFileId) {
+      runPayload.tools = [{ type: 'file_search' }];
+      console.log('Enabling file_search tool for assistant run');
+    }
+
+    // Run the assistant
+    const runResponse = await fetch(`${OPENAI_ASSISTANTS_URL}/threads/${threadId}/runs`, {
+      method: 'POST',
+      headers: openAIHeaders,
+      body: JSON.stringify(runPayload),
+    });
+
+    if (!runResponse.ok) {
+      const error = await runResponse.text();
+      console.error('Failed to run assistant:', error);
+      throw new Error('Failed to run assistant');
+    }
+
+    const run = await runResponse.json();
+    console.log('Assistant run started:', run.id);
+
+    // Poll for completion
+    let runStatus = run.status;
+    let attempts = 0;
+    const maxAttempts = 60; // 60 seconds max
+
+    while (runStatus !== 'completed' && runStatus !== 'failed' && attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+
+      const statusResponse = await fetch(`${OPENAI_ASSISTANTS_URL}/threads/${threadId}/runs/${run.id}`, {
+        headers: openAIHeaders,
+      });
+
+      if (statusResponse.ok) {
+        const statusData = await statusResponse.json();
+        runStatus = statusData.status;
+        console.log('Run status:', runStatus);
+      }
+
+      attempts++;
+    }
+
+    if (runStatus !== 'completed') {
+      throw new Error(`Assistant run did not complete. Status: ${runStatus}`);
+    }
+
+    // Get the assistant's response
+    const messagesResponse = await fetch(`${OPENAI_ASSISTANTS_URL}/threads/${threadId}/messages?limit=10`, {
+      headers: openAIHeaders,
+    });
+
+    if (!messagesResponse.ok) {
+      throw new Error('Failed to retrieve messages');
+    }
+
+    const messagesData = await messagesResponse.json();
+    const assistantMessage = messagesData.data.find((msg: any) => msg.role === 'assistant');
+
+    if (assistantMessage && Array.isArray(assistantMessage.content) && assistantMessage.content.length > 0) {
+      const textBlocks = assistantMessage.content
+        .filter((block: any) => block.type === 'text' && block?.text?.value)
+        .map((block: any) => block.text.value.trim())
+        .filter(Boolean);
+
+      const responseText = textBlocks.join('\n\n').trim();
+
+      if (responseText.length === 0) {
+        throw new Error('Assistant returned empty text content');
+      }
+
+      console.log('Assistant response received, length:', responseText.length);
+      return responseText;
+    }
+
+    throw new Error('No response from assistant');
+  } catch (error) {
+    console.error('Error using OpenAI Assistant:', error);
+    throw error;
+  }
 }
 
 // Main handler function
@@ -256,6 +703,7 @@ Deno.serve(async (req) => {
 
   try {
     console.log('Enhanced Nora chat function called');
+    console.log('OPENAI_API_KEY_NEW_NORA configured:', !!OPENAI_API_KEY && OPENAI_API_KEY !== '');
 
     // Get the authorization header
     const authHeader = req.headers.get('Authorization');
@@ -309,6 +757,86 @@ Deno.serve(async (req) => {
 
     console.log('User authenticated:', user.id);
 
+    // ============================================================
+    // 🔒 SECURITY CHECK: Rate Limiting & Tier Validation
+    // ============================================================
+    console.log('🔒 Starting security checks for Nora AI access...');
+
+    // 1. Check rate limits and tier access
+    const rateLimitResult = await checkRateLimit(supabaseClient, user.id, 'nora');
+
+    if (!rateLimitResult.allowed) {
+      console.log('❌ Access denied:', rateLimitResult.reason);
+
+      // Return user-friendly error with upgrade prompt
+      const upgradeMessage = getTierUpgradeMessage(rateLimitResult.tier, 'nora');
+
+      return new Response(JSON.stringify({
+        error: 'ACCESS_DENIED',
+        response: `${rateLimitResult.reason}\n\n${upgradeMessage}`,
+        tier: rateLimitResult.tier,
+        remaining_messages: rateLimitResult.remaining_messages,
+        upgrade_required: true
+      }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    console.log('✅ Rate limit check passed');
+    console.log(`📊 User tier: ${rateLimitResult.tier}, Remaining messages: ${rateLimitResult.remaining_messages}`);
+
+    // 2. Get tier limits for additional validation
+    const tierLimits = await getTierLimits(supabaseClient, user.id);
+
+    if (!tierLimits) {
+      console.error('❌ Failed to get tier limits');
+      return new Response(JSON.stringify({
+        error: 'CONFIGURATION_ERROR',
+        response: 'Unable to verify your subscription. Please try again or contact support.'
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    // 3. Sanitize user input to prevent injection
+    const sanitizedMessage = sanitizeInput(message);
+
+    // 4. Validate message length
+    const lengthValidation = validateMessageLength(sanitizedMessage, tierLimits);
+    if (!lengthValidation.valid) {
+      console.log('❌ Message too long:', lengthValidation.reason);
+      return new Response(JSON.stringify({
+        error: 'MESSAGE_TOO_LONG',
+        response: lengthValidation.reason,
+        max_length: tierLimits.max_message_length,
+        upgrade_required: rateLimitResult.tier !== 'pro'
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    // 5. Validate PDF access if PDF is attached
+    if (pdfContext) {
+      const pdfValidation = validatePDFAccess(tierLimits, true);
+      if (!pdfValidation.allowed) {
+        console.log('❌ PDF access denied:', pdfValidation.reason);
+        return new Response(JSON.stringify({
+          error: 'PDF_ACCESS_DENIED',
+          response: pdfValidation.reason,
+          upgrade_required: true
+        }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        });
+      }
+    }
+
+    console.log('✅ All security checks passed, proceeding with request...');
+    // ============================================================
+
     // Get comprehensive user context from database
     const [profileResult, onboardingResult, leaderboardResult] = await Promise.allSettled([
       supabaseClient.from('profiles').select('*').eq('id', user.id).single(),
@@ -324,29 +852,56 @@ Deno.serve(async (req) => {
       settings: userSettings || {}
     };
 
-    // Handle PDF content extraction if PDF context is provided
+    // Handle PDF upload to OpenAI if PDF context is provided
+    let pdfFileId: string | null = null;
     let enhancedPdfContext = null;
-    if (pdfContext) {
+
+    if (pdfContext && pdfContext.file_path) {
       try {
-        // Get PDF details from database
-        const { data: pdfData } = await supabaseClient
+        console.log('PDF context provided, uploading to OpenAI...');
+        console.log('PDF title:', pdfContext.title);
+        console.log('PDF file path:', pdfContext.file_path);
+
+        // Check if we already have an OpenAI file ID for this PDF
+        const { data: existingFile } = await supabaseClient
           .from('user_ebooks')
-          .select('*')
+          .select('openai_file_id')
           .eq('user_id', user.id)
-          .eq('title', pdfContext.title)
+          .eq('file_path', pdfContext.file_path)
           .single();
 
-        if (pdfData) {
-          enhancedPdfContext = {
-            ...pdfContext,
-            ...pdfData,
-            // In a full implementation, extract actual PDF content here
-            content: await extractPdfContent(pdfData.file_path)
-          };
+        if (existingFile?.openai_file_id) {
+          console.log('Using existing OpenAI file ID:', existingFile.openai_file_id);
+          pdfFileId = existingFile.openai_file_id;
+        } else {
+          // Upload PDF to OpenAI
+          pdfFileId = await uploadPdfToOpenAI(pdfContext.file_path, supabaseClient);
+
+          if (pdfFileId) {
+            // Save the file ID for future use
+            await supabaseClient
+              .from('user_ebooks')
+              .update({ openai_file_id: pdfFileId })
+              .eq('user_id', user.id)
+              .eq('file_path', pdfContext.file_path);
+
+            console.log('OpenAI file ID saved to database');
+          }
         }
+
+        enhancedPdfContext = {
+          ...pdfContext,
+          openai_file_id: pdfFileId,
+          uploadedAt: new Date().toISOString()
+        };
+
+        console.log('PDF uploaded to OpenAI successfully');
       } catch (error) {
-        console.error('Error fetching PDF context:', error);
-        enhancedPdfContext = pdfContext;
+        console.error('Error uploading PDF to OpenAI:', error);
+        enhancedPdfContext = {
+          ...pdfContext,
+          error: error.message
+        };
       }
     }
 
@@ -362,8 +917,29 @@ Deno.serve(async (req) => {
       console.error('Error saving user message:', insertError);
     }
 
-    // Generate enhanced response with full context
-    const response = generateNoraResponse(message, userContext, enhancedPdfContext);
+    // Generate enhanced response with full context using OpenAI
+    let response: string | null = null;
+
+    if (OPENAI_ASSISTANT_ID) {
+      try {
+        response = await askNoraAssistantWithPdf(
+          message,
+          user.id,
+          userContext,
+          pdfFileId,
+          enhancedPdfContext,
+          supabaseClient
+        );
+      } catch (assistantError) {
+        console.error('Assistant API run failed, falling back to chat completions.', assistantError);
+      }
+    } else {
+      console.warn('OPENAI Assistant ID not configured, skipping assistants API flow.');
+    }
+
+    if (!response) {
+      response = await generateNoraResponseWithOpenAI(message, userContext, enhancedPdfContext);
+    }
 
     // Save Nora's response to database
     const { error: noraInsertError } = await supabaseClient.from('nora_chat').insert({
@@ -379,11 +955,30 @@ Deno.serve(async (req) => {
 
     console.log('Generated response for user:', user.id);
 
+    // ============================================================
+    // 📊 LOG USAGE: Track tokens and cost
+    // ============================================================
+    const inputTokens = estimateTokenCount(sanitizedMessage);
+    const outputTokens = estimateTokenCount(response);
+    const totalTokens = inputTokens + outputTokens;
+    const costEstimate = estimateCost(inputTokens, outputTokens);
+
+    console.log(`📊 Token usage: ${totalTokens} (input: ${inputTokens}, output: ${outputTokens})`);
+    console.log(`💰 Estimated cost: $${costEstimate.toFixed(4)}`);
+
+    // Log the message for rate limiting and cost tracking
+    await logAIMessage(supabaseClient, user.id, 'nora', totalTokens, costEstimate);
+
+    console.log('✅ Usage logged successfully');
+    // ============================================================
+
     // Return response with enhanced format
     return new Response(JSON.stringify({
       response,
       userId: user.id,
       success: true,
+      tier: rateLimitResult.tier,
+      remaining_messages: rateLimitResult.remaining_messages - 1,
       context: {
         pdfActive: !!enhancedPdfContext,
         focusMethod: userContext.onboarding?.focus_method,

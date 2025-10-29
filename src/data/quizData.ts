@@ -1101,7 +1101,7 @@ export const LEARNING_STYLE_RESULTS = {
       description: "Learning through seeing and visual information"
     },
     auditory: {
-      name: "Auditory Learning", 
+      name: "Auditory Learning",
       description: "Learning through hearing and verbal information"
     },
     kinesthetic: {
@@ -1115,6 +1115,850 @@ export const LEARNING_STYLE_RESULTS = {
     social: {
       name: "Social Learning",
       description: "Learning through interaction with others"
+    }
+  }
+};
+
+// Motivation Profile Quiz - 60 questions based on Self-Determination Theory
+export const MOTIVATION_PROFILE_QUESTIONS: QuizQuestion[] = [
+  // Intrinsic Motivation
+  {
+    id: "mp_001",
+    question: "Why do you study most of the time?",
+    options: ["Because I enjoy learning new things", "To get good grades", "Because I have to", "To please others", "To avoid feeling guilty"],
+    category: "intrinsic",
+    weight: 4
+  },
+  {
+    id: "mp_002",
+    question: "How do you feel when you master a difficult concept?",
+    options: ["Deeply satisfied and proud", "Relieved it's over", "Happy for the grade", "Glad to meet expectations", "Just ready to move on"],
+    category: "intrinsic",
+    weight: 3
+  },
+  {
+    id: "mp_003",
+    question: "When do you study most effectively?",
+    options: ["When the topic interests me", "Right before deadlines", "When I'm reminded", "When others are studying", "When I feel obligated"],
+    category: "intrinsic",
+    weight: 4
+  },
+  {
+    id: "mp_004",
+    question: "How often do you study topics beyond what's required?",
+    options: ["Very often - I love exploring further", "Sometimes - if it's interesting", "Rarely - I stick to requirements", "Never - I do what's needed", "Only for my favorite subjects"],
+    category: "intrinsic",
+    weight: 4
+  },
+  {
+    id: "mp_005",
+    question: "What's your reaction when you discover something new while studying?",
+    options: ["Excited and curious to learn more", "Interested if it's useful", "Neutral - just more to remember", "Stressed about extra material", "Hope it won't be on the test"],
+    category: "intrinsic",
+    weight: 3
+  },
+  {
+    id: "mp_006",
+    question: "How do you feel about optional learning opportunities?",
+    options: ["Enthusiastic - I seek them out", "Interested if convenient", "Indifferent to them", "See them as extra work", "Avoid when possible"],
+    category: "intrinsic",
+    weight: 3
+  },
+  {
+    id: "mp_007",
+    question: "When reading for class, how engaged are you?",
+    options: ["Fully absorbed in the content", "Engaged when interesting", "Going through the motions", "Forcing myself to focus", "Frequently distracted"],
+    category: "intrinsic",
+    weight: 3
+  },
+  {
+    id: "mp_008",
+    question: "How do you approach challenging problems?",
+    options: ["See them as exciting puzzles", "Accept them as necessary", "Find them frustrating", "Avoid when possible", "Need external push to try"],
+    category: "intrinsic",
+    weight: 4
+  },
+  {
+    id: "mp_009",
+    question: "What drives you to improve your understanding?",
+    options: ["Personal curiosity and growth", "Better performance", "Meeting standards", "Others' expectations", "Avoiding consequences"],
+    category: "intrinsic",
+    weight: 4
+  },
+  {
+    id: "mp_010",
+    question: "How do you feel during deep study sessions?",
+    options: ["Energized and in flow", "Productive and focused", "It's work but manageable", "Drained and tired", "Counting down the time"],
+    category: "intrinsic",
+    weight: 3
+  },
+
+  // Extrinsic Motivation - Achievement
+  {
+    id: "mp_011",
+    question: "How important are grades to your motivation?",
+    options: ["Very important - they drive me", "Important but not everything", "Somewhat important", "Not very important", "I don't focus on grades"],
+    category: "achievement",
+    weight: 4
+  },
+  {
+    id: "mp_012",
+    question: "How do you feel when you receive a high grade?",
+    options: ["Proud and validated", "Satisfied - it's expected", "Relieved", "Happy for a moment", "Grades don't affect me much"],
+    category: "achievement",
+    weight: 3
+  },
+  {
+    id: "mp_013",
+    question: "What role do academic achievements play in your identity?",
+    options: ["Central to who I am", "Important part of me", "One aspect among many", "Minor role", "Not part of my identity"],
+    category: "achievement",
+    weight: 3
+  },
+  {
+    id: "mp_014",
+    question: "How do you respond to academic competition?",
+    options: ["Thrive on it - it motivates me", "Use it as motivation", "Prefer collaboration", "Find it stressful", "Avoid competitive situations"],
+    category: "achievement",
+    weight: 3
+  },
+  {
+    id: "mp_015",
+    question: "How important is being the best in class to you?",
+    options: ["Extremely important", "Very important", "Somewhat important", "Not very important", "Not important at all"],
+    category: "achievement",
+    weight: 3
+  },
+  {
+    id: "mp_016",
+    question: "How do you feel about public recognition for academic success?",
+    options: ["Love it - very motivating", "Appreciate it", "It's nice but not necessary", "Indifferent to it", "Prefer private acknowledgment"],
+    category: "achievement",
+    weight: 2
+  },
+  {
+    id: "mp_017",
+    question: "What's your reaction to a lower-than-expected grade?",
+    options: ["Devastated and immediately plan improvement", "Disappointed but move forward", "Analyze what went wrong", "Frustrated temporarily", "Doesn't bother me much"],
+    category: "achievement",
+    weight: 3
+  },
+  {
+    id: "mp_018",
+    question: "How do you set academic goals?",
+    options: ["Ambitious - aim for top performance", "Challenging but achievable", "Moderate - meet requirements", "Flexible goals", "I don't set specific goals"],
+    category: "achievement",
+    weight: 3
+  },
+  {
+    id: "mp_019",
+    question: "How important is maintaining your GPA to you?",
+    options: ["Critically important", "Very important", "Somewhat important", "Not very important", "I don't track my GPA closely"],
+    category: "achievement",
+    weight: 3
+  },
+  {
+    id: "mp_020",
+    question: "How do you measure your academic success?",
+    options: ["By grades and rankings", "By personal growth and understanding", "By effort put in", "By completion of work", "I don't measure success"],
+    category: "achievement",
+    weight: 3
+  },
+
+  // Social Motivation
+  {
+    id: "mp_021",
+    question: "How much does your family's opinion influence your study habits?",
+    options: ["Greatly - it's a major factor", "Significantly", "Somewhat", "A little", "Not at all"],
+    category: "social",
+    weight: 3
+  },
+  {
+    id: "mp_022",
+    question: "How important is making your parents proud?",
+    options: ["Extremely important - primary motivator", "Very important", "Somewhat important", "A minor factor", "Not a factor"],
+    category: "social",
+    weight: 4
+  },
+  {
+    id: "mp_023",
+    question: "How do peer expectations affect your studying?",
+    options: ["Strongly motivate me", "Influence my effort", "Slightly affect me", "Don't really matter", "I ignore peer pressure"],
+    category: "social",
+    weight: 3
+  },
+  {
+    id: "mp_024",
+    question: "How much do you study to meet others' expectations?",
+    options: ["Most of my motivation", "A significant part", "Some of it", "A small part", "I study for myself"],
+    category: "social",
+    weight: 4
+  },
+  {
+    id: "mp_025",
+    question: "How do you feel about studying with friends?",
+    options: ["Essential - keeps me motivated", "Very helpful and motivating", "Sometimes helpful", "Prefer alone", "Find it distracting"],
+    category: "social",
+    weight: 2
+  },
+  {
+    id: "mp_026",
+    question: "How important is social approval for your academic choices?",
+    options: ["Very important in my decisions", "Somewhat important", "Moderately important", "Minor consideration", "Not important"],
+    category: "social",
+    weight: 3
+  },
+  {
+    id: "mp_027",
+    question: "How do you feel when studying less than your peers?",
+    options: ["Very guilty and anxious", "Somewhat concerned", "A bit uneasy", "Doesn't bother me", "I don't compare"],
+    category: "social",
+    weight: 2
+  },
+  {
+    id: "mp_028",
+    question: "How much do teachers' opinions motivate you?",
+    options: ["Greatly - I want their approval", "Significantly", "Somewhat", "A little", "Not much"],
+    category: "social",
+    weight: 3
+  },
+  {
+    id: "mp_029",
+    question: "How do you feel about disappointing people with poor performance?",
+    options: ["Devastating - major motivator to avoid", "Very concerned about it", "Somewhat concerned", "Mildly concerned", "Doesn't worry me"],
+    category: "social",
+    weight: 3
+  },
+  {
+    id: "mp_030",
+    question: "How important is studying to fit in with your social group?",
+    options: ["Very important", "Somewhat important", "A minor factor", "Not important", "My group doesn't focus on studying"],
+    category: "social",
+    weight: 2
+  },
+
+  // Future Goals Motivation
+  {
+    id: "mp_031",
+    question: "How connected do you feel between current studies and future career?",
+    options: ["Very directly connected", "Clearly connected", "Somewhat connected", "Loosely connected", "Don't see the connection"],
+    category: "future_goals",
+    weight: 4
+  },
+  {
+    id: "mp_032",
+    question: "How often do you think about your long-term career goals while studying?",
+    options: ["Constantly - it drives me", "Very often", "Sometimes", "Rarely", "Never"],
+    category: "future_goals",
+    weight: 3
+  },
+  {
+    id: "mp_033",
+    question: "How clear are your post-graduation plans?",
+    options: ["Very clear and detailed", "Fairly clear", "Some ideas", "Vague ideas", "No clear plans"],
+    category: "future_goals",
+    weight: 3
+  },
+  {
+    id: "mp_034",
+    question: "How much does your desired future motivate your present study habits?",
+    options: ["It's my primary motivator", "Major motivation", "Some motivation", "Minor motivation", "Doesn't motivate me"],
+    category: "future_goals",
+    weight: 4
+  },
+  {
+    id: "mp_035",
+    question: "How important is financial success in your academic motivation?",
+    options: ["Extremely important", "Very important", "Somewhat important", "Not very important", "Not a factor"],
+    category: "future_goals",
+    weight: 2
+  },
+  {
+    id: "mp_036",
+    question: "Do you have a specific dream job or career?",
+    options: ["Yes, very specific and it drives me", "Yes, and it motivates me", "Sort of - still exploring", "No, I'm undecided", "Career isn't my focus"],
+    category: "future_goals",
+    weight: 3
+  },
+  {
+    id: "mp_037",
+    question: "How often do you research or plan for your future career?",
+    options: ["Very frequently", "Regularly", "Occasionally", "Rarely", "Never"],
+    category: "future_goals",
+    weight: 2
+  },
+  {
+    id: "mp_038",
+    question: "How important is achieving a certain lifestyle through education?",
+    options: ["Extremely important", "Very important", "Somewhat important", "Not very important", "Not important"],
+    category: "future_goals",
+    weight: 2
+  },
+  {
+    id: "mp_039",
+    question: "How does thinking about your future make you feel?",
+    options: ["Excited and motivated", "Hopeful and driven", "Neutral", "Anxious", "Overwhelmed"],
+    category: "future_goals",
+    weight: 2
+  },
+  {
+    id: "mp_040",
+    question: "How much do you see education as a means to an end?",
+    options: ["Entirely - it's just a stepping stone", "Mostly practical purpose", "Mix of practical and personal", "More for personal growth", "Education is the goal itself"],
+    category: "future_goals",
+    weight: 3
+  },
+
+  // Autonomy and Control
+  {
+    id: "mp_041",
+    question: "How much control do you feel over your academic choices?",
+    options: ["Complete control", "Mostly in control", "Some control", "Limited control", "No control"],
+    category: "autonomy",
+    weight: 3
+  },
+  {
+    id: "mp_042",
+    question: "How do you feel about choosing your own study methods?",
+    options: ["Love the freedom - essential", "Prefer having choice", "It's okay either way", "Prefer guidance", "Want to be told what to do"],
+    category: "autonomy",
+    weight: 3
+  },
+  {
+    id: "mp_043",
+    question: "How important is having a say in what you study?",
+    options: ["Extremely important", "Very important", "Somewhat important", "Not very important", "Don't care"],
+    category: "autonomy",
+    weight: 3
+  },
+  {
+    id: "mp_044",
+    question: "How do you feel about self-directed learning?",
+    options: ["Thrive on it", "Enjoy it", "It's acceptable", "Find it challenging", "Prefer structured learning"],
+    category: "autonomy",
+    weight: 3
+  },
+  {
+    id: "mp_045",
+    question: "How much do you customize your study approach?",
+    options: ["Extensively - I have my own system", "Quite a bit", "Somewhat", "A little", "Follow standard methods"],
+    category: "autonomy",
+    weight: 2
+  },
+  {
+    id: "mp_046",
+    question: "How do you feel when forced to study something you don't want to?",
+    options: ["Very resistant and unmotivated", "Frustrated but compliant", "Accept it as necessary", "Don't mind much", "Equally motivated either way"],
+    category: "autonomy",
+    weight: 3
+  },
+  {
+    id: "mp_047",
+    question: "How important is personal ownership of your learning?",
+    options: ["Extremely important", "Very important", "Somewhat important", "Not very important", "Doesn't matter"],
+    category: "autonomy",
+    weight: 3
+  },
+  {
+    id: "mp_048",
+    question: "How do you react to micromanagement of your studies?",
+    options: ["Strongly dislike - kills motivation", "Dislike it", "Tolerate it", "Don't mind", "Actually prefer it"],
+    category: "autonomy",
+    weight: 2
+  },
+  {
+    id: "mp_049",
+    question: "How much do you value independence in learning?",
+    options: ["Highly value it", "Value it significantly", "Moderately value it", "Don't value it much", "Prefer dependence/guidance"],
+    category: "autonomy",
+    weight: 3
+  },
+  {
+    id: "mp_050",
+    question: "How do you feel about flexible study schedules vs. rigid ones?",
+    options: ["Need flexibility to stay motivated", "Prefer flexibility", "Either works", "Prefer structure", "Need rigid structure"],
+    category: "autonomy",
+    weight: 2
+  },
+
+  // Competence and Mastery
+  {
+    id: "mp_051",
+    question: "How important is becoming an expert in your field?",
+    options: ["Extremely important - my main goal", "Very important", "Somewhat important", "Not very important", "Not a priority"],
+    category: "competence",
+    weight: 3
+  },
+  {
+    id: "mp_052",
+    question: "How do you feel when you've truly mastered a skill?",
+    options: ["Incredibly fulfilled", "Very satisfied", "Good but ready for next", "Relieved", "Doesn't affect me much"],
+    category: "competence",
+    weight: 3
+  },
+  {
+    id: "mp_053",
+    question: "How important is continuous improvement to you?",
+    options: ["Essential - always want to be better", "Very important", "Important", "Somewhat important", "Not very focused on it"],
+    category: "competence",
+    weight: 4
+  },
+  {
+    id: "mp_054",
+    question: "How do you handle topics you're naturally good at?",
+    options: ["Push to master them completely", "Enjoy and develop them", "Maintain but don't prioritize", "Take them for granted", "Find them boring"],
+    category: "competence",
+    weight: 2
+  },
+  {
+    id: "mp_055",
+    question: "How motivated are you by personal progress?",
+    options: ["Extremely - it's my main drive", "Very motivated", "Moderately motivated", "Somewhat motivated", "Not really motivated by it"],
+    category: "competence",
+    weight: 4
+  },
+  {
+    id: "mp_056",
+    question: "How do you feel about becoming highly skilled?",
+    options: ["It's my passion and goal", "Very appealing", "Appealing", "Nice but not essential", "Indifferent"],
+    category: "competence",
+    weight: 3
+  },
+  {
+    id: "mp_057",
+    question: "How important is developing deep expertise?",
+    options: ["Critically important", "Very important", "Important", "Somewhat important", "Surface knowledge is enough"],
+    category: "competence",
+    weight: 3
+  },
+  {
+    id: "mp_058",
+    question: "How do you respond to intellectual challenges?",
+    options: ["Energized - love proving I can do it", "Motivated to overcome them", "Accept them", "Find them daunting", "Prefer to avoid them"],
+    category: "competence",
+    weight: 4
+  },
+  {
+    id: "mp_059",
+    question: "How much do you care about being competent?",
+    options: ["It's fundamental to my identity", "Very important to me", "Important", "Somewhat important", "Not very important"],
+    category: "competence",
+    weight: 3
+  },
+  {
+    id: "mp_060",
+    question: "How do you feel about reaching your potential?",
+    options: ["Passionate drive to reach it", "Strongly motivated", "Motivated", "Somewhat interested", "Don't think about it much"],
+    category: "competence",
+    weight: 3
+  }
+];
+
+// Focus Type Quiz - 48 questions based on attention research
+export const FOCUS_TYPE_QUESTIONS: QuizQuestion[] = [
+  // Sustained Attention
+  {
+    id: "ft_001",
+    question: "How long can you typically maintain focus on a single task?",
+    options: ["2+ hours easily", "60-90 minutes", "30-60 minutes", "15-30 minutes", "Under 15 minutes"],
+    category: "sustained",
+    weight: 4
+  },
+  {
+    id: "ft_002",
+    question: "How do you handle monotonous or repetitive study tasks?",
+    options: ["Stay focused throughout", "Maintain focus well", "Need occasional breaks", "Find it challenging", "Struggle to focus"],
+    category: "sustained",
+    weight: 3
+  },
+  {
+    id: "ft_003",
+    question: "How does your focus change during long study sessions?",
+    options: ["Stays consistent", "Slight decline", "Moderate decline", "Significant decline", "Declines rapidly"],
+    category: "sustained",
+    weight: 3
+  },
+  {
+    id: "ft_004",
+    question: "How often do you need to take breaks during focused work?",
+    options: ["Rarely - can go for hours", "Every 60-90 minutes", "Every 30-45 minutes", "Every 15-25 minutes", "Very frequently"],
+    category: "sustained",
+    weight: 3
+  },
+  {
+    id: "ft_005",
+    question: "How well do you maintain attention when reading long texts?",
+    options: ["Excellent - fully absorbed", "Good - mostly focused", "Moderate - some wandering", "Difficult - mind wanders often", "Very difficult - can't focus"],
+    category: "sustained",
+    weight: 3
+  },
+  {
+    id: "ft_006",
+    question: "How do you handle studying topics that don't immediately interest you?",
+    options: ["Focus just as well", "Can focus with effort", "Challenging but manageable", "Very challenging", "Nearly impossible"],
+    category: "sustained",
+    weight: 3
+  },
+  {
+    id: "ft_007",
+    question: "What's your attention span like during lectures?",
+    options: ["Fully attentive throughout", "Good for most of it", "Attention fades halfway", "Struggle after 15-20 min", "Very short attention span"],
+    category: "sustained",
+    weight: 3
+  },
+  {
+    id: "ft_008",
+    question: "How consistent is your focus across different times of day?",
+    options: ["Very consistent", "Mostly consistent", "Some variation", "Significant variation", "Highly variable"],
+    category: "sustained",
+    weight: 2
+  },
+
+  // Selective Attention
+  {
+    id: "ft_009",
+    question: "How well can you filter out distractions?",
+    options: ["Excellent - rarely distracted", "Good - mostly stay focused", "Moderate - some distractions", "Poor - easily distracted", "Very poor - constantly distracted"],
+    category: "selective",
+    weight: 4
+  },
+  {
+    id: "ft_010",
+    question: "How do you handle background noise while studying?",
+    options: ["Completely tune it out", "Can ignore it mostly", "Sometimes distracting", "Often distracting", "Can't focus with any noise"],
+    category: "selective",
+    weight: 3
+  },
+  {
+    id: "ft_011",
+    question: "How easily do visual distractions pull your attention?",
+    options: ["Rarely notice them", "Occasionally notice", "Sometimes distracting", "Often distracting", "Constantly distracted"],
+    category: "selective",
+    weight: 3
+  },
+  {
+    id: "ft_012",
+    question: "How do you handle studying in busy environments?",
+    options: ["Focus just as well", "Can focus with effort", "Challenging but possible", "Very difficult", "Nearly impossible"],
+    category: "selective",
+    weight: 3
+  },
+  {
+    id: "ft_013",
+    question: "When someone talks nearby, how does it affect you?",
+    options: ["Don't notice at all", "Barely notice", "Somewhat distracting", "Very distracting", "Completely breaks focus"],
+    category: "selective",
+    weight: 3
+  },
+  {
+    id: "ft_014",
+    question: "How well can you ignore your phone during study sessions?",
+    options: ["Never think about it", "Rarely tempted", "Sometimes tempted", "Often tempted", "Constantly checking it"],
+    category: "selective",
+    weight: 4
+  },
+  {
+    id: "ft_015",
+    question: "How do internal distractions (thoughts/worries) affect you?",
+    options: ["Rarely intrude", "Occasionally intrude", "Sometimes intrude", "Often intrude", "Constantly intrude"],
+    category: "selective",
+    weight: 3
+  },
+  {
+    id: "ft_016",
+    question: "How easily can you return to focus after interruptions?",
+    options: ["Immediately", "Within a minute", "A few minutes", "Several minutes", "Very difficult"],
+    category: "selective",
+    weight: 3
+  },
+
+  // Divided Attention
+  {
+    id: "ft_017",
+    question: "How well can you multitask while studying?",
+    options: ["Effectively handle multiple things", "Can manage two tasks", "Struggle with multitasking", "Can't multitask effectively", "Multitasking ruins focus"],
+    category: "divided",
+    weight: 3
+  },
+  {
+    id: "ft_018",
+    question: "Can you listen to music and study simultaneously?",
+    options: ["Yes, helps me focus", "Yes, doesn't affect me", "Sometimes works", "Usually distracting", "Never works"],
+    category: "divided",
+    weight: 2
+  },
+  {
+    id: "ft_019",
+    question: "How do you handle switching between different subjects?",
+    options: ["Switch easily", "Can switch with minor adjustment", "Need time to adjust", "Difficult transition", "Very disruptive"],
+    category: "divided",
+    weight: 3
+  },
+  {
+    id: "ft_020",
+    question: "Can you take notes while listening to a lecture?",
+    options: ["Easily and effectively", "Generally well", "Manageable but challenging", "Very challenging", "Miss important points"],
+    category: "divided",
+    weight: 3
+  },
+  {
+    id: "ft_021",
+    question: "How well do you handle multiple ongoing projects?",
+    options: ["Excel at it", "Manage well", "Can handle it", "Find it stressful", "Prefer one thing at a time"],
+    category: "divided",
+    weight: 2
+  },
+  {
+    id: "ft_022",
+    question: "How does task-switching affect your efficiency?",
+    options: ["No impact", "Minimal impact", "Some impact", "Significant impact", "Major disruption"],
+    category: "divided",
+    weight: 3
+  },
+  {
+    id: "ft_023",
+    question: "Can you monitor time while deeply focused?",
+    options: ["Yes, good time awareness", "Usually aware", "Sometimes lose track", "Often lose track", "Completely lose track"],
+    category: "divided",
+    weight: 2
+  },
+  {
+    id: "ft_024",
+    question: "How well can you think and write simultaneously?",
+    options: ["Very naturally", "Generally well", "Adequately", "Challenging", "Very difficult"],
+    category: "divided",
+    weight: 2
+  },
+
+  // Alternating Attention
+  {
+    id: "ft_025",
+    question: "How quickly can you shift focus between different tasks?",
+    options: ["Instantly", "Very quickly", "Moderately fast", "Slowly", "Very slowly"],
+    category: "alternating",
+    weight: 3
+  },
+  {
+    id: "ft_026",
+    question: "How do you handle studying multiple topics in one session?",
+    options: ["Prefer and excel at it", "Works well for me", "Can manage it", "Prefer one topic", "Strongly prefer single focus"],
+    category: "alternating",
+    weight: 3
+  },
+  {
+    id: "ft_027",
+    question: "After a break, how quickly can you refocus?",
+    options: ["Immediately", "Within 1-2 minutes", "Within 5 minutes", "Takes 10+ minutes", "Very difficult"],
+    category: "alternating",
+    weight: 3
+  },
+  {
+    id: "ft_028",
+    question: "How do you handle interleaved practice (mixing topics)?",
+    options: ["Prefer it - helps learning", "Works well", "Can adapt", "Find it confusing", "Strongly dislike it"],
+    category: "alternating",
+    weight: 3
+  },
+  {
+    id: "ft_029",
+    question: "How well can you switch between different types of thinking?",
+    options: ["Very fluidly", "Quite well", "Adequately", "With difficulty", "Struggle significantly"],
+    category: "alternating",
+    weight: 2
+  },
+  {
+    id: "ft_030",
+    question: "How do you handle studying that requires frequent reference switching?",
+    options: ["Enjoy the variety", "Manage well", "Can handle it", "Find it disruptive", "Prefer continuous reading"],
+    category: "alternating",
+    weight: 2
+  },
+  {
+    id: "ft_031",
+    question: "How flexible is your attention?",
+    options: ["Extremely flexible", "Very flexible", "Moderately flexible", "Somewhat rigid", "Prefer single focus"],
+    category: "alternating",
+    weight: 3
+  },
+  {
+    id: "ft_032",
+    question: "How do you feel about changing study methods mid-session?",
+    options: ["Energizes me", "Fine with it", "Neutral", "Prefer consistency", "Disruptive"],
+    category: "alternating",
+    weight: 2
+  },
+
+  // Deep Focus (Flow State)
+  {
+    id: "ft_033",
+    question: "How often do you experience 'flow' or deep immersion while studying?",
+    options: ["Very frequently", "Often", "Sometimes", "Rarely", "Never"],
+    category: "deep",
+    weight: 4
+  },
+  {
+    id: "ft_034",
+    question: "Can you lose track of time when deeply focused?",
+    options: ["Happens regularly", "Happens often", "Happens occasionally", "Rarely happens", "Never happens"],
+    category: "deep",
+    weight: 3
+  },
+  {
+    id: "ft_035",
+    question: "How easily do you enter a state of deep concentration?",
+    options: ["Very easily", "Fairly easily", "Takes some time", "Very difficult", "Nearly impossible"],
+    category: "deep",
+    weight: 4
+  },
+  {
+    id: "ft_036",
+    question: "How do you feel during periods of intense focus?",
+    options: ["Energized and in the zone", "Engaged and productive", "Focused but aware of effort", "Strained concentration", "Can't reach that state"],
+    category: "deep",
+    weight: 3
+  },
+  {
+    id: "ft_037",
+    question: "How long does it take you to reach deep focus?",
+    options: ["Immediate", "5-10 minutes", "15-20 minutes", "30+ minutes", "Can't reach deep focus"],
+    category: "deep",
+    weight: 3
+  },
+  {
+    id: "ft_038",
+    question: "How often do you feel completely absorbed in your studies?",
+    options: ["Very often", "Often", "Sometimes", "Rarely", "Never"],
+    category: "deep",
+    weight: 3
+  },
+  {
+    id: "ft_039",
+    question: "Can you study for extended periods without breaks?",
+    options: ["Yes, regularly 2+ hours", "Often 1-2 hours", "Usually under 1 hour", "Need frequent breaks", "Can't go more than 30 min"],
+    category: "deep",
+    weight: 3
+  },
+  {
+    id: "ft_040",
+    question: "How protected are you from distractions when deeply focused?",
+    options: ["Completely immune", "Mostly immune", "Somewhat protected", "Easily interrupted", "Very fragile focus"],
+    category: "deep",
+    weight: 3
+  },
+
+  // Environmental Sensitivity
+  {
+    id: "ft_041",
+    question: "How sensitive are you to your study environment?",
+    options: ["Can focus anywhere", "Fairly adaptable", "Moderately sensitive", "Quite sensitive", "Extremely sensitive"],
+    category: "environmental",
+    weight: 3
+  },
+  {
+    id: "ft_042",
+    question: "How does lighting affect your ability to focus?",
+    options: ["No effect", "Minimal effect", "Some effect", "Significant effect", "Major effect"],
+    category: "environmental",
+    weight: 2
+  },
+  {
+    id: "ft_043",
+    question: "How does temperature affect your concentration?",
+    options: ["No effect", "Minimal effect", "Some effect", "Significant effect", "Major effect"],
+    category: "environmental",
+    weight: 2
+  },
+  {
+    id: "ft_044",
+    question: "How important is comfort for maintaining focus?",
+    options: ["Can focus in discomfort", "Prefer comfort but adaptable", "Fairly important", "Very important", "Critical for focus"],
+    category: "environmental",
+    weight: 2
+  },
+  {
+    id: "ft_045",
+    question: "How do you adapt to new study environments?",
+    options: ["Instantly comfortable", "Quick adjustment", "Need some time", "Difficult adjustment", "Very challenging"],
+    category: "environmental",
+    weight: 2
+  },
+  {
+    id: "ft_046",
+    question: "How does hunger or tiredness affect your focus?",
+    options: ["No impact", "Minor impact", "Moderate impact", "Significant impact", "Cannot focus when hungry/tired"],
+    category: "environmental",
+    weight: 2
+  },
+  {
+    id: "ft_047",
+    question: "How crucial is a designated study space for you?",
+    options: ["Not important - anywhere works", "Slightly helpful", "Somewhat important", "Very important", "Absolutely essential"],
+    category: "environmental",
+    weight: 2
+  },
+  {
+    id: "ft_048",
+    question: "How do changes in routine affect your ability to focus?",
+    options: ["No effect", "Minimal effect", "Some effect", "Significant effect", "Major disruption"],
+    category: "environmental",
+    weight: 2
+  }
+];
+
+export const MOTIVATION_PROFILE_RESULTS = {
+  categories: {
+    intrinsic: {
+      name: "Intrinsic Motivation",
+      description: "Driven by internal satisfaction and love of learning"
+    },
+    achievement: {
+      name: "Achievement Motivation",
+      description: "Driven by grades, recognition, and external success"
+    },
+    social: {
+      name: "Social Motivation",
+      description: "Driven by relationships and others' expectations"
+    },
+    future_goals: {
+      name: "Future Goals Motivation",
+      description: "Driven by long-term career and life aspirations"
+    },
+    autonomy: {
+      name: "Autonomy Motivation",
+      description: "Driven by independence and personal control"
+    },
+    competence: {
+      name: "Competence Motivation",
+      description: "Driven by mastery and skill development"
+    }
+  }
+};
+
+export const FOCUS_TYPE_RESULTS = {
+  categories: {
+    sustained: {
+      name: "Sustained Attention",
+      description: "Ability to maintain focus over extended periods"
+    },
+    selective: {
+      name: "Selective Attention",
+      description: "Ability to filter distractions and stay on task"
+    },
+    divided: {
+      name: "Divided Attention",
+      description: "Ability to handle multiple tasks simultaneously"
+    },
+    alternating: {
+      name: "Alternating Attention",
+      description: "Ability to shift focus flexibly between tasks"
+    },
+    deep: {
+      name: "Deep Focus (Flow)",
+      description: "Ability to enter states of complete immersion"
+    },
+    environmental: {
+      name: "Environmental Sensitivity",
+      description: "How external factors affect your concentration"
     }
   }
 };

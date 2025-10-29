@@ -166,14 +166,18 @@ export function BottomTabNavigator() {
       <Tab.Screen name="Patrick" component={PatrickScreen} />
       <Tab.Screen name="Bonuses" component={BonusesScreen} />
       <Tab.Screen name="Results" component={ResultsScreen} />
-      <Tab.Screen name="Leaderboard" component={LeaderboardScreen} options={{ tabBarButton: () => null, title: 'Leaderboard' }} />
+      <Tab.Screen
+        name="Leaderboard"
+        component={LeaderboardScreen}
+        options={{ tabBarButton: () => null, title: 'Leaderboard', headerShown: false }}
+      />
       <Tab.Screen name="Profile" component={ProfileStack} options={{ tabBarButton: () => null, title: 'Profile' }} />
-      <Tab.Screen name="EBooks" component={EBooksScreen} options={{ tabBarButton: () => null }} />
+      <Tab.Screen name="EBooks" component={EBooksScreen} options={{ tabBarButton: () => null, headerRight: () => null }} />
       <Tab.Screen name="PDFViewer" component={PDFViewerScreen} options={{ tabBarButton: () => null }} />
       {/* ADD MISSING SCREENS HERE */}
-      <Tab.Screen name="Achievements" component={AchievementsScreen} options={{ tabBarButton: () => null }} />
-      <Tab.Screen name="SelfDiscoveryQuiz" component={SelfDiscoveryQuizScreen} options={{ tabBarButton: () => null }} />
-      <Tab.Screen name="BrainMapping" component={BrainMappingScreen} options={{ tabBarButton: () => null }} />
+      <Tab.Screen name="Achievements" component={AchievementsScreen} options={{ tabBarButton: () => null, headerRight: () => null }} />
+      <Tab.Screen name="SelfDiscoveryQuiz" component={SelfDiscoveryQuizScreen} options={{ tabBarButton: () => null, headerRight: () => null }} />
+      <Tab.Screen name="BrainMapping" component={BrainMappingScreen} options={{ tabBarButton: () => null, headerRight: () => null }} />
       <Tab.Screen name="PatrickSpeak" component={PatrickSpeakScreen} options={{ tabBarButton: () => null }} />
       <Tab.Screen name="Quizzes" component={QuizzesScreen} options={{ tabBarButton: () => null }} />
       <Tab.Screen name="QuizPrompt" component={QuizPromptScreen} options={{ tabBarButton: () => null }} />

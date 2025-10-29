@@ -7,8 +7,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { getRandomQuote } from '../../data/motivationalQuotes';
+import { useBackgroundMusic } from '../../hooks/useBackgroundMusic';
 
-// Import userAppData functions  
+// Import userAppData functions
 const userAppDataModule = require('../../utils/userAppData');
 
 // Extract functions from userAppData module
@@ -35,6 +37,16 @@ export default function HomeScreen() {
   // Use theme context colors directly - they automatically sync with Settings
   const environmentColors = theme;
 
+  // Music hook - stop playback when returning to home
+  const { stopPlayback } = useBackgroundMusic();
+
+  // Stop music when returning to home screen
+  useEffect(() => {
+    stopPlayback().catch(error => {
+      console.warn('🎵 Failed to stop music on home screen:', error);
+    });
+  }, [stopPlayback]);
+
 
   const handleScroll = Animated.event(
     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -43,50 +55,28 @@ export default function HomeScreen() {
     }
   );
 
-  // Generate daily changing encouragement text
+  // Generate daily changing encouragement text from comprehensive database
   const getDailyEncouragement = () => {
     const today = new Date();
+    // Use day of year to ensure same quote shows all day
     const dayOfYear = Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / (1000 * 60 * 60 * 24));
-    
-    const encouragements = [
-      { quote: "The way to get started is to quit talking and begin doing.", author: "Walt Disney" },
-      { quote: "Success is not final, failure is not fatal: it is the courage to continue that counts.", author: "Winston Churchill" },
-      { quote: "The only impossible journey is the one you never begin.", author: "Tony Robbins" },
-      { quote: "Your limitation—it's only your imagination.", author: "Unknown" },
-      { quote: "Push yourself, because no one else is going to do it for you.", author: "Unknown" },
-      { quote: "Great things never come from comfort zones.", author: "Unknown" },
-      { quote: "Dream it. Wish it. Do it.", author: "Unknown" },
-      { quote: "Success doesn't just find you. You have to go out and get it.", author: "Unknown" },
-      { quote: "The harder you work for something, the greater you'll feel when you achieve it.", author: "Unknown" },
-      { quote: "Dream bigger. Do bigger.", author: "Unknown" },
-      { quote: "Don't stop when you're tired. Stop when you're done.", author: "Unknown" },
-      { quote: "Wake up with determination. Go to bed with satisfaction.", author: "George Lorimer" },
-      { quote: "Do something today that your future self will thank you for.", author: "Sean Patrick Flanery" },
-      { quote: "Little progress is still progress.", author: "Unknown" },
-      { quote: "Don't wait for opportunity. Create it.", author: "George Bernard Shaw" },
-      { quote: "Sometimes we're tested not to show our weaknesses, but to discover our strengths.", author: "Unknown" },
-      { quote: "The key to success is to focus on goals, not obstacles.", author: "Unknown" },
-      { quote: "You don't have to be great to get started, but you have to get started to be great.", author: "Zig Ziglar" },
-      { quote: "A year from now you may wish you had started today.", author: "Karen Lamb" },
-      { quote: "The secret of getting ahead is getting started.", author: "Mark Twain" },
-      { quote: "Don't watch the clock; do what it does. Keep going.", author: "Sam Levenson" },
-      { quote: "Believe you can and you're halfway there.", author: "Theodore Roosevelt" },
-      { quote: "You are never too old to set another goal or to dream a new dream.", author: "C.S. Lewis" },
-      { quote: "The future belongs to those who believe in the beauty of their dreams.", author: "Eleanor Roosevelt" },
-      { quote: "It is during our darkest moments that we must focus to see the light.", author: "Aristotle" },
-      { quote: "You have been assigned this mountain to show others it can be moved.", author: "Mel Robbins" },
-      { quote: "Difficult roads often lead to beautiful destinations.", author: "Zig Ziglar" },
-      { quote: "Focus on being productive instead of being busy.", author: "Tim Ferriss" },
-      { quote: "Your only limit is your mind.", author: "Unknown" },
-      { quote: "Be yourself; everyone else is already taken.", author: "Oscar Wilde" },
-    ];
-    
-    return encouragements[dayOfYear % encouragements.length];
+
+    // Use the day of year as a seed for consistent daily quotes
+    const previousRandom = Math.random;
+    Math.random = () => {
+      const x = Math.sin(dayOfYear) * 10000;
+      return x - Math.floor(x);
+    };
+
+    const quote = getRandomQuote();
+    Math.random = previousRandom; // Restore original random
+
+    return quote;
   };
 
 
   useEffect(() => {
-    // Set daily encouragement
+    // Set daily encouragement from database of 200+ quotes
     const dailyEncouragement = getDailyEncouragement();
     setInspiration(dailyEncouragement);
 
@@ -162,7 +152,8 @@ export default function HomeScreen() {
         });
         break;
       case 'nora':
-        // No functionality - placeholder
+        // Navigate to NoraScreen (Nora AI assistant)
+        navigation.navigate('NoraScreen' as never);
         break;
       case 'leaderboard':
         navigation.navigate('Leaderboard' as never);
@@ -197,16 +188,8 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: environmentColors.background }]}>
-      {/* Top Bar with Menu and Profile Icon */}
+      {/* Top Bar with Profile Icon */}
       <View style={styles.topBar}>
-        {/* Menu Button */}
-        <TouchableOpacity
-          style={styles.menuButton}
-          onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
-        >
-          <Ionicons name="menu" size={24} color={environmentColors.text} />
-        </TouchableOpacity>
-
         {/* Profile Icon */}
         <TouchableOpacity
           style={styles.profileIconContainer}

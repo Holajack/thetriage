@@ -1,5 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import {
+  checkRateLimit,
+  logAIMessage,
+  getTierLimits,
+  validateMessageLength,
+  estimateTokenCount,
+  estimateCost,
+  getTierUpgradeMessage,
+  sanitizeInput
+} from '../_shared/rateLimiter.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -44,18 +54,92 @@ serve(async (req) => {
       throw new Error('UserId mismatch with authenticated user')
     }
 
+    // ============================================================
+    // 🔒 SECURITY CHECK: Rate Limiting & Tier Validation
+    // ============================================================
+    console.log('🔒 Starting security checks for Patrick AI access...');
+
+    // 1. Check rate limits and tier access
+    const rateLimitResult = await checkRateLimit(supabaseClient, user.id, 'patrick');
+
+    if (!rateLimitResult.allowed) {
+      console.log('❌ Access denied:', rateLimitResult.reason);
+
+      const upgradeMessage = getTierUpgradeMessage(rateLimitResult.tier, 'patrick');
+
+      return new Response(JSON.stringify({
+        error: 'ACCESS_DENIED',
+        response: `${rateLimitResult.reason}\n\n${upgradeMessage}`,
+        tier: rateLimitResult.tier,
+        remaining_messages: rateLimitResult.remaining_messages,
+        upgrade_required: true
+      }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    console.log('✅ Rate limit check passed');
+    console.log(`📊 User tier: ${rateLimitResult.tier}, Remaining messages: ${rateLimitResult.remaining_messages}`);
+
+    // 2. Get tier limits
+    const tierLimits = await getTierLimits(supabaseClient, user.id);
+
+    if (!tierLimits) {
+      return new Response(JSON.stringify({
+        error: 'CONFIGURATION_ERROR',
+        response: 'Unable to verify your subscription. Please try again.'
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // 3. Sanitize input
+    const sanitizedMessage = sanitizeInput(message);
+
+    // 4. Validate message length
+    const lengthValidation = validateMessageLength(sanitizedMessage, tierLimits);
+    if (!lengthValidation.valid) {
+      return new Response(JSON.stringify({
+        error: 'MESSAGE_TOO_LONG',
+        response: lengthValidation.reason,
+        max_length: tierLimits.max_message_length,
+        upgrade_required: rateLimitResult.tier === 'free'
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // 5. Block PDF for Patrick (Premium users don't get PDF features)
+    if (pdfContext) {
+      console.log('❌ PDF feature blocked for Patrick');
+      return new Response(JSON.stringify({
+        error: 'PDF_NOT_SUPPORTED',
+        response: 'Patrick doesn\'t support PDF analysis. For advanced PDF reading and analysis, upgrade to Pro and use Nora AI!',
+        upgrade_required: true
+      }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    console.log('✅ All security checks passed');
+    // ============================================================
+
     // Save user message
     await supabaseClient
       .from('patrick_chat')
       .insert([{
-        content: message,
+        content: sanitizedMessage,
         sender: 'user',
         user_id: user.id,
         timestamp: new Date().toISOString(),
       }])
 
-    // Generate response
-    let response = generatePatrickResponse(message, pdfContext)
+    // Generate response (NO PDF context for Patrick)
+    let response = generatePatrickResponse(sanitizedMessage, null)
 
     // Save Patrick's response
     await supabaseClient
@@ -67,8 +151,30 @@ serve(async (req) => {
         timestamp: new Date().toISOString(),
       }])
 
+    // ============================================================
+    // 📊 LOG USAGE: Track tokens and cost
+    // ============================================================
+    const inputTokens = estimateTokenCount(sanitizedMessage);
+    const outputTokens = estimateTokenCount(response);
+    const totalTokens = inputTokens + outputTokens;
+    const costEstimate = estimateCost(inputTokens, outputTokens);
+
+    console.log(`📊 Token usage: ${totalTokens} tokens`);
+    console.log(`💰 Estimated cost: $${costEstimate.toFixed(4)}`);
+
+    // Log usage
+    await logAIMessage(supabaseClient, user.id, 'patrick', totalTokens, costEstimate);
+
+    console.log('✅ Usage logged successfully');
+    // ============================================================
+
     return new Response(
-      JSON.stringify({ response }),
+      JSON.stringify({
+        response,
+        tier: rateLimitResult.tier,
+        remaining_messages: rateLimitResult.remaining_messages - 1,
+        success: true
+      }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,

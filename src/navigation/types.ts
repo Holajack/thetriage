@@ -4,6 +4,7 @@ export type AuthStackParamList = {
   Login: { showSignupTab?: boolean } | undefined;
   Register: undefined;
   ForgotPassword: undefined;
+  ResetPassword: { access_token?: string; refresh_token?: string } | undefined;
   EmailVerification: { email: string };
 };
 

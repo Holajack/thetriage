@@ -78,23 +78,30 @@ export async function sendFriendRequest(
     }
 
     // Send friend request
-    const { data, error } = await supabase
-      .from('friend_requests')
-      .insert({
-        sender_id: session.user.id,
-        recipient_id: recipientId,
-        message: message || null,
-        status: 'pending'
-      })
-      .select('*')
-      .single();
+    const baseInsert = {
+      sender_id: session.user.id,
+      recipient_id: recipientId,
+      status: 'pending' as const,
+    };
 
-    if (error) {
-      return { success: false, error: error.message };
+    const attemptInsert = async (payload: Record<string, any>) =>
+      supabase.from('friend_requests').insert(payload).select('*').single();
+
+    let result = await attemptInsert({
+      ...baseInsert,
+      message: message ?? null,
+    });
+
+    if (result.error && result.error.message?.includes('message')) {
+      result = await attemptInsert(baseInsert);
+    }
+
+    if (result.error) {
+      return { success: false, error: result.error.message };
     }
 
     // Fetch sender and recipient profiles separately to avoid foreign key issues
-    let enhancedData = data;
+    let enhancedData = result.data as FriendRequest;
     try {
       const { data: profiles } = await supabase
         .from('profiles')

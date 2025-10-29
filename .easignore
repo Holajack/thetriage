@@ -1,0 +1,63 @@
+# Exclude example/demo images (not used in app)
+assets/examples/**
+assets/errors/**
+assets/Claude iOS Onboarding/**
+
+# Exclude backup images
+assets/*-backup*.png
+assets/icon-ios-brand*.png
+assets/icon-ios-solid.png
+assets/icon-ios-final.png
+assets/triage-app-logo-backup*.png
+assets/triage-app-logo-solid*.png
+assets/triage-wallkman.png
+assets/nora-wallking.png
+assets/Nora-AI.png
+assets/Original-0.png
+assets/*.sql
+assets/simulator_screenshot*.png
+
+# Keep assets/music/** - it's required by useBackgroundMusic.ts
+# Exclude duplicate music in src/assets/ (not used by code)
+src/assets/Jazz Ambient/**
+src/assets/Lo-Fi/**
+src/assets/Classical/**
+src/assets/Ambient/**
+src/assets/Nature/**
+
+# Exclude large 3D models that are too complex
+src/assets/Brain_MRI_Nevit%20Dilmen_NIH3D.gltf
+
+# Exclude documentation and test files
+*.md
+test-*.js
+debug-*.js
+verify-*.js
+fix-*.js
+comprehensive-*.js
+*.sql
+check-*.js
+storage-diagnostic.js
+optimize-*.js
+
+# Exclude build artifacts and caches
+dist/**
+.codebuddy/**
+ios/Pods/**
+android/.gradle/**
+android/build/**
+*.log
+
+# Exclude scripts
+scripts/**
+ci_scripts/**
+*.sh
+*.exp
+
+# Keep these - they are used in the app:
+# - assets/nora-walking-cute.png
+# - assets/homescreen-image.png
+# - assets/triage-background-image.png
+# - assets/Nora-AI-Chatbot.png
+# - src/assets/transparent-triage.png
+

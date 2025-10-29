@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Platform } from 'react-native';
+import { Platform, Linking } from 'react-native';
 import { NavigationContainer, NavigationContainerRef, CommonActions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
@@ -17,6 +17,7 @@ import { PatrickSpeakScreen } from '../screens/main/PatrickScreen';
 import LandingPage from '../screens/LandingPage';
 import { SplashScreen } from '../components/SplashScreen';
 import SessionHistoryScreen from '../screens/main/SessionHistoryScreen';
+import { supabase } from '../utils/supabase';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -98,12 +99,77 @@ export const RootNavigator = () => {
     }
   }, [isAuthenticated, hasCompletedOnboarding, justLoggedIn, isInitialLoading, showSplash, clearJustLoggedIn]);
 
+  // Handle deep linking for password reset
+  useEffect(() => {
+    // Listen for Supabase auth state changes (for password reset flow)
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        console.log('RootNavigator: Password recovery event detected');
+        // Navigate to reset password screen
+        if (navigationRef.current) {
+          navigationRef.current.dispatch(
+            CommonActions.navigate({
+              name: 'Auth',
+              params: {
+                screen: 'ResetPassword',
+              },
+            })
+          );
+        }
+      }
+    });
+
+    // Cleanup subscription
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  // Deep linking configuration
+  const linking = {
+    prefixes: ['hikewise://', 'https://ucculvnodabrfwbkzsnx.supabase.co'],
+    config: {
+      screens: {
+        Auth: {
+          screens: {
+            ResetPassword: 'reset-password',
+            Login: 'login',
+            ForgotPassword: 'forgot-password',
+          },
+        },
+        Landing: '',
+        Main: 'main',
+        Onboarding: 'onboarding',
+      },
+    },
+    async getInitialURL() {
+      // Check if app was opened from a deep link
+      const url = await Linking.getInitialURL();
+      if (url != null) {
+        return url;
+      }
+      return null;
+    },
+    subscribe(listener: (url: string) => void) {
+      // Listen for deep link events while app is open
+      const onReceiveURL = ({ url }: { url: string }) => {
+        listener(url);
+      };
+
+      const subscription = Linking.addEventListener('url', onReceiveURL);
+
+      return () => {
+        subscription.remove();
+      };
+    },
+  };
+
   if (isInitialLoading || showSplash) {
     return <SplashScreen onAnimationComplete={handleSplashComplete} />;
   }
 
   return (
-    <NavigationContainer ref={navigationRef}>
+    <NavigationContainer ref={navigationRef} linking={linking}>
       <Stack.Navigator
         screenOptions={{ headerShown: false }}
         initialRouteName="Landing" // Always start at Landing after splash
