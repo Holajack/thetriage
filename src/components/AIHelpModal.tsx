@@ -112,7 +112,7 @@ export default function AIHelpModal({ visible, onClose, aiType }: AIHelpModalPro
             '• Include the exact question/command\n' +
             '• Note the unexpected behavior\n' +
             '• Provide screenshots if helpful\n\n' +
-            'Send to: ai-support@thetriage.app'
+            'Send to: ai-support@hikewise.app'
           )
         },
         {
@@ -124,7 +124,7 @@ export default function AIHelpModal({ visible, onClose, aiType }: AIHelpModalPro
             '• What feature you\'d like\n' +
             '• How it would help your studies\n' +
             '• Examples of how it should work\n\n' +
-            'Send to: ai-features@thetriage.app'
+            'Send to: ai-features@hikewise.app'
           )
         },
         {
@@ -132,7 +132,7 @@ export default function AIHelpModal({ visible, onClose, aiType }: AIHelpModalPro
           onPress: () => Alert.alert(
             'Privacy & Data Concerns',
             'For questions about data collection, privacy, or to request data deletion:\n\n' +
-            'Email: privacy@thetriage.app\n\n' +
+            'Email: privacy@hikewise.app\n\n' +
             'Include your user ID for faster processing:\n' +
             user?.id || 'Not available'
           )

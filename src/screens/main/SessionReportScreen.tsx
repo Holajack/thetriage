@@ -8,11 +8,13 @@ import type { RootStackParamList } from '../../navigation/types';
 import { supabase } from '../../utils/supabase';
 const { useUserAppData } = require('../../utils/userAppData');
 import { useBackgroundMusic } from '../../hooks/useBackgroundMusic';
+import { useTheme } from '../../context/ThemeContext';
 
 export const SessionReportScreen = () => {
   const { data: userData } = useUserAppData();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute();
+  const { theme } = useTheme();
   
   const params = route.params as {
     sessionDuration: number;
@@ -24,6 +26,8 @@ export const SessionReportScreen = () => {
     subject: string;
     plannedDuration: number;
     productivity: number;
+    focusMode?: 'basecamp' | 'summit';
+    completedTasksData?: any[];
   } | undefined;
 
   const [newAchievements, setNewAchievements] = useState<any[]>([]);
@@ -157,44 +161,13 @@ export const SessionReportScreen = () => {
     setSessionScore(calculateSessionScore);
   }, [params, calculateSessionScore]);
 
-  // Get environment colors
-  const getEnvironmentColors = () => {
-    const envTheme = userData?.settings?.environment_theme || 'forest';
-    
-    switch (envTheme) {
-      case 'ocean':
-        return {
-          primary: '#2196F3',
-          secondary: '#E3F2FD',
-          accent: '#1976D2',
-          background: '#F0F8FF'
-        };
-      case 'sunset':
-        return {
-          primary: '#FF5722',
-          secondary: '#FFE0B2',
-          accent: '#D84315',
-          background: '#FFF8E1'
-        };
-      case 'night':
-        return {
-          primary: '#9C27B0',
-          secondary: '#E1BEE7',
-          accent: '#7B1FA2',
-          background: '#F3E5F5'
-        };
-      case 'forest':
-      default:
-        return {
-          primary: '#4CAF50',
-          secondary: '#E8F5E9',
-          accent: '#388E3C',
-          background: '#F1F8E9'
-        };
-    }
-  };
+  // Stop music on screen entry
+  useEffect(() => {
+    stopPlayback().catch(error => {
+      console.warn('🎵 Failed to stop music on session report entry:', error);
+    });
+  }, [stopPlayback]);
 
-  const colors = getEnvironmentColors();
 
   const renderStars = (rating: number) => {
     return Array.from({ length: 5 }, (_, i) => (
@@ -223,138 +196,190 @@ export const SessionReportScreen = () => {
 
   if (!params) {
     return (
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
         <Text style={styles.errorText}>No session data available</Text>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={["top", "left", "right"]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]} edges={["top", "left", "right"]}>
       {/* Top Navigation */}
-      <View style={[styles.topNavBar, { backgroundColor: colors.background }]}>
+      <View style={[styles.topNavBar, { backgroundColor: theme.background }]}>
         <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Main', { screen: 'Home' })}>
-          <Ionicons name="close" size={24} color="#222" />
+          <Ionicons name="close" size={24} color={theme.text} />
         </TouchableOpacity>
         <View style={styles.topNavTitleRow}>
-          <Text style={styles.topNavTitle}>Session Report</Text>
+          <Text style={[styles.topNavTitle, { color: theme.text }]}>Session Report</Text>
         </View>
         <View style={styles.iconBtn} />
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Session Score Card */}
-        <View style={[styles.scoreCard, { backgroundColor: colors.secondary }]}>
-          <MaterialIcons name="assessment" size={32} color={colors.primary} />
-          <Text style={[styles.scoreTitle, { color: colors.accent }]}>Session Quality Score</Text>
-          
-          <View style={styles.scoreCircle}>
+        <View style={[styles.scoreCard, { backgroundColor: theme.cardBackground, borderColor: theme.border }]}>
+          <MaterialIcons name="assessment" size={32} color={theme.primary} />
+          <Text style={[styles.scoreTitle, { color: theme.text }]}>Session Quality Score</Text>
+
+          <View style={[styles.scoreCircle, { backgroundColor: theme.background }]}>
             <Text style={[styles.scoreNumber, { color: getScoreColor(sessionScore) }]}>
               {sessionScore}
             </Text>
-            <Text style={styles.scoreOutOf}>/ 100</Text>
+            <Text style={[styles.scoreOutOf, { color: theme.textSecondary }]}>/ 100</Text>
           </View>
-          
+
           <Text style={[styles.scoreLabel, { color: getScoreColor(sessionScore) }]}>
             {getScoreLabel(sessionScore)}
           </Text>
-          
+
           {/* Score Breakdown */}
-          <View style={styles.scoreBreakdown}>
+          <View style={[styles.scoreBreakdown, { backgroundColor: 'rgba(255, 255, 255, 0.05)' }]}>
             <View style={styles.breakdownRow}>
-              <Text style={styles.breakdownLabel}>Completion:</Text>
-              <Text style={styles.breakdownValue}>
+              <Text style={[styles.breakdownLabel, { color: theme.textSecondary }]}>Completion:</Text>
+              <Text style={[styles.breakdownValue, { color: theme.text }]}>
                 {params.taskCompleted ? '40/40' : `${Math.floor(40 * (params.sessionDuration / params.plannedDuration))}/40`}
               </Text>
             </View>
             <View style={styles.breakdownRow}>
-              <Text style={styles.breakdownLabel}>Focus Rating:</Text>
-              <Text style={styles.breakdownValue}>{Math.floor((params.focusRating / 5) * 25)}/25</Text>
+              <Text style={[styles.breakdownLabel, { color: theme.textSecondary }]}>Focus Rating:</Text>
+              <Text style={[styles.breakdownValue, { color: theme.text }]}>{Math.floor((params.focusRating / 5) * 25)}/25</Text>
             </View>
             <View style={styles.breakdownRow}>
-              <Text style={styles.breakdownLabel}>Productivity:</Text>
-              <Text style={styles.breakdownValue}>{Math.floor((params.productivity / 5) * 25)}/25</Text>
+              <Text style={[styles.breakdownLabel, { color: theme.textSecondary }]}>Productivity:</Text>
+              <Text style={[styles.breakdownValue, { color: theme.text }]}>{Math.floor((params.productivity / 5) * 25)}/25</Text>
             </View>
             <View style={styles.breakdownRow}>
-              <Text style={styles.breakdownLabel}>Notes Bonus:</Text>
-              <Text style={styles.breakdownValue}>{params.notes && params.notes.trim().length > 0 ? '10' : '0'}/10</Text>
+              <Text style={[styles.breakdownLabel, { color: theme.textSecondary }]}>Notes Bonus:</Text>
+              <Text style={[styles.breakdownValue, { color: theme.text }]}>{params.notes && params.notes.trim().length > 0 ? '10' : '0'}/10</Text>
             </View>
           </View>
         </View>
 
         {/* Session Details Card */}
-        <View style={styles.detailsCard}>
-          <Text style={[styles.detailsTitle, { color: colors.accent }]}>Session Details</Text>
-          
+        <View style={[styles.detailsCard, { backgroundColor: theme.cardBackground, borderColor: theme.border }]}>
+          <Text style={[styles.detailsTitle, { color: theme.text }]}>Session Details</Text>
+
           <View style={styles.detailRow}>
-            <MaterialIcons name="schedule" size={20} color={colors.primary} />
-            <Text style={styles.detailLabel}>Duration:</Text>
-            <Text style={styles.detailValue}>
+            <MaterialIcons name="schedule" size={20} color={theme.primary} />
+            <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Duration:</Text>
+            <Text style={[styles.detailValue, { color: theme.text }]}>
               {params.sessionDuration} of {params.plannedDuration} minutes
-              {params.taskCompleted && <Text style={{ color: colors.primary }}> ✓</Text>}
+              {params.taskCompleted && <Text style={{ color: theme.primary }}> ✓</Text>}
             </Text>
           </View>
-          
+
           <View style={styles.detailRow}>
-            <MaterialIcons name="subject" size={20} color={colors.primary} />
-            <Text style={styles.detailLabel}>Subject:</Text>
-            <Text style={styles.detailValue}>{params.subject}</Text>
+            <MaterialIcons name="subject" size={20} color={theme.primary} />
+            <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Subject:</Text>
+            <Text style={[styles.detailValue, { color: theme.text }]}>{params.subject}</Text>
           </View>
-          
+
           <View style={styles.detailRow}>
-            <MaterialIcons name="settings" size={20} color={colors.primary} />
-            <Text style={styles.detailLabel}>Session Type:</Text>
-            <Text style={styles.detailValue}>{params.sessionType === 'manual' ? 'Custom Setup' : 'Quick Start'}</Text>
+            <MaterialIcons name="settings" size={20} color={theme.primary} />
+            <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Session Type:</Text>
+            <Text style={[styles.detailValue, { color: theme.text }]}>{params.sessionType === 'manual' ? 'Custom Setup' : 'Quick Start'}</Text>
           </View>
-          
+
           <View style={styles.detailRow}>
-            <MaterialIcons name="free-breakfast" size={20} color={colors.primary} />
-            <Text style={styles.detailLabel}>Break Duration:</Text>
-            <Text style={styles.detailValue}>{params.breakDuration} minutes</Text>
+            <MaterialIcons name="free-breakfast" size={20} color={theme.primary} />
+            <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Break Duration:</Text>
+            <Text style={[styles.detailValue, { color: theme.text }]}>{params.breakDuration} minutes</Text>
           </View>
         </View>
 
+        {/* Summit Mode: Individual Tasks Breakdown */}
+        {params?.focusMode === 'summit' && params?.completedTasksData && params.completedTasksData.length > 0 && (
+          <View style={[styles.detailsCard, { backgroundColor: theme.cardBackground, borderColor: theme.border }]}>
+            <Text style={[styles.detailsTitle, { color: theme.text }]}>📋 Tasks Completed ({params.completedTasksData.length})</Text>
+
+            {params.completedTasksData.map((taskData, index) => (
+              <View key={index} style={[styles.taskBreakdownItem, { backgroundColor: 'rgba(255, 255, 255, 0.03)', borderColor: theme.border }]}>
+                <View style={styles.taskBreakdownHeader}>
+                  <Text style={[styles.taskBreakdownNumber, { color: theme.primary }]}>Task {index + 1}</Text>
+                  <Text style={[styles.taskBreakdownTitle, { color: theme.text }]}>{taskData.task}</Text>
+                </View>
+
+                <View style={styles.taskBreakdownDetails}>
+                  <View style={styles.taskBreakdownRow}>
+                    <MaterialIcons name="subject" size={16} color={theme.textSecondary} />
+                    <Text style={[styles.taskBreakdownLabel, { color: theme.textSecondary }]}>Subject:</Text>
+                    <Text style={[styles.taskBreakdownValue, { color: theme.text }]}>{taskData.subject}</Text>
+                  </View>
+
+                  <View style={styles.taskBreakdownRow}>
+                    <MaterialIcons name="schedule" size={16} color={theme.textSecondary} />
+                    <Text style={[styles.taskBreakdownLabel, { color: theme.textSecondary }]}>Duration:</Text>
+                    <Text style={[styles.taskBreakdownValue, { color: theme.text }]}>{taskData.duration} min</Text>
+                  </View>
+
+                  <View style={styles.taskBreakdownRow}>
+                    <MaterialIcons name="psychology" size={16} color={theme.textSecondary} />
+                    <Text style={[styles.taskBreakdownLabel, { color: theme.textSecondary }]}>Focus:</Text>
+                    <View style={styles.starsContainer}>
+                      {renderStars(taskData.focusRating)}
+                    </View>
+                  </View>
+
+                  <View style={styles.taskBreakdownRow}>
+                    <MaterialIcons name="trending-up" size={16} color={theme.textSecondary} />
+                    <Text style={[styles.taskBreakdownLabel, { color: theme.textSecondary }]}>Productivity:</Text>
+                    <View style={styles.starsContainer}>
+                      {renderStars(taskData.productivityRating)}
+                    </View>
+                  </View>
+
+                  {taskData.notes && (
+                    <View style={styles.taskBreakdownNotes}>
+                      <Text style={[styles.taskBreakdownNotesText, { color: theme.textSecondary }]}>"{taskData.notes}"</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* Ratings Card */}
-        <View style={styles.ratingsCard}>
-          <Text style={[styles.ratingsTitle, { color: colors.accent }]}>Your Ratings</Text>
-          
+        <View style={[styles.ratingsCard, { backgroundColor: theme.cardBackground, borderColor: theme.border }]}>
+          <Text style={[styles.ratingsTitle, { color: theme.text }]}>Your Ratings</Text>
+
           <View style={styles.ratingRow}>
-            <Text style={styles.ratingLabel}>Focus Quality:</Text>
+            <Text style={[styles.ratingLabel, { color: theme.textSecondary }]}>Focus Quality:</Text>
             <View style={styles.starsContainer}>
               {renderStars(params.focusRating)}
             </View>
-            <Text style={styles.ratingNumber}>({params.focusRating}/5)</Text>
+            <Text style={[styles.ratingNumber, { color: theme.textSecondary }]}>({params.focusRating}/5)</Text>
           </View>
-          
+
           <View style={styles.ratingRow}>
-            <Text style={styles.ratingLabel}>Productivity:</Text>
+            <Text style={[styles.ratingLabel, { color: theme.textSecondary }]}>Productivity:</Text>
             <View style={styles.starsContainer}>
               {renderStars(params.productivity)}
             </View>
-            <Text style={styles.ratingNumber}>({params.productivity}/5)</Text>
+            <Text style={[styles.ratingNumber, { color: theme.textSecondary }]}>({params.productivity}/5)</Text>
           </View>
-          
+
           {params.notes && (
-            <View style={styles.notesSection}>
-              <Text style={[styles.notesTitle, { color: colors.accent }]}>Your Notes:</Text>
-              <Text style={styles.notesText}>"{params.notes}"</Text>
+            <View style={[styles.notesSection, { backgroundColor: 'rgba(255, 255, 255, 0.05)' }]}>
+              <Text style={[styles.notesTitle, { color: theme.text }]}>Your Notes:</Text>
+              <Text style={[styles.notesText, { color: theme.textSecondary }]}>"{params.notes}"</Text>
             </View>
           )}
         </View>
 
         {/* Achievements Card */}
         {newAchievements.length > 0 && (
-          <View style={styles.achievementsCard}>
-            <Text style={[styles.achievementsTitle, { color: colors.accent }]}>New Achievements! 🎉</Text>
-            
+          <View style={[styles.achievementsCard, { backgroundColor: theme.cardBackground, borderColor: theme.border }]}>
+            <Text style={[styles.achievementsTitle, { color: theme.text }]}>New Achievements! 🎉</Text>
+
             {newAchievements.map((achievement, index) => (
-              <View key={index} style={[styles.achievementItem, { borderColor: achievement.color }]}>
+              <View key={index} style={[styles.achievementItem, { borderColor: achievement.color, backgroundColor: 'rgba(255, 255, 255, 0.03)' }]}>
                 <View style={[styles.achievementIcon, { backgroundColor: achievement.color }]}>
                   <MaterialIcons name={achievement.icon} size={24} color="#fff" />
                 </View>
                 <View style={styles.achievementContent}>
-                  <Text style={styles.achievementTitle}>{achievement.title}</Text>
-                  <Text style={styles.achievementDesc}>{achievement.description}</Text>
+                  <Text style={[styles.achievementTitle, { color: theme.text }]}>{achievement.title}</Text>
+                  <Text style={[styles.achievementDesc, { color: theme.textSecondary }]}>{achievement.description}</Text>
                 </View>
               </View>
             ))}
@@ -363,13 +388,13 @@ export const SessionReportScreen = () => {
 
         {/* Music Status Section */}
         {currentTrack && isPlaying && !isPreviewMode && (
-          <View style={[styles.musicContinuing, { backgroundColor: colors.secondary }]}>
-            <MaterialIcons name="music-note" size={20} color={colors.primary} />
+          <View style={[styles.musicContinuing, { backgroundColor: theme.cardBackground, borderColor: theme.border }]}>
+            <MaterialIcons name="music-note" size={20} color={theme.primary} />
             <View style={{ flex: 1, marginLeft: 8 }}>
-              <Text style={[styles.musicContinuingTitle, { color: colors.accent }]}>
+              <Text style={[styles.musicContinuingTitle, { color: theme.text }]}>
                 Music Continuing
               </Text>
-              <Text style={[styles.musicContinuingText, { color: colors.primary }]}>
+              <Text style={[styles.musicContinuingText, { color: theme.textSecondary }]}>
                 ♪ {currentTrack.displayName}
               </Text>
             </View>
@@ -382,7 +407,7 @@ export const SessionReportScreen = () => {
         {/* Action Buttons */}
         <View style={styles.actionsContainer}>
           <TouchableOpacity
-            style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
+            style={[styles.primaryBtn, { backgroundColor: theme.primary }]}
             onPress={() => navigation.navigate('StudySessionScreen', { manualSelection: true })}
           >
             <MaterialIcons name="refresh" size={20} color="#fff" />
@@ -390,18 +415,18 @@ export const SessionReportScreen = () => {
           </TouchableOpacity>
           
           <TouchableOpacity
-            style={styles.secondaryBtn}
+            style={[styles.secondaryBtn, { borderColor: theme.border }]}
             onPress={() => navigation.navigate('Main', { screen: 'Analytics' })}
           >
-            <MaterialIcons name="analytics" size={20} color={colors.primary} />
-            <Text style={[styles.secondaryBtnText, { color: colors.primary }]}>View Analytics</Text>
+            <MaterialIcons name="analytics" size={20} color={theme.primary} />
+            <Text style={[styles.secondaryBtnText, { color: theme.text }]}>View Analytics</Text>
           </TouchableOpacity>
-          
+
           <TouchableOpacity
             style={styles.tertiaryBtn}
             onPress={() => navigation.navigate('Main', { screen: 'Home' })}
           >
-            <Text style={styles.tertiaryBtnText}>Back to Home</Text>
+            <Text style={[styles.tertiaryBtnText, { color: theme.textSecondary }]}>Back to Home</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -441,6 +466,7 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: 'center',
     marginVertical: 16,
+    borderWidth: 1,
   },
   scoreTitle: {
     fontSize: 18,
@@ -500,6 +526,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 20,
     marginBottom: 16,
+    borderWidth: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
@@ -533,6 +560,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 20,
     marginBottom: 16,
+    borderWidth: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
@@ -587,6 +615,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 20,
     marginBottom: 16,
+    borderWidth: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
@@ -635,6 +664,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 8,
     marginBottom: 16,
+    borderWidth: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
@@ -698,6 +728,52 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     marginTop: 50,
+  },
+  taskBreakdownItem: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+  },
+  taskBreakdownHeader: {
+    marginBottom: 12,
+  },
+  taskBreakdownNumber: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  taskBreakdownTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  taskBreakdownDetails: {
+    gap: 8,
+  },
+  taskBreakdownRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  taskBreakdownLabel: {
+    fontSize: 14,
+    marginLeft: 8,
+    width: 100,
+  },
+  taskBreakdownValue: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  taskBreakdownNotes: {
+    marginTop: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  taskBreakdownNotesText: {
+    fontSize: 13,
+    fontStyle: 'italic',
+    lineHeight: 18,
   },
 });
 

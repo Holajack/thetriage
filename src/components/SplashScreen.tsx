@@ -149,8 +149,8 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationComplete 
         </Animated.View>
 
         <Animated.View style={[styles.textContainer, { opacity: titleOpacity }]}>
-          <Text style={styles.title}>TRIAGE</Text>
-          <Text style={styles.subtitle}>SYSTEM</Text>
+          <Text style={styles.title}>HIKE</Text>
+          <Text style={styles.subtitle}>WISE</Text>
         </Animated.View>
 
         <Animated.View style={[styles.taglineContainer, { opacity: taglineOpacity }]}>

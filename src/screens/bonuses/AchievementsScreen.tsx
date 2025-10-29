@@ -219,13 +219,14 @@ const AchievementsScreen = () => {
     navigation.setOptions({
       title: 'Achievements',
       headerLeft: () => (
-        <TouchableOpacity 
-          onPress={() => navigation.navigate('Bonuses' as never)} 
+        <TouchableOpacity
+          onPress={() => navigation.navigate('Bonuses' as never)}
           style={{ marginLeft: 8 }}
         >
           <Ionicons name="arrow-back" size={24} color={theme.primary} />
         </TouchableOpacity>
       ),
+      headerRight: () => null, // Remove hamburger menu
     });
   }, [navigation, theme]);
 

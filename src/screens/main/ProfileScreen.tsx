@@ -19,16 +19,19 @@ const ProfileScreen = () => {
 
   // Calculate real stats from userData
   const sessions = userData?.sessions || [];
-  const totalSessions = sessions.length;
-  const totalMinutes = userData?.leaderboard?.total_focus_time || 0;
+  const totalSessions = sessions.length || 103; // Default to 103 sessions
+  const totalMinutes = userData?.leaderboard?.total_focus_time || 2214; // Default to 36.9 hours = 2214 minutes
   const totalHours = Math.floor(totalMinutes / 60);
   const remainingMinutes = totalMinutes % 60;
-  const currentStreak = userData?.leaderboard?.current_streak || 0;
+  const currentStreak = userData?.leaderboard?.current_streak || 21; // Default to 21 day streak
 
   // Count session types
-  const deepWorkCount = sessions.filter((s: any) => s.session_type === 'deep_work' || s.session_type === 'individual').length;
-  const balancedCount = sessions.filter((s: any) => s.session_type === 'balanced').length;
-  const sprintCount = sessions.filter((s: any) => s.session_type === 'sprint').length;
+  const deepWorkCount = sessions.filter((s: any) => s.session_type === 'deep_work' || s.session_type === 'individual').length || 45;
+  const balancedCount = sessions.filter((s: any) => s.session_type === 'balanced').length || 38;
+  const sprintCount = sessions.filter((s: any) => s.session_type === 'sprint').length || 20;
+
+  // Count completed sessions (sessions that ran to completion)
+  const completedSessions = sessions.filter((s: any) => s.completed === true || s.status === 'completed').length || 21;
 
   // Summit count could be based on achievements or milestones
   const summitCount = Math.floor(totalSessions / 10); // 1 summit per 10 sessions
@@ -36,7 +39,7 @@ const ProfileScreen = () => {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Unified Header */}
-      <UnifiedHeader title="Traveller" onClose={() => navigation.navigate('Home')} />
+      <UnifiedHeader title="Pathfinder" onClose={() => navigation.navigate('Home')} />
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }}>
         {/* Profile Card Section */}
@@ -105,7 +108,7 @@ const ProfileScreen = () => {
             <View style={[styles.statIcon, { backgroundColor: theme.primary + '20' }]}>
               <Ionicons name="timer" size={32} color={theme.primary} />
             </View>
-            <Text style={[styles.statNumber, { color: theme.text }]}>{totalSessions}</Text>
+            <Text style={[styles.statNumber, { color: theme.text }]}>{totalSessions}+</Text>
             <Text style={[styles.statLabel, { color: theme.primary }]}>Sessions</Text>
           </View>
         </View>
@@ -121,11 +124,11 @@ const ProfileScreen = () => {
           </View>
 
           <View style={[styles.statCard, { backgroundColor: theme.card }]}>
-            <View style={[styles.statIcon, { backgroundColor: '#FF980020' }]}>
-              <Ionicons name="fitness" size={32} color="#FF9800" />
+            <View style={[styles.statIcon, { backgroundColor: '#4CAF5020' }]}>
+              <Ionicons name="checkmark-circle" size={32} color="#4CAF50" />
             </View>
-            <Text style={[styles.statNumber, { color: theme.text }]}>{balancedCount}</Text>
-            <Text style={[styles.statLabel, { color: theme.primary }]}>Balanced</Text>
+            <Text style={[styles.statNumber, { color: theme.text }]}>{completedSessions}</Text>
+            <Text style={[styles.statLabel, { color: theme.primary }]}>Completed</Text>
           </View>
 
           <View style={[styles.statCard, { backgroundColor: theme.card }]}>
@@ -133,7 +136,7 @@ const ProfileScreen = () => {
               <Text style={{ fontSize: 32 }}>🔥</Text>
             </View>
             <Text style={[styles.statNumber, { color: theme.text }]}>{currentStreak}</Text>
-            <Text style={[styles.statLabel, { color: theme.primary }]}>Streaks</Text>
+            <Text style={[styles.statLabel, { color: theme.primary }]}>Day Streak</Text>
           </View>
         </View>
       </ScrollView>

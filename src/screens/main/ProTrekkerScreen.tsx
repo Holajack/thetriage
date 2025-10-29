@@ -20,8 +20,18 @@ const ProTrekkerScreen = () => {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: '#3D9AE2' }]}>
-      <UnifiedHeader title="Traveller" />
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      {/* Back Button */}
+      <View style={styles.backButtonContainer}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.navigate('Settings' as any)}
+        >
+          <View style={[styles.backButtonCircle, { backgroundColor: theme.primary + '20' }]}>
+            <Ionicons name="arrow-back" size={24} color={theme.primary} />
+          </View>
+        </TouchableOpacity>
+      </View>
 
       <ScrollView
         style={styles.scrollView}
@@ -43,24 +53,25 @@ const ProTrekkerScreen = () => {
         </View>
 
         {/* Title */}
-        <Text style={styles.title}>Become Pro Trekker</Text>
+        <Text style={[styles.title, { color: theme.primary }]}>HikeWise Pro</Text>
 
         {/* Pricing Cards */}
         <View style={styles.pricingContainer}>
-          {/* Monthly Plan */}
+          {/* Premium Plan */}
           <TouchableOpacity
             style={[
               styles.priceCard,
+              { backgroundColor: theme.surface },
               selectedPlan === 'monthly' && styles.priceCardSelected
             ]}
             onPress={() => setSelectedPlan('monthly')}
             activeOpacity={0.8}
           >
-            <Text style={styles.priceAmount}>Monthly $0.99</Text>
-            <Text style={styles.priceDescription}>Recurring payment</Text>
+            <Text style={[styles.priceAmount, { color: theme.text }]}>Premium $4.99/mo</Text>
+            <Text style={[styles.priceDescription, { color: theme.textSecondary }]}>3 Days Free Trial, Cancel Anytime</Text>
           </TouchableOpacity>
 
-          {/* Yearly Plan - Recommended */}
+          {/* Pro Plan - Most Popular */}
           <TouchableOpacity
             style={[
               styles.priceCard,
@@ -71,113 +82,141 @@ const ProTrekkerScreen = () => {
             activeOpacity={0.8}
           >
             <View style={styles.recommendBadge}>
-              <Text style={styles.recommendText}>Recommend</Text>
+              <Text style={styles.recommendText}>Most Popular</Text>
             </View>
             <View style={styles.checkmark}>
               <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
             </View>
-            <Text style={[styles.priceAmount, { color: '#FFF' }]}>Yearly $7.99</Text>
-            <Text style={[styles.priceDescription, { color: '#E3F2FD' }]}>3 Days Free Trial, Cancel Anytime</Text>
+            <Text style={[styles.priceAmount, { color: '#FFF' }]}>Pro $14.99/mo</Text>
+            <Text style={[styles.priceDescription, { color: '#E3F2FD' }]}>Ultimate study experience with all features</Text>
           </TouchableOpacity>
 
           {/* Lifetime Plan */}
           <TouchableOpacity
             style={[
               styles.priceCard,
+              { backgroundColor: theme.surface },
               selectedPlan === 'lifetime' && styles.priceCardSelected
             ]}
             onPress={() => setSelectedPlan('lifetime')}
             activeOpacity={0.8}
           >
             <View style={styles.saleBadge}>
-              <Text style={styles.saleText}>On sale</Text>
+              <Text style={styles.saleText}>Best Value</Text>
             </View>
-            <Text style={styles.priceAmount}>Life Time Access</Text>
-            <Text style={styles.priceDescription}>$9.99, No recurring payments</Text>
+            <Text style={[styles.priceAmount, { color: theme.text }]}>Lifetime Access</Text>
+            <Text style={[styles.priceDescription, { color: theme.textSecondary }]}>$149.99, Pay once, use forever</Text>
           </TouchableOpacity>
         </View>
 
         {/* Get All Features Button */}
         <TouchableOpacity
-          style={styles.subscribeButton}
+          style={[styles.subscribeButton, { backgroundColor: theme.primary }]}
           onPress={handleSubscribe}
           activeOpacity={0.9}
         >
-          <Text style={styles.subscribeButtonText}>Get All Features</Text>
+          <Text style={[styles.subscribeButtonText, { color: '#FFF' }]}>Unlock HikeWise Pro</Text>
         </TouchableOpacity>
 
         {/* Links */}
         <View style={styles.linksContainer}>
-          <TouchableOpacity><Text style={styles.linkText}>Terms of use</Text></TouchableOpacity>
-          <Text style={styles.linkSeparator}>|</Text>
-          <TouchableOpacity><Text style={styles.linkText}>Privacy</Text></TouchableOpacity>
-          <Text style={styles.linkSeparator}>|</Text>
-          <TouchableOpacity><Text style={styles.linkText}>Restore Purchased</Text></TouchableOpacity>
+          <TouchableOpacity><Text style={[styles.linkText, { color: theme.textSecondary }]}>Terms of use</Text></TouchableOpacity>
+          <Text style={[styles.linkSeparator, { color: theme.textSecondary }]}>|</Text>
+          <TouchableOpacity><Text style={[styles.linkText, { color: theme.textSecondary }]}>Privacy</Text></TouchableOpacity>
+          <Text style={[styles.linkSeparator, { color: theme.textSecondary }]}>|</Text>
+          <TouchableOpacity><Text style={[styles.linkText, { color: theme.textSecondary }]}>Restore Purchased</Text></TouchableOpacity>
         </View>
 
         {/* Features Section */}
-        <Text style={styles.featuresTitle}>Features</Text>
+        <Text style={[styles.featuresTitle, { color: theme.primary }]}>What You'll Get</Text>
 
         <View style={styles.featuresList}>
-          {/* Feature 1 - More Scenery */}
+          {/* Feature 1 - AI-Powered Insights */}
           <View style={styles.featureCard}>
-            <View style={[styles.featureIcon, { backgroundColor: '#FF6B35' }]}>
-              <MaterialCommunityIcons name="leaf-maple" size={32} color="#FFF" />
+            <View style={[styles.featureIcon, { backgroundColor: '#7B61FF' }]}>
+              <Ionicons name="bulb" size={32} color="#FFF" />
             </View>
-            <Text style={styles.featureTitle}>3 more scenery</Text>
-            <Text style={styles.featureDesc}>Focus in spring, winter and autumn</Text>
+            <Text style={[styles.featureTitle, { color: theme.text }]}>Unlimited AI Insights</Text>
+            <Text style={[styles.featureDesc, { color: theme.textSecondary }]}>Get personalized study recommendations powered by AI</Text>
           </View>
 
-          {/* Feature 2 - All Characters */}
-          <View style={styles.featureCard}>
-            <View style={[styles.featureIcon, { backgroundColor: '#FF9500' }]}>
-              <Ionicons name="happy" size={32} color="#FFF" />
-            </View>
-            <Text style={styles.featureTitle}>All characters</Text>
-            <Text style={styles.featureDesc}>Fox, Bear, Corgi and more...</Text>
-          </View>
-
-          {/* Feature 3 - Customize Focus Time */}
+          {/* Feature 2 - Personalized Study Plans */}
           <View style={styles.featureCard}>
             <View style={[styles.featureIcon, { backgroundColor: '#4CAF50' }]}>
-              <Ionicons name="time" size={32} color="#FFF" />
+              <Ionicons name="calendar" size={32} color="#FFF" />
             </View>
-            <Text style={styles.featureTitle}>Customize focus time</Text>
-            <Text style={styles.featureDesc}>Set a single focus time freely</Text>
+            <Text style={[styles.featureTitle, { color: theme.text }]}>AI-Generated Study Plans</Text>
+            <Text style={[styles.featureDesc, { color: theme.textSecondary }]}>Custom schedules tailored to your learning style</Text>
           </View>
 
-          {/* Feature 4 - Notebook Cover */}
+          {/* Feature 3 - E-Books Library */}
           <View style={styles.featureCard}>
-            <View style={[styles.featureIcon, { backgroundColor: '#B8A88A' }]}>
+            <View style={[styles.featureIcon, { backgroundColor: '#FF9500' }]}>
               <Ionicons name="book" size={32} color="#FFF" />
             </View>
-            <Text style={styles.featureTitle}>Notebook cover</Text>
-            <Text style={styles.featureDesc}>16 unique covers</Text>
+            <Text style={[styles.featureTitle, { color: theme.text }]}>E-Books Library Access</Text>
+            <Text style={[styles.featureDesc, { color: theme.textSecondary }]}>Exclusive study guides and educational resources</Text>
           </View>
 
-          {/* Feature 5 - Customize Summit Time */}
+          {/* Feature 4 - Session Analytics */}
           <View style={styles.featureCard}>
-            <View style={[styles.featureIcon, { backgroundColor: '#7CB342' }]}>
-              <MaterialCommunityIcons name="mountain" size={32} color="#FFF" />
+            <View style={[styles.featureIcon, { backgroundColor: '#2196F3' }]}>
+              <Ionicons name="stats-chart" size={32} color="#FFF" />
             </View>
-            <Text style={styles.featureTitle}>Customize summit time</Text>
-            <Text style={styles.featureDesc}>Set the total length of the mountain trail</Text>
+            <Text style={[styles.featureTitle, { color: theme.text }]}>Advanced Analytics</Text>
+            <Text style={[styles.featureDesc, { color: theme.textSecondary }]}>Detailed reports and progress tracking</Text>
           </View>
 
-          {/* Feature 6 - Pomodoro Mode */}
+          {/* Feature 5 - Soundscapes */}
+          <View style={styles.featureCard}>
+            <View style={[styles.featureIcon, { backgroundColor: '#00BCD4' }]}>
+              <Ionicons name="musical-notes" size={32} color="#FFF" />
+            </View>
+            <Text style={[styles.featureTitle, { color: theme.text }]}>Focus Soundscapes</Text>
+            <Text style={[styles.featureDesc, { color: theme.textSecondary }]}>Curated audio for deep concentration</Text>
+          </View>
+
+          {/* Feature 6 - Brain Mapping */}
+          <View style={styles.featureCard}>
+            <View style={[styles.featureIcon, { backgroundColor: '#9C27B0' }]}>
+              <MaterialCommunityIcons name="brain" size={32} color="#FFF" />
+            </View>
+            <Text style={[styles.featureTitle, { color: theme.text }]}>Brain Mapping Profile</Text>
+            <Text style={[styles.featureDesc, { color: theme.textSecondary }]}>Discover your unique learning patterns</Text>
+          </View>
+
+          {/* Feature 7 - Self-Discovery Quizzes */}
+          <View style={styles.featureCard}>
+            <View style={[styles.featureIcon, { backgroundColor: '#FF6B35' }]}>
+              <Ionicons name="help-circle" size={32} color="#FFF" />
+            </View>
+            <Text style={[styles.featureTitle, { color: theme.text }]}>Self-Discovery Quizzes</Text>
+            <Text style={[styles.featureDesc, { color: theme.textSecondary }]}>Unlock insights about your study habits</Text>
+          </View>
+
+          {/* Feature 8 - Protection Center */}
           <View style={styles.featureCard}>
             <View style={[styles.featureIcon, { backgroundColor: '#EF5350' }]}>
-              <MaterialCommunityIcons name="tomato" size={32} color="#FFF" />
+              <Ionicons name="shield-checkmark" size={32} color="#FFF" />
             </View>
-            <Text style={styles.featureTitle}>Pomodoro mode</Text>
-            <Text style={styles.featureDesc}>Classic Pomodoro technique</Text>
+            <Text style={[styles.featureTitle, { color: theme.text }]}>App Blocking</Text>
+            <Text style={[styles.featureDesc, { color: theme.textSecondary }]}>Block distracting apps and websites during focus time</Text>
+          </View>
+
+          {/* Feature 9 - Pro Badge */}
+          <View style={styles.featureCard}>
+            <View style={[styles.featureIcon, { backgroundColor: '#FFA726' }]}>
+              <Ionicons name="trophy" size={32} color="#FFF" />
+            </View>
+            <Text style={[styles.featureTitle, { color: theme.text }]}>Pro Badge</Text>
+            <Text style={[styles.featureDesc, { color: theme.textSecondary }]}>Stand out in the community leaderboard</Text>
           </View>
         </View>
 
         {/* Testimonials Section */}
         <View style={styles.testimonialsSection}>
-          <Text style={styles.recommendTitle}>Recommend</Text>
-          <Text style={styles.reviewCount}>2000+ reviews</Text>
+          <Text style={styles.recommendTitle}>What Students Say</Text>
+          <Text style={styles.reviewCount}>Join thousands of successful students</Text>
 
           <ScrollView
             horizontal
@@ -186,10 +225,10 @@ const ProTrekkerScreen = () => {
           >
             <View style={styles.testimonialCard}>
               <Text style={styles.testimonialText}>
-                "A great app with beautiful graphics. The music is also so lovely. I only wish there was a way to visually see how many mountains you've climbed, or have a different mountain type/different area. I love the little journals you get after each mountain."
+                "HikeWise Pro transformed my study habits! The AI insights helped me identify my optimal study times and the personalized plans keep me on track. My grades have improved significantly since upgrading."
               </Text>
               <View style={styles.testimonialFooter}>
-                <Text style={styles.testimonialAuthor}>Traveller N</Text>
+                <Text style={styles.testimonialAuthor}>Sarah K., College Student</Text>
                 <View style={styles.testimonialAvatar}>
                   <Ionicons name="person" size={20} color="#FFF" />
                 </View>
@@ -198,10 +237,22 @@ const ProTrekkerScreen = () => {
 
             <View style={styles.testimonialCard}>
               <Text style={styles.testimonialText}>
-                "I love the concept and the aesthetic! Perfect for building healthy study habits."
+                "The e-books library and brain mapping features are game-changers. I finally understand how I learn best, and the app blocking feature helps me stay focused during deep work sessions."
               </Text>
               <View style={styles.testimonialFooter}>
-                <Text style={styles.testimonialAuthor}>Traveller M</Text>
+                <Text style={styles.testimonialAuthor}>Marcus T., Graduate Student</Text>
+                <View style={styles.testimonialAvatar}>
+                  <Ionicons name="person" size={20} color="#FFF" />
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.testimonialCard}>
+              <Text style={styles.testimonialText}>
+                "Best investment in my academic career! The analytics show me exactly where I'm making progress and where I need more focus. The soundscapes are perfect for concentration."
+              </Text>
+              <View style={styles.testimonialFooter}>
+                <Text style={styles.testimonialAuthor}>Emma L., Medical Student</Text>
                 <View style={styles.testimonialAvatar}>
                   <Ionicons name="person" size={20} color="#FFF" />
                 </View>
@@ -210,7 +261,7 @@ const ProTrekkerScreen = () => {
           </ScrollView>
         </View>
 
-        {/* Editor's Picks Badge */}
+        {/* Success Badge */}
         <View style={styles.editorPicksContainer}>
           <Image
             source={require('../../../assets/homescreen-image.png')}
@@ -218,10 +269,10 @@ const ProTrekkerScreen = () => {
             resizeMode="cover"
           />
           <View style={styles.editorPicksOverlay}>
-            <Ionicons name="leaf" size={32} color="#FFF" style={styles.leafIcon} />
-            <Ionicons name="leaf" size={32} color="#FFF" style={[styles.leafIcon, styles.leafIconRight]} />
-            <Text style={styles.editorPicksText}>APP STORE</Text>
-            <Text style={styles.editorPicksSubtext}>Editor's Picks</Text>
+            <Ionicons name="trophy" size={40} color="#FFA726" style={styles.leftIcon} />
+            <Ionicons name="star" size={40} color="#FFA726" style={[styles.leftIcon, styles.rightIcon]} />
+            <Text style={styles.editorPicksText}>HIKEWISE PRO</Text>
+            <Text style={styles.editorPicksSubtext}>Unlock Your Potential</Text>
           </View>
         </View>
 
@@ -236,6 +287,27 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  backButtonContainer: {
+    position: 'absolute',
+    top: 50,
+    left: 20,
+    zIndex: 100,
+  },
+  backButton: {
+    padding: 4,
+  },
+  backButtonCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+  },
   scrollView: {
     flex: 1,
   },
@@ -247,6 +319,7 @@ const styles = StyleSheet.create({
     height: 250,
     position: 'relative',
     marginBottom: 20,
+    overflow: 'hidden',
   },
   heroImage: {
     width: '100%',
@@ -345,17 +418,20 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   subscribeButton: {
-    backgroundColor: '#A8D5E2',
     marginHorizontal: 20,
     borderRadius: 20,
     padding: 18,
     alignItems: 'center',
     marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   subscribeButtonText: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1A237E',
   },
   linksContainer: {
     flexDirection: 'row',
@@ -486,12 +562,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  leafIcon: {
+  leftIcon: {
     position: 'absolute',
     top: 40,
     left: 40,
   },
-  leafIconRight: {
+  rightIcon: {
     left: undefined,
     right: 40,
   },

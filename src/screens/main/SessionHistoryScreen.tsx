@@ -121,23 +121,39 @@ const SessionHistoryScreen = () => {
       }
 
       // Transform the data to match the expected interface
-      const transformedSessions: SessionHistoryItem[] = (sessionsData || []).map(session => ({
-        id: session.id,
-        user_id: session.user_id,
-        start_time: session.start_time,
-        end_time: session.end_time || '',
-        duration_minutes: session.duration_seconds ? Math.round(session.duration_seconds / 60) : 0, // Convert seconds to minutes
-        intended_duration: 0, // Not available in current schema
-        status: session.status as 'completed' | 'cancelled' | 'paused',
-        focus_quality: 0, // Not available in current schema
-        interruptions: 0, // Not available in current schema
-        session_type: session.session_type,
-        subject: 'General Study', // Not available in current schema
-        notes: '', // Not available in current schema
-        created_at: session.created_at,
-        task_title: 'Study Session',
-        productivity_rating: 0, // Not available in current schema
-      }));
+      const transformedSessions: SessionHistoryItem[] = (sessionsData || []).map(session => {
+        // Generate a friendly session name based on session_type
+        let sessionName = 'Study Session';
+        if (session.session_type === 'individual') {
+          sessionName = 'Focus Session';
+        } else if (session.session_type === 'group') {
+          sessionName = 'Group Study Session';
+        } else if (session.session_type === 'deep_work') {
+          sessionName = 'Deep Work Session';
+        } else if (session.session_type === 'sprint') {
+          sessionName = 'Sprint Session';
+        } else if (session.session_type === 'balanced') {
+          sessionName = 'Balanced Session';
+        }
+
+        return {
+          id: session.id,
+          user_id: session.user_id,
+          start_time: session.start_time,
+          end_time: session.end_time || '',
+          duration_minutes: session.duration_seconds ? Math.round(session.duration_seconds / 60) : 0,
+          intended_duration: 0,
+          status: session.status as 'completed' | 'cancelled' | 'paused',
+          focus_quality: 0,
+          interruptions: 0,
+          session_type: session.session_type,
+          subject: sessionName,
+          notes: '',
+          created_at: session.created_at,
+          task_title: sessionName,
+          productivity_rating: 0,
+        };
+      });
 
       setSessions(transformedSessions);
       console.log(`SessionHistory: Loaded ${transformedSessions.length} sessions`);
@@ -225,7 +241,7 @@ const SessionHistoryScreen = () => {
       <View style={styles.sessionHeader}>
         <View style={styles.sessionTitleRow}>
           <Text style={[styles.sessionTitle, { color: theme.text }]}>
-            {session.task_title || session.subject || <Text>{session.session_type} Session</Text>}
+            {session.task_title || session.subject || `${session.session_type} Session`}
           </Text>
           <View style={[styles.statusBadge, { backgroundColor: getStatusColor(session.status) }]}>
             <Ionicons 
@@ -334,7 +350,7 @@ const SessionHistoryScreen = () => {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Unified Header */}
-      <UnifiedHeader title="Traveller" onClose={() => navigation.navigate('Home')} />
+      <UnifiedHeader title="Pathfinder" onClose={() => navigation.navigate('Home')} />
 
       {/* Time Filter */}
       <View style={[styles.filterContainer, { backgroundColor: theme.card }]}>

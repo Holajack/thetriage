@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Modal } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
-import { QuizQuestion, QuizResult, STUDY_HABITS_QUESTIONS, LEARNING_STYLE_QUESTIONS, STUDY_HABITS_RESULTS, LEARNING_STYLE_RESULTS } from '../data/quizData';
+import { QuizQuestion, QuizResult, STUDY_HABITS_QUESTIONS, LEARNING_STYLE_QUESTIONS, MOTIVATION_PROFILE_QUESTIONS, FOCUS_TYPE_QUESTIONS, STUDY_HABITS_RESULTS, LEARNING_STYLE_RESULTS, MOTIVATION_PROFILE_RESULTS, FOCUS_TYPE_RESULTS } from '../data/quizData';
 import { saveQuizResultLocally, saveQuizResultToDatabase } from '../utils/quizStorage';
 import { recordQuizCompletion } from '../utils/achievementManager';
 import { useAuth } from '../context/AuthContext';
 
 interface InteractiveQuizProps {
-  quizType: 'study_habits' | 'learning_style';
+  quizType: 'study_habits' | 'learning_style' | 'motivation_profile' | 'focus_type';
   onComplete: (result: QuizResult) => void;
   onClose: () => void;
 }
@@ -25,7 +25,21 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({ quizType, onComplete,
 
   // Initialize quiz with random 15 questions
   useEffect(() => {
-    const allQuestions = quizType === 'study_habits' ? STUDY_HABITS_QUESTIONS : LEARNING_STYLE_QUESTIONS;
+    let allQuestions: QuizQuestion[] = [];
+    switch (quizType) {
+      case 'study_habits':
+        allQuestions = STUDY_HABITS_QUESTIONS;
+        break;
+      case 'learning_style':
+        allQuestions = LEARNING_STYLE_QUESTIONS;
+        break;
+      case 'motivation_profile':
+        allQuestions = MOTIVATION_PROFILE_QUESTIONS;
+        break;
+      case 'focus_type':
+        allQuestions = FOCUS_TYPE_QUESTIONS;
+        break;
+    }
     const shuffled = [...allQuestions].sort(() => 0.5 - Math.random());
     const selected = shuffled.slice(0, 15);
     setQuizQuestions(selected);
@@ -91,9 +105,26 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({ quizType, onComplete,
 
   const calculateResults = (): QuizResult => {
     const categoryScores: { [key: string]: { total: number; count: number; weighted: number } } = {};
-    
-    // Initialize categories
-    const categories = quizType === 'study_habits' ? STUDY_HABITS_RESULTS.categories : LEARNING_STYLE_RESULTS.categories;
+
+    // Initialize categories based on quiz type
+    let categories;
+    switch (quizType) {
+      case 'study_habits':
+        categories = STUDY_HABITS_RESULTS.categories;
+        break;
+      case 'learning_style':
+        categories = LEARNING_STYLE_RESULTS.categories;
+        break;
+      case 'motivation_profile':
+        categories = MOTIVATION_PROFILE_RESULTS.categories;
+        break;
+      case 'focus_type':
+        categories = FOCUS_TYPE_RESULTS.categories;
+        break;
+      default:
+        categories = STUDY_HABITS_RESULTS.categories;
+    }
+
     Object.keys(categories).forEach(cat => {
       categoryScores[cat] = { total: 0, count: 0, weighted: 0 };
     });

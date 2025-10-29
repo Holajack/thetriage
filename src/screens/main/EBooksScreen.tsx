@@ -104,13 +104,14 @@ const EBooksScreen: React.FC = () => {
     navigation.setOptions({
       title: 'E-Books',
       headerLeft: () => (
-        <TouchableOpacity 
-          onPress={() => navigation.navigate('Bonuses' as never)} 
+        <TouchableOpacity
+          onPress={() => navigation.navigate('Bonuses' as never)}
           style={{ marginLeft: 8 }}
         >
           <Ionicons name="arrow-back" size={24} color={theme.primary} />
         </TouchableOpacity>
       ),
+      headerRight: () => null, // Remove hamburger menu
     });
   }, [navigation, theme]);
 
@@ -350,15 +351,15 @@ const EBooksScreen: React.FC = () => {
                   throw new Error('Failed to get PDF URL for Nora');
                 }
 
-                // Navigate to Nora with the PDF context
-                navigation.navigate('Nora', { 
+                // Navigate to NoraScreen with the PDF context
+                navigation.navigate('NoraScreen' as never, {
                   initialMessage: `I've uploaded a textbook: "${book.name}". Can you help me study from it?`,
                   pdfContext: {
                     title: book.name,
                     url: data.signedUrl,
                     fileSize: book.file_size
                   }
-                });
+                } as never);
                 
               } catch (error) {
                 console.error('Error sending to Nora:', error);

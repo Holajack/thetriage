@@ -6,6 +6,7 @@ import { supabase } from '../../utils/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 import NoraOnboarding from '../../components/NoraOnboarding';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 const { useUserAppData } = require('../../utils/userAppData');
@@ -169,6 +170,7 @@ const NoraScreen = () => {
   const [uploadedPdfs, setUploadedPdfs] = useState<any[]>([]);
   const [selectedPdf, setSelectedPdf] = useState<any>(null);
   const [showNoraOnboarding, setShowNoraOnboarding] = useState(false);
+  const [showPdfModal, setShowPdfModal] = useState(false);
   
   const scrollViewRef = useRef<ScrollView>(null);
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -276,18 +278,55 @@ const NoraScreen = () => {
 
   const fetchUploadedPdfs = async () => {
     if (!user) return;
-    
+
     try {
-      const { data, error } = await supabase
-        .from('user_ebooks')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('upload_date', { ascending: false });
-        
-      if (error) throw error;
-      setUploadedPdfs(data || []);
+      // Fetch from storage
+      const { data: storageData, error: storageError } = await supabase.storage
+        .from('e-books')
+        .list(`${user.id}/`, { limit: 100, sortBy: { column: 'created_at', order: 'desc' } });
+
+      if (storageError) {
+        console.warn('Storage fetch error:', storageError);
+      }
+
+      // Fetch metadata from database with error handling
+      let dbData = [];
+      try {
+        const { data, error: dbError } = await supabase
+          .from('user_ebooks')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('upload_date', { ascending: false });
+
+        if (dbError) {
+          console.warn('Database fetch error:', dbError);
+        } else {
+          dbData = data || [];
+        }
+      } catch (dbError) {
+        console.warn('Database table access error:', dbError);
+      }
+
+      // Combine storage and database data (matching EBooksScreen approach)
+      const combinedData = (storageData || [])
+        .filter((f) => f.metadata?.mimetype === 'application/pdf' || f.name.endsWith('.pdf'))
+        .map((f) => {
+          const dbRecord = dbData.find(record => record.file_path.endsWith(f.name));
+          return {
+            id: dbRecord?.id || f.id || f.name,
+            name: dbRecord?.title || f.name.replace('.pdf', ''),
+            title: dbRecord?.title || f.name.replace('.pdf', ''),
+            file_size: f.metadata?.size || dbRecord?.file_size || 0,
+            upload_date: dbRecord?.upload_date || f.created_at,
+            file_path: dbRecord?.file_path || `${user.id}/${f.name}`,
+            storage_path: f.name
+          };
+        });
+
+      setUploadedPdfs(combinedData);
     } catch (error) {
       console.error('Failed to load PDFs:', error);
+      setUploadedPdfs([]);
     }
   };
 
@@ -506,32 +545,14 @@ const NoraScreen = () => {
 
 
   const handlePdfUpload = async () => {
-    Alert.alert(
-      'PDF Upload Options',
-      'Choose how you want to add a PDF',
-      [
-        {
-          text: 'Browse E-Book Library',
-          onPress: () => navigation.navigate('EBooks')
-        },
-        {
-          text: 'Upload New PDF',
-          onPress: uploadNewPdf
-        },
-        {
-          text: 'Go to Bonuses Screen',
-          onPress: () => navigation.navigate('Bonuses')
-        },
-        {
-          text: 'Cancel',
-          style: 'cancel'
-        }
-      ]
-    );
+    // Refresh PDF list before showing modal
+    await fetchUploadedPdfs();
+    setShowPdfModal(true);
   };
 
   const uploadNewPdf = async () => {
     try {
+      setShowPdfModal(false);
       const result = await DocumentPicker.getDocumentAsync({
         type: 'application/pdf',
         copyToCacheDirectory: true,
@@ -547,20 +568,143 @@ const NoraScreen = () => {
         return;
       }
 
-      // Navigate to EBooks screen with upload
-      navigation.navigate('EBooks', { uploadFile: file });
-    } catch (error) {
-      Alert.alert('Error', 'Failed to select PDF file.');
+      // Show uploading indicator
+      setIsLoading(true);
+
+      // Upload to Supabase storage
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        Alert.alert('Error', 'You must be logged in to upload files.');
+        setIsLoading(false);
+        return;
+      }
+
+      const userId = session.user.id;
+      const timestamp = Date.now();
+      const fileName = `${timestamp}_${file.name}`;
+      const filePath = `${userId}/${fileName}`;
+
+      console.log('Starting PDF upload using EBooksScreen method...');
+
+      try {
+        // Method 1: Direct FormData upload (React Native compatible)
+        const formData = new FormData();
+        formData.append('file', {
+          uri: file.uri,
+          type: 'application/pdf',
+          name: fileName,
+        } as any);
+
+        // Upload using Supabase storage with FormData
+        const { error: uploadError } = await supabase.storage
+          .from('e-books')
+          .upload(filePath, formData);
+
+        if (uploadError) {
+          console.log('FormData upload failed, trying alternative method...');
+
+          // Method 2: Base64 string upload
+          const base64Data = await FileSystem.readAsStringAsync(file.uri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+
+          // Upload base64 string directly
+          const { error: base64UploadError } = await supabase.storage
+            .from('e-books')
+            .upload(filePath, base64Data, {
+              contentType: 'application/pdf',
+              upsert: false
+            });
+
+          if (base64UploadError) {
+            console.log('Base64 upload failed, trying file URI method...');
+
+            // Method 3: Direct file URI (React Native specific)
+            const { error: uriUploadError } = await supabase.storage
+              .from('e-books')
+              .upload(filePath, {
+                uri: file.uri,
+                type: 'application/pdf',
+                name: fileName,
+              } as any);
+
+            if (uriUploadError) {
+              throw new Error(`All upload methods failed. Last error: ${uriUploadError.message}`);
+            }
+          }
+        }
+
+        console.log('Upload successful, saving metadata...');
+
+        // Save metadata to database
+        try {
+          const { error: dbError } = await supabase
+            .from('user_ebooks')
+            .insert({
+              user_id: userId,
+              title: file.name.replace('.pdf', ''),
+              file_path: filePath,
+              file_size: file.size,
+              upload_date: new Date().toISOString()
+            });
+
+          if (dbError) {
+            console.warn('Database save error:', dbError);
+            Alert.alert(
+              'File Uploaded',
+              'Your PDF was uploaded successfully, but there was an issue saving the metadata.'
+            );
+          } else {
+            Alert.alert('Success', 'Your PDF has been uploaded successfully! You can now select it.');
+          }
+        } catch (metadataError) {
+          console.error('Metadata save failed:', metadataError);
+          Alert.alert('File Uploaded', 'Your PDF was uploaded successfully.');
+        }
+
+        // Refresh PDF list
+        await fetchUploadedPdfs();
+        setShowPdfModal(true);
+
+      } catch (uploadError) {
+        console.error('All upload methods failed:', uploadError);
+        throw new Error('Unable to upload the PDF. Please check your internet connection and try again.');
+      }
+
+    } catch (error: any) {
+      console.error('Upload error:', error);
+
+      let errorMessage = 'There was an error uploading your PDF.';
+
+      if (error.message.includes('Network request failed')) {
+        errorMessage = 'Network connection issue. Please check your internet connection and try again.';
+      } else if (error.message.includes('Unable to upload')) {
+        errorMessage = 'Upload failed. Please try selecting a different file or check your internet connection.';
+      } else if (error.message.includes('logged in')) {
+        errorMessage = 'Please sign in again to upload files.';
+      } else if (error.message.includes('too large')) {
+        errorMessage = 'File is too large. Please choose a file smaller than 100MB.';
+      }
+
+      Alert.alert('Upload Failed', errorMessage);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const selectPdfFromLibrary = (pdf: any) => {
     setSelectedPdf(pdf);
+    setShowPdfModal(false);
     Alert.alert(
       'PDF Selected',
-      `${pdf.title} is now available for Nora to reference when generating study questions.`,
-      [{ text: 'OK' }]
+      `"${pdf.name}" is now attached to your conversation.\n\nNora will provide comprehensive study assistance for this document, including:\n• Study strategies and learning plans\n• Practice questions and quizzes\n• Summarization techniques\n• Note-taking guidance\n• Active recall exercises\n\nFull PDF text extraction is being enhanced. For now, Nora will help based on the document title and your study needs.`,
+      [{ text: 'Got it!' }]
     );
+  };
+
+  const removePdfSelection = () => {
+    setSelectedPdf(null);
+    Alert.alert('PDF Removed', 'PDF context has been removed from the conversation.');
   };
 
   const handleNoraOnboardingComplete = async () => {
@@ -639,7 +783,9 @@ const NoraScreen = () => {
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="small" color="#7B61FF" />
             <Text style={[styles.loadingDots, { color: theme.textSecondary }]}>
-              Nora is processing your request...
+              {selectedPdf
+                ? `Nora is analyzing "${selectedPdf.name}" and your question...`
+                : 'Nora is processing your request...'}
             </Text>
           </View>
         )}
@@ -670,10 +816,26 @@ const NoraScreen = () => {
       >
         {showLandingScreen ? renderLandingScreen() : renderChatScreen()}
 
+        {/* Selected PDF Indicator */}
+        {selectedPdf && (
+          <View style={[styles.selectedPdfBanner, {
+            backgroundColor: theme.primary + '15',
+            borderTopColor: theme.primary + '40'
+          }]}>
+            <Ionicons name="document-text" size={20} color={theme.primary} />
+            <Text style={[styles.selectedPdfBannerText, { color: theme.text }]} numberOfLines={1}>
+              PDF attached: {selectedPdf.name}
+            </Text>
+            <TouchableOpacity onPress={removePdfSelection}>
+              <Ionicons name="close-circle" size={20} color={theme.textSecondary} />
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Input Bar */}
-        <View style={[styles.inputContainer, { 
+        <View style={[styles.inputContainer, {
           backgroundColor: theme.surface,
-          borderTopColor: theme.border 
+          borderTopColor: theme.border
         }]}>
           <TextInput
             style={[styles.textInput, { 
@@ -779,6 +941,87 @@ const NoraScreen = () => {
           onComplete={handleNoraOnboardingComplete}
           onSkip={handleNoraOnboardingSkip}
         />
+
+        {/* PDF Selection Modal */}
+        <Modal
+          visible={showPdfModal}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => setShowPdfModal(false)}
+        >
+          <View style={[styles.pdfModalContainer, { backgroundColor: theme.background }]}>
+            <View style={[styles.pdfModalHeader, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
+              <Text style={[styles.pdfModalTitle, { color: theme.text }]}>Select PDF</Text>
+              <TouchableOpacity onPress={() => setShowPdfModal(false)}>
+                <Ionicons name="close" size={24} color={theme.text} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.pdfModalContent}>
+              {/* Upload New PDF Button */}
+              <TouchableOpacity
+                style={[styles.uploadPdfButton, { backgroundColor: theme.primary }]}
+                onPress={uploadNewPdf}
+              >
+                <Ionicons name="cloud-upload-outline" size={24} color="#FFFFFF" />
+                <Text style={styles.uploadPdfButtonText}>Upload New PDF</Text>
+              </TouchableOpacity>
+
+              {/* PDF List */}
+              <Text style={[styles.pdfListTitle, { color: theme.text }]}>
+                Your PDFs ({uploadedPdfs.length})
+              </Text>
+
+              <FlatList
+                data={uploadedPdfs}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item: pdf }) => (
+                  <TouchableOpacity
+                    style={[
+                      styles.pdfListItem,
+                      {
+                        backgroundColor: theme.surface,
+                        borderColor: selectedPdf?.id === pdf.id ? theme.primary : theme.border,
+                        borderWidth: selectedPdf?.id === pdf.id ? 2 : 1
+                      }
+                    ]}
+                    onPress={() => selectPdfFromLibrary(pdf)}
+                  >
+                    <View style={[styles.pdfIconContainer, { backgroundColor: theme.primary + '20' }]}>
+                      <Ionicons name="document-text" size={28} color={theme.primary} />
+                    </View>
+                    <View style={styles.pdfInfo}>
+                      <Text style={[styles.pdfName, { color: theme.text }]} numberOfLines={2}>
+                        {pdf.name}
+                      </Text>
+                      <Text style={[styles.pdfSize, { color: theme.textSecondary }]}>
+                        {(pdf.file_size / 1024 / 1024).toFixed(2)} MB
+                      </Text>
+                      <Text style={[styles.pdfDate, { color: theme.textSecondary }]}>
+                        {new Date(pdf.upload_date).toLocaleDateString()}
+                      </Text>
+                    </View>
+                    {selectedPdf?.id === pdf.id && (
+                      <Ionicons name="checkmark-circle" size={24} color={theme.primary} />
+                    )}
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={
+                  <View style={styles.emptyPdfState}>
+                    <Ionicons name="document-outline" size={64} color={theme.textSecondary} />
+                    <Text style={[styles.emptyPdfText, { color: theme.textSecondary }]}>
+                      No PDFs uploaded yet
+                    </Text>
+                    <Text style={[styles.emptyPdfSubtext, { color: theme.textSecondary }]}>
+                      Upload your first PDF to get started
+                    </Text>
+                  </View>
+                }
+                contentContainerStyle={styles.pdfListContent}
+              />
+            </View>
+          </View>
+        </Modal>
       </KeyboardAvoidingView>
     </View>
   );
@@ -1140,6 +1383,111 @@ const styles = StyleSheet.create({
   messageText: {
     fontSize: 16,
     lineHeight: 22,
+  },
+  // PDF Modal Styles
+  pdfModalContainer: {
+    flex: 1,
+  },
+  pdfModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+  },
+  pdfModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  pdfModalContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  uploadPdfButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 12,
+    marginBottom: 24,
+  },
+  uploadPdfButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  pdfListTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  pdfListContent: {
+    flexGrow: 1,
+    paddingBottom: 20,
+  },
+  pdfListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+  },
+  pdfIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  pdfInfo: {
+    flex: 1,
+  },
+  pdfName: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  pdfSize: {
+    fontSize: 14,
+    marginBottom: 2,
+  },
+  pdfDate: {
+    fontSize: 12,
+  },
+  emptyPdfState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 80,
+  },
+  emptyPdfText: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginTop: 16,
+  },
+  emptyPdfSubtext: {
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  selectedPdfBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+  },
+  selectedPdfBannerText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 8,
+    marginRight: 8,
   },
 });
 

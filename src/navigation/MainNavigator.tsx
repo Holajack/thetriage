@@ -226,13 +226,21 @@ export const MainNavigator = () => {
         component={ResultsScreen}
         options={{ headerShown: false }}
       />
-      <Drawer.Screen name="Leaderboard" component={LeaderboardScreen} />
+      <Drawer.Screen
+        name="Leaderboard"
+        component={LeaderboardScreen}
+        options={{ headerShown: false }}
+      />
       <Drawer.Screen
         name="Profile"
         component={ProfileScreen}
         options={{ headerShown: false }}
       />
-      <Drawer.Screen name="Settings" component={SettingsScreen} />
+      <Drawer.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{ headerShown: false }}
+      />
       <Drawer.Screen
         name="SessionHistory"
         component={SessionHistoryScreen}

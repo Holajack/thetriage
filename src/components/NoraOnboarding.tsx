@@ -20,6 +20,7 @@ interface NoraOnboardingProps {
   visible: boolean;
   onComplete: () => void;
   onSkip: () => void;
+  isFirstTime?: boolean; // Track if this is the user's first time
 }
 
 interface OnboardingStep {
@@ -107,6 +108,7 @@ export default function NoraOnboarding({
   visible,
   onComplete,
   onSkip,
+  isFirstTime = true,
 }: NoraOnboardingProps) {
   const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
@@ -380,10 +382,14 @@ export default function NoraOnboarding({
             style={styles.modalGradient}
           >
             <View style={styles.header}>
-              <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
-                <Text style={styles.skipText}>Skip</Text>
-              </TouchableOpacity>
-              
+              {!isFirstTime ? (
+                <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
+                  <Text style={styles.skipText}>Skip</Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.skipButton} />
+              )}
+
               <View style={styles.progressContainer}>
                 {ONBOARDING_STEPS.map((_, index) => (
                   <View
@@ -396,7 +402,7 @@ export default function NoraOnboarding({
                   />
                 ))}
               </View>
-              
+
               <View style={styles.skipButton} />
             </View>
             
@@ -449,8 +455,9 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     width: '100%',
-    maxWidth: 400,
-    maxHeight: screenHeight * 0.85,
+    maxWidth: 500,
+    maxHeight: screenHeight * 0.92,
+    height: screenHeight * 0.92,
     borderRadius: 20,
     overflow: 'hidden',
   },
@@ -509,18 +516,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   stepTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
     color: '#E8F5E9',
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: 18,
   },
   stepContent: {
-    fontSize: 16,
+    fontSize: 18,
     color: '#B8E6C1',
     textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 20,
+    lineHeight: 26,
+    marginBottom: 24,
   },
   featuresContainer: {
     gap: 12,
@@ -542,9 +549,9 @@ const styles = StyleSheet.create({
   },
   featureText: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 16,
     color: '#B8E6C1',
-    lineHeight: 22,
+    lineHeight: 24,
   },
   warningsContainer: {
     gap: 12,
@@ -566,9 +573,9 @@ const styles = StyleSheet.create({
   },
   warningText: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 16,
     color: '#B8E6C1',
-    lineHeight: 22,
+    lineHeight: 24,
   },
   acceptanceButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.05)',

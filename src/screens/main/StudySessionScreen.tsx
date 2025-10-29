@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView, Alert, AppState, BackHandler, ImageBackground, Animated, Image } from 'react-native';
 import { ThemedImage, ThemedImageBackground } from '../../components/ThemedImage';
 import Svg, { Rect, G, LinearGradient, Stop, Defs, Filter, FeOffset, FeGaussianBlur, FeColorMatrix, FeBlend, Ellipse, Circle, Line, Polygon, Text as SvgText, TSpan, Pattern, Path } from 'react-native-svg';
@@ -64,27 +64,62 @@ export const StudySessionScreen = () => {
   const { theme } = useTheme();
   const environmentColors = theme;
   const { data: userData } = useUserAppData();
-  const { 
+  const {
     startPlaylist,
-    stopPlayback, 
-    currentTrack, 
+    stopPlayback,
+    currentTrack,
     currentPlaylist,
-    currentTrackIndex,
     isPlaying,
     audioSupported,
-    isPreviewMode,
     nextTrack,
     previousTrack,
     pausePlayback,
-    getCurrentPlaylistTracks,
     volume,
-    setVolume
+    setVolume,
+    enableAutoAdvance,
+    disableAutoAdvance,
   } = useBackgroundMusic();
   
+  // Navigation and route params - must be defined early
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute();
+  const params = route.params as {
+    group?: boolean;
+    room?: any;
+    autoStart?: boolean;
+    selectedTask?: any;
+    manualSelection?: boolean;
+    focusMode?: 'basecamp' | 'summit';
+    tasks?: any[];
+    duration?: number;
+    task?: any;
+    autoProgress?: boolean;
+    currentTaskIndex?: number;
+    completedTasksData?: any[];
+  } | undefined;
+
+  // State variables - must be defined before any useEffect that uses them
+  const [showBackConfirmModal, setShowBackConfirmModal] = useState(false);
+  const [musicEnabled, setMusicEnabled] = useState(true);
+  const [sessionStarted, setSessionStarted] = useState(false);
+
+  // Timer refs for background functionality
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const startTimeRef = useRef<number | null>(null);
+  const backgroundTimeRef = useRef<number | null>(null);
+  const appStateRef = useRef(AppState.currentState);
+  const musicStartAttemptedRef = useRef<boolean>(false);
+
+  // Define callback AFTER all refs are created
+  const stopSessionMusic = useCallback(async () => {
+    await stopPlayback();
+    musicStartAttemptedRef.current = false;
+  }, [stopPlayback]);
+
   // Get user's sound preference from settings using centralized utility
   const userSoundPreference = getSoundPreference(userData);
   const autoPlaySound = getAutoPlaySetting(userData);
-  
+
   // Debug logging for music preferences
   useEffect(() => {
     console.log('🎵 Music Settings Debug:', {
@@ -98,27 +133,14 @@ export const StudySessionScreen = () => {
       }
     });
   }, [userSoundPreference, autoPlaySound, userData]);
-  
-  // Navigation and route params - must be defined before useState calls
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const route = useRoute();
-  const params = route.params as { 
-    group?: boolean; 
-    room?: any;
-    autoStart?: boolean;
-    selectedTask?: any;
-    manualSelection?: boolean;
-  } | undefined;
 
-  // Add this missing state variable
-  const [showBackConfirmModal, setShowBackConfirmModal] = useState(false);
-  
-  // Timer refs for background functionality
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const startTimeRef = useRef<number | null>(null);
-  const backgroundTimeRef = useRef<number | null>(null);
-  const appStateRef = useRef(AppState.currentState);
-  const musicStartAttemptedRef = useRef<boolean>(false);
+  useEffect(() => {
+    if (!musicEnabled) {
+      stopSessionMusic().catch(error => {
+        console.warn('🎵 Failed to stop music after disabling:', error);
+      });
+    }
+  }, [musicEnabled, stopSessionMusic]);
   
   // Pre-session selection state - updated logic
   const [showPreSessionModal, setShowPreSessionModal] = useState(() => {
@@ -133,23 +155,33 @@ export const StudySessionScreen = () => {
   });
   
   // Session configuration state
-  const [selectedDuration, setSelectedDuration] = useState<number>(0);
+  const [selectedDuration, setSelectedDuration] = useState<number>(() => {
+    // Initialize from params.duration if available (from focus session selection screen)
+    if (params?.duration && params.duration > 0) {
+      console.log('🎯 Initializing duration from params:', params.duration);
+      return params.duration * 60; // Convert minutes to seconds
+    }
+    return 0;
+  });
   const [selectedTasks, setSelectedTasks] = useState<Task[]>([]);
   const [taskOrder, setTaskOrder] = useState<Task[]>([]);
   const [selectedSubject, setSelectedSubject] = useState<string>('');
   const [customMinutes, setCustomMinutes] = useState('');
-  const [sessionStarted, setSessionStarted] = useState(false);
-  
+
   // Calculate initial timer duration based on user's focus method or selection
   const initialDuration = useMemo(() => {
     if (TESTING_MODE) {
       return TEST_DURATION;
     }
+    // CRITICAL: Check params.duration first (from focus session selection)
+    if (params?.duration && params.duration > 0) {
+      return params.duration * 60; // Convert minutes to seconds
+    }
     if (selectedDuration > 0) {
       return selectedDuration;
     }
     return getWorkStyleDuration(userData?.onboarding?.focus_method);
-  }, [userData?.onboarding?.focus_method, selectedDuration]);
+  }, [userData?.onboarding?.focus_method, selectedDuration, params?.duration]);
   
   const [timer, setTimer] = useState(initialDuration);
   const [isPaused, setIsPaused] = useState(false);
@@ -158,31 +190,52 @@ export const StudySessionScreen = () => {
   const [showTimerCustomization, setShowTimerCustomization] = useState(false);
   const [customDuration, setCustomDuration] = useState('');
   const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
-  
+  const [showMusicControls, setShowMusicControls] = useState(false);
+  const [showTaskInfo, setShowTaskInfo] = useState(false);
+  const [longPressTimeout, setLongPressTimeout] = useState<NodeJS.Timeout | null>(null);
   // Session report state
   const [focusRating, setFocusRating] = useState(0);
   const [productivityRating, setProductivityRating] = useState(0);
   const [sessionNotes, setSessionNotes] = useState('');
   const [completedSessionData, setCompletedSessionData] = useState<any>(null);
 
+  // Summit mode multi-task state
+  const [currentTaskIndex, setCurrentTaskIndex] = useState(params?.currentTaskIndex || 0);
+  const [completedTasksData, setCompletedTasksData] = useState<any[]>(params?.completedTasksData || []);
+
   // Enhanced task selection logic using real Supabase data
   const currentTask = useMemo(() => {
     console.log('🎯 currentTask calculation triggered');
     console.log('   selectionMode:', selectionMode);
+    console.log('   focusMode:', params?.focusMode);
+    console.log('   currentTaskIndex:', currentTaskIndex);
+    console.log('   params.tasks length:', params?.tasks?.length || 0);
     console.log('   userData?.tasks length:', userData?.tasks?.length || 0);
     console.log('   taskOrder length:', taskOrder.length);
+
+    // Summit mode: use tasks from params and current index
+    if (params?.focusMode === 'summit' && params?.tasks && params.tasks.length > 0) {
+      console.log('🎯 Summit mode: returning task at index', currentTaskIndex);
+      return params.tasks[currentTaskIndex];
+    }
+
+    // Basecamp mode or direct task parameter
+    if (params?.task) {
+      console.log('🎯 Direct task from params:', params.task);
+      return params.task;
+    }
 
     if (selectionMode === 'manual' && taskOrder.length > 0) {
       console.log('🎯 Manual mode: returning first task from order');
       return taskOrder[0];
     }
-    
+
     if (selectionMode === 'auto' && userData?.tasks) {
       console.log('🎯 Auto mode: processing available tasks');
-      
+
       // More inclusive task filtering
       const availableTasks = userData.tasks.filter((task: any) => {
-        const isAvailable = task.status !== 'completed' && 
+        const isAvailable = task.status !== 'completed' &&
                            task.status !== 'deleted' && 
                            task.status !== 'cancelled' &&
                            task.status !== 'archived';
@@ -354,36 +407,20 @@ export const StudySessionScreen = () => {
     // If coming from automatic mode, start session immediately with the auto-selected task
     if (params?.autoStart === true && !sessionStarted && currentTask) {
       console.log('🔄 Auto-starting session with selected task:', currentTask.title);
-      
-      // Get subject from current task or default to "General Study"
-      const autoSubject = currentTask.subject || 'General Study';
+
+      // Get subject from current task - check multiple possible fields
+      const autoSubject = currentTask.subject || currentTask.category || currentTask.title || 'General Study';
+      console.log('🎯 Setting subject to:', autoSubject);
       setSelectedSubject(autoSubject);
       
       // Start session automatically
-      setTimeout(async () => {
+      setTimeout(() => {
         const sessionTypeParam = isGroupSession ? 'group' : 'individual';
         const roomId = room?.id || undefined;
         startSession(roomId, sessionTypeParam);
         startTimeRef.current = Date.now();
         setSessionStarted(true);
-        
-        // 🎵 AUTO-PLAY MUSIC FOR AUTOMATIC MODE
-        console.log('🎵 Auto-play check:', { autoPlaySound, userSoundPreference, audioSupported });
-        if (autoPlaySound && userSoundPreference && userSoundPreference !== 'Silence') {
-          console.log(`🎵 Auto-starting playlist for automatic session: ${userSoundPreference}`);
-          try {
-            await startPlaylist(userSoundPreference);
-            console.log(`🎵 Successfully started ${userSoundPreference} playlist for automatic session`);
-          } catch (error) {
-            console.error('🎵 Failed to start auto-play music for automatic session:', error);
-          }
-        } else {
-          console.log('🎵 Auto-play conditions not met:', { 
-            autoPlaySound, 
-            userSoundPreference, 
-            isSilence: userSoundPreference === 'Silence' 
-          });
-        }
+        // Music will be started by the consolidated music effect
       }, 500);
     }
     // If auto-start is true but no task is found, start general study session
@@ -393,101 +430,58 @@ export const StudySessionScreen = () => {
       // Automatically set subject to "General Study" for auto mode with no tasks
       setSelectedSubject('General Study');
       
-      setTimeout(async () => {
+      setTimeout(() => {
         const sessionTypeParam = isGroupSession ? 'group' : 'individual';
         const roomId = room?.id || undefined;
         startSession(roomId, sessionTypeParam);
         startTimeRef.current = Date.now();
         setSessionStarted(true);
-        
-        // 🎵 AUTO-PLAY MUSIC FOR GENERAL STUDY
-        console.log('🎵 Auto-play check (general study):', { autoPlaySound, userSoundPreference });
-        if (autoPlaySound && userSoundPreference && userSoundPreference !== 'Silence') {
-          console.log(`🎵 Auto-starting playlist for general study session: ${userSoundPreference}`);
-          try {
-            await startPlaylist(userSoundPreference);
-            console.log(`🎵 Successfully started ${userSoundPreference} playlist`);
-          } catch (error) {
-            console.error('🎵 Failed to start auto-play music:', error);
-          }
-        } else {
-          console.log('🎵 Auto-play conditions not met (general study):', { 
-            autoPlaySound, 
-            userSoundPreference, 
-            isSilence: userSoundPreference === 'Silence' 
-          });
-        }
+        // Music will be started by the consolidated music effect
       }, 500);
     }
-  }, [params?.autoStart, userData, sessionStarted, autoPlaySound, userSoundPreference, currentTask]);
+  }, [params?.autoStart, userData, sessionStarted, autoPlaySound, userSoundPreference, currentTask, musicEnabled]);
 
-  // Separate effect to handle music auto-play when userData loads after session has started
+  // Consolidated music auto-play handler with guard against multiple starts
   useEffect(() => {
     // Only trigger if session is started, music conditions are met, and we haven't attempted yet
-    if (sessionStarted && 
-        autoPlaySound && 
-        userSoundPreference && 
-        userSoundPreference !== 'Silence' && 
-        !isPlaying && 
-        !musicStartAttemptedRef.current) {
-      
-      console.log('🎵 Starting music after userData loaded:', { 
-        autoPlaySound, 
-        userSoundPreference, 
+    if (sessionStarted &&
+        autoPlaySound &&
+        musicEnabled &&
+        userSoundPreference &&
+        userSoundPreference !== 'Silence' &&
+        !isPlaying &&
+        !musicStartAttemptedRef.current &&
+        currentPlaylist.length === 0) { // Additional guard: no playlist loaded yet
+
+      console.log('🎵 Starting music after session started:', {
+        autoPlaySound,
+        userSoundPreference,
         isPlaying,
         sessionStarted,
-        attemptedBefore: musicStartAttemptedRef.current
+        attemptedBefore: musicStartAttemptedRef.current,
+        playlistLength: currentPlaylist.length
       });
-      
+
       musicStartAttemptedRef.current = true;
-      
+
       const startMusicDelayed = async () => {
         try {
-          await startPlaylist(userSoundPreference);
-          console.log(`🎵 Successfully started ${userSoundPreference} playlist after userData load`);
+          // Double-check we're not already playing before starting
+          if (!isPlaying && currentPlaylist.length === 0) {
+            await startPlaylist(userSoundPreference);
+            console.log(`🎵 Successfully started ${userSoundPreference} playlist`);
+          }
         } catch (error) {
-          console.error('🎵 Failed to start music after userData load:', error);
+          console.error('🎵 Failed to start music:', error);
           // Reset the flag on error so user can try again
           musicStartAttemptedRef.current = false;
         }
       };
-      
+
       // Small delay to ensure session is fully initialized
       setTimeout(startMusicDelayed, 1000);
     }
-  }, [sessionStarted, autoPlaySound, userSoundPreference, isPlaying, startPlaylist]);
-
-  // Auto-play music when entering the screen (before session starts)
-  useEffect(() => {
-    // Start music immediately when entering screen if user has music preference
-    if (userData && 
-        userSoundPreference && 
-        userSoundPreference !== 'Silence' && 
-        !isPlaying && 
-        !musicStartAttemptedRef.current) {
-      
-      console.log('🎵 Starting music on screen entry:', { 
-        userSoundPreference, 
-        isPlaying 
-      });
-      
-      musicStartAttemptedRef.current = true;
-      
-      const startMusicOnEntry = async () => {
-        try {
-          await startPlaylist(userSoundPreference);
-          console.log(`🎵 Successfully started ${userSoundPreference} playlist on screen entry`);
-        } catch (error) {
-          console.error('🎵 Failed to start music on screen entry:', error);
-          // Reset the flag on error so user can try again
-          musicStartAttemptedRef.current = false;
-        }
-      };
-      
-      // Small delay to ensure everything is loaded
-      setTimeout(startMusicOnEntry, 500);
-    }
-  }, [userData, userSoundPreference, isPlaying, startPlaylist]);
+  }, [sessionStarted, autoPlaySound, musicEnabled, userSoundPreference, isPlaying, startPlaylist, currentPlaylist]);
 
   // Remove the old handleModeSelection function and replace with this simplified version:
   const handleModeSelection = (mode: 'auto' | 'manual') => {
@@ -517,30 +511,13 @@ export const StudySessionScreen = () => {
     setShowPreSessionModal(false);
     
     // Start session immediately after modal closes
-    setTimeout(async () => {
+    setTimeout(() => {
       const sessionTypeParam = isGroupSession ? 'group' : 'individual';
       const roomId = room?.id || undefined;
       startSession(roomId, sessionTypeParam);
       startTimeRef.current = Date.now();
       setSessionStarted(true);
-      
-      // 🎵 AUTO-PLAY MUSIC FOR MANUAL MODE
-      console.log('🎵 Auto-play check (manual mode):', { autoPlaySound, userSoundPreference });
-      if (autoPlaySound && userSoundPreference && userSoundPreference !== 'Silence') {
-        console.log(`🎵 Auto-starting playlist for manual session: ${userSoundPreference}`);
-        try {
-          await startPlaylist(userSoundPreference);
-          console.log(`🎵 Successfully started ${userSoundPreference} playlist for manual session`);
-        } catch (error) {
-          console.error('🎵 Failed to start auto-play music for manual session:', error);
-        }
-      } else {
-        console.log('🎵 Auto-play conditions not met (manual mode):', { 
-          autoPlaySound, 
-          userSoundPreference, 
-          isSilence: userSoundPreference === 'Silence' 
-        });
-      }
+      // Music will be started by the consolidated music effect
     }, 100);
   };
 
@@ -614,6 +591,7 @@ export const StudySessionScreen = () => {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
+      // Don't automatically set sessionStarted to false - let other handlers control this
     }
 
     return () => {
@@ -621,6 +599,7 @@ export const StudySessionScreen = () => {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
+      // Clean up on unmount but don't change session state
     };
   }, [isPaused, timer, sessionStarted]);
 
@@ -633,15 +612,21 @@ export const StudySessionScreen = () => {
 
   const handleTimerComplete = async () => {
     try {
-      // 🎵 DON'T STOP MUSIC - Let it continue into break
-      // await stopPlayback(); // Remove this line
-      
+      console.log('🎵 Timer complete - disabling auto-advance FIRST');
+
+      // CRITICAL: Disable auto-advance FIRST (synchronous) before async operations
+      disableAutoAdvance();
+
+      // Now stop music
+      await stopSessionMusic();
+
       startTimeRef.current = null;
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
-      
+      setSessionStarted(false);
+
       const sessionResult = await endSession();
       setCompletedSessionData(sessionResult);
       setShowSessionCompleteModal(true);
@@ -672,11 +657,11 @@ export const StudySessionScreen = () => {
       setShowBackConfirmModal(true);
       return;
     }
-    
-    // Otherwise, safe to go back
-    // Stop music when leaving the session
-    await stopPlayback();
-    console.log('🎵 Stopped music when returning to home');
+
+    // Otherwise, safe to go back - disable auto-advance FIRST
+    disableAutoAdvance();
+    await stopSessionMusic();
+    console.log('🎵 Stopped music and disabled auto-advance when returning to home');
     navigation.goBack();
   };
 
@@ -711,27 +696,61 @@ export const StudySessionScreen = () => {
   //   });
   // };
 
-  const handleEndSession = () => {
+  const handleEndSession = async () => {
+    console.log('🎵 User attempting to end session - disabling auto-advance FIRST');
+
+    // CRITICAL: Disable auto-advance FIRST (synchronous) before any async operations
+    // This prevents any track that finishes during the stop process from auto-advancing
+    disableAutoAdvance();
+
     setIsPaused(true);
+
+    // Now stop music (this is async but auto-advance is already disabled)
+    await stopSessionMusic();
+
     setShowEndModal(true);
   };
 
-  const handleContinueFocusing = () => {
+  const handleContinueFocusing = async () => {
+    console.log('🎵 User continuing session - resuming music');
     setShowEndModal(false);
     setIsPaused(false);
+
+    // Re-enable auto-advance and resume music if it was playing before
+    enableAutoAdvance();
+
+    // Restart music if user had music enabled
+    if (musicEnabled && userData) {
+      const userSoundPreference = getSoundPreference(userData);
+      if (userSoundPreference && userSoundPreference !== 'none') {
+        try {
+          await startPlaylist(userSoundPreference);
+          console.log('🎵 Music resumed after continuing session');
+        } catch (error) {
+          console.error('🎵 Failed to resume music:', error);
+        }
+      }
+    }
   };
 
   const handleEndSessionNow = async () => {
     try {
-      // 🎵 DON'T STOP MUSIC - Let it continue into break
-      // await stopPlayback(); // Remove this line
-      
+      console.log('🎵 USER CONFIRMED END SESSION - FORCE STOPPING ALL MUSIC IMMEDIATELY');
+
+      // CRITICAL: Be defensive - disable auto-advance and stop music AGAIN to be absolutely certain
+      // Even though we already did this in handleEndSession, do it again for safety
+      disableAutoAdvance();
+      await stopSessionMusic();
+
+      console.log('🎵 Music force-stopped on confirmation');
+
       startTimeRef.current = null;
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
-      
+      setSessionStarted(false);
+
       const sessionResult = await endSession();
       setCompletedSessionData(sessionResult);
       setShowEndModal(false);
@@ -762,7 +781,7 @@ export const StudySessionScreen = () => {
           productivity_rating: productivityRating,
           notes: sessionNotes,
           task_worked_on: currentTask?.title || 'No specific task',
-          subject: selectedSubject || 'General Study',
+          subject: currentTask?.subject || currentTask?.category || selectedSubject || 'General Study',
           session_duration: Math.floor((initialDuration - timer) / 60),
           completed_full_session: timer === 0,
           session_type: selectionMode || 'auto',
@@ -793,8 +812,9 @@ export const StudySessionScreen = () => {
 
   const handleSkipSessionReport = () => {
     setShowSessionCompleteModal(false);
-    
-    const sessionData = {
+
+    // Collect current task session data
+    const currentTaskSessionData = {
       duration: Math.floor((initialDuration - timer) / 60),
       task: currentTask?.title || 'No specific task',
       focusRating: focusRating || 0,
@@ -802,11 +822,49 @@ export const StudySessionScreen = () => {
       notes: sessionNotes || '',
       completedFullSession: timer === 0,
       sessionType: selectionMode || 'auto',
-      subject: selectedSubject || 'General Study',
+      subject: currentTask?.subject || currentTask?.category || selectedSubject || 'General Study',
       plannedDuration: Math.floor(initialDuration / 60)
     };
-    
-    navigation.navigate('BreakTimerScreen', { sessionData });
+
+    // Add current task data to completed tasks
+    const updatedCompletedTasks = [...completedTasksData, currentTaskSessionData];
+
+    // Summit mode: check if there are more tasks
+    if (params?.focusMode === 'summit' && params?.tasks && params.tasks.length > 0) {
+      const nextTaskIndex = currentTaskIndex + 1;
+      const hasMoreTasks = nextTaskIndex < params.tasks.length;
+
+      if (hasMoreTasks) {
+        // Navigate to BreakTimerScreen with info about next task
+        navigation.navigate('BreakTimerScreen', {
+          sessionData: currentTaskSessionData,
+          focusMode: 'summit',
+          tasks: params.tasks,
+          nextTaskIndex: nextTaskIndex,
+          completedTasksData: updatedCompletedTasks,
+          duration: params.duration,
+          autoProgress: params.autoProgress
+        });
+      } else {
+        // All tasks complete - go to final session report
+        navigation.navigate('SessionReportScreen', {
+          focusMode: 'summit',
+          completedTasksData: updatedCompletedTasks,
+          sessionDuration: updatedCompletedTasks.reduce((sum, task) => sum + task.duration, 0),
+          breakDuration: 0, // Will be calculated from all breaks
+          taskCompleted: true,
+          focusRating: Math.round(updatedCompletedTasks.reduce((sum, task) => sum + task.focusRating, 0) / updatedCompletedTasks.length),
+          productivity: Math.round(updatedCompletedTasks.reduce((sum, task) => sum + task.productivityRating, 0) / updatedCompletedTasks.length),
+          notes: updatedCompletedTasks.map(task => `${task.task}: ${task.notes}`).filter(n => n).join('\n'),
+          sessionType: selectionMode || 'auto',
+          subject: 'Multiple Subjects',
+          plannedDuration: updatedCompletedTasks.reduce((sum, task) => sum + task.plannedDuration, 0)
+        });
+      }
+    } else {
+      // Basecamp mode or single task - normal flow
+      navigation.navigate('BreakTimerScreen', { sessionData: currentTaskSessionData });
+    }
   };
 
 
@@ -831,37 +889,71 @@ export const StudySessionScreen = () => {
   };
 
   // Music controls are now integrated into the new UI design
-
-  const [showMusicControls, setShowMusicControls] = useState(false);
-  const [showTaskInfo, setShowTaskInfo] = useState(false);
-  const [longPressTimeout, setLongPressTimeout] = useState<NodeJS.Timeout | null>(null);
-  const [musicEnabled, setMusicEnabled] = useState(true);
-  
   // Music control functions
-  const handlePlayPause = () => {
+  const handlePlayPause = async () => {
     if (!audioSupported) {
       return;
     }
-    // If we already have a playlist, toggle pause/resume.
-    if (currentPlaylist && currentPlaylist.length > 0) {
-      pausePlayback();
-    } else {
-      // Otherwise start a playlist based on user preference, fallback to ambient.
-      const category = (userSoundPreference as any) || 'ambient';
-      startPlaylist(category);
+    if (!sessionStarted) {
+      Alert.alert('Start Focus Session', 'Begin your focus session before playing music.');
+      return;
     }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (!musicEnabled) {
+      Alert.alert('Music Disabled', 'Enable focus music to play tracks during your session.');
+      return;
+    }
+    try {
+      // If we already have a playlist, toggle pause/resume.
+      if (currentPlaylist && currentPlaylist.length > 0) {
+        await pausePlayback();
+      } else {
+        // Otherwise start a playlist based on user preference, fallback to ambient.
+        const category = (userSoundPreference as any) || 'ambient';
+        await startPlaylist(category);
+      }
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (error) {
+      console.error('🎵 Music play/pause error:', error);
+    }
   };
   
-  const handleNextTrack = () => {
-    nextTrack();
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  const handleNextTrack = async () => {
+    if (!sessionStarted || !musicEnabled || !currentPlaylist?.length) {
+      return;
+    }
+    try {
+      await nextTrack();
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (error) {
+      console.error('🎵 Failed to skip to next track:', error);
+    }
   };
   
-  const handlePreviousTrack = () => {
-    previousTrack();
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  const handlePreviousTrack = async () => {
+    if (!sessionStarted || !musicEnabled || !currentPlaylist?.length) {
+      return;
+    }
+    try {
+      await previousTrack();
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (error) {
+      console.error('🎵 Failed to go to previous track:', error);
+    }
   };
+  
+  // Enable auto-advance on mount, disable on unmount
+  useEffect(() => {
+    // Enable auto-advance when focus session screen mounts
+    enableAutoAdvance();
+
+    return () => {
+      // Disable auto-advance and stop music when leaving focus session screen
+      disableAutoAdvance();
+      stopSessionMusic().catch(error => {
+        console.warn('🎵 Failed to stop music on cleanup:', error);
+      });
+    };
+  }, [stopSessionMusic, enableAutoAdvance, disableAutoAdvance]);
   
   // Bottom sheet animation refs
   const bottomSheetTranslateY = useRef(new Animated.Value(400)).current;
@@ -1342,7 +1434,7 @@ export const StudySessionScreen = () => {
                               
                               {/* Dynamic title */}
                               <SvgText x="520" y="274" fontSize="48" fontWeight="800" letterSpacing="1px" fill="#2a3a4a">
-                                Hike Wise Focus
+                                HikeWise Focus
                               </SvgText>
                               
                               <Line x1="520" y1="300" x2="1180" y2="300" stroke="#9aa9b8" strokeWidth="2" opacity="0.6"/>
@@ -1511,7 +1603,9 @@ export const StudySessionScreen = () => {
 
                       <View style={styles.taskInfoSession}>
                         <Text style={styles.taskInfoSessionTitle}>Session Info:</Text>
-                        <Text style={styles.taskInfoSessionText}>Subject: {selectedSubject}</Text>
+                        <Text style={styles.taskInfoSessionText}>
+                          Subject: {currentTask.subject || currentTask.category || selectedSubject || 'General Study'}
+                        </Text>
                         <Text style={styles.taskInfoSessionText}>Mode: {selectionMode === 'manual' ? 'Manual' : 'Automatic'}</Text>
                         <Text style={styles.taskInfoSessionText}>Time Remaining: {formatTime(timer)}</Text>
                       </View>
@@ -1687,11 +1781,14 @@ export const StudySessionScreen = () => {
                 >
                   <Text style={modalStyles.continueBtnText}>Continue Session</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
-                  style={modalStyles.endNowBtn} 
+                <TouchableOpacity
+                  style={modalStyles.endNowBtn}
                   onPress={async () => {
                     setShowBackConfirmModal(false);
-                    await stopPlayback();
+                    console.log('🎵 User ending session via back button - disabling auto-advance FIRST');
+                    // CRITICAL: Disable auto-advance first before any async operations
+                    disableAutoAdvance();
+                    await stopSessionMusic();
                     navigation.goBack();
                   }}
                 >

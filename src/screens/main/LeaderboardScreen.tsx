@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, ActivityIndicator, RefreshControl } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSupabaseLeaderboardWithFriends, Leaderboard, useSupabaseTasks, useSupabaseProfile } from '../../utils/supabaseHooks';
 import { useNavigation } from '@react-navigation/native';
@@ -159,20 +160,33 @@ const LeaderboardScreen = () => {
   );
 
   return (
-    <ScrollView 
-      style={{ flex: 1, backgroundColor: theme.background }}
-      contentContainerStyle={{ paddingBottom: 32 }}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-    >
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
       <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.primary }]}>
-        <Text style={[styles.title, { color: theme.primary }]}>Leaderboard</Text>
-        <Text style={[styles.subtitle, { color: theme.accent }]}>{'Compete with friends and track your progress'}</Text>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.navigate('Home')}
+          accessibilityRole="button"
+          accessibilityLabel="Go back to Home"
+        >
+          <Ionicons name="arrow-back" size={22} color={theme.primary} />
+        </TouchableOpacity>
+        <View style={styles.headerTextContainer}>
+          <Text style={[styles.title, { color: theme.primary }]}>Leaderboard</Text>
+          <Text style={[styles.subtitle, { color: theme.accent }]}>
+            Compete with friends and track your progress
+          </Text>
+        </View>
       </View>
 
-      {/* Personal Productivity Summary */}
-      <View style={[styles.card, { backgroundColor: theme.card }]}>
+      <ScrollView 
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 32 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        {/* Personal Productivity Summary */}
+        <View style={[styles.card, { backgroundColor: theme.card }]}>
         <View style={styles.cardHeaderRow}>
           <MaterialCommunityIcons name="account-circle" size={24} color="#4CAF50" />
           <Text style={[styles.sectionTitle, { color: theme.primary }]}>Personal Productivity</Text>
@@ -342,6 +356,7 @@ const LeaderboardScreen = () => {
         )}
       </View>
     </ScrollView>
+    </SafeAreaView>
   );
 };
 
@@ -351,10 +366,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#E8F5E9',
   },
   header: {
-    padding: 20,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
     backgroundColor: '#FFF',
     borderBottomWidth: 1,
     borderBottomColor: '#C8E6C9',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backButton: {
+    marginRight: 12,
+    padding: 6,
+    borderRadius: 20,
+  },
+  headerTextContainer: {
+    flex: 1,
   },
   title: {
     fontSize: 24,

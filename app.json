@@ -1,12 +1,13 @@
 {
   "expo": {
-    "name": "Hike Wise",
-    "slug": "hikewise",
-    "version": "1.6.0",
-    "runtimeVersion": "1.6.0",
+    "name": "HikeWise",
+    "slug": "thetriage",
+    "version": "1.7.0",
+    "runtimeVersion": "1.7.0",
     "sdkVersion": "54.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon-ios-white-1024.png",
+    "scheme": "hikewise",
     "updates": {
       "enabled": false,
       "checkAutomatically": "NEVER",
@@ -21,11 +22,28 @@
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses camera for document scanning",
         "NSMicrophoneUsageDescription": "This app uses microphone for voice features"
-      }
+      },
+      "associatedDomains": [
+        "applinks:ucculvnodabrfwbkzsnx.supabase.co"
+      ]
     },
     "android": {
       "package": "com.hikewise.app",
-      "versionCode": 18
+      "versionCode": 19,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "ucculvnodabrfwbkzsnx.supabase.co",
+              "pathPrefix": "/auth/v1"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "extra": {
       "eas": {
@@ -35,6 +53,7 @@
     "plugins": [
       "expo-localization",
       "expo-asset"
-    ]
+    ],
+    "owner": "hollaj"
   }
 }

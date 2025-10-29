@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Switch, TouchableOpacity, ScrollView, Alert, Modal, Platform } from 'react-native';
+import { View, Text, StyleSheet, Switch, TouchableOpacity, ScrollView, Alert, Modal, Platform, Image } from 'react-native';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons, Entypo } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
@@ -25,6 +25,8 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 
@@ -61,7 +63,7 @@ const SettingsScreen = () => {
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
   const { profile, updateProfile } = useSupabaseProfile();
   const { theme, themeName, themeMode, fontSize, setThemeName, setThemeMode, setFontSize } = useTheme();
-  const { updateOnboarding, refreshData } = useAuth();
+  const { updateOnboarding } = useAuth();
   
   // Use our comprehensive data hook
   const { data: userData, isLoading: userDataLoading } = useUserAppData();
@@ -114,9 +116,9 @@ const SettingsScreen = () => {
         if (session?.user) {
           const settings = await getUserSettings(session.user.id);
           if (settings) {
-            setTts(settings.tts_enabled || false);
-            setHighContrast(settings.high_contrast || false);
-            setReduceMotion(settings.reduce_motion || false);
+            setTts((settings as any).tts_enabled || false);
+            setHighContrast((settings as any).high_contrast || false);
+            setReduceMotion((settings as any).reduce_motion || false);
           }
         }
       } catch (error) {
@@ -218,8 +220,6 @@ const SettingsScreen = () => {
         
         // Appearance settings
         if (profile?.theme) {
-          setAppearanceTheme(profile.theme);
-          
           // Apply theme if not system default
           if (profile.theme !== 'System Default') {
             setThemeName(profile.theme.toLowerCase() as ThemeName);
@@ -440,9 +440,6 @@ const SettingsScreen = () => {
           focus_method: style
         });
         
-        // Refresh user data to update timer display
-        await refreshData();
-        
         Alert.alert('Success', 'Your work style has been updated!');
       } catch (error) {
         Alert.alert('Error', 'Failed to update work style. Please try again.');
@@ -487,7 +484,7 @@ const SettingsScreen = () => {
       if (session?.user) {
         await updateUserSettings(session.user.id, {
           daily_reminder: time
-        });
+        } as any);
       }
       
       // Schedule daily notification if notifications are enabled
@@ -516,6 +513,7 @@ const SettingsScreen = () => {
           sound: true,
         },
         trigger: {
+          type: 'calendar' as const,
           hour: hours,
           minute: minutes,
           repeats: true,
@@ -551,7 +549,7 @@ const SettingsScreen = () => {
       if (session?.user) {
         await updateUserSettings(session.user.id, {
           session_end_reminder: value
-        });
+        } as any);
       }
       
       if (value) {
@@ -585,6 +583,7 @@ const SettingsScreen = () => {
           sound: true,
         },
         trigger: {
+          type: 'timeInterval' as const,
           seconds: reminderTime * 60,
         },
       });
@@ -702,11 +701,11 @@ const SettingsScreen = () => {
   const showEmailSupport = () => {
     Alert.alert(
       'Email Support 📧',
-      'For general support:\nsupport@thetriage.app\n\n' +
-      'For technical issues:\ntech@thetriage.app\n\n' +
-      'For billing questions:\nbilling@thetriage.app\n\n' +
+      'For general support:\nsupport@hikewise.app\n\n' +
+      'For technical issues:\ntech@hikewise.app\n\n' +
+      'For billing questions:\nbilling@hikewise.app\n\n' +
       'We typically respond within 24 hours!',
-      [{ text: 'Copy Email', onPress: () => Alert.alert('Copied!', 'support@thetriage.app copied to clipboard') }]
+      [{ text: 'Copy Email', onPress: () => Alert.alert('Copied!', 'support@hikewise.app copied to clipboard') }]
     );
   };
 
@@ -718,7 +717,7 @@ const SettingsScreen = () => {
       '• Steps to reproduce the issue\n' +
       '• What you expected to happen\n' +
       '• Screenshots if applicable\n\n' +
-      'Send to: bugs@thetriage.app',
+      'Send to: bugs@hikewise.app',
       [{ text: 'Got it!' }]
     );
   };
@@ -728,7 +727,7 @@ const SettingsScreen = () => {
       'Feature Request 💡',
       'Have an idea to make our app better?\n\n' +
       'We love hearing from our users! Send your suggestions to:\n\n' +
-      'features@thetriage.app\n\n' +
+      'features@hikewise.app\n\n' +
       'Tell us:\n• What feature you\'d like\n• Why it would be helpful\n• How you envision it working',
       [{ text: 'Will do!' }]
     );
@@ -742,7 +741,7 @@ const SettingsScreen = () => {
       '• Email changes: Contact support\n' +
       '• Data export: Email us your request\n' +
       '• Account deletion: Email support\n\n' +
-      'Contact: account@thetriage.app',
+      'Contact: account@hikewise.app',
       [{ text: 'Thanks!' }]
     );
   };
@@ -756,7 +755,7 @@ const SettingsScreen = () => {
       '• Respect other users in community features\n' +
       '• Your study data belongs to you\n' +
       '• We may update terms with notice\n\n' +
-      'Full terms: www.thetriage.app/terms',
+      'Full terms: www.hikewise.app/terms',
       [
         { text: 'View Online', onPress: () => Alert.alert('Opening...', 'Would open terms in browser') },
         { text: 'Close' }
@@ -773,7 +772,7 @@ const SettingsScreen = () => {
       '• App usage analytics (anonymous)\n' +
       '• Account info (email, preferences)\n\n' +
       'We DON\'T sell your data or share it with advertisers.\n\n' +
-      'Full policy: www.thetriage.app/privacy',
+      'Full policy: www.hikewise.app/privacy',
       [
         { text: 'View Online', onPress: () => Alert.alert('Opening...', 'Would open privacy policy in browser') },
         { text: 'Close' }
@@ -845,7 +844,7 @@ const SettingsScreen = () => {
       if (session?.user) {
         await updateUserSettings(session.user.id, {
           tts_enabled: value
-        });
+        } as any);
       }
       Alert.alert('Success', `Text-to-speech ${value ? 'enabled' : 'disabled'}`);
     } catch (error) {
@@ -870,7 +869,7 @@ const SettingsScreen = () => {
       if (session?.user) {
         await updateUserSettings(session.user.id, {
           high_contrast: value
-        });
+        } as any);
       }
       Alert.alert('Success', `High contrast mode ${value ? 'enabled' : 'disabled'}`);
     } catch (error) {
@@ -885,7 +884,7 @@ const SettingsScreen = () => {
       if (session?.user) {
         await updateUserSettings(session.user.id, {
           reduce_motion: value
-        });
+        } as any);
       }
       Alert.alert('Success', `Reduce motion ${value ? 'enabled' : 'disabled'}`);
     } catch (error) {
@@ -970,9 +969,6 @@ const SettingsScreen = () => {
         console.log('User settings table not available');
       }
 
-      // Force refresh user data
-      await refreshData();
-      
       Alert.alert('Success', 'Settings saved successfully!');
       
     } catch (error) {
@@ -1065,15 +1061,14 @@ const SettingsScreen = () => {
           onPress={() => navigation.navigate('ProTrekker' as any)}
           activeOpacity={0.9}
         >
+          <Image
+            source={require('../../assets/example/new professional.png')}
+            style={styles.backgroundImage}
+            resizeMode="cover"
+          />
           <View style={styles.proTrekkerImageContainer}>
-            <Text style={styles.proTrekkerCardTitle}>Become a professional traveller</Text>
+            <Text style={styles.proTrekkerCardTitle}>Become a professional HikeWise Member</Text>
             <Text style={styles.proTrekkerCardSubtitle}>Pomodoro mode, customizable focus time</Text>
-            {/* Using placeholder - in real app, use the hiking illustration */}
-            <View style={styles.illustrationPlaceholder}>
-              <Ionicons name="trail-sign" size={60} color="#FF6B35" />
-              <Ionicons name="person-outline" size={50} color="#4A90E2" style={{ marginLeft: 20 }} />
-              <Ionicons name="flower-outline" size={40} color="#E91E63" style={{ marginLeft: 15 }} />
-            </View>
           </View>
         </TouchableOpacity>
 
@@ -1081,7 +1076,7 @@ const SettingsScreen = () => {
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
             <Ionicons name="time-outline" size={24} color={theme.primary} />
-            <Text style={[styles.sectionTitle, { color: theme.primary }]}>Timer</Text>
+            <Text style={[styles.sectionTitleLarge, { color: theme.primary }]}>Timer</Text>
           </View>
 
           <View style={[styles.settingRow, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
@@ -1107,7 +1102,7 @@ const SettingsScreen = () => {
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
             <Ionicons name="musical-notes-outline" size={24} color={theme.primary} />
-            <Text style={[styles.sectionTitle, { color: theme.primary }]}>Music</Text>
+            <Text style={[styles.sectionTitleLarge, { color: theme.primary }]}>Music</Text>
           </View>
 
           <View style={[styles.settingRow, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
@@ -1135,7 +1130,7 @@ const SettingsScreen = () => {
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
             <Ionicons name="settings-outline" size={24} color={theme.primary} />
-            <Text style={[styles.sectionTitle, { color: theme.primary }]}>System</Text>
+            <Text style={[styles.sectionTitleLarge, { color: theme.primary }]}>System</Text>
           </View>
 
           <View style={[styles.settingRow, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
@@ -1194,7 +1189,7 @@ const SettingsScreen = () => {
             <View style={styles.rowValueWrap}><Text style={[styles.rowValue, { fontSize: fontSize * 0.9, color: theme.primary }]}>{themeMode}</Text></View>
             <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
           </TouchableOpacity>
-          
+
           {/* Environment Selection - Only show when Light mode is selected */}
           {themeMode === 'Light' && (
             <TouchableOpacity style={styles.rowCard} onPress={() => setShowEnvModal(true)} activeOpacity={0.7}>
@@ -1204,7 +1199,7 @@ const SettingsScreen = () => {
               <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
             </TouchableOpacity>
           )}
-          
+
           <TouchableOpacity style={styles.rowCard} onPress={() => setShowFontModal(true)} activeOpacity={0.7}>
             <MaterialIcons name="format-size" size={22} color={theme.primary} style={styles.rowIcon} />
             <Text style={[styles.rowLabel, { fontSize: fontSize, color: theme.text }]}>Font Size</Text>
@@ -1217,6 +1212,7 @@ const SettingsScreen = () => {
             <View style={styles.rowValueWrap}><Text style={styles.rowValue}>{appIcon}</Text></View>
             <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
           </TouchableOpacity>
+        </View>
         </View>
 
         {/* SOUND SECTION - FIXED */}
@@ -1440,7 +1436,7 @@ const SettingsScreen = () => {
                   onSlidingComplete={handleWeeklyGoalUpdate}
                   minimumTrackTintColor="#4CAF50"
                   maximumTrackTintColor="#E0E0E0"
-                  thumbStyle={{ backgroundColor: '#4CAF50' }}
+                  thumbTintColor="#4CAF50"
                 />
                 <Text style={styles.sliderLabel}>80h</Text>
               </View>
@@ -1694,18 +1690,18 @@ const SettingsScreen = () => {
 
         {/* App Version */}
         <Text style={[styles.versionText, { color: theme.text + '66' }]}>v1.0.0 (517) (506)</Text>
-
-        <AIHelpModal
-          visible={showNoraHelp}
-          onClose={() => setShowNoraHelp(false)}
-          aiType="nora"
-        />
-        <AIHelpModal
-          visible={showPatrickHelp}
-          onClose={() => setShowPatrickHelp(false)}
-          aiType="patrick"
-        />
       </ScrollView>
+
+      <AIHelpModal
+        visible={showNoraHelp}
+        onClose={() => setShowNoraHelp(false)}
+        aiType="nora"
+      />
+      <AIHelpModal
+        visible={showPatrickHelp}
+        onClose={() => setShowPatrickHelp(false)}
+        aiType="patrick"
+      />
     </SafeAreaView>
   );
 };
@@ -1899,8 +1895,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 10,
+    paddingTop: 4,
+    paddingBottom: 8,
   },
   settingsTitle: {
     fontSize: 28,
@@ -1932,21 +1928,41 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 6,
+    position: 'relative',
+    height: 200,
+  },
+  backgroundImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
   },
   proTrekkerImageContainer: {
     padding: 20,
-    paddingBottom: 100,
+    backgroundColor: 'transparent',
+    flex: 1,
+    justifyContent: 'flex-start',
+    paddingTop: 30,
   },
   proTrekkerCardTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1A3A52',
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
     marginBottom: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   proTrekkerCardSubtitle: {
-    fontSize: 14,
-    color: '#2C5F7F',
+    fontSize: 15,
+    color: '#FFFFFF',
     marginBottom: 20,
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   illustrationPlaceholder: {
     flexDirection: 'row',
@@ -1964,7 +1980,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     gap: 8,
   },
-  sectionTitle: {
+  sectionTitleLarge: {
     fontSize: 20,
     fontWeight: 'bold',
   },

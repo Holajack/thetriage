@@ -6,7 +6,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { useBackgroundMusic } from '../../hooks/useBackgroundMusic';
-import { getSoundPreference } from '../../utils/musicPreferences';
+import { useTheme } from '../../context/ThemeContext';
 const { useUserAppData } = require('../../utils/userAppData');
 
 // Break duration based on focus method
@@ -55,7 +55,8 @@ export const BreakTimerScreen = () => {
   const { data: userData } = useUserAppData();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute();
-  
+  const { theme } = useTheme();
+
   const params = route.params as {
     sessionData?: {
       duration: number;
@@ -68,64 +69,33 @@ export const BreakTimerScreen = () => {
       subject: string;
       plannedDuration: number;
     };
+    focusMode?: 'basecamp' | 'summit';
+    tasks?: any[];
+    nextTaskIndex?: number;
+    completedTasksData?: any[];
+    duration?: number;
+    autoProgress?: boolean;
   } | undefined;
 
   const sessionData = params?.sessionData;
-  
+
   // Calculate break duration based on completed session
   const breakDurationMinutes = getBreakDuration(
-    userData?.onboarding?.focus_method, 
+    userData?.onboarding?.focus_method,
     sessionData?.duration || sessionData?.plannedDuration
   );
-  
+
   // Timer refs for background functionality
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number | null>(null);
   const appStateRef = useRef(AppState.currentState);
-  
+
   const [timer, setTimer] = useState(breakDurationMinutes * 60); // Convert to seconds
   const [isPaused, setIsPaused] = useState(false);
   const [showEndModal, setShowEndModal] = useState(false);
   const [showConfirmEndModal, setShowConfirmEndModal] = useState(false);
-
-  // Get environment colors from user settings (fallback to default)
-  const getEnvironmentColors = () => {
-    const envTheme = userData?.settings?.environment_theme || 'forest';
-    
-    switch (envTheme) {
-      case 'ocean':
-        return {
-          primary: '#2196F3',
-          secondary: '#E3F2FD',
-          accent: '#1976D2',
-          background: '#F0F8FF'
-        };
-      case 'sunset':
-        return {
-          primary: '#FF5722',
-          secondary: '#FFE0B2',
-          accent: '#D84315',
-          background: '#FFF8E1'
-        };
-      case 'night':
-        return {
-          primary: '#9C27B0',
-          secondary: '#E1BEE7',
-          accent: '#7B1FA2',
-          background: '#F3E5F5'
-        };
-      case 'forest':
-      default:
-        return {
-          primary: '#4CAF50',
-          secondary: '#E8F5E9',
-          accent: '#388E3C',
-          background: '#F1F8E9'
-        };
-    }
-  };
-
-  const colors = getEnvironmentColors();
+  const [showNextSessionWarning, setShowNextSessionWarning] = useState(false);
+  const [warningCountdown, setWarningCountdown] = useState(3);
 
   // Background timer functionality
   const startBackgroundTimer = () => {
@@ -194,28 +164,126 @@ export const BreakTimerScreen = () => {
     }
   }, [timer]);
 
+  // Countdown timer for warning modal
+  useEffect(() => {
+    if (showNextSessionWarning && warningCountdown > 0) {
+      const countdownTimer = setTimeout(() => {
+        setWarningCountdown(prev => prev - 1);
+      }, 1000);
+
+      return () => clearTimeout(countdownTimer);
+    } else if (showNextSessionWarning && warningCountdown === 0) {
+      // Auto-proceed to next session when countdown reaches 0
+      handleProceedToNextSession();
+    }
+  }, [showNextSessionWarning, warningCountdown]);
+
   const formatTime = (seconds: number) => {
     const min = Math.floor(seconds / 60).toString().padStart(2, '0');
     const sec = (seconds % 60).toString().padStart(2, '0');
     return `${min}:${sec}`;
   };
 
+  const handleProceedToNextSession = () => {
+    if (!params?.tasks || params?.nextTaskIndex === undefined) return;
+
+    const nextTask = params.tasks[params.nextTaskIndex];
+    console.log('🎯 Proceeding to next session:', nextTask);
+
+    const navigationParams = {
+      focusMode: 'summit' as const,
+      tasks: params.tasks,
+      currentTaskIndex: params.nextTaskIndex,
+      completedTasksData: params.completedTasksData,
+      task: nextTask,
+      selectedTask: nextTask,
+      duration: params.duration,
+      autoProgress: params.autoProgress,
+      autoStart: true,
+      manualSelection: false
+    };
+
+    setShowNextSessionWarning(false);
+    navigation.navigate('StudySessionScreen', navigationParams);
+  };
+
+  const handleStopSummitMode = () => {
+    console.log('🎯 User stopped summit mode, showing session report');
+    const allTasksData = params?.completedTasksData || [];
+
+    setShowNextSessionWarning(false);
+    navigation.navigate('SessionReportScreen', {
+      focusMode: 'summit',
+      completedTasksData: allTasksData,
+      sessionDuration: allTasksData.reduce((sum, task) => sum + task.duration, 0),
+      breakDuration: breakDurationMinutes * allTasksData.length,
+      taskCompleted: true,
+      focusRating: allTasksData.length > 0
+        ? Math.round(allTasksData.reduce((sum, task) => sum + task.focusRating, 0) / allTasksData.length)
+        : 0,
+      productivity: allTasksData.length > 0
+        ? Math.round(allTasksData.reduce((sum, task) => sum + task.productivityRating, 0) / allTasksData.length)
+        : 0,
+      notes: allTasksData.map(task => `${task.task}: ${task.notes}`).filter(n => n).join('\n'),
+      sessionType: allTasksData[0]?.sessionType || 'auto',
+      subject: 'Multiple Subjects',
+      plannedDuration: allTasksData.reduce((sum, task) => sum + task.plannedDuration, 0)
+    });
+  };
+
   const handleBreakComplete = () => {
+    console.log('🎯 BreakTimerScreen: handleBreakComplete called');
+    console.log('🎯 Focus Mode:', params?.focusMode);
+    console.log('🎯 Tasks:', params?.tasks?.length || 0);
+    console.log('🎯 Next Task Index:', params?.nextTaskIndex);
+
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
-    navigation.navigate('SessionReportScreen', {
-      sessionDuration: sessionData?.duration || 0,
-      breakDuration: breakDurationMinutes,
-      taskCompleted: sessionData?.completedFullSession || false,
-      focusRating: sessionData?.focusRating || 0,
-      notes: sessionData?.notes || '',
-      sessionType: sessionData?.sessionType || 'auto',
-      subject: sessionData?.subject || 'General Study',
-      plannedDuration: sessionData?.plannedDuration || 0,
-      productivity: sessionData?.productivityRating || 0
-    });
+
+    // Summit mode: check if there are more tasks
+    if (params?.focusMode === 'summit' && params?.tasks && params.nextTaskIndex !== undefined) {
+      const hasMoreTasks = params.nextTaskIndex < params.tasks.length;
+      console.log('🎯 Summit Mode: Has more tasks?', hasMoreTasks);
+
+      if (hasMoreTasks) {
+        // Show warning modal before starting next session
+        console.log('🎯 Summit Mode: Showing next session warning');
+        setShowNextSessionWarning(true);
+        setWarningCountdown(3);
+      } else {
+        // All tasks complete - go to final session report
+        console.log('🎯 Summit Mode: All tasks complete, showing final report');
+        const allTasksData = params.completedTasksData || [];
+        navigation.navigate('SessionReportScreen', {
+          focusMode: 'summit',
+          completedTasksData: allTasksData,
+          sessionDuration: allTasksData.reduce((sum, task) => sum + task.duration, 0),
+          breakDuration: breakDurationMinutes * allTasksData.length,
+          taskCompleted: true,
+          focusRating: Math.round(allTasksData.reduce((sum, task) => sum + task.focusRating, 0) / allTasksData.length),
+          productivity: Math.round(allTasksData.reduce((sum, task) => sum + task.productivityRating, 0) / allTasksData.length),
+          notes: allTasksData.map(task => `${task.task}: ${task.notes}`).filter(n => n).join('\n'),
+          sessionType: sessionData?.sessionType || 'auto',
+          subject: 'Multiple Subjects',
+          plannedDuration: allTasksData.reduce((sum, task) => sum + task.plannedDuration, 0)
+        });
+      }
+    } else {
+      // Basecamp mode or single task - normal flow
+      navigation.navigate('SessionReportScreen', {
+        sessionDuration: sessionData?.duration || 0,
+        breakDuration: breakDurationMinutes,
+        taskCompleted: sessionData?.completedFullSession || false,
+        focusRating: sessionData?.focusRating || 0,
+        notes: sessionData?.notes || '',
+        sessionType: sessionData?.sessionType || 'auto',
+        subject: sessionData?.subject || 'General Study',
+        plannedDuration: sessionData?.plannedDuration || 0,
+        productivity: sessionData?.productivityRating || 0
+      });
+    }
   };
 
   const handlePause = () => {
@@ -264,75 +332,59 @@ export const BreakTimerScreen = () => {
   };
 
   // Add music hook
-  const { 
-    currentTrack, 
-    currentPlaylist,
-    currentTrackIndex,
-    isPlaying,
-    startPlaylist, // Add this to the destructuring
+  const {
     stopPlayback,
     audioSupported,
-    isPreviewMode
   } = useBackgroundMusic();
+
+  // Stop music immediately on mount - CRITICAL for break screen
+  useEffect(() => {
+    let isMounted = true;
+
+    const stopMusicImmediately = async () => {
+      try {
+        console.log('🎵 BreakTimerScreen: Stopping music on entry...');
+        await stopPlayback();
+        if (isMounted) {
+          console.log('🎵 BreakTimerScreen: Music stopped successfully');
+        }
+      } catch (error) {
+        if (isMounted) {
+          console.error('🎵 BreakTimerScreen: Failed to stop music on break entry:', error);
+        }
+      }
+    };
+
+    stopMusicImmediately();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [stopPlayback]);
 
   const renderMusicStatus = () => {
     if (!audioSupported) return null;
 
-    // Get user's sound preference from settings using centralized utility
-    const userSoundPreference = getSoundPreference(userData);
-  
-    const handleStartMusic = async () => {
-      try {
-        await startPlaylist(userSoundPreference);
-        console.log(`🎵 Started ${userSoundPreference} playlist during break`);
-      } catch (error) {
-        console.error('🎵 Failed to start music during break:', error);
-      }
-    };
-  
     return (
-      <View style={[styles.musicStatusCard, { backgroundColor: colors.secondary }]}>
-        <MaterialIcons name={isPlaying ? "music-note" : "music-off"} size={24} color={colors.primary} />
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.musicStatusText, { color: colors.primary }]}>
-            {isPlaying ? `Now Playing: ${currentTrack?.name || currentTrack?.title}` : 'Music Available'}
-          </Text>
-          {!isPlaying && (
-            <Text style={[styles.musicSubText, { color: colors.primary, opacity: 0.7 }]}>
-              Preferred: {userSoundPreference}
-            </Text>
-          )}
-        </View>
-        <View style={styles.musicControls}>
-          {!isPlaying ? (
-            <TouchableOpacity 
-              style={[styles.musicControlBtn, { backgroundColor: colors.primary }]} 
-              onPress={handleStartMusic}
-            >
-              <Ionicons name="play" size={20} color="#fff" />
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity 
-              style={[styles.musicControlBtn, { backgroundColor: '#E57373' }]} 
-              onPress={stopPlayback}
-            >
-              <Ionicons name="stop" size={20} color="#fff" />
-            </TouchableOpacity>
-          )}
+      <View style={[styles.musicStatusCard, { backgroundColor: theme.cardBackground, borderColor: theme.border }]}>
+        <MaterialIcons name="music-off" size={24} color={theme.primary} />
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={[styles.musicStatusText, { color: theme.text }]}>Focus music is paused during breaks</Text>
+          <Text style={[styles.musicSubText, { color: theme.textSecondary }]}>Music will resume when your next focus session starts.</Text>
         </View>
       </View>
     );
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={["top", "left", "right"]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]} edges={["top", "left", "right"]}>
       {/* Top Navigation Bar - Same style as HomeScreen */}
-      <View style={[styles.topNavBar, { backgroundColor: colors.background }]}>
+      <View style={[styles.topNavBar, { backgroundColor: theme.background }]}>
         <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Main', { screen: 'Home' })}>
-          <Ionicons name="arrow-back" size={24} color="#222" />
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <View style={styles.topNavTitleRow}>
-          <Text style={styles.topNavTitle}>
+          <Text style={[styles.topNavTitle, { color: theme.text }]}>
             Break Timer: {getBreakTypeText(userData?.onboarding?.focus_method)}
           </Text>
         </View>
@@ -343,79 +395,79 @@ export const BreakTimerScreen = () => {
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Session Summary Card */}
         {sessionData && (
-          <View style={[styles.sessionSummaryCard, { borderLeftColor: colors.primary }]}>
-            <Text style={[styles.sessionSummaryTitle, { color: colors.accent }]}>Session Complete!</Text>
-            
+          <View style={[styles.sessionSummaryCard, { backgroundColor: theme.card, borderLeftColor: theme.primary, borderColor: theme.primary + '33' }]}>
+            <Text style={[styles.sessionSummaryTitle, { color: theme.text }]}>Session Complete!</Text>
+
             <View style={styles.summaryRow}>
-              <MaterialIcons name="schedule" size={20} color={colors.primary} />
-              <Text style={styles.summaryText}>
+              <MaterialIcons name="schedule" size={20} color={theme.primary} />
+              <Text style={[styles.summaryText, { color: theme.text }]}>
                 Duration: {sessionData.duration} min {sessionData.completedFullSession ? '(Full session)' : '(Ended early)'}
               </Text>
             </View>
-            
+
             <View style={styles.summaryRow}>
-              <MaterialIcons name="task-alt" size={20} color={colors.primary} />
-              <Text style={styles.summaryText}>Task: {sessionData.task}</Text>
+              <MaterialIcons name="task-alt" size={20} color={theme.primary} />
+              <Text style={[styles.summaryText, { color: theme.text }]}>Task: {sessionData.task}</Text>
             </View>
-            
+
             <View style={styles.summaryRow}>
-              <MaterialIcons name="subject" size={20} color={colors.primary} />
-              <Text style={styles.summaryText}>Subject: {sessionData.subject}</Text>
+              <MaterialIcons name="subject" size={20} color={theme.primary} />
+              <Text style={[styles.summaryText, { color: theme.text }]}>Subject: {sessionData.subject}</Text>
             </View>
-            
+
             <View style={styles.summaryRow}>
-              <MaterialIcons name="psychology" size={20} color={colors.primary} />
-              <Text style={styles.summaryText}>Focus: </Text>
+              <MaterialIcons name="psychology" size={20} color={theme.primary} />
+              <Text style={[styles.summaryText, { color: theme.text }]}>Focus: </Text>
               <View style={styles.starsRow}>
                 {renderStars(sessionData.focusRating)}
               </View>
             </View>
-            
+
             <View style={styles.summaryRow}>
-              <MaterialIcons name="trending-up" size={20} color={colors.primary} />
-              <Text style={styles.summaryText}>Productivity: </Text>
+              <MaterialIcons name="trending-up" size={20} color={theme.primary} />
+              <Text style={[styles.summaryText, { color: theme.text }]}>Productivity: </Text>
               <View style={styles.starsRow}>
                 {renderStars(sessionData.productivityRating)}
               </View>
             </View>
-            
+
             {sessionData.notes && (
-              <View style={styles.notesSection}>
-                <Text style={[styles.notesLabel, { color: colors.accent }]}>Notes:</Text>
-                <Text style={styles.notesText}>"{sessionData.notes}"</Text>
+              <View style={[styles.notesSection, { backgroundColor: theme.card + '80' }]}>
+                <Text style={[styles.notesLabel, { color: theme.text }]}>Notes:</Text>
+                <Text style={[styles.notesText, { color: theme.text + '99' }]}>"{sessionData.notes}"</Text>
               </View>
             )}
           </View>
         )}
 
         {/* Break Timer Card - Same style as HomeScreen timer */}
-        <View style={[styles.timerCard, { backgroundColor: colors.secondary }]}>
-          <MaterialIcons name="free-breakfast" size={32} color={colors.primary} />
-          <Text style={[styles.timerCardTitle, { color: colors.accent }]}>Take a Well-Deserved Break</Text>
-          
-          {/* Timer Display - Same style as StudySessionScreen */}
-          <View style={[styles.timerBox, { backgroundColor: colors.background }]}>
-            <Text style={[styles.timerText, { color: '#222' }]}>{formatTime(timer)}</Text>
+        <View style={[styles.timerCard, { backgroundColor: theme.cardBackground, borderColor: theme.border }]}>
+          <MaterialIcons name="free-breakfast" size={32} color={theme.primary} />
+          <Text style={[styles.timerCardTitle, { color: theme.text }]}>Take a Well-Deserved Break</Text>
+
+          {/* Timer Display - Fixed width to prevent layout shifts */}
+          <View style={[styles.timerBox, { backgroundColor: theme.background }]}>
+            <Text style={[styles.timerText, { color: theme.text }]}>{formatTime(timer)}</Text>
           </View>
-          
+
           {/* Break Tips */}
           <View style={styles.tipsSection}>
-            <Text style={[styles.tipsTitle, { color: colors.accent }]}>Break Suggestions:</Text>
-            <Text style={styles.tipText}>• Stretch your body and neck</Text>
-            <Text style={styles.tipText}>• Hydrate with water</Text>
-            <Text style={styles.tipText}>• Rest your eyes from screens</Text>
-            <Text style={[styles.tipText, { marginTop: 10 }]}>
-              Taking full breaks helps maintain your focus for the next session. You still have {formatTime(timer)} remaining.
+            <Text style={[styles.tipsTitle, { color: theme.text }]}>Break Suggestions:</Text>
+            <Text style={[styles.tipText, { color: theme.textSecondary }]}>• Stretch your body and neck</Text>
+            <Text style={[styles.tipText, { color: theme.textSecondary }]}>• Hydrate with water</Text>
+            <Text style={[styles.tipText, { color: theme.textSecondary }]}>• Rest your eyes from screens</Text>
+            <Text style={[styles.tipText, { color: theme.textSecondary, marginTop: 10 }]}>
+              Taking full breaks helps maintain your focus for the next session.
             </Text>
           </View>
 
           {/* Controls */}
           <View style={styles.controlsRow}>
-            <TouchableOpacity style={[styles.pauseBtn, { borderColor: colors.primary }]} onPress={handlePause}>
-              <Ionicons name={isPaused ? "play" : "pause"} size={22} color="#222" />
-              <Text style={styles.pauseBtnText}>{isPaused ? 'Resume' : 'Pause'}</Text>
+            <TouchableOpacity style={[styles.pauseBtn, { borderColor: theme.border, backgroundColor: 'rgba(255, 255, 255, 0.05)' }]} onPress={handlePause}>
+              <Ionicons name={isPaused ? "play" : "pause"} size={22} color={theme.text} />
+              <Text style={[styles.pauseBtnText, { color: theme.text }]}>{isPaused ? 'Resume' : 'Pause'}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.endBtn, { backgroundColor: colors.primary }]} onPress={handleEndBreak}>
+            <TouchableOpacity style={[styles.endBtn, { backgroundColor: theme.primary }]} onPress={handleEndBreak}>
               <MaterialIcons name="timer-off" size={22} color="#fff" />
               <Text style={styles.endBtnText}>End Break</Text>
             </TouchableOpacity>
@@ -429,14 +481,14 @@ export const BreakTimerScreen = () => {
       {/* End Break Modal */}
       <Modal visible={showEndModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
+          <View style={[styles.modalBox, { backgroundColor: theme.card, borderColor: theme.primary + '33' }]}>
             <MaterialIcons name="warning" size={48} color="#FF9800" />
-            <Text style={styles.modalTitle}>End Break Early?</Text>
-            <Text style={styles.modalDesc}>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>End Break Early?</Text>
+            <Text style={[styles.modalDesc, { color: theme.text + '99' }]}>
               Taking full breaks helps maintain your focus for the next session.
             </Text>
-            <TouchableOpacity style={[styles.continueBtn, { borderColor: colors.primary }]} onPress={handleCancelEndBreak}>
-              <Text style={[styles.continueBtnText, { color: colors.primary }]}>Continue Break</Text>
+            <TouchableOpacity style={[styles.continueBtn, { borderColor: theme.primary }]} onPress={handleCancelEndBreak}>
+              <Text style={[styles.continueBtnText, { color: theme.primary }]}>Continue Break</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.endNowBtn, { backgroundColor: '#FF9800' }]} onPress={handleFirstEndConfirm}>
               <Text style={styles.endNowBtnText}>End Break Now</Text>
@@ -448,17 +500,50 @@ export const BreakTimerScreen = () => {
       {/* Double Confirmation Modal */}
       <Modal visible={showConfirmEndModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
+          <View style={[styles.modalBox, { backgroundColor: theme.card, borderColor: theme.primary + '33' }]}>
             <MaterialIcons name="error" size={48} color="#F44336" />
-            <Text style={styles.modalTitle}>Are You Sure?</Text>
-            <Text style={styles.modalDesc}>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Are You Sure?</Text>
+            <Text style={[styles.modalDesc, { color: theme.text + '99' }]}>
               This is your second confirmation. Ending your break early may reduce the effectiveness of your next study session.
             </Text>
-            <TouchableOpacity style={[styles.continueBtn, { borderColor: colors.primary }]} onPress={handleCancelEndBreak}>
-              <Text style={[styles.continueBtnText, { color: colors.primary }]}>Cancel - Continue Break</Text>
+            <TouchableOpacity style={[styles.continueBtn, { borderColor: theme.primary }]} onPress={handleCancelEndBreak}>
+              <Text style={[styles.continueBtnText, { color: theme.primary }]}>Cancel - Continue Break</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.confirmEndBtn} onPress={handleConfirmEndBreak}>
               <Text style={styles.confirmEndBtnText}>Yes, End Break Now</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Next Session Warning Modal - Summit Mode Only */}
+      <Modal visible={showNextSessionWarning} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalBox, { backgroundColor: theme.card, borderColor: theme.primary + '33' }]}>
+            <View style={[styles.countdownCircle, { borderColor: theme.primary }]}>
+              <Text style={[styles.countdownText, { color: theme.primary }]}>{warningCountdown}</Text>
+            </View>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Next Focus Session Starting</Text>
+            <Text style={[styles.modalDesc, { color: theme.text + '99' }]}>
+              {params?.tasks && params?.nextTaskIndex !== undefined && params.tasks[params.nextTaskIndex]
+                ? `Get ready to focus on: ${params.tasks[params.nextTaskIndex].title || 'Next Task'}`
+                : 'Prepare for your next focus session'}
+            </Text>
+            <Text style={[styles.modalDesc, { color: theme.text + '66', fontSize: 14, marginTop: 8 }]}>
+              Starting automatically in {warningCountdown} second{warningCountdown !== 1 ? 's' : ''}...
+            </Text>
+            <TouchableOpacity
+              style={[styles.endNowBtn, { backgroundColor: '#F44336', marginTop: 20 }]}
+              onPress={handleStopSummitMode}
+            >
+              <MaterialIcons name="stop" size={20} color="#fff" style={{ marginRight: 8 }} />
+              <Text style={styles.endNowBtnText}>Stop & View Report</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.continueBtn, { borderColor: theme.primary, marginTop: 12 }]}
+              onPress={handleProceedToNextSession}
+            >
+              <Text style={[styles.continueBtnText, { color: theme.primary }]}>Start Now</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -500,6 +585,7 @@ const styles = StyleSheet.create({
     padding: 20,
     marginVertical: 16,
     borderLeftWidth: 6,
+    borderWidth: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
@@ -548,6 +634,7 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: 'center',
     marginBottom: 24,
+    borderWidth: 1,
   },
   timerCardTitle: {
     fontSize: 18,
@@ -572,6 +659,9 @@ const styles = StyleSheet.create({
     fontSize: 48,
     fontWeight: 'bold',
     letterSpacing: 2,
+    minWidth: 150,
+    textAlign: 'center',
+    fontVariant: ['tabular-nums'],
   },
   tipsSection: {
     alignItems: 'flex-start',
@@ -649,6 +739,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     width: '85%',
     alignItems: 'center',
+    borderWidth: 1,
   },
   modalTitle: {
     fontSize: 20,
@@ -708,6 +799,9 @@ const styles = StyleSheet.create({
     padding: 16,
     marginVertical: 12,
     marginHorizontal: 16,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   musicHeader: {
     flexDirection: 'row',
@@ -750,6 +844,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     marginLeft: 4,
+  },
+  countdownCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  countdownText: {
+    fontSize: 36,
+    fontWeight: 'bold',
   },
 });
 
