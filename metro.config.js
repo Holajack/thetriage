@@ -2,6 +2,12 @@ const { getDefaultConfig } = require('expo/metro-config');
 
 const config = getDefaultConfig(__dirname);
 
+// Add 3D model file support
+config.resolver.assetExts.push('glb', 'gltf', 'bin', 'obj', 'mtl');
+
+// Handle Three.js examples/jsm files (they need .js extension)
+config.resolver.sourceExts.push('jsx', 'js', 'ts', 'tsx', 'json', 'cjs', 'mjs');
+
 config.resolver.extraNodeModules = {
   ...config.resolver.extraNodeModules,
   url: require.resolve('react-native-url-polyfill'),
