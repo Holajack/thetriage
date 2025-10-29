@@ -2,9 +2,44 @@ const React = require('react');
 const { Platform } = require('react-native');
 const { supabase } = require('./supabase');
 
-// Import mock data helper
-// Note: In production, you'd replace this with your actual Supabase service key
-const mockDataHelper = require('../../scripts/mock-admin-data');
+// Lightweight mock data helper used when USE_MOCK_DATA is enabled.
+// We keep this inline to avoid bundler resolution issues in production builds.
+const getLocalMockData = () => {
+  const demoProfile = {
+    id: 'demo-user-id',
+    email: 'demo@study.com',
+    full_name: 'Demo Student',
+    avatar_url: null,
+  };
+
+  return {
+    profile: demoProfile,
+    leaderboard: {
+      user_id: demoProfile.id,
+      total_focus_time: 4200,
+      weekly_focus_time: 480,
+      points: 925,
+      level: 4,
+      current_streak: 5,
+    },
+    friends: [
+      {
+        friend: {
+          id: 'demo-friend-1',
+          full_name: 'Focus Friend',
+          avatar_url: null,
+        },
+      },
+      {
+        friend: {
+          id: 'demo-friend-2',
+          full_name: 'Study Buddy',
+          avatar_url: null,
+        },
+      },
+    ],
+  };
+};
 
 /**
  * Hooks and utilities for fetching and displaying user data from Supabase
@@ -285,7 +320,7 @@ export async function getLeaderboardData() {
   // Use mock data for development if flag is set
   if (USE_MOCK_DATA) {
     console.log('Using mock leaderboard data');
-    const mockData = mockDataHelper.getMockAdminData();
+    const mockData = getLocalMockData();
     
     // Format friends for leaderboard
     const friendsLeaderboard = mockData.friends.map(f => ({
