@@ -18,7 +18,7 @@ import StudyRoomInvitations from '../../components/StudyRoomInvitations';
 import { BottomTabBar } from '../../components/BottomTabBar';
 import { UnifiedHeader } from '../../components/UnifiedHeader';
 
-const TABS = ['Friends', 'Messages', 'All Users', 'Study Rooms'];
+const TABS = ['Friends', 'Messages', 'Study Rooms'];
 const MOCK_FRIENDS = [
   { id: '1', name: 'Nikolai', joined: '3/18/2025' },
   { id: '2', name: 'Owner', joined: '3/17/2025' },
@@ -117,7 +117,7 @@ interface FriendRequest {
 
 const CommunityScreen = () => {
   const route = useRoute<any>();
-  const initialTab = route.params?.initialTab || 'All Users';
+  const initialTab = route.params?.initialTab || 'Friends';
   const [activeTab, setActiveTab] = useState(initialTab);
   const [search, setSearch] = useState('');
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -494,6 +494,44 @@ const CommunityScreen = () => {
       setLoading(false);
     }
   };
+
+  // User search effect
+  useEffect(() => {
+    const searchUsers = async () => {
+      if (!search.trim() || !currentUser) {
+        setSearchResults([]);
+        return;
+      }
+
+      try {
+        const searchTerm = search.toLowerCase().trim();
+
+        // Search in database by username or full_name
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id, email, username, full_name, avatar_url, university, major, created_at, status')
+          .neq('id', currentUser.id)
+          .or(`username.ilike.%${searchTerm}%,full_name.ilike.%${searchTerm}%`)
+          .limit(20);
+
+        if (error) {
+          console.error('Search error:', error);
+          return;
+        }
+
+        setSearchResults(data || []);
+      } catch (err) {
+        console.error('Error searching users:', err);
+      }
+    };
+
+    // Debounce search
+    const timeoutId = setTimeout(() => {
+      searchUsers();
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [search, currentUser]);
 
   // Study Room creation handler
   const handleCreateRoom = async () => {
@@ -993,24 +1031,165 @@ const CommunityScreen = () => {
             )}
           </View>
 
-          {/* Tab Navigation */}
-          <View style={[styles.tabRow, { backgroundColor: theme.card }]}>
-            {TABS.map(tab => (
+          {/* Search Results */}
+          {search.trim() && searchResults.length > 0 && (
+            <View style={[styles.searchResultsContainer, { backgroundColor: theme.background }]}>
+              <Text style={[styles.searchResultsTitle, { color: theme.text }]}>
+                Search Results ({searchResults.length})
+              </Text>
+              <ScrollView style={styles.searchResultsList} nestedScrollEnabled>
+                {searchResults.map((user) => {
+                  const friendStatus = getFriendStatus(user.id);
+                  const incomingRequestForUser = incomingFriendRequests.find(
+                    req => req.sender_id === user.id
+                  );
+
+                  return (
+                    <View key={user.id} style={[styles.userCardCompact, { backgroundColor: theme.card, borderColor: theme.primary + '33' }]}>
+                      <View style={styles.userInfoCompact}>
+                        <View style={[styles.avatarCircleCompact, { backgroundColor: theme.primary + '22' }]}>
+                          {user.avatar_url ? (
+                            <Image source={{ uri: user.avatar_url }} style={styles.avatarCircleCompact} />
+                          ) : (
+                            <Text style={[styles.avatarTextCompact, { color: theme.primary }]}>
+                              {user.full_name ? user.full_name[0] : user.email[0]}
+                            </Text>
+                          )}
+                        </View>
+                        <View>
+                          <Text style={[styles.userNameCompact, { color: theme.text }]}>
+                            {user.full_name || user.username || 'Anonymous User'}
+                          </Text>
+                          {user.username && (
+                            <Text style={[styles.userJoinedCompact, { color: theme.text + '99' }]}>
+                              @{user.username}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                      <View style={styles.actionButtonsCompact}>
+                        {friendStatus === 'accepted' ? (
+                          <TouchableOpacity
+                            onPress={() => navigation.navigate('MessageScreen' as any, {
+                              contact: {
+                                id: user.id,
+                                name: user.full_name || user.username || user.email,
+                                avatar: user.avatar_url,
+                                status: getStatusLabel(user.status)
+                              }
+                            })}
+                            style={styles.messageButtonCompact}
+                          >
+                            <Ionicons name="chatbubble-outline" size={20} color="#4CAF50" />
+                          </TouchableOpacity>
+                        ) : null}
+                        {!friendStatus && !pendingFriendRequestIds.includes(user.id) && (
+                          <TouchableOpacity
+                            onPress={() => handleAddFriend(user.id)}
+                            style={styles.addFriendButtonCompact}
+                          >
+                            <Ionicons
+                              name="person-add-outline"
+                              size={20}
+                              color="#4CAF50"
+                            />
+                          </TouchableOpacity>
+                        )}
+                        {friendStatus === 'accepted' && (
+                          <View style={styles.friendBadgeCompact}>
+                            <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                          </View>
+                        )}
+                        {friendStatus === 'incoming' && incomingRequestForUser && (
+                          <View style={{ flexDirection: 'row' }}>
+                            <TouchableOpacity
+                              style={styles.addFriendButtonCompact}
+                              onPress={() => handleAcceptFriendRequest(incomingRequestForUser.id)}
+                            >
+                              <Ionicons name="checkmark" size={18} color="#4CAF50" />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.addFriendButtonCompact}
+                              onPress={() => handleDeclineFriendRequest(incomingRequestForUser.id)}
+                            >
+                              <Ionicons name="close" size={18} color="#ef4444" />
+                            </TouchableOpacity>
+                          </View>
+                        )}
+                        {friendStatus === 'pending' && (
+                          <View style={styles.pendingBadgeCompact}>
+                            <Text style={styles.pendingTextCompact}>Pending</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })}
+              </ScrollView>
               <TouchableOpacity
-                key={tab}
-                style={[styles.tab, activeTab === tab && [styles.activeTab, { backgroundColor: theme.primary + '22' }]]}
-                onPress={() => setActiveTab(tab)}
+                onPress={() => setSearch('')}
+                style={[styles.clearSearchButton, { backgroundColor: theme.card }]}
               >
-                <Text style={[styles.tabText, activeTab === tab && styles.activeTabText, { color: activeTab === tab ? theme.primary : theme.text + '99' }]}>
-                  {tab}
-                </Text>
+                <Text style={[styles.clearSearchText, { color: theme.primary }]}>Clear Search</Text>
               </TouchableOpacity>
-            ))}
-          </View>
+            </View>
+          )}
+
+          {/* Search Results Empty State */}
+          {search.trim() && searchResults.length === 0 && (
+            <View style={[styles.searchResultsContainer, { backgroundColor: theme.background }]}>
+              <View style={styles.emptyContainer}>
+                <Ionicons name="search-outline" size={48} color={theme.text + '33'} />
+                <Text style={[styles.emptyText, { color: theme.text }]}>No users found</Text>
+                <Text style={[styles.emptySubtext, { color: theme.text + '99' }]}>
+                  Try searching for a different username or name
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setSearch('')}
+                style={[styles.clearSearchButton, { backgroundColor: theme.card }]}
+              >
+                <Text style={[styles.clearSearchText, { color: theme.primary }]}>Clear Search</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Tab Navigation */}
+          {!search.trim() && (
+            <View style={[styles.tabRow, { backgroundColor: theme.card }]}>
+              {TABS.map(tab => (
+                <TouchableOpacity
+                  key={tab}
+                  style={[styles.tab, activeTab === tab && [styles.activeTab, { backgroundColor: theme.primary + '22' }]]}
+                  onPress={() => setActiveTab(tab)}
+                >
+                  <Text style={[styles.tabText, activeTab === tab && styles.activeTabText, { color: activeTab === tab ? theme.primary : theme.text + '99' }]}>
+                    {tab}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
 
           {/* Content based on active tab */}
-          {activeTab === 'Friends' && (
+          {!search.trim() && activeTab === 'Friends' && (
             <>
+              {/* Scan QR Code Button */}
+              <View style={{ marginHorizontal: 16, marginTop: 12, marginBottom: 16 }}>
+                <TouchableOpacity
+                  style={[
+                    styles.scanQRButton,
+                    { backgroundColor: theme.primary, borderColor: theme.primary }
+                  ]}
+                  onPress={() => navigation.navigate('QRScanner' as any)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="qr-code-outline" size={24} color="#FFFFFF" />
+                  <Text style={styles.scanQRButtonText}>Scan QR Code to Add Friend</Text>
+                  <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+
               {incomingFriendRequests.length > 0 && (
                 <View style={{ marginHorizontal: 16, marginBottom: 12 }}>
                   <Text style={{ fontWeight: 'bold', color: theme.primary, marginBottom: 6 }}>
@@ -1145,7 +1324,7 @@ const CommunityScreen = () => {
           )}
 
           {/* Messages Tab */}
-          {activeTab === 'Messages' && (
+          {!search.trim() && activeTab === 'Messages' && (
             <FlatList
               data={userConversations}
               keyExtractor={item => item.id}
@@ -1216,108 +1395,8 @@ const CommunityScreen = () => {
             />
           )}
 
-          {/* All Users Tab */}
-          {activeTab === 'All Users' && (
-            <FlatList
-              data={filteredUsers}
-              keyExtractor={item => item.id}
-              contentContainerStyle={styles.listContainer}
-              refreshing={loading}
-              onRefresh={refreshData}
-              renderItem={({ item }) => {
-                const friendStatus = getFriendStatus(item.id);
-                const incomingRequestForUser = incomingFriendRequests.find(
-                  req => req.sender_id === item.id
-                );
-                return (
-                  <View key={item.id} style={[styles.userCardCompact, { backgroundColor: theme.card, borderColor: theme.primary + '33' }]}>
-                    {/* Left: Avatar/Initial and Info */}
-                    <View style={styles.userInfoCompact}>
-                      <View style={[styles.avatarCircleCompact, { backgroundColor: theme.primary + '22' }]}>
-                        {item.avatar_url ? (
-                          <Image source={{ uri: item.avatar_url }} style={styles.avatarCircleCompact} />
-                        ) : (
-                          <Text style={[styles.avatarTextCompact, { color: theme.primary }]}>
-                            {item.full_name ? item.full_name[0] : item.email[0]}
-                          </Text>
-                        )}
-                      </View>
-                      <View>
-                        <Text style={[styles.userNameCompact, { color: theme.text }]}>
-                          {item.full_name || item.username || 'Anonymous User'}
-                        </Text>
-                        <Text style={[styles.userJoinedCompact, { color: theme.text + '99' }]}>
-                          Joined {item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}
-                        </Text>
-                      </View>
-                    </View>
-                    {/* Right: Action Buttons */}
-                    <View style={styles.actionButtonsCompact}>
-                      <TouchableOpacity 
-                        onPress={() => navigation.navigate('MessageScreen' as any, {
-                          contact: {
-                            id: item.id,
-                            name: item.full_name || item.username || item.email,
-                            avatar: item.avatar_url,
-                            status: getStatusLabel(item.status)
-                          }
-                        })}
-                        style={styles.messageButtonCompact}
-                      >
-                        <Ionicons name="chatbubble-outline" size={20} color="#4CAF50" />
-                      </TouchableOpacity>
-                      {!friendStatus && !pendingFriendRequestIds.includes(item.id) && (
-                        <TouchableOpacity
-                          onPress={() => handleAddFriend(item.id)}
-                          style={styles.addFriendButtonCompact}
-                        >
-                          <Ionicons 
-                            name="person-add-outline"
-                            size={20} 
-                            color="#4CAF50"
-                          />
-                        </TouchableOpacity>
-                      )}
-                      {pendingFriendRequestIds.includes(item.id) && (
-                        <View style={styles.pendingBadgeCompact}>
-                          <Ionicons name="hourglass-outline" size={18} color="#FF9800" />
-                        </View>
-                      )}
-                      {friendStatus === 'incoming' && incomingRequestForUser && (
-                        <View style={{ flexDirection: 'row' }}>
-                          <TouchableOpacity
-                            style={styles.addFriendButtonCompact}
-                            onPress={() => handleAcceptFriendRequest(incomingRequestForUser.id)}
-                          >
-                            <Ionicons name="checkmark" size={18} color="#4CAF50" />
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={styles.addFriendButtonCompact}
-                            onPress={() => handleDeclineFriendRequest(incomingRequestForUser.id)}
-                          >
-                            <Ionicons name="close" size={18} color="#ef4444" />
-                          </TouchableOpacity>
-                        </View>
-                      )}
-                      {(friendStatus === 'pending' && !pendingFriendRequestIds.includes(item.id)) && (
-                        <View style={styles.pendingBadgeCompact}>
-                          <Text style={styles.pendingTextCompact}>Pending</Text>
-                        </View>
-                      )}
-                      {friendStatus === 'accepted' && (
-                        <View style={styles.friendBadgeCompact}>
-                          <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                );
-              }}
-            />
-          )}
-
           {/* Study Rooms Tab */}
-          {activeTab === 'Study Rooms' && (
+          {!search.trim() && activeTab === 'Study Rooms' && (
             <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
               <TouchableOpacity style={[styles.createRoomBtn, { backgroundColor: theme.card, borderColor: theme.primary }]} onPress={() => setShowCreateModal(true)}>
                 <Ionicons name="add" size={20} color={theme.primary} />
@@ -2127,7 +2206,56 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
   },
-  
+
+  // Search results styles
+  searchResultsContainer: {
+    flex: 1,
+    marginHorizontal: 16,
+    marginBottom: 16,
+  },
+  searchResultsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  searchResultsList: {
+    flex: 1,
+    maxHeight: 450,
+  },
+  clearSearchButton: {
+    marginTop: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  clearSearchText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  scanQRButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    borderWidth: 2,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  scanQRButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    flex: 1,
+  },
+
   // ...rest of existing styles...
 });
 

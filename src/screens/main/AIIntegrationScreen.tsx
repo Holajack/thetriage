@@ -321,7 +321,7 @@ const AIIntegrationScreen = () => {
       <ScrollView style={{ flex: 1 }}>
         {/* Header */}
         <View style={[styles.header, { backgroundColor: theme.card }]}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <TouchableOpacity onPress={() => navigation.navigate('Settings' as never)} style={styles.backButton}>
             <Ionicons name="chevron-back" size={24} color={theme.primary} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { fontSize: fontSize * 1.3, color: theme.text }]}>AI Integration</Text>

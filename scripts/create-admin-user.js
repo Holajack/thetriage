@@ -101,7 +101,7 @@ async function createAdminUser() {
         work_style: 'Deep Focus',
         user_goal: 'Academic Excellence',
         weekly_focus_goal: 15,
-        focus_method: 'Pomodoro',
+        focus_method: 'Balanced',
         education_level: 'University',
         university: adminUser.university,
         major: adminUser.major,

@@ -5,8 +5,17 @@ const config = getDefaultConfig(__dirname);
 // Add 3D model file support
 config.resolver.assetExts.push('glb', 'gltf', 'bin', 'obj', 'mtl');
 
-// Handle Three.js examples/jsm files (they need .js extension)
-config.resolver.sourceExts.push('jsx', 'js', 'ts', 'tsx', 'json', 'cjs', 'mjs');
+// Configure SVG transformer
+const assetExts = config.resolver.assetExts.filter((ext) => ext !== 'svg');
+const sourceExts = [...config.resolver.sourceExts, 'svg'];
+
+config.resolver.assetExts = assetExts;
+config.resolver.sourceExts = sourceExts;
+
+config.transformer = {
+  ...config.transformer,
+  babelTransformerPath: require.resolve('react-native-svg-transformer'),
+};
 
 config.resolver.extraNodeModules = {
   ...config.resolver.extraNodeModules,

@@ -5,6 +5,7 @@ import { AuthProvider } from './src/context/AuthContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ThemeProvider } from './src/context/ThemeContext';
+import { QRAcceptanceProvider } from './src/context/QRAcceptanceContext';
 import * as SplashScreen from 'expo-splash-screen';
 import { LogBox } from 'react-native';
 import { StartupErrorBoundary } from './src/components/StartupErrorBoundary';
@@ -40,8 +41,10 @@ export default function App() {
         <StartupErrorBoundary>
           <ThemeProvider>
             <AuthProvider>
-              <StatusBar style="auto" />
-              <RootNavigator />
+              <QRAcceptanceProvider>
+                <StatusBar style="auto" />
+                <RootNavigator />
+              </QRAcceptanceProvider>
             </AuthProvider>
           </ThemeProvider>
         </StartupErrorBoundary>

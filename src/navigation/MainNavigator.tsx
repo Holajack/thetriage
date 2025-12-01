@@ -13,6 +13,7 @@ import BonusesScreen from '../screens/main/BonusesScreen';
 import ResultsScreen from '../screens/main/AnalyticsScreen';
 import LeaderboardScreen from '../screens/main/LeaderboardScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
+import ShopScreen from '../screens/main/ShopScreen';
 import SettingsScreen from '../screens/main/SettingsScreen';
 import SubscriptionScreen from '../screens/main/SubscriptionScreen';
 import ProTrekkerScreen from '../screens/main/ProTrekkerScreen';
@@ -21,6 +22,7 @@ import PDFViewerScreen from '../screens/main/PDFViewerScreen';
 import AIIntegrationScreen from '../screens/main/AIIntegrationScreen';
 import FocusPreparationScreen from '../screens/main/FocusPreparationScreen';
 import { StudySessionScreen } from '../screens/main/StudySessionScreen';
+import QRScannerScreen from '../screens/main/QRScannerScreen';
 
 // Hidden screens accessible through Bonuses
 import EBooksScreen from '../screens/main/EBooksScreen';
@@ -30,6 +32,7 @@ import BrainMappingScreen from '../screens/main/BrainMappingScreen';
 
 // Profile sub-screens
 import { 
+  ProfileCustomizationScreen,
   PersonalInformationScreen,
   EducationScreen,
   LocationAndTimeScreen,
@@ -237,6 +240,19 @@ export const MainNavigator = () => {
         options={{ headerShown: false }}
       />
       <Drawer.Screen
+        name="Shop"
+        component={ShopScreen}
+        options={{ headerShown: false, drawerItemStyle: { display: 'none' } }}
+      />
+      <Drawer.Screen
+        name="ProfileCustomization"
+        component={ProfileCustomizationScreen}
+        options={{
+          headerTitle: 'Customize Profile',
+          drawerItemStyle: { display: 'none' },
+        }}
+      />
+      <Drawer.Screen
         name="Settings"
         component={SettingsScreen}
         options={{ headerShown: false }}
@@ -250,6 +266,15 @@ export const MainNavigator = () => {
         }}
       />
       <Drawer.Screen name="Subscription" component={SubscriptionScreen} />
+      <Drawer.Screen
+        name="QRScanner"
+        component={QRScannerScreen}
+        options={{
+          drawerItemStyle: { display: 'none' },
+          headerShown: false,
+          title: 'Scan QR Code'
+        }}
+      />
       <Drawer.Screen
         name="ProTrekker"
         component={ProTrekkerScreen}

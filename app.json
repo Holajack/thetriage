@@ -41,7 +41,10 @@
               "pathPrefix": "/auth/v1"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -52,7 +55,8 @@
     },
     "plugins": [
       "expo-localization",
-      "expo-asset"
+      "expo-asset",
+      "expo-barcode-scanner"
     ],
     "owner": "hollaj"
   }

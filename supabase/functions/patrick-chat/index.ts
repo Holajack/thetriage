@@ -202,7 +202,7 @@ function generatePatrickResponse(message: string, pdfContext?: any): string {
   }
 
   if (lowerMessage.includes('focus') || lowerMessage.includes('concentrate')) {
-    return "Excellent question about focus! Here are my top recommendations: 1) Use the Pomodoro Technique (25-minute focused sessions), 2) Eliminate distractions (phone, social media), 3) Create a dedicated study space, 4) Take regular breaks to recharge. What specific focus challenges are you facing?"
+    return "Excellent question about focus! Here are my top recommendations: 1) Use the Balanced Technique (25-minute focused sessions), 2) Eliminate distractions (phone, social media), 3) Create a dedicated study space, 4) Take regular breaks to recharge. What specific focus challenges are you facing?"
   }
 
   if (lowerMessage.includes('motivation') || lowerMessage.includes('procrastination')) {

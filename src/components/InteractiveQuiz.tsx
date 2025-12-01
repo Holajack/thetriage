@@ -217,7 +217,7 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({ quizType, onComplete,
       const recommendations = {
         time_management: [
           "Use time-blocking techniques to schedule specific study periods",
-          "Try the Pomodoro Technique: 25 minutes focused study + 5 minute breaks",
+          "Try the Balanced Technique: 25 minutes focused study + 5 minute breaks",
           "Create weekly and daily study schedules",
           "Start assignments and exam prep earlier",
           "Use calendar apps to track deadlines and study goals"

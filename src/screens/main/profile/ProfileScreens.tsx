@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, Platform, KeyboardAvoidingView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Platform, KeyboardAvoidingView, Image, ActivityIndicator } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -9,6 +9,437 @@ import Slider from '@react-native-community/slider';
 import DropDownPicker from 'react-native-dropdown-picker';
 import { useAuth } from '../../../context/AuthContext';
 import { useTheme } from '../../../context/ThemeContext';
+import * as ImagePicker from 'expo-image-picker';
+import { SafeAreaView } from 'react-native-safe-area-context';
+const { useUserAppData } = require('../../../utils/userAppData');
+
+const PRIVACY_OPTIONS = [
+  { label: 'Do Not Show', value: 'none' },
+  { label: 'Only my Friends', value: 'friends' },
+  { label: 'Everyone', value: 'everyone' },
+];
+
+export const ProfileCustomizationScreen = () => {
+  const navigation = useNavigation();
+  const { theme } = useTheme();
+  const { profile, updateProfile, uploadProfileImage } = useSupabaseProfile();
+  const { signOut, refreshUserData } = useAuth();
+  const { refetch } = useUserAppData();
+  const [formData, setFormData] = useState({
+    fullName: '',
+    username: '',
+    bio: '',
+    location: '',
+    website: '',
+    fullNameVisibility: 'none',
+    universityVisibility: 'none',
+    locationVisibility: 'none',
+    classesVisibility: 'none',
+  });
+  const [avatar, setAvatar] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  // Privacy dropdown states
+  const [fullNameOpen, setFullNameOpen] = useState(false);
+  const [universityOpen, setUniversityOpen] = useState(false);
+  const [locationPrivacyOpen, setLocationPrivacyOpen] = useState(false);
+  const [classesOpen, setClassesOpen] = useState(false);
+
+  useEffect(() => {
+    navigation.setOptions({
+      title: 'Customize Profile',
+      headerLeft: () => (
+        <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginLeft: 8 }}>
+          <Ionicons name="arrow-back" size={24} color={theme.primary} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, theme]);
+
+  useEffect(() => {
+    if (profile) {
+      setFormData({
+        fullName: profile.full_name || '',
+        username: profile.username || '',
+        bio: profile.bio || '',
+        location: profile.location || '',
+        website: profile.website || '',
+        fullNameVisibility: profile.fullNameVisibility || 'none',
+        universityVisibility: profile.universityVisibility || 'none',
+        locationVisibility: profile.locationVisibility || 'none',
+        classesVisibility: profile.classesVisibility || 'none',
+      });
+      setAvatar(profile.avatar_url || null);
+    }
+  }, [profile]);
+
+  // Only one privacy dropdown open at a time
+  const onFullNameOpen = useCallback(() => {
+    setUniversityOpen(false);
+    setLocationPrivacyOpen(false);
+    setClassesOpen(false);
+  }, []);
+  const onUniversityOpen = useCallback(() => {
+    setFullNameOpen(false);
+    setLocationPrivacyOpen(false);
+    setClassesOpen(false);
+  }, []);
+  const onLocationPrivacyOpen = useCallback(() => {
+    setFullNameOpen(false);
+    setUniversityOpen(false);
+    setClassesOpen(false);
+  }, []);
+  const onClassesOpen = useCallback(() => {
+    setFullNameOpen(false);
+    setUniversityOpen(false);
+    setLocationPrivacyOpen(false);
+  }, []);
+
+  const secondaryTextColor = (theme as any).textSecondary || `${theme.text}99`;
+  const borderColor = (theme as any).border || '#E0E0E0';
+  const cardColor = (theme as any).card || '#FFFFFF';
+
+  const handleInputChange = (key: keyof typeof formData, value: string) => {
+    setFormData(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handlePickImage = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission required', 'Please allow access to your photos to update your profile image.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.85,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      setUploadingPhoto(true);
+      const uri = result.assets[0].uri;
+      const { publicUrl } = await uploadProfileImage(uri);
+      await updateProfile({ avatar_url: publicUrl });
+      setAvatar(publicUrl);
+      if (typeof refetch === 'function') {
+        try {
+          await refetch();
+        } catch (refetchError) {
+          console.warn('ProfileCustomization: Failed to refetch user data:', refetchError);
+        }
+      }
+      try {
+        await refreshUserData();
+      } catch (refreshError) {
+        console.warn('ProfileCustomization: Failed to refresh auth context user:', refreshError);
+      }
+      Alert.alert('Success', 'Profile photo updated successfully.');
+    } catch (error: any) {
+      console.error('Profile photo update error:', error);
+      Alert.alert('Error', 'We could not update your profile photo. Please try again.');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await updateProfile({
+        full_name: formData.fullName.trim(),
+        username: formData.username.trim(),
+        bio: formData.bio.trim(),
+        location: formData.location.trim(),
+        website: formData.website.trim(),
+        fullNameVisibility: formData.fullNameVisibility,
+        universityVisibility: formData.universityVisibility,
+        locationVisibility: formData.locationVisibility,
+        classesVisibility: formData.classesVisibility,
+      });
+      if (typeof refetch === 'function') {
+        try {
+          await refetch();
+        } catch (refetchError) {
+          console.warn('ProfileCustomization: Failed to refetch user data:', refetchError);
+        }
+      }
+      try {
+        await refreshUserData();
+      } catch (refreshError) {
+        console.warn('ProfileCustomization: Failed to refresh auth context user:', refreshError);
+      }
+      Alert.alert('Profile Updated', 'Your profile and privacy settings have been saved.');
+    } catch (error: any) {
+      console.error('Profile save error:', error);
+      Alert.alert('Error', 'Unable to save your profile changes. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      setLoggingOut(true);
+      await signOut();
+    } catch (error: any) {
+      console.error('Sign out error:', error);
+      setLoggingOut(false);
+      Alert.alert('Error', 'Failed to sign out. Please try again.');
+    }
+  };
+
+  return (
+    <SafeAreaView style={[styles.customizationSafeArea, { backgroundColor: theme.background }]}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAwareScrollView
+          contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+          enableOnAndroid={true}
+          extraScrollHeight={80}
+        >
+          <View style={styles.avatarSection}>
+            <TouchableOpacity
+              style={[
+                styles.avatarTouch,
+                { borderColor: theme.primary + '55' },
+                uploadingPhoto && { opacity: 0.7 },
+              ]}
+              onPress={handlePickImage}
+              activeOpacity={0.85}
+              disabled={uploadingPhoto}
+            >
+              {avatar ? (
+                <Image source={{ uri: avatar }} style={styles.avatarImageLarge} />
+              ) : (
+                <View style={[styles.avatarPlaceholder, { backgroundColor: theme.primary + '22' }]}>
+                  <Ionicons name="person" size={52} color={theme.primary} />
+                </View>
+              )}
+              <View style={[styles.avatarEditBadge, { backgroundColor: cardColor }]}>
+                {uploadingPhoto ? (
+                  <ActivityIndicator size="small" color={theme.primary} />
+                ) : (
+                  <Ionicons name="camera" size={18} color={theme.primary} />
+                )}
+              </View>
+            </TouchableOpacity>
+            <Text style={[styles.avatarHelpText, { color: secondaryTextColor }]}>
+              Tap to update your profile photo.
+            </Text>
+          </View>
+
+          <View style={styles.formSection}>
+            <Text style={[styles.sectionHeading, { color: theme.primary }]}>Profile Details</Text>
+
+            <View style={styles.fieldContainer}>
+              <Text style={[styles.label, { color: theme.text }]}>Display Name</Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  { backgroundColor: cardColor, borderColor, color: theme.text },
+                ]}
+                value={formData.fullName}
+                onChangeText={text => handleInputChange('fullName', text)}
+                placeholder="Add your display name"
+                placeholderTextColor={secondaryTextColor}
+                autoCapitalize="words"
+              />
+            </View>
+
+            <View style={styles.fieldContainer}>
+              <Text style={[styles.label, { color: theme.text }]}>Username</Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  { backgroundColor: cardColor, borderColor, color: theme.text },
+                ]}
+                value={formData.username}
+                onChangeText={text => handleInputChange('username', text)}
+                placeholder="Choose a username"
+                placeholderTextColor={secondaryTextColor}
+                autoCapitalize="none"
+              />
+            </View>
+
+            <View style={styles.fieldContainer}>
+              <Text style={[styles.label, { color: theme.text }]}>Bio</Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  styles.multilineInput,
+                  { backgroundColor: cardColor, borderColor, color: theme.text },
+                ]}
+                value={formData.bio}
+                onChangeText={text => handleInputChange('bio', text)}
+                placeholder="Share a bit about yourself, your goals, or your study focus."
+                placeholderTextColor={secondaryTextColor}
+                multiline
+                numberOfLines={4}
+              />
+            </View>
+
+            <View style={styles.fieldContainer}>
+              <Text style={[styles.label, { color: theme.text }]}>Location</Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  { backgroundColor: cardColor, borderColor, color: theme.text },
+                ]}
+                value={formData.location}
+                onChangeText={text => handleInputChange('location', text)}
+                placeholder="City, Country"
+                placeholderTextColor={secondaryTextColor}
+                autoCapitalize="words"
+              />
+            </View>
+
+            <View style={styles.fieldContainer}>
+              <Text style={[styles.label, { color: theme.text }]}>Website</Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  { backgroundColor: cardColor, borderColor, color: theme.text },
+                ]}
+                value={formData.website}
+                onChangeText={text => handleInputChange('website', text)}
+                placeholder="https://your-site.com"
+                placeholderTextColor={secondaryTextColor}
+                autoCapitalize="none"
+                keyboardType="url"
+              />
+            </View>
+          </View>
+
+          <View style={styles.formSection}>
+            <Text style={[styles.sectionHeading, { color: theme.primary }]}>Privacy Settings</Text>
+            <Text style={[styles.privacyDescription, { color: secondaryTextColor }]}>
+              Control who can see your profile information in the community.
+            </Text>
+
+            <View style={styles.fieldContainer}>
+              <Text style={[styles.label, { color: theme.text }]}>Full Name Visibility</Text>
+              <Text style={[styles.subtext, { color: secondaryTextColor }]}>
+                Control who can see your full name
+              </Text>
+              <DropDownPicker
+                open={fullNameOpen}
+                setOpen={setFullNameOpen}
+                onOpen={onFullNameOpen}
+                value={formData.fullNameVisibility || ''}
+                setValue={cb => setFormData(f => ({ ...f, fullNameVisibility: typeof cb === 'function' ? cb(f.fullNameVisibility) : cb }))}
+                items={PRIVACY_OPTIONS}
+                style={[styles.dropdown, { backgroundColor: cardColor, borderColor }]}
+                dropDownContainerStyle={[styles.dropdownContainer, { backgroundColor: cardColor, borderColor, zIndex: 4000, elevation: 4000 }]}
+                zIndex={4000}
+                zIndexInverse={1000}
+                listMode="SCROLLVIEW"
+                onChangeValue={val => setFormData(f => ({ ...f, fullNameVisibility: val || '' }))}
+              />
+            </View>
+
+            <View style={styles.fieldContainer}>
+              <Text style={[styles.label, { color: theme.text }]}>University Visibility</Text>
+              <Text style={[styles.subtext, { color: secondaryTextColor }]}>
+                Control who can see your university or school
+              </Text>
+              <DropDownPicker
+                open={universityOpen}
+                setOpen={setUniversityOpen}
+                onOpen={onUniversityOpen}
+                value={formData.universityVisibility || ''}
+                setValue={cb => setFormData(f => ({ ...f, universityVisibility: typeof cb === 'function' ? cb(f.universityVisibility) : cb }))}
+                items={PRIVACY_OPTIONS}
+                style={[styles.dropdown, { backgroundColor: cardColor, borderColor }]}
+                dropDownContainerStyle={[styles.dropdownContainer, { backgroundColor: cardColor, borderColor, zIndex: 3000, elevation: 3000 }]}
+                zIndex={3000}
+                zIndexInverse={2000}
+                listMode="SCROLLVIEW"
+                onChangeValue={val => setFormData(f => ({ ...f, universityVisibility: val || '' }))}
+              />
+            </View>
+
+            <View style={styles.fieldContainer}>
+              <Text style={[styles.label, { color: theme.text }]}>Location Visibility</Text>
+              <Text style={[styles.subtext, { color: secondaryTextColor }]}>
+                Control who can see your location
+              </Text>
+              <DropDownPicker
+                open={locationPrivacyOpen}
+                setOpen={setLocationPrivacyOpen}
+                onOpen={onLocationPrivacyOpen}
+                value={formData.locationVisibility || ''}
+                setValue={cb => setFormData(f => ({ ...f, locationVisibility: typeof cb === 'function' ? cb(f.locationVisibility) : cb }))}
+                items={PRIVACY_OPTIONS}
+                style={[styles.dropdown, { backgroundColor: cardColor, borderColor }]}
+                dropDownContainerStyle={[styles.dropdownContainer, { backgroundColor: cardColor, borderColor, zIndex: 2000, elevation: 2000 }]}
+                zIndex={2000}
+                zIndexInverse={3000}
+                listMode="SCROLLVIEW"
+                onChangeValue={val => setFormData(f => ({ ...f, locationVisibility: val || '' }))}
+              />
+            </View>
+
+            <View style={styles.fieldContainer}>
+              <Text style={[styles.label, { color: theme.text }]}>Classes Visibility</Text>
+              <Text style={[styles.subtext, { color: secondaryTextColor }]}>
+                Control who can see your current classes
+              </Text>
+              <DropDownPicker
+                open={classesOpen}
+                setOpen={setClassesOpen}
+                onOpen={onClassesOpen}
+                value={formData.classesVisibility || ''}
+                setValue={cb => setFormData(f => ({ ...f, classesVisibility: typeof cb === 'function' ? cb(f.classesVisibility) : cb }))}
+                items={PRIVACY_OPTIONS}
+                style={[styles.dropdown, { backgroundColor: cardColor, borderColor }]}
+                dropDownContainerStyle={[styles.dropdownContainer, { backgroundColor: cardColor, borderColor, zIndex: 1000, elevation: 1000 }]}
+                zIndex={1000}
+                zIndexInverse={4000}
+                listMode="SCROLLVIEW"
+                onChangeValue={val => setFormData(f => ({ ...f, classesVisibility: val || '' }))}
+              />
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.saveButtonLarge,
+              { backgroundColor: theme.primary },
+              (saving || uploadingPhoto) && styles.saveButtonDisabled,
+            ]}
+            onPress={handleSave}
+            activeOpacity={0.9}
+            disabled={saving || uploadingPhoto}
+          >
+            <Text style={styles.saveButtonText}>{saving ? 'Saving...' : 'Save Changes'}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.logoutButton,
+              { borderColor: '#E53935', backgroundColor: theme.background },
+              loggingOut && styles.saveButtonDisabled,
+            ]}
+            onPress={handleLogout}
+            activeOpacity={0.9}
+            disabled={loggingOut}
+          >
+            <Text style={[styles.logoutButtonText, { color: '#E53935' }]}>
+              {loggingOut ? 'Signing Out...' : 'Log Out'}
+            </Text>
+          </TouchableOpacity>
+        </KeyboardAwareScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+};
 
 export const PersonalInformationScreen = () => {
   const { profile, updateProfile } = useSupabaseProfile();
@@ -71,29 +502,37 @@ export const PersonalInformationScreen = () => {
     setIsEditing(false);
   };
 
+  const isDarkMode = theme.isDark;
+  const formBackground = isDarkMode ? (theme.surface ?? '#1E1E1E') : '#fff';
+  const disabledBackground = isDarkMode ? '#303030' : '#F5F5F5';
+  const fieldBorderColor = theme.border ?? '#E0E0E0';
+  const textColor = theme.text ?? '#333';
+  const secondaryText = theme.textSecondary ?? '#666';
+  const accentColor = theme.primary ?? '#4CAF50';
+
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <KeyboardAwareScrollView style={styles.container} contentContainerStyle={{ flexGrow: 1 }} enableOnAndroid={true} extraScrollHeight={80}>
-        <View style={styles.header}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.background }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <KeyboardAwareScrollView style={[styles.container, { backgroundColor: theme.background }]} contentContainerStyle={{ flexGrow: 1 }} enableOnAndroid={true} extraScrollHeight={80}>
+        <View style={[styles.header, { borderBottomColor: fieldBorderColor, backgroundColor: theme.background }]}>
           <View style={{ flex: 1 }} />
           {!isEditing ? (
             <TouchableOpacity
               style={styles.editButton}
               onPress={() => setIsEditing(true)}
             >
-              <Ionicons name="pencil" size={20} color="#4CAF50" />
-              <Text style={styles.editButtonText}>Edit</Text>
+              <Ionicons name="pencil" size={20} color={accentColor} />
+              <Text style={[styles.editButtonText, { color: accentColor }]}>Edit</Text>
             </TouchableOpacity>
           ) : (
             <View style={styles.editActions}>
               <TouchableOpacity
-                style={[styles.actionButton, styles.cancelButton]}
+                style={[styles.actionButton, { backgroundColor: isDarkMode ? '#2C2C2C' : '#F5F5F5' }]}
                 onPress={handleCancel}
               >
-                <Text style={styles.actionButtonText}>Cancel</Text>
+                <Text style={[styles.actionButtonText, { color: secondaryText }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.actionButton, styles.saveButton]}
+                style={[styles.actionButton, { backgroundColor: accentColor }]}
                 onPress={handleSave}
               >
                 <Text style={[styles.actionButtonText, styles.saveButtonText]}>
@@ -103,40 +542,55 @@ export const PersonalInformationScreen = () => {
             </View>
           )}
         </View>
-        <View style={styles.content}>
+        <View style={[styles.content, { backgroundColor: theme.background }]}>
           <View style={styles.fieldContainer}>
-            <Text style={styles.label}>Username</Text>
+            <Text style={[styles.label, { color: textColor }]}>Username</Text>
             <TextInput
-              style={[styles.input, !isEditing && styles.disabledInput]}
+              style={[
+                styles.input,
+                { backgroundColor: formBackground, borderColor: fieldBorderColor, color: textColor },
+                !isEditing && { backgroundColor: disabledBackground, color: secondaryText },
+              ]}
               value={formData.username}
               onChangeText={(text) => setFormData({ ...formData, username: text })}
               editable={isEditing}
               placeholder="Enter your username"
+              placeholderTextColor={secondaryText}
             />
           </View>
           <View style={styles.fieldContainer}>
-            <Text style={styles.label}>Email</Text>
+            <Text style={[styles.label, { color: textColor }]}>Email</Text>
             <TextInput
-              style={[styles.input, !isEditing && styles.disabledInput]}
+              style={[
+                styles.input,
+                { backgroundColor: formBackground, borderColor: fieldBorderColor, color: textColor },
+                !isEditing && { backgroundColor: disabledBackground, color: secondaryText },
+              ]}
               value={formData.email}
               onChangeText={(text) => setFormData({ ...formData, email: text })}
               editable={isEditing}
               placeholder="Enter your email"
               keyboardType="email-address"
               autoCapitalize="none"
+              placeholderTextColor={secondaryText}
             />
           </View>
           <View style={styles.fieldContainer}>
-            <Text style={styles.label}>Full Name</Text>
+            <Text style={[styles.label, { color: textColor }]}>Full Name</Text>
             <TextInput
-              style={[styles.input, !isEditing && styles.disabledInput]}
+              style={[
+                styles.input,
+                { backgroundColor: formBackground, borderColor: fieldBorderColor, color: textColor },
+                !isEditing && { backgroundColor: disabledBackground, color: secondaryText },
+              ]}
               value={formData.fullName}
               onChangeText={(text) => setFormData({ ...formData, fullName: text })}
               editable={isEditing}
               placeholder="Enter your full name"
+              placeholderTextColor={secondaryText}
             />
           </View>
-          <Text style={styles.infoText}>
+          <Text style={[styles.infoText, { color: secondaryText }]}>
             Your personal information helps us personalize your experience and keep your account secure.
           </Text>
         </View>
@@ -206,29 +660,37 @@ export const EducationScreen = () => {
     setIsEditing(false);
   };
 
+  const isDarkMode = theme.isDark;
+  const formBackground = isDarkMode ? (theme.surface ?? '#1E1E1E') : '#fff';
+  const disabledBackground = isDarkMode ? '#303030' : '#F5F5F5';
+  const fieldBorderColor = theme.border ?? '#E0E0E0';
+  const textColor = theme.text ?? '#333';
+  const secondaryText = theme.textSecondary ?? '#666';
+  const accentColor = theme.primary ?? '#4CAF50';
+
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <KeyboardAwareScrollView style={styles.container} contentContainerStyle={{ flexGrow: 1 }} enableOnAndroid={true} extraScrollHeight={80}>
-        <View style={styles.header}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.background }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <KeyboardAwareScrollView style={[styles.container, { backgroundColor: theme.background }]} contentContainerStyle={{ flexGrow: 1 }} enableOnAndroid={true} extraScrollHeight={80}>
+        <View style={[styles.header, { borderBottomColor: fieldBorderColor, backgroundColor: theme.background }]}>
           <View style={{ flex: 1 }} />
           {!isEditing ? (
             <TouchableOpacity
               style={styles.editButton}
               onPress={() => setIsEditing(true)}
             >
-              <Ionicons name="pencil" size={20} color="#4CAF50" />
-              <Text style={styles.editButtonText}>Edit</Text>
+              <Ionicons name="pencil" size={20} color={accentColor} />
+              <Text style={[styles.editButtonText, { color: accentColor }]}>Edit</Text>
             </TouchableOpacity>
           ) : (
             <View style={styles.editActions}>
               <TouchableOpacity
-                style={[styles.actionButton, styles.cancelButton]}
+                style={[styles.actionButton, { backgroundColor: isDarkMode ? '#2C2C2C' : '#F5F5F5' }]}
                 onPress={handleCancel}
               >
-                <Text style={styles.actionButtonText}>Cancel</Text>
+                <Text style={[styles.actionButtonText, { color: secondaryText }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.actionButton, styles.saveButton]}
+                style={[styles.actionButton, { backgroundColor: accentColor }]} 
                 onPress={handleSave}
               >
                 <Text style={[styles.actionButtonText, styles.saveButtonText]}>
@@ -238,39 +700,54 @@ export const EducationScreen = () => {
             </View>
           )}
         </View>
-        <View style={styles.content}>
+        <View style={[styles.content, { backgroundColor: theme.background }]}>
           <View style={styles.fieldContainer}>
-            <Text style={styles.label}>University / School</Text>
+            <Text style={[styles.label, { color: textColor }]}>University / School</Text>
             <TextInput
-              style={[styles.input, !isEditing && styles.disabledInput]}
+              style={[
+                styles.input,
+                { backgroundColor: formBackground, borderColor: fieldBorderColor, color: textColor },
+                !isEditing && { backgroundColor: disabledBackground, color: secondaryText },
+              ]}
               value={formData.university}
               onChangeText={(text) => setFormData({ ...formData, university: text })}
               editable={isEditing}
               placeholder="Enter your university or school"
+              placeholderTextColor={secondaryText}
             />
           </View>
           <View style={styles.fieldContainer}>
-            <Text style={styles.label}>Major / Field of Study</Text>
+            <Text style={[styles.label, { color: textColor }]}>Major / Field of Study</Text>
             <TextInput
-              style={[styles.input, !isEditing && styles.disabledInput]}
+              style={[
+                styles.input,
+                { backgroundColor: formBackground, borderColor: fieldBorderColor, color: textColor },
+                !isEditing && { backgroundColor: disabledBackground, color: secondaryText },
+              ]}
               value={formData.major}
               onChangeText={(text) => setFormData({ ...formData, major: text })}
               editable={isEditing}
               placeholder="Enter your major or field of study"
+              placeholderTextColor={secondaryText}
             />
           </View>
           <View style={styles.fieldContainer}>
-            <Text style={styles.label}>Current Classes</Text>
+            <Text style={[styles.label, { color: textColor }]}>Current Classes</Text>
             <TextInput
-              style={[styles.input, !isEditing && styles.disabledInput]}
+              style={[
+                styles.input,
+                { backgroundColor: formBackground, borderColor: fieldBorderColor, color: textColor },
+                !isEditing && { backgroundColor: disabledBackground, color: secondaryText },
+              ]}
               value={formData.classes}
               onChangeText={(text) => setFormData({ ...formData, classes: text })}
               editable={isEditing}
               placeholder="List your current classes (comma separated)"
               multiline
+              placeholderTextColor={secondaryText}
             />
           </View>
-          <Text style={styles.infoText}>
+          <Text style={[styles.infoText, { color: secondaryText }]}> 
             Keeping your education information up to date helps us tailor your study experience.
           </Text>
         </View>
@@ -362,29 +839,37 @@ export const LocationAndTimeScreen = () => {
     setIsEditing(false);
   };
 
+  const isDarkMode = theme.isDark;
+  const formBackground = isDarkMode ? (theme.surface ?? '#1E1E1E') : '#fff';
+  const disabledBackground = isDarkMode ? '#303030' : '#F5F5F5';
+  const fieldBorderColor = theme.border ?? '#E0E0E0';
+  const textColor = theme.text ?? '#333';
+  const secondaryText = theme.textSecondary ?? '#666';
+  const accentColor = theme.primary ?? '#4CAF50';
+
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <KeyboardAwareScrollView style={styles.container} contentContainerStyle={{ flexGrow: 1 }} enableOnAndroid={true} extraScrollHeight={80}>
-        <View style={styles.header}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.background }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <KeyboardAwareScrollView style={[styles.container, { backgroundColor: theme.background }]} contentContainerStyle={{ flexGrow: 1 }} enableOnAndroid={true} extraScrollHeight={80}>
+        <View style={[styles.header, { borderBottomColor: fieldBorderColor, backgroundColor: theme.background }]}>
           <View style={{ flex: 1 }} />
           {!isEditing ? (
             <TouchableOpacity
               style={styles.editButton}
               onPress={() => setIsEditing(true)}
             >
-              <Ionicons name="pencil" size={20} color="#4CAF50" />
-              <Text style={styles.editButtonText}>Edit</Text>
+              <Ionicons name="pencil" size={20} color={accentColor} />
+              <Text style={[styles.editButtonText, { color: accentColor }]}>Edit</Text>
             </TouchableOpacity>
           ) : (
             <View style={styles.editActions}>
               <TouchableOpacity
-                style={[styles.actionButton, styles.cancelButton]}
+                style={[styles.actionButton, { backgroundColor: isDarkMode ? '#2C2C2C' : '#F5F5F5' }]}
                 onPress={handleCancel}
               >
-                <Text style={styles.actionButtonText}>Cancel</Text>
+                <Text style={[styles.actionButtonText, { color: secondaryText }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.actionButton, styles.saveButton]}
+                style={[styles.actionButton, { backgroundColor: accentColor }]} 
                 onPress={handleSave}
               >
                 <Text style={[styles.actionButtonText, styles.saveButtonText]}>
@@ -394,19 +879,24 @@ export const LocationAndTimeScreen = () => {
             </View>
           )}
         </View>
-        <View style={styles.content}>
+        <View style={[styles.content, { backgroundColor: theme.background }]}>
           <View style={styles.fieldContainer}>
-            <Text style={styles.label}>Location</Text>
+            <Text style={[styles.label, { color: textColor }]}>Location</Text>
             <TextInput
-              style={[styles.input, !isEditing && styles.disabledInput]}
+              style={[
+                styles.input,
+                { backgroundColor: formBackground, borderColor: fieldBorderColor, color: textColor },
+                !isEditing && { backgroundColor: disabledBackground, color: secondaryText },
+              ]}
               value={formData.location}
               onChangeText={(text) => setFormData({ ...formData, location: text })}
               editable={isEditing}
               placeholder="Enter your location"
+              placeholderTextColor={secondaryText}
             />
           </View>
           <View style={styles.fieldContainer}>
-            <Text style={styles.label}>Time Zone</Text>
+            <Text style={[styles.label, { color: textColor }]}>Time Zone</Text>
             {isEditing ? (
               <View style={styles.pickerWrapper}>
                 <DropDownPicker
@@ -416,18 +906,18 @@ export const LocationAndTimeScreen = () => {
                   setValue={cb => setFormData(f => ({ ...f, timeZone: typeof cb === 'function' ? cb(f.timeZone) : cb }))}
                   items={TIME_ZONES.map((tz) => ({ label: tz, value: tz }))}
                   onChangeValue={val => setFormData(f => ({ ...f, timeZone: val || '' }))}
-                  style={styles.dropdown}
-                  dropDownContainerStyle={[styles.dropdownContainer, { zIndex: 5000, elevation: 5000 }]}
+                  style={[styles.dropdown, { backgroundColor: formBackground, borderColor: fieldBorderColor }]}
+                  dropDownContainerStyle={[styles.dropdownContainer, { backgroundColor: formBackground, borderColor: fieldBorderColor, zIndex: 5000, elevation: 5000 }]}
                   zIndex={5000}
                   zIndexInverse={500}
                   listMode="SCROLLVIEW"
                 />
               </View>
             ) : (
-              <Text style={styles.valueText}>{formData.timeZone || Localization.timezone}</Text>
+              <Text style={[styles.valueText, { color: textColor }]}>{formData.timeZone || Localization.timezone}</Text>
             )}
           </View>
-          <Text style={styles.infoText}>
+          <Text style={[styles.infoText, { color: secondaryText }]}>
             Keeping your location and time zone up to date helps us provide accurate scheduling and reminders.
           </Text>
         </View>
@@ -435,12 +925,6 @@ export const LocationAndTimeScreen = () => {
     </KeyboardAvoidingView>
   );
 };
-
-const PRIVACY_OPTIONS = [
-  { label: 'Do Not Show', value: 'none' },
-  { label: 'Only my Friends', value: 'friends' },
-  { label: 'Everyone', value: 'everyone' },
-];
 
 export const PrivacyScreen = () => {
   const { profile, updateProfile } = useSupabaseProfile();
@@ -529,29 +1013,37 @@ export const PrivacyScreen = () => {
     setIsEditing(false);
   };
 
+  const isDarkMode = theme.isDark;
+  const formBackground = isDarkMode ? (theme.surface ?? '#1E1E1E') : '#fff';
+  const disabledBackground = isDarkMode ? '#303030' : '#F5F5F5';
+  const fieldBorderColor = theme.border ?? '#E0E0E0';
+  const textColor = theme.text ?? '#333';
+  const secondaryText = theme.textSecondary ?? '#666';
+  const accentColor = theme.primary ?? '#4CAF50';
+
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <KeyboardAwareScrollView style={styles.container} contentContainerStyle={{ flexGrow: 1 }} enableOnAndroid={true} extraScrollHeight={80}>
-        <View style={styles.header}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.background }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <KeyboardAwareScrollView style={[styles.container, { backgroundColor: theme.background }]} contentContainerStyle={{ flexGrow: 1 }} enableOnAndroid={true} extraScrollHeight={80}>
+        <View style={[styles.header, { borderBottomColor: fieldBorderColor, backgroundColor: theme.background }]}>
           <View style={{ flex: 1 }} />
           {!isEditing ? (
             <TouchableOpacity
               style={styles.editButton}
               onPress={() => setIsEditing(true)}
             >
-              <Ionicons name="pencil" size={20} color="#4CAF50" />
-              <Text style={styles.editButtonText}>Edit</Text>
+              <Ionicons name="pencil" size={20} color={accentColor} />
+              <Text style={[styles.editButtonText, { color: accentColor }]}>Edit</Text>
             </TouchableOpacity>
           ) : (
             <View style={styles.editActions}>
               <TouchableOpacity
-                style={[styles.actionButton, styles.cancelButton]}
+                style={[styles.actionButton, { backgroundColor: isDarkMode ? '#2C2C2C' : '#F5F5F5' }]}
                 onPress={handleCancel}
               >
-                <Text style={styles.actionButtonText}>Cancel</Text>
+                <Text style={[styles.actionButtonText, { color: secondaryText }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.actionButton, styles.saveButton]}
+                style={[styles.actionButton, { backgroundColor: accentColor }]} 
                 onPress={handleSave}
               >
                 <Text style={[styles.actionButtonText, styles.saveButtonText]}>
@@ -561,10 +1053,10 @@ export const PrivacyScreen = () => {
             </View>
           )}
         </View>
-        <View style={styles.content}>
+        <View style={[styles.content, { backgroundColor: theme.background }]}>
           <View style={styles.fieldContainer}>
-            <Text style={styles.labelBold}>Full Name</Text>
-            <Text style={styles.subtext}>Control who can see your full name in the community.</Text>
+            <Text style={[styles.labelBold, { color: textColor }]}>Full Name</Text>
+            <Text style={[styles.subtext, { color: secondaryText }]}>Control who can see your full name in the community.</Text>
             <DropDownPicker
               open={fullNameOpen}
               setOpen={setFullNameOpen}
@@ -573,8 +1065,8 @@ export const PrivacyScreen = () => {
               setValue={cb => setFormData(f => ({ ...f, fullNameVisibility: typeof cb === 'function' ? cb(f.fullNameVisibility) : cb }))}
               items={PRIVACY_OPTIONS}
               disabled={!isEditing}
-              style={styles.dropdown}
-              dropDownContainerStyle={[styles.dropdownContainer, { zIndex: 4000, elevation: 4000 }]}
+              style={[styles.dropdown, { backgroundColor: formBackground, borderColor: fieldBorderColor }]}
+              dropDownContainerStyle={[styles.dropdownContainer, { backgroundColor: formBackground, borderColor: fieldBorderColor, zIndex: 4000, elevation: 4000 }]}
               zIndex={4000}
               zIndexInverse={1000}
               listMode="SCROLLVIEW"
@@ -582,8 +1074,8 @@ export const PrivacyScreen = () => {
             />
           </View>
           <View style={styles.fieldContainer}>
-            <Text style={styles.labelBold}>University</Text>
-            <Text style={styles.subtext}>Control who can see your university or school in the community.</Text>
+            <Text style={[styles.labelBold, { color: textColor }]}>University</Text>
+            <Text style={[styles.subtext, { color: secondaryText }]}>Control who can see your university or school in the community.</Text>
             <DropDownPicker
               open={universityOpen}
               setOpen={setUniversityOpen}
@@ -592,8 +1084,8 @@ export const PrivacyScreen = () => {
               setValue={cb => setFormData(f => ({ ...f, universityVisibility: typeof cb === 'function' ? cb(f.universityVisibility) : cb }))}
               items={PRIVACY_OPTIONS}
               disabled={!isEditing}
-              style={styles.dropdown}
-              dropDownContainerStyle={[styles.dropdownContainer, { zIndex: 3000, elevation: 3000 }]}
+              style={[styles.dropdown, { backgroundColor: formBackground, borderColor: fieldBorderColor }]}
+              dropDownContainerStyle={[styles.dropdownContainer, { backgroundColor: formBackground, borderColor: fieldBorderColor, zIndex: 3000, elevation: 3000 }]}
               zIndex={3000}
               zIndexInverse={2000}
               listMode="SCROLLVIEW"
@@ -601,8 +1093,8 @@ export const PrivacyScreen = () => {
             />
           </View>
           <View style={styles.fieldContainer}>
-            <Text style={styles.labelBold}>Location</Text>
-            <Text style={styles.subtext}>Control who can see your location in the community.</Text>
+            <Text style={[styles.labelBold, { color: textColor }]}>Location</Text>
+            <Text style={[styles.subtext, { color: secondaryText }]}>Control who can see your location in the community.</Text>
             <DropDownPicker
               open={locationOpen}
               setOpen={setLocationOpen}
@@ -611,8 +1103,8 @@ export const PrivacyScreen = () => {
               setValue={cb => setFormData(f => ({ ...f, locationVisibility: typeof cb === 'function' ? cb(f.locationVisibility) : cb }))}
               items={PRIVACY_OPTIONS}
               disabled={!isEditing}
-              style={styles.dropdown}
-              dropDownContainerStyle={[styles.dropdownContainer, { zIndex: 2000, elevation: 2000 }]}
+              style={[styles.dropdown, { backgroundColor: formBackground, borderColor: fieldBorderColor }]}
+              dropDownContainerStyle={[styles.dropdownContainer, { backgroundColor: formBackground, borderColor: fieldBorderColor, zIndex: 2000, elevation: 2000 }]}
               zIndex={2000}
               zIndexInverse={3000}
               listMode="SCROLLVIEW"
@@ -620,8 +1112,8 @@ export const PrivacyScreen = () => {
             />
           </View>
           <View style={styles.fieldContainer}>
-            <Text style={styles.labelBold}>Class</Text>
-            <Text style={styles.subtext}>Control who can see your current classes in the community.</Text>
+            <Text style={[styles.labelBold, { color: textColor }]}>Class</Text>
+            <Text style={[styles.subtext, { color: secondaryText }]}>Control who can see your current classes in the community.</Text>
             <DropDownPicker
               open={classesOpen}
               setOpen={setClassesOpen}
@@ -630,8 +1122,8 @@ export const PrivacyScreen = () => {
               setValue={cb => setFormData(f => ({ ...f, classesVisibility: typeof cb === 'function' ? cb(f.classesVisibility) : cb }))}
               items={PRIVACY_OPTIONS}
               disabled={!isEditing}
-              style={styles.dropdown}
-              dropDownContainerStyle={[styles.dropdownContainer, { zIndex: 1000, elevation: 1000 }]}
+              style={[styles.dropdown, { backgroundColor: formBackground, borderColor: fieldBorderColor }]}
+              dropDownContainerStyle={[styles.dropdownContainer, { backgroundColor: formBackground, borderColor: fieldBorderColor, zIndex: 1000, elevation: 1000 }]}
               zIndex={1000}
               zIndexInverse={4000}
               listMode="SCROLLVIEW"
@@ -740,6 +1232,33 @@ export const PreferencesScreen = () => {
   }, []);
 
   const handleSave = async () => {
+    // Check if weekly focus goal is over 60 hours and show warning
+    if (formData.weeklyFocusGoal > 60) {
+      Alert.alert(
+        'Big Goal!',
+        'Are you sure you want to focus that many hours? It might make it harder to earn rewards and move up the leaderboard. But if you do it, you can earn bigger rewards!',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel'
+          },
+          {
+            text: "Yes, I'm Sure",
+            onPress: async () => {
+              // Proceed with saving
+              await savePreferences();
+            }
+          }
+        ]
+      );
+    } else {
+      // Goal is 60 or under, save directly
+      await savePreferences();
+    }
+  };
+
+  // Helper function to save preferences
+  const savePreferences = async () => {
     try {
       await updateOnboarding({
         weekly_focus_goal: formData.weeklyFocusGoal,
@@ -900,6 +1419,87 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
+  customizationSafeArea: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  avatarSection: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  avatarTouch: {
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImageLarge: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarPlaceholder: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarEditBadge: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    borderRadius: 14,
+    padding: 6,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  avatarHelpText: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 12,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  formSection: {
+    marginTop: 12,
+  },
+  sectionHeading: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  privacyDescription: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  multilineInput: {
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  saveButtonLarge: {
+    marginTop: 24,
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  saveButtonDisabled: {
+    opacity: 0.6,
+  },
+  logoutButton: {
+    marginTop: 16,
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  logoutButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -944,6 +1544,8 @@ const styles = StyleSheet.create({
   },
   saveButtonText: {
     color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   content: {
     padding: 16,

@@ -24,7 +24,7 @@ const APP_FEATURES: AppFeature[] = [
   {
     id: 'focus-sessions',
     title: 'Focus Sessions',
-    description: 'Personalized study sessions with Pomodoro timer and ambient sounds',
+    description: 'Personalized study sessions with Balanced timer and ambient sounds',
     icon: 'timer-outline',
     color: '#4CAF50',
   },

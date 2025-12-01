@@ -40,7 +40,7 @@ interface ChatMessage {
 }
 
 const FOCUS_TOPICS = [
-  { title: 'Start a Pomodoro Session', subtitle: 'Last session 2 hours ago', action: 'pomodoro' },
+  { title: 'Start a Balanced Session', subtitle: 'Last session 2 hours ago', action: 'pomodoro' },
   { title: 'Review My Tasks', subtitle: 'Last review 3 hours ago', action: 'tasks' },
   { title: 'Ask for Study Tips', subtitle: 'Last tip 3 hours ago', action: 'tips' },
   { title: 'Check Progress', subtitle: 'Last check 3 hours ago', action: 'progress' },

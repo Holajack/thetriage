@@ -21,6 +21,9 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
 
   const [profilePicUri, setProfilePicUri] = useState<string | null>(null);
   const [bio, setBio] = useState('');
+  const [university, setUniversity] = useState('');
+  const [location, setLocation] = useState('');
+  const [classes, setClasses] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -113,6 +116,18 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
         updateData.bio = bio.trim();
       }
 
+      if (university.trim()) {
+        updateData.university = university.trim();
+      }
+
+      if (location.trim()) {
+        updateData.location = location.trim();
+      }
+
+      if (classes.trim()) {
+        updateData.classes = classes.trim();
+      }
+
       await updateOnboarding(updateData);
       setLoading(false);
       navigation.navigate('StudyPreferences', { focusMethod });
@@ -172,6 +187,33 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
             <Text style={[styles.bioHint, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>
               {bio.length}/150 characters
             </Text>
+
+            <Text style={[styles.inputLabel, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>University / School (Optional)</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: theme.isDark ? theme.card : 'rgba(255, 255, 255, 0.05)', color: theme.isDark ? theme.text : '#E8F5E9', borderColor: theme.isDark ? theme.border : 'rgba(232, 245, 233, 0.2)' }]}
+              placeholder="Enter your university or school"
+              placeholderTextColor={theme.isDark ? theme.textSecondary : '#B8E6C1'}
+              value={university}
+              onChangeText={setUniversity}
+            />
+
+            <Text style={[styles.inputLabel, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>Location (Optional)</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: theme.isDark ? theme.card : 'rgba(255, 255, 255, 0.05)', color: theme.isDark ? theme.text : '#E8F5E9', borderColor: theme.isDark ? theme.border : 'rgba(232, 245, 233, 0.2)' }]}
+              placeholder="City, Country"
+              placeholderTextColor={theme.isDark ? theme.textSecondary : '#B8E6C1'}
+              value={location}
+              onChangeText={setLocation}
+            />
+
+            <Text style={[styles.inputLabel, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>Current Classes (Optional)</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: theme.isDark ? theme.card : 'rgba(255, 255, 255, 0.05)', color: theme.isDark ? theme.text : '#E8F5E9', borderColor: theme.isDark ? theme.border : 'rgba(232, 245, 233, 0.2)' }]}
+              placeholder="e.g., Math 101, Physics 202"
+              placeholderTextColor={theme.isDark ? theme.textSecondary : '#B8E6C1'}
+              value={classes}
+              onChangeText={setClasses}
+            />
 
             {error ? <Text style={[styles.errorText, { backgroundColor: theme.isDark ? 'rgba(255, 107, 107, 0.15)' : 'rgba(255, 107, 107, 0.1)', borderColor: theme.isDark ? 'rgba(255, 107, 107, 0.4)' : 'rgba(255, 107, 107, 0.3)' }]}>{error}</Text> : null}
           </View>

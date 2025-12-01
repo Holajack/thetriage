@@ -149,8 +149,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationComplete 
         </Animated.View>
 
         <Animated.View style={[styles.textContainer, { opacity: titleOpacity }]}>
-          <Text style={styles.title}>HIKE</Text>
-          <Text style={styles.subtitle}>WISE</Text>
+          <Text style={styles.title}>HikeWise</Text>
         </Animated.View>
 
         <Animated.View style={[styles.taglineContainer, { opacity: taglineOpacity }]}>
@@ -192,15 +191,7 @@ const styles = StyleSheet.create({
     fontSize: 48,
     fontWeight: 'bold',
     color: '#E8F5E9',
-    letterSpacing: 8,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 24,
-    fontWeight: '300',
-    color: '#E8F5E9',
-    letterSpacing: 12,
-    marginTop: 5,
+    letterSpacing: 4,
     textAlign: 'center',
   },
   taglineContainer: {
