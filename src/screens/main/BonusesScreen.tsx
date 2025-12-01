@@ -118,9 +118,6 @@ const BonusesScreen = () => {
 
         {/* Stats Card */}}
         <View style={[styles.statsCard, { backgroundColor: theme.primary + '15' }]}>
-          <Text style={[styles.statsTitle, { color: theme.primary }]}>
-            Your Progress
-          </Text>
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <Text style={[styles.statNumber, { color: theme.primary }]}>4</Text>

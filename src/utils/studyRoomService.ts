@@ -625,7 +625,8 @@ export async function sendStudyRoomMessage(
       return { success: false, error: 'Not authenticated' };
     }
 
-    const { data, error } = await supabase
+    // Insert the message
+    const { data: message, error } = await supabase
       .from('study_room_messages')
       .insert({
         room_id: roomId,
@@ -633,17 +634,27 @@ export async function sendStudyRoomMessage(
         content,
         message_type: 'text'
       })
-      .select(`
-        *,
-        sender:profiles!study_room_messages_sender_id_fkey(id, username, full_name, avatar_url)
-      `)
+      .select('*')
       .single();
 
     if (error) {
       return { success: false, error: error.message };
     }
 
-    return { success: true, data };
+    // Fetch sender profile separately
+    const { data: sender } = await supabase
+      .from('profiles')
+      .select('id, username, full_name, avatar_url')
+      .eq('id', session.user.id)
+      .single();
+
+    // Combine message with sender profile
+    const enrichedMessage = {
+      ...message,
+      sender: sender || undefined
+    };
+
+    return { success: true, data: enrichedMessage };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -657,21 +668,45 @@ export async function getStudyRoomMessages(
   limit: number = 50
 ): Promise<{ success: boolean; error?: string; data?: StudyRoomMessage[] }> {
   try {
-    const { data, error } = await supabase
+    // Fetch messages first
+    const { data: messages, error: messagesError } = await supabase
       .from('study_room_messages')
-      .select(`
-        *,
-        sender:profiles!study_room_messages_sender_id_fkey(id, username, full_name, avatar_url)
-      `)
+      .select('*')
       .eq('room_id', roomId)
       .order('created_at', { ascending: false })
       .limit(limit);
 
-    if (error) {
-      return { success: false, error: error.message };
+    if (messagesError) {
+      return { success: false, error: messagesError.message };
     }
 
-    return { success: true, data: (data || []).reverse() };
+    if (!messages || messages.length === 0) {
+      return { success: true, data: [] };
+    }
+
+    // Get unique sender IDs
+    const senderIds = [...new Set(messages.map(m => m.sender_id))];
+
+    // Fetch sender profiles separately
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, username, full_name, avatar_url')
+      .in('id', senderIds);
+
+    if (profilesError) {
+      console.warn('Failed to fetch sender profiles:', profilesError);
+      // Return messages without sender info rather than failing
+      return { success: true, data: messages.reverse() };
+    }
+
+    // Map profiles to messages
+    const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+    const enrichedMessages = messages.map(msg => ({
+      ...msg,
+      sender: profileMap.get(msg.sender_id)
+    }));
+
+    return { success: true, data: enrichedMessages.reverse() };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -695,18 +730,25 @@ export function subscribeToStudyRoomMessages(
         filter: `room_id.eq.${roomId}`
       },
       async (payload) => {
-        // Fetch the complete message with sender info
-        const { data } = await supabase
+        // Fetch the complete message
+        const { data: message } = await supabase
           .from('study_room_messages')
-          .select(`
-            *,
-            sender:profiles!study_room_messages_sender_id_fkey(id, username, full_name, avatar_url)
-          `)
+          .select('*')
           .eq('id', payload.new.id)
           .single();
 
-        if (data) {
-          callback(data);
+        if (message) {
+          // Fetch sender profile separately
+          const { data: sender } = await supabase
+            .from('profiles')
+            .select('id, username, full_name, avatar_url')
+            .eq('id', message.sender_id)
+            .single();
+
+          callback({
+            ...message,
+            sender: sender || undefined
+          });
         }
       }
     )
@@ -715,4 +757,53 @@ export function subscribeToStudyRoomMessages(
   return () => {
     supabase.removeChannel(channel);
   };
+}
+
+/**
+ * Delete a study room (owner only)
+ */
+export async function deleteStudyRoom(
+  roomId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) {
+      return { success: false, error: 'Not authenticated' };
+    }
+
+    // First, verify the user is the owner of the room
+    const { data: room, error: fetchError } = await supabase
+      .from('study_rooms')
+      .select('owner_id, creator_id')
+      .eq('id', roomId)
+      .single();
+
+    if (fetchError) {
+      return { success: false, error: fetchError.message };
+    }
+
+    if (!room) {
+      return { success: false, error: 'Study room not found' };
+    }
+
+    // Check if user is owner (check both owner_id and creator_id for compatibility)
+    const isOwner = room.owner_id === session.user.id || room.creator_id === session.user.id;
+    if (!isOwner) {
+      return { success: false, error: 'Only the room creator can delete this study room' };
+    }
+
+    // Delete the room (cascade will handle related records)
+    const { error: deleteError } = await supabase
+      .from('study_rooms')
+      .delete()
+      .eq('id', roomId);
+
+    if (deleteError) {
+      return { success: false, error: deleteError.message };
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
 }

@@ -244,7 +244,7 @@ export const STUDY_HABITS_QUESTIONS: QuizQuestion[] = [
   {
     id: "sh_032",
     question: "How do you maintain focus during long study sessions?",
-    options: ["Set small goals and reward myself", "Use focus techniques (Pomodoro, etc.)", "Take regular breaks", "Change subjects/topics", "I struggle to maintain focus"],
+    options: ["Set small goals and reward myself", "Use focus techniques (Balanced, etc.)", "Take regular breaks", "Change subjects/topics", "I struggle to maintain focus"],
     category: "motivation",
     weight: 3
   },

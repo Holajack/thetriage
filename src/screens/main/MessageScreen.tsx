@@ -100,12 +100,16 @@ const MessageScreen = () => {
     setSending(true);
     const messageContent = inputText.trim();
     setInputText('');
-    
+
     try {
       const result = await MessageService.sendMessage(recipientId, messageContent);
-      if (result.success) {
-        // Message will be added via real-time subscription
-        flatListRef.current?.scrollToEnd({ animated: true });
+      if (result.success && result.data) {
+        // Immediately add the sent message to the state (optimistic update)
+        setMessages((prev) => [...prev, result.data!]);
+        // Scroll to bottom
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
       } else {
         console.error('Error sending message:', result.error);
         // Restore the input text if sending failed
@@ -135,9 +139,10 @@ const MessageScreen = () => {
           {item.content}
         </Text>
         <Text style={[styles.timestamp, { color: isMyMessage ? 'rgba(255,255,255,0.7)' : theme.textSecondary }]}>
-          {new Date(item.created_at).toLocaleTimeString([], { 
-            hour: '2-digit', 
-            minute: '2-digit' 
+          {new Date(item.created_at).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
           })}
         </Text>
       </View>

@@ -97,8 +97,10 @@ export type MainTabParamList = {
   Results: undefined;
   Leaderboard: undefined;
   Profile: undefined;
+  Shop: undefined;
   Settings: undefined;
   ProfileMain: undefined;
+  ProfileCustomization: undefined;
   PersonalInformation: undefined;
   Education: undefined;
   LocationAndTime: undefined;
@@ -137,6 +139,7 @@ export type MainTabParamList = {
   SessionReport: undefined;
   ProTrekker: undefined;
   Subscription: undefined;
+  QRScanner: undefined;
 };
 
 export type MessageContact = {

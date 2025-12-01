@@ -8,7 +8,7 @@ const plans = [
     name: 'Basic',
     price: 'Free',
     features: [
-      'Pomodoro Focus Timer (45/15 min cycles)',
+      'Balanced Focus Timer (45/15 min cycles)',
       'Task & Subject Creation',
       'Weekly Progress Tracking',
       'Daily Inspiration Quotes',

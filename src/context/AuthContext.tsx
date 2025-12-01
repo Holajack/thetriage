@@ -3,6 +3,7 @@ import { supabase } from '../utils/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createInitialUserData, ensureUserDataCompleteness } from '../utils/createUserData';
 import * as Network from 'expo-network';
+import { scheduleWeeklyGoalChecks } from '../utils/weeklyGoalNotifications';
 
 // Simple timeout wrapper
 const withTimeout = (promise: Promise<any>, timeoutMs: number = 6000): Promise<any> => {
@@ -290,6 +291,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('💾 User data cached for offline use');
       } catch (cacheError) {
         console.log('⚠️ Failed to cache user data:', cacheError);
+      }
+
+      // Initialize weekly goal notifications
+      try {
+        if (userData.profile?.id) {
+          await scheduleWeeklyGoalChecks(userData.profile.id);
+          console.log('📅 Weekly goal notifications initialized');
+        }
+      } catch (notifError) {
+        console.log('⚠️ Failed to initialize weekly goal notifications:', notifError);
       }
 
       if (showLogs) {

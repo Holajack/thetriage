@@ -8,6 +8,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
 import { useSupabaseTasks } from '../../utils/supabaseHooks';
 import { getUserSettings } from '../../utils/userSettings';
+import { startFocusSessionWithDND } from '../../utils/doNotDisturb';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { width, height } = Dimensions.get('window');
@@ -151,8 +152,7 @@ export default function FocusPreparationScreen() {
     ];
 
     const customTimes = [];
-    // 3, 5
-    customTimes.push({ label: '3 min', value: 3, isWorkStyle: false });
+    // Start at 5 minutes (removed 3-minute option as sessions under 5 minutes are not saved)
     customTimes.push({ label: '5 min', value: 5, isWorkStyle: false });
     
     // Increments of 5 until 30
@@ -319,11 +319,14 @@ export default function FocusPreparationScreen() {
     return defaultResponses[Math.floor(Math.random() * defaultResponses.length)];
   };
 
-  const handleStartFocus = () => {
+  const handleStartFocus = async () => {
     if (!selectedTask) {
       Alert.alert('Select a Task', 'Please select a task to focus on');
       return;
     }
+
+    // Enable Do Not Disturb mode if auto DND is enabled
+    await startFocusSessionWithDND(true);
 
     // Start color fill animation with longer duration for full screen coverage
     Animated.timing(colorFillAnim, {

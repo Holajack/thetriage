@@ -17,7 +17,7 @@ import EBooksScreen from '../screens/main/EBooksScreen';
 import SelfDiscoveryQuizScreen from '../screens/main/SelfDiscoveryQuizScreen';
 import BrainMappingScreen from '../screens/main/BrainMappingScreen';
 import AchievementsScreen from '../screens/bonuses/AchievementsScreen';
-import { PersonalInformationScreen, EducationScreen, LocationAndTimeScreen, PrivacyScreen, PreferencesScreen } from '../screens/main/profile/ProfileScreens';
+import { ProfileCustomizationScreen, PersonalInformationScreen, EducationScreen, LocationAndTimeScreen, PrivacyScreen, PreferencesScreen } from '../screens/main/profile/ProfileScreens';
 import { Ionicons, Entypo } from '@expo/vector-icons';
 import { TouchableOpacity, View, Text } from 'react-native';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
@@ -115,11 +115,16 @@ function getTabIcon(routeName: string): any {
 
 function ProfileStack() {
   return (
-    <Stack.Navigator>
+  <Stack.Navigator>
       <Stack.Screen 
         name="ProfileMain" 
         component={ProfileScreen} 
         options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="ProfileCustomization"
+        component={ProfileCustomizationScreen}
+        options={{ title: 'Customize Profile' }}
       />
       <Stack.Screen 
         name="PersonalInformation" 

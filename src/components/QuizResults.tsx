@@ -72,8 +72,8 @@ const QuizResults: React.FC<QuizResultsProps> = ({ result, onRetake, onClose }) 
       "Use time-blocking techniques to schedule specific study periods": 
         "Time-blocking involves scheduling specific time slots for different activities. For studying, this means setting aside dedicated blocks of time for each subject or task. This helps reduce decision fatigue and ensures you allocate enough time to each area.",
       
-      "Try the Pomodoro Technique: 25 minutes focused study + 5 minute breaks":
-        "The Pomodoro Technique is a time management method that breaks work into intervals (traditionally 25 minutes) separated by short breaks. This helps maintain focus and prevents mental fatigue. After 4 pomodoros, take a longer 15-30 minute break.",
+      "Try the Balanced Technique: 25 minutes focused study + 5 minute breaks":
+        "The Balanced Technique is a time management method that breaks work into intervals (traditionally 25 minutes) separated by short breaks. This helps maintain focus and prevents mental fatigue. After 4 balanced sessions, take a longer 15-30 minute break.",
         
       "Use mind maps, charts, and diagrams to organize information":
         "Visual learners process information better when it's presented graphically. Mind maps help you see connections between concepts, while charts and diagrams can simplify complex information. Try using colors and symbols to make your visual aids even more effective.",

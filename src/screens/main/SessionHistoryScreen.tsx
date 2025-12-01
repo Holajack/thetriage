@@ -121,39 +121,41 @@ const SessionHistoryScreen = () => {
       }
 
       // Transform the data to match the expected interface
-      const transformedSessions: SessionHistoryItem[] = (sessionsData || []).map(session => {
-        // Generate a friendly session name based on session_type
-        let sessionName = 'Study Session';
-        if (session.session_type === 'individual') {
-          sessionName = 'Focus Session';
-        } else if (session.session_type === 'group') {
-          sessionName = 'Group Study Session';
-        } else if (session.session_type === 'deep_work') {
-          sessionName = 'Deep Work Session';
-        } else if (session.session_type === 'sprint') {
-          sessionName = 'Sprint Session';
-        } else if (session.session_type === 'balanced') {
-          sessionName = 'Balanced Session';
-        }
+      const transformedSessions: SessionHistoryItem[] = (sessionsData || [])
+        .map(session => {
+          // Generate a friendly session name based on session_type
+          let sessionName = 'Study Session';
+          if (session.session_type === 'individual') {
+            sessionName = 'Focus Session';
+          } else if (session.session_type === 'group') {
+            sessionName = 'Group Study Session';
+          } else if (session.session_type === 'deep_work') {
+            sessionName = 'Deep Work Session';
+          } else if (session.session_type === 'sprint') {
+            sessionName = 'Sprint Session';
+          } else if (session.session_type === 'balanced') {
+            sessionName = 'Balanced Session';
+          }
 
-        return {
-          id: session.id,
-          user_id: session.user_id,
-          start_time: session.start_time,
-          end_time: session.end_time || '',
-          duration_minutes: session.duration_seconds ? Math.round(session.duration_seconds / 60) : 0,
-          intended_duration: 0,
-          status: session.status as 'completed' | 'cancelled' | 'paused',
-          focus_quality: 0,
-          interruptions: 0,
-          session_type: session.session_type,
-          subject: sessionName,
-          notes: '',
-          created_at: session.created_at,
-          task_title: sessionName,
-          productivity_rating: 0,
-        };
-      });
+          return {
+            id: session.id,
+            user_id: session.user_id,
+            start_time: session.start_time,
+            end_time: session.end_time || '',
+            duration_minutes: session.duration_seconds ? Math.round(session.duration_seconds / 60) : 0,
+            intended_duration: 0,
+            status: session.status as 'completed' | 'cancelled' | 'paused',
+            focus_quality: 0,
+            interruptions: 0,
+            session_type: session.session_type,
+            subject: sessionName,
+            notes: '',
+            created_at: session.created_at,
+            task_title: sessionName,
+            productivity_rating: 0,
+          };
+        })
+        .filter(session => session.duration_minutes >= 5); // Filter out sessions less than 5 minutes
 
       setSessions(transformedSessions);
       console.log(`SessionHistory: Loaded ${transformedSessions.length} sessions`);
@@ -272,7 +274,7 @@ const SessionHistoryScreen = () => {
           <Ionicons name="calendar-outline" size={16} color={theme.primary} />
           <Text style={[styles.statLabel, { color: theme.text }]}>Type</Text>
           <Text style={[styles.statValue, { color: theme.text }]}>
-            <Text>{session.session_type === 'individual' ? 'Solo' : 'Group'}</Text>
+            {session.session_type === 'individual' ? 'Solo' : 'Group'}
           </Text>
         </View>
 
@@ -302,9 +304,10 @@ const SessionHistoryScreen = () => {
         <View style={styles.footerItem}>
           <Ionicons name="time-outline" size={14} color={theme.primary} />
           <Text style={[styles.footerText, { color: theme.text }]}>
-            {new Date(session.start_time).toLocaleTimeString('en-US', { 
-              hour: '2-digit', 
-              minute: '2-digit' 
+            {new Date(session.start_time).toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true
             })}
           </Text>
         </View>
@@ -427,8 +430,7 @@ const SessionHistoryScreen = () => {
                 </View>
                 <View style={styles.summaryItem}>
                   <Text style={[styles.summaryValue, { color: theme.primary }]}>
-                    <Text>{Math.round(sessions.reduce((total, session) => total + (session.duration_minutes || 0), 0) / 60 * 10) / 10}</Text>
-                    <Text>h</Text>
+                    {Math.round(sessions.reduce((total, session) => total + (session.duration_minutes || 0), 0) / 60 * 10) / 10}h
                   </Text>
                   <Text style={[styles.summaryLabel, { color: theme.text }]}>Total Time</Text>
                 </View>

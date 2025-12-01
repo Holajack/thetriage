@@ -171,7 +171,9 @@ const NoraScreen = () => {
   const [selectedPdf, setSelectedPdf] = useState<any>(null);
   const [showNoraOnboarding, setShowNoraOnboarding] = useState(false);
   const [showPdfModal, setShowPdfModal] = useState(false);
-  
+  const [thinkingMode, setThinkingMode] = useState<'fast' | 'deep'>('fast');
+  const [lastNoraResponse, setLastNoraResponse] = useState<string>(''); // Track last response for context
+
   const scrollViewRef = useRef<ScrollView>(null);
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
@@ -364,6 +366,88 @@ const NoraScreen = () => {
     });
   };
 
+  // Detect vague follow-ups that need context from previous response
+  const isVagueFollowUp = (message: string): boolean => {
+    const lowerMessage = message.toLowerCase().trim();
+    const wordCount = message.split(/\s+/).length;
+
+    // Short messages (1-10 words) with vague references
+    if (wordCount <= 10) {
+      // Transformation commands
+      const transformationCommands = [
+        'shorter', 'longer', 'simplify', 'expand', 'elaborate', 'more detail',
+        'less detail', 'summarize', 'break it down', 'explain', 'clarify',
+        'rephrase', 'rewrite', 'change', 'modify', 'adjust', 'make it'
+      ];
+
+      // Vague pronouns/references
+      const vagueReferences = [
+        'it', 'this', 'that', 'these', 'those', 'them', 'the above',
+        'your answer', 'your response', 'what you said', 'what you just said'
+      ];
+
+      // Question words that might reference previous content
+      const referenceQuestions = [
+        'why', 'how', 'what about', 'can you', 'could you', 'would you',
+        'please', 'give me', 'show me', 'tell me'
+      ];
+
+      // Check if message contains any vague indicators
+      const hasTransformation = transformationCommands.some(cmd => lowerMessage.includes(cmd));
+      const hasVagueReference = vagueReferences.some(ref => lowerMessage.includes(ref));
+      const hasReferenceQuestion = referenceQuestions.some(q => lowerMessage.includes(q));
+
+      // Consider it vague if it has transformation commands or vague references
+      if (hasTransformation || (hasVagueReference && hasReferenceQuestion)) {
+        console.log('🔗 Vague follow-up detected:', message);
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  // Detect question complexity automatically
+  const detectQuestionComplexity = (message: string): 'fast' | 'deep' => {
+    const lowerMessage = message.toLowerCase();
+
+    // Keywords that suggest deep thinking is needed
+    const deepThinkingKeywords = [
+      'research', 'explain in detail', 'analyze', 'compare', 'comprehensive',
+      'detailed analysis', 'investigate', 'explore', 'thorough', 'in-depth',
+      'breakdown', 'examine', 'evaluate', 'assess', 'elaborate'
+    ];
+
+    // Keywords that suggest user data is needed
+    const userDataKeywords = [
+      'my progress', 'my sessions', 'my goals', 'my statistics', 'my performance',
+      'my history', 'my achievements', 'how am i doing', 'track my', 'show my'
+    ];
+
+    // Check for deep thinking indicators
+    const hasDeepKeywords = deepThinkingKeywords.some(keyword => lowerMessage.includes(keyword));
+    const needsUserData = userDataKeywords.some(keyword => lowerMessage.includes(keyword));
+    const isLongQuestion = message.length > 150; // Long questions often need deeper analysis
+    const hasMultipleQuestions = (message.match(/\?/g) || []).length > 1;
+    const hasTechnicalLanguage = /\b(algorithm|methodology|framework|paradigm|hypothesis|empirical)\b/i.test(message);
+
+    // If any indicator suggests complexity, use deep mode
+    if (hasDeepKeywords || needsUserData || hasMultipleQuestions || hasTechnicalLanguage) {
+      console.log('🔍 Deep thinking mode automatically detected');
+      return 'deep';
+    }
+
+    // For medium-length questions with academic context
+    if (isLongQuestion && /\b(study|learn|understand|practice|review)\b/i.test(message)) {
+      console.log('🔍 Deep thinking mode detected (long academic question)');
+      return 'deep';
+    }
+
+    // Simple, short questions get fast mode
+    console.log('⚡ Quick question mode automatically detected');
+    return 'fast';
+  };
+
   const handleSend = async (messageText?: string) => {
     const textToSend = messageText || input.trim();
     if (!textToSend || !user) return;
@@ -372,12 +456,38 @@ const NoraScreen = () => {
     if (showLandingScreen) {
       transitionToChatMode();
     }
-    
+
     // Clear input if it came from the input field
     if (!messageText) {
       setInput('');
     }
-    
+
+    // Check if this is a vague follow-up that needs context
+    let enhancedMessage = textToSend;
+    const isVague = isVagueFollowUp(textToSend);
+
+    if (isVague && lastNoraResponse) {
+      // Create a summary of the last response (first 200 chars)
+      const responseSummary = lastNoraResponse.substring(0, 200) + (lastNoraResponse.length > 200 ? '...' : '');
+
+      // Enhance the message with context
+      enhancedMessage = `${textToSend}
+
+[Context: User is referring to your previous response: "${responseSummary}"]`;
+
+      console.log('🔗 Enhanced vague follow-up with context from previous response');
+    }
+
+    // Automatically detect question complexity (user's manual selection overrides)
+    const detectedMode = detectQuestionComplexity(enhancedMessage);
+    const finalThinkingMode = thinkingMode; // Use user's manual selection if they chose one
+
+    // If using deep mode, show indicator
+    if (detectedMode === 'deep' && thinkingMode === 'fast') {
+      // Auto-switch to deep mode for complex questions
+      setThinkingMode('deep');
+    }
+
     // Add user message to chat immediately
     const userMsg: NoraMessage = {
       id: Math.random().toString(36).slice(2),
@@ -387,12 +497,24 @@ const NoraScreen = () => {
       user_id: user.id,
     };
     setChat(prev => [...prev, userMsg]);
-    
+
     // Save user message
     await saveMessage(textToSend, 'user');
-    
-    // Start loading for Nora's response
+
+    // Start loading for Nora's response with mode indicator
     setIsLoading(true);
+
+    // Add "thinking deeply" message if in deep mode
+    if (detectedMode === 'deep' || thinkingMode === 'deep') {
+      const thinkingMsg: NoraMessage = {
+        id: 'thinking-indicator',
+        content: '🔍 Thinking deeply about your question...',
+        sender: 'nora',
+        timestamp: new Date().toISOString(),
+        user_id: user.id,
+      };
+      setChat(prev => [...prev, thinkingMsg]);
+    }
 
     try {
       // Get session for authentication
@@ -410,8 +532,16 @@ const NoraScreen = () => {
       
       console.log('NoraScreen: Session valid, access_token present:', !!session.access_token);
 
+      // Prepare conversation context (last 10 messages for context)
+      const conversationHistory = chat.slice(-10).map(msg => ({
+        role: msg.sender === 'user' ? 'user' : 'assistant',
+        content: msg.content
+      }));
+
       // Send message to enhanced Nora assistant edge function
       console.log('NoraScreen: Making API call to nora-chat-auth-fix with userId:', user.id);
+      console.log(`NoraScreen: Using ${detectedMode === 'deep' ? '🔍 Deep Think' : '⚡ Quick Question'} mode`);
+      console.log('NoraScreen: Including', conversationHistory.length, 'messages for context');
       const response = await fetch('https://ucculvnodabrfwbkzsnx.supabase.co/functions/v1/nora-chat-auth-fix', {
         method: 'POST',
         headers: {
@@ -420,8 +550,10 @@ const NoraScreen = () => {
           'apikey': process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVjY3Vsdm5vZGFicmZ3Ymt6c254Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDIyNDQxODksImV4cCI6MjA1NzgyMDE4OX0._tWjZyUAafkMNi5fAOmrgJZu3yuzz_G--S0Wi0qVF1A',
         },
         body: JSON.stringify({
-          message: textToSend,
+          message: enhancedMessage, // Use enhanced message with context if vague
           userId: user.id,
+          thinkingMode: detectedMode, // Use automatically detected mode
+          conversationHistory: conversationHistory, // Add conversation context
           userSettings: {
             focus_method: userData?.onboarding?.focus_method,
             weekly_focus_goal: userData?.onboarding?.weekly_focus_goal,
@@ -457,12 +589,32 @@ const NoraScreen = () => {
       }
 
       if (data.response) {
-        // Clean response by removing markdown formatting
+        // Remove the "thinking deeply" indicator if present
+        setChat(prev => prev.filter(msg => msg.id !== 'thinking-indicator'));
+
+        // Store the full response for context in future vague follow-ups
+        setLastNoraResponse(data.response);
+
+        // Clean response by removing markdown formatting, emojis, and asterisks
         const cleanResponse = data.response
-          .replace(/\*\*(.*?)\*\*/g, '$1')
-          .replace(/\*(.*?)\*/g, '$1')
-          .replace(/__(.*?)__/g, '$1')
-          .trim();
+          .replace(/\*\*(.*?)\*\*/g, '$1')  // Remove bold markdown
+          .replace(/\*(.*?)\*/g, '$1')       // Remove italic markdown
+          .replace(/__(.*?)__/g, '$1')       // Remove underline markdown
+          .replace(/\*/g, '')                // Remove remaining asterisks
+          // Remove emojis (all Unicode emoji ranges)
+          .replace(/[\u{1F600}-\u{1F64F}]/gu, '') // Emoticons
+          .replace(/[\u{1F300}-\u{1F5FF}]/gu, '') // Misc Symbols and Pictographs
+          .replace(/[\u{1F680}-\u{1F6FF}]/gu, '') // Transport and Map
+          .replace(/[\u{1F1E0}-\u{1F1FF}]/gu, '') // Flags
+          .replace(/[\u{2600}-\u{26FF}]/gu, '')   // Misc symbols
+          .replace(/[\u{2700}-\u{27BF}]/gu, '')   // Dingbats
+          .replace(/[\u{1F900}-\u{1F9FF}]/gu, '') // Supplemental Symbols and Pictographs
+          .replace(/[\u{1FA00}-\u{1FA6F}]/gu, '') // Chess Symbols
+          .replace(/[\u{1FA70}-\u{1FAFF}]/gu, '') // Symbols and Pictographs Extended-A
+          .replace(/[\u{FE00}-\u{FE0F}]/gu, '')   // Variation Selectors
+          .replace(/[\u{200D}]/gu, '')            // Zero Width Joiner
+          .trim()
+          .replace(/\s+/g, ' ');                  // Normalize whitespace
 
         const noraMsg: NoraMessage = {
           id: Math.random().toString(36).slice(2),
@@ -471,7 +623,7 @@ const NoraScreen = () => {
           timestamp: new Date().toISOString(),
           user_id: user.id,
         };
-        
+
         setChat(prev => [...prev, noraMsg]);
         await saveMessage(cleanResponse, 'nora');
       } else {
@@ -737,28 +889,44 @@ const NoraScreen = () => {
 
   const renderMessage = (message: NoraMessage, index: number) => {
     const isUser = message.sender === 'user';
-    
+
+    // Dynamic colors based on theme for better visibility
+    const noraBackgroundColor = theme.mode === 'dark'
+      ? '#2D2440'  // Dark purple background for dark mode
+      : '#F3F2FF'; // Light purple background for light mode
+
+    const noraTextColor = theme.mode === 'dark'
+      ? '#E8E4FF'  // Light purple-tinted white for dark mode
+      : '#1A1A1A'; // Dark gray for light mode
+
     return (
       <View
         key={`${message.id}-${index}`}
         style={[
           styles.messageBubble,
           isUser ? styles.userMessage : styles.noraMessage,
+          // Theme-aware background for Nora messages
+          !isUser && { backgroundColor: noraBackgroundColor }
         ]}
       >
         <Text style={[
           styles.messageText,
-          { color: isUser ? '#FFFFFF' : theme.text }
+          { color: isUser ? '#FFFFFF' : noraTextColor }
         ]}>
           {message.content}
         </Text>
         <Text style={[
           styles.timestamp,
-          { color: isUser ? 'rgba(255,255,255,0.7)' : theme.textSecondary }
+          {
+            color: isUser
+              ? 'rgba(255,255,255,0.7)'
+              : (theme.mode === 'dark' ? '#B8B0D9' : '#666666')
+          }
         ]}>
-          {new Date(message.timestamp).toLocaleTimeString([], { 
-            hour: '2-digit', 
-            minute: '2-digit' 
+          {new Date(message.timestamp).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
           })}
         </Text>
       </View>
@@ -767,17 +935,25 @@ const NoraScreen = () => {
 
 
   const renderChatScreen = () => (
-    <Animated.View style={[styles.chatScreenContainer, { opacity: fadeAnim }]}>
+    <Animated.View style={[styles.chatScreenContainer, { opacity: fadeAnim, flex: 1 }]}>
       <ScrollView
         ref={scrollViewRef}
         style={styles.messagesContainer}
         contentContainerStyle={styles.messagesContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
+        keyboardDismissMode="interactive"
+        onContentSizeChange={() => {
+          // Auto-scroll to bottom when content size changes (new messages)
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }}
+        onLayout={() => {
+          // Scroll to bottom on initial layout
+          scrollViewRef.current?.scrollToEnd({ animated: false });
+        }}
       >
         {chat.map((message, index) => renderMessage(message, index))}
-        
+
         {/* Loading Indicator */}
         {isLoading && (
           <View style={styles.loadingContainer}>
@@ -805,15 +981,12 @@ const NoraScreen = () => {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-
-      {/* Content */}
-      <KeyboardAvoidingView 
-        style={styles.contentContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 20}
-        enabled={true}
-      >
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: theme.background }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
+      <View style={styles.contentContainer}>
         {showLandingScreen ? renderLandingScreen() : renderChatScreen()}
 
         {/* Selected PDF Indicator */}
@@ -861,7 +1034,62 @@ const NoraScreen = () => {
             spellCheck={true}
             selectionColor="#7B61FF"
           />
-          
+
+          {/* Thinking Mode Selector */}
+          <View style={styles.thinkingModeContainer}>
+            <Text style={[styles.thinkingModeLabel, { color: theme.textSecondary }]}>
+              Thinking Mode:
+            </Text>
+            <View style={styles.thinkingModeButtons}>
+              <TouchableOpacity
+                style={[
+                  styles.thinkingModeButton,
+                  thinkingMode === 'fast' && styles.thinkingModeButtonActive,
+                  {
+                    borderColor: thinkingMode === 'fast' ? theme.primary : theme.border,
+                    backgroundColor: thinkingMode === 'fast' ? theme.primary + '15' : 'transparent'
+                  }
+                ]}
+                onPress={() => setThinkingMode('fast')}
+              >
+                <Ionicons
+                  name="flash"
+                  size={16}
+                  color={thinkingMode === 'fast' ? theme.primary : theme.textSecondary}
+                />
+                <Text style={[
+                  styles.thinkingModeText,
+                  { color: thinkingMode === 'fast' ? theme.primary : theme.textSecondary }
+                ]}>
+                  Quick Question
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.thinkingModeButton,
+                  thinkingMode === 'deep' && styles.thinkingModeButtonActive,
+                  {
+                    borderColor: thinkingMode === 'deep' ? theme.primary : theme.border,
+                    backgroundColor: thinkingMode === 'deep' ? theme.primary + '15' : 'transparent'
+                  }
+                ]}
+                onPress={() => setThinkingMode('deep')}
+              >
+                <Ionicons
+                  name="sparkles"
+                  size={16}
+                  color={thinkingMode === 'deep' ? theme.primary : theme.textSecondary}
+                />
+                <Text style={[
+                  styles.thinkingModeText,
+                  { color: thinkingMode === 'deep' ? theme.primary : theme.textSecondary }
+                ]}>
+                  Deep Dive
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
           {/* Action Buttons */}
           <View style={styles.actionButtons}>
             <TouchableOpacity 
@@ -1022,8 +1250,8 @@ const NoraScreen = () => {
             </View>
           </View>
         </Modal>
-      </KeyboardAvoidingView>
-    </View>
+      </View>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -1165,7 +1393,6 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 4,
   },
   noraMessage: {
-    backgroundColor: '#F3F2FF',
     alignSelf: 'flex-start',
     borderBottomLeftRadius: 4,
   },
@@ -1378,7 +1605,6 @@ const styles = StyleSheet.create({
   },
   noraMessage: {
     alignSelf: 'flex-start',
-    backgroundColor: '#F5F5F5',
   },
   messageText: {
     fontSize: 16,
@@ -1488,6 +1714,38 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginLeft: 8,
     marginRight: 8,
+  },
+
+  // Thinking Mode Selector Styles
+  thinkingModeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  thinkingModeLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  thinkingModeButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  thinkingModeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 4,
+  },
+  thinkingModeButtonActive: {
+    borderWidth: 1.5,
+  },
+  thinkingModeText: {
+    fontSize: 13,
+    fontWeight: '500',
   },
 });
 

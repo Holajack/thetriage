@@ -14,6 +14,7 @@ import { supabase } from '../../utils/supabase';
 import { useSupabaseFocusSession, Task } from '../../utils/supabaseHooks';
 import { useBackgroundMusic } from '../../hooks/useBackgroundMusic';
 import { getSoundPreference, getAutoPlaySetting } from '../../utils/musicPreferences';
+import { endFocusSessionWithDND } from '../../utils/doNotDisturb';
 import { useTheme } from '../../context/ThemeContext';
 const { useUserAppData } = require('../../utils/userAppData');
 
@@ -617,6 +618,9 @@ export const StudySessionScreen = () => {
       // CRITICAL: Disable auto-advance FIRST (synchronous) before async operations
       disableAutoAdvance();
 
+      // Disable Do Not Disturb mode and restore notifications
+      await endFocusSessionWithDND();
+
       // Now stop music
       await stopSessionMusic();
 
@@ -741,6 +745,9 @@ export const StudySessionScreen = () => {
       // Even though we already did this in handleEndSession, do it again for safety
       disableAutoAdvance();
       await stopSessionMusic();
+
+      // Disable Do Not Disturb mode and restore notifications
+      await endFocusSessionWithDND();
 
       console.log('🎵 Music force-stopped on confirmation');
 

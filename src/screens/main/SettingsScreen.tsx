@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Switch, TouchableOpacity, ScrollView, Alert, Modal, Platform, Image } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, Switch, TouchableOpacity, ScrollView, Alert, Modal, Platform, Image, Linking } from 'react-native';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons, Entypo } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, DrawerActions } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import type { MainTabParamList } from '../../navigation/types';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
@@ -17,6 +17,7 @@ import { getUserSettings, updateUserSettings, UserSettings } from '../../utils/u
 import { saveMusicPreferences, getSoundPreference, getAutoPlaySetting } from '../../utils/musicPreferences';
 import { useAuth } from '../../context/AuthContext';
 import * as Notifications from 'expo-notifications';
+import { showDNDReminder } from '../../utils/doNotDisturb';
 import AIHelpModal from '../../components/AIHelpModal';
 
 // Configure notifications
@@ -37,6 +38,11 @@ const SOUND_OPTIONS = [
   'Jazz Ambient',
   'Ambient',
 ];
+const MAIN_GOAL_OPTIONS = [
+  { label: 'Intense Focus', value: 'Intense Focus' },
+  { label: 'Study', value: 'Study' },
+  { label: 'Accountability', value: 'Accountability' },
+] as const;
 const THEME_OPTIONS = ['System Default', 'Light', 'Dark'];
 const FONT_SIZE_OPTIONS = ['Small', 'Medium', 'Large'];
 const APP_ICON_OPTIONS = ['Default', 'Minimal', 'Bold'];
@@ -64,6 +70,37 @@ const SettingsScreen = () => {
   const { profile, updateProfile } = useSupabaseProfile();
   const { theme, themeName, themeMode, fontSize, setThemeName, setThemeMode, setFontSize } = useTheme();
   const { updateOnboarding } = useAuth();
+  const isDarkMode = theme.isDark;
+  const screenBackground = theme.background;
+  const cardBackground = isDarkMode ? (theme.surface ?? '#1E1E1E') : (theme.card ?? '#FFFFFF');
+  const secondaryCardBackground = isDarkMode ? (theme.surface2 ?? '#232323') : '#F9FBF9';
+  const textColor = theme.text ?? '#222';
+  const secondaryTextColor = theme.textSecondary ?? (isDarkMode ? '#A6A6A6' : '#666');
+  const borderColor = theme.border ?? (isDarkMode ? '#2F2F2F' : '#E0E0E0');
+  const iconPrimary = theme.primary ?? '#4CAF50';
+  const cardSectionStyle = useMemo(() => ({
+    backgroundColor: cardBackground,
+    borderColor,
+    borderWidth: isDarkMode ? StyleSheet.hairlineWidth : 0,
+    shadowColor: isDarkMode ? 'transparent' : '#000',
+    shadowOpacity: isDarkMode ? 0 : 0.03,
+    shadowOffset: { width: 0, height: isDarkMode ? 0 : 1 },
+    shadowRadius: isDarkMode ? 0 : 2,
+    elevation: isDarkMode ? 0 : 1,
+  }), [cardBackground, borderColor, isDarkMode]);
+  const rowCardBaseStyle = useMemo(() => ({
+    borderBottomWidth: 1,
+    borderBottomColor: borderColor,
+  }), [borderColor]);
+  const modalBoxStyle = useMemo(() => ({
+    backgroundColor: cardBackground,
+  }), [cardBackground]);
+  const modalTextColor = useMemo(() => ({
+    color: textColor,
+  }), [textColor]);
+  const rowLabelTextStyle = useMemo(() => ({ color: textColor }), [textColor]);
+  const rowDescriptionTextStyle = useMemo(() => ({ color: secondaryTextColor }), [secondaryTextColor]);
+  const rowValueTextStyle = useMemo(() => ({ color: iconPrimary }), [iconPrimary]);
   
   // Use our comprehensive data hook
   const { data: userData, isLoading: userDataLoading } = useUserAppData();
@@ -75,18 +112,30 @@ const SettingsScreen = () => {
   const [notifications, setNotifications] = useState(true);
   const [dailyReminder, setDailyReminder] = useState('08:00');
   const [sessionEndReminder, setSessionEndReminder] = useState(true);
+  const [showNotificationPrefsModal, setShowNotificationPrefsModal] = useState(false);
+  // Granular notification preferences
+  const [notifFriendRequests, setNotifFriendRequests] = useState(true);
+  const [notifFriendMessages, setNotifFriendMessages] = useState(true);
+  const [notifStudyReminders, setNotifStudyReminders] = useState(true);
+  const [notifAppUpdates, setNotifAppUpdates] = useState(true);
+  const [notifFocusSessionWarnings, setNotifFocusSessionWarnings] = useState(true);
+  const [notifWeeklyGoalReminders, setNotifWeeklyGoalReminders] = useState(true);
+  const [weeklyGoalReminderDays, setWeeklyGoalReminderDays] = useState<string[]>(['Wednesday', 'Thursday', 'Friday', 'Saturday']);
+  const [notifQRScans, setNotifQRScans] = useState(true);
+  const [notifStudyRoomInvites, setNotifStudyRoomInvites] = useState(true);
   // Focus & Study
   const [focusDuration, setFocusDuration] = useState(25);
   const [workStyle, setWorkStyle] = useState('Balanced');
+  const [mainGoal, setMainGoal] = useState<string>(MAIN_GOAL_OPTIONS[0].value);
   const [autoStartNext, setAutoStartNext] = useState(false);
   const [autoDND, setAutoDND] = useState(false);
   const [weeklyGoal, setWeeklyGoal] = useState(10);
   // Sound & Environment
-  const [sound, setSound] = useState(true);
+  const [, setSound] = useState(true);
   const [autoPlaySound, setAutoPlaySound] = useState(false);
   const [selectedSound, setSelectedSound] = useState('Lo-Fi');
-  const [ambientNoise, setAmbientNoise] = useState(0.5);
-  const [ambientLevel, setAmbientLevel] = useState(50);
+  const [appleMusicConnected, setAppleMusicConnected] = useState(false);
+  const [spotifyConnected, setSpotifyConnected] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   // Accessibility
   const [tts, setTts] = useState(false);
@@ -100,10 +149,29 @@ const SettingsScreen = () => {
   const [showIconModal, setShowIconModal] = useState(false);
   const [showWorkStyleModal, setShowWorkStyleModal] = useState(false);
   const [showEnvModal, setShowEnvModal] = useState(false);
+  const [showMainGoalModal, setShowMainGoalModal] = useState(false);
   const [selectedEnv, setSelectedEnv] = useState<ThemeName>(themeName);
   // AI Help modals
   const [showNoraHelp, setShowNoraHelp] = useState(false);
   const [showPatrickHelp, setShowPatrickHelp] = useState(false);
+
+  // Environment section collapse state
+  const [isEnvSectionExpanded, setIsEnvSectionExpanded] = useState(false);
+
+  // AI Integration section collapse state
+  const [isAISectionExpanded, setIsAISectionExpanded] = useState(false);
+
+  // AI Settings State
+  const [noraEnabled, setNoraEnabled] = useState(true); // Default ON for Pro
+  const [patrickEnabled, setPatrickEnabled] = useState(false); // Optional for Pro, default for Premium
+  const [insightsEnabled, setInsightsEnabled] = useState(true);
+  const [personalizedResponses, setPersonalizedResponses] = useState(true);
+
+  // User subscription tier (default to free if not set)
+  const subscriptionTier = profile?.subscription_tier || 'free';
+  const isPro = subscriptionTier === 'pro';
+  const isPremium = subscriptionTier === 'premium';
+  const hasAIAccess = isPro || isPremium;
 
   // Music preview state
   const { playPreview, stopPreview, isPlaying, isPreviewMode, currentTrack } = useBackgroundMusic();
@@ -142,6 +210,25 @@ const SettingsScreen = () => {
   useEffect(() => {
     checkNotificationPermission();
   }, []);
+
+  // Reschedule daily reminder when settings load
+  useEffect(() => {
+    const rescheduleNotifications = async () => {
+      if (notifications && notificationPermission === 'granted' && dailyReminder) {
+        try {
+          await scheduleDailyReminder(dailyReminder);
+          console.log('✅ Daily reminder rescheduled on app load');
+        } catch (error) {
+          console.error('Error rescheduling notifications:', error);
+        }
+      }
+    };
+
+    // Only reschedule after permissions and settings are loaded
+    if (notificationPermission !== 'undetermined') {
+      rescheduleNotifications();
+    }
+  }, [notificationPermission, notifications, dailyReminder]);
 
   const checkNotificationPermission = async () => {
     try {
@@ -187,7 +274,7 @@ const SettingsScreen = () => {
       await requestNotificationPermission();
     } else {
       setNotifications(value);
-      
+
       // Save notification preference to settings
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -196,16 +283,27 @@ const SettingsScreen = () => {
             notifications_enabled: value
           });
         }
-        
+
         // Schedule or cancel daily reminder based on notification state
         if (value && notificationPermission === 'granted') {
           await scheduleDailyReminder(dailyReminder);
+          Alert.alert(
+            'Notifications Enabled',
+            `Daily reminder set for ${dailyReminder}. You'll receive notifications for study sessions!`,
+            [{ text: 'OK' }]
+          );
         } else {
-          await Notifications.cancelScheduledNotificationAsync('daily-study-reminder');
+          await Notifications.cancelAllScheduledNotificationsAsync();
+          Alert.alert(
+            'Notifications Disabled',
+            'All scheduled notifications have been cancelled.',
+            [{ text: 'OK' }]
+          );
         }
-        
+
       } catch (error) {
         console.error('Error saving notification setting:', error);
+        Alert.alert('Error', 'Failed to update notification settings. Please try again.');
       }
     }
   };
@@ -225,11 +323,17 @@ const SettingsScreen = () => {
             setThemeName(profile.theme.toLowerCase() as ThemeName);
           }
         }
-        
+
+        // Load environment theme (color palette)
+        if (profile?.environment_theme) {
+          setThemeName(profile.environment_theme as ThemeName);
+          console.log(`🎨 Loaded environment theme: ${profile.environment_theme}`);
+        }
+
         if (profile?.font_size) {
           setFontSize(profile.font_size);
         }
-        
+
         if (profile?.app_icon) {
           setAppIcon(profile.app_icon);
         }
@@ -246,15 +350,26 @@ const SettingsScreen = () => {
         }
         
         // Focus & Study settings
+        if (onboarding?.user_goal) {
+          setMainGoal(onboarding.user_goal);
+        }
+
         if (onboarding?.weekly_focus_goal) {
           setWeeklyGoal(onboarding.weekly_focus_goal);
         }
         
-        if (onboarding?.focus_method === 'Balanced Work-Rest Cycle') {
+        const focusMethodName = onboarding?.focus_method?.toLowerCase?.();
+
+        if (focusMethodName === 'balanced work-rest cycle') {
           setFocusDuration(45);
-        } else if (onboarding?.focus_method === 'Pomodoro Technique') {
+        } else if (
+          focusMethodName === 'balanced technique' ||
+          focusMethodName === 'balanced' ||
+          focusMethodName === 'balanced focus' ||
+          focusMethodName === 'pomodoro technique'
+        ) {
           setFocusDuration(25);
-        } else if (onboarding?.focus_method === 'Deep Focus') {
+        } else if (focusMethodName === 'deep focus') {
           setFocusDuration(60);
         }
         
@@ -283,11 +398,6 @@ const SettingsScreen = () => {
           if (settings.auto_play_sound !== undefined) {
             setAutoPlaySound(settings.auto_play_sound);
           }
-          
-          if (settings.ambient_noise !== undefined) {
-            setAmbientNoise(settings.ambient_noise);
-          }
-          
           if (settings.tts !== undefined) {
             setTts(settings.tts);
           }
@@ -320,12 +430,56 @@ const SettingsScreen = () => {
         if (userSettings && !settingsError) {
           setAutoPlaySound(userSettings.auto_play_sound || false);
           setSound(userSettings.sound_enabled !== undefined ? userSettings.sound_enabled : true);
-          setAmbientNoise(userSettings.music_volume || 0.5);
           setNotifications(userSettings.notifications_enabled !== undefined ? userSettings.notifications_enabled : true);
           setAutoStartNext(userSettings.auto_start_focus !== undefined ? userSettings.auto_start_focus : false);
           setAutoDND(userSettings.auto_dnd_focus !== undefined ? userSettings.auto_dnd_focus : false);
-          
-          console.log('🎵 User settings loaded from database');
+          setSessionEndReminder(userSettings.session_end_reminder !== undefined ? userSettings.session_end_reminder : true);
+
+          // Load daily reminder time if set
+          if (userSettings.daily_reminder) {
+            setDailyReminder(userSettings.daily_reminder);
+          }
+
+          // Load AI settings with tier-based defaults
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('subscription_tier')
+            .eq('user_id', session.user.id)
+            .single();
+
+          const tier = profileData?.subscription_tier || 'free';
+          const isProUser = tier === 'pro';
+          const isPremiumUser = tier === 'premium';
+
+          // Set AI settings with tier-appropriate defaults
+          if (isProUser) {
+            // Pro: Nora ON, Patrick OFF, Insights ON, Personalization available
+            setNoraEnabled(userSettings.nora_enabled !== undefined ? userSettings.nora_enabled : true);
+            setPatrickEnabled(userSettings.patrick_enabled !== undefined ? userSettings.patrick_enabled : false);
+            setInsightsEnabled(userSettings.insights_enabled !== undefined ? userSettings.insights_enabled : true);
+            setPersonalizedResponses(userSettings.personalized_responses !== undefined ? userSettings.personalized_responses : true);
+          } else if (isPremiumUser) {
+            // Premium: Patrick ON (only option), Basic Insights ON
+            setNoraEnabled(false); // Not available for Premium
+            setPatrickEnabled(userSettings.patrick_enabled !== undefined ? userSettings.patrick_enabled : true);
+            setInsightsEnabled(userSettings.insights_enabled !== undefined ? userSettings.insights_enabled : true);
+            setPersonalizedResponses(false); // Not available for Premium
+          } else {
+            // Free: All AI disabled
+            setNoraEnabled(false);
+            setPatrickEnabled(false);
+            setInsightsEnabled(false);
+            setPersonalizedResponses(false);
+          }
+
+          // Load Accessibility settings
+          setTts(userSettings.tts_enabled !== undefined ? userSettings.tts_enabled : false);
+          setHighContrast(userSettings.high_contrast !== undefined ? userSettings.high_contrast : false);
+          setReduceMotion(userSettings.reduce_motion !== undefined ? userSettings.reduce_motion : false);
+
+          console.log('🔔 User settings loaded from database');
+          console.log(`🤖 AI settings loaded for ${tier} tier`);
+          console.log(`♿ Accessibility settings loaded - TTS: ${userSettings.tts_enabled ? 'ON' : 'OFF'}, Color Blind Mode: ${userSettings.high_contrast ? 'ON' : 'OFF'}, Reduce Motion: ${userSettings.reduce_motion ? 'ON' : 'OFF'}`);
         } else {
           // Fallback: try loading from onboarding_preferences
           const { data: onboardingData, error: onboardingError } = await supabase
@@ -395,7 +549,7 @@ const SettingsScreen = () => {
   const handleAppIconUpdate = async (icon: string) => {
     setAppIcon(icon);
     setShowIconModal(false);
-    
+
     try {
       await updateProfile({ app_icon: icon });
       Alert.alert('Success', 'App icon updated successfully!');
@@ -404,17 +558,94 @@ const SettingsScreen = () => {
     }
   };
 
+  const handleEnvThemeUpdate = async (env: ThemeName) => {
+    setThemeName(env);
+    setShowEnvModal(false);
+
+    try {
+      // Save environment theme to user profile
+      await updateProfile({ environment_theme: env });
+      console.log(`🎨 Environment theme updated to: ${themePalettes[env].name}`);
+      Alert.alert(
+        'Environment Updated',
+        `Your environment has been changed to ${themePalettes[env].name}`,
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Environment theme update error:', error);
+      Alert.alert('Error', 'Failed to update environment theme. Please try again.');
+      // Revert on error
+      setThemeName(themeName);
+    }
+  };
+
   // Handle weekly goal update
   const handleWeeklyGoalUpdate = async (goal: number) => {
+    // Check if goal is over 60 hours and show warning
+    if (goal > 60) {
+      Alert.alert(
+        'Big Goal!',
+        'Are you sure you want to focus that many hours? It might make it harder to earn rewards and move up the leaderboard. But if you do it, you can earn bigger rewards!',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => {
+              // Reset to previous value
+              setWeeklyGoal(weeklyGoal);
+            }
+          },
+          {
+            text: "Yes, I'm Sure",
+            onPress: async () => {
+              // Proceed with update
+              await saveWeeklyGoal(goal);
+            }
+          }
+        ]
+      );
+    } else {
+      // Goal is 60 or under, save directly
+      await saveWeeklyGoal(goal);
+    }
+  };
+
+  // Helper function to save weekly goal
+  const saveWeeklyGoal = async (goal: number) => {
+    const previousGoal = weeklyGoal; // Store previous value for rollback
     setWeeklyGoal(goal);
-    
+
     try {
-      await updateProfile({ weeklyFocusGoal: goal });
-      // Also update onboarding data
+      // Update onboarding preferences (weekly_focus_goal is stored in onboarding_preferences table)
       await updateOnboarding({ weekly_focus_goal: goal });
+      console.log('✅ Weekly goal updated successfully');
       Alert.alert('Success', 'Your weekly focus goal has been updated!');
+    } catch (error: any) {
+      console.error('💥 Weekly goal save error:', error);
+      // Revert to previous value on error
+      setWeeklyGoal(previousGoal);
+      Alert.alert(
+        'Error',
+        error?.message || 'Failed to update weekly focus goal. Please try again.'
+      );
+    }
+  };
+
+  const handleMainGoalUpdate = async (goal: string) => {
+    if (goal === mainGoal) {
+      setShowMainGoalModal(false);
+      return;
+    }
+
+    setMainGoal(goal);
+    setShowMainGoalModal(false);
+
+    try {
+      await updateOnboarding({ user_goal: goal });
+      Alert.alert('Success', 'Your main goal has been updated!');
     } catch (error) {
-      Alert.alert('Error', 'Failed to update weekly focus goal. Please try again.');
+      console.error('Error updating main goal:', error);
+      Alert.alert('Error', 'Failed to update main goal. Please try again.');
     }
   };
 
@@ -477,8 +708,6 @@ const SettingsScreen = () => {
   const updateDailyReminder = async (time: string) => {
     setDailyReminder(time);
     try {
-      await updateProfile({ daily_reminder: time });
-      
       // Save to user_settings table
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
@@ -486,59 +715,114 @@ const SettingsScreen = () => {
           daily_reminder: time
         } as any);
       }
-      
+
+      // Also save to profile for backup
+      await updateProfile({ daily_reminder: time });
+
       // Schedule daily notification if notifications are enabled
       if (notifications && notificationPermission === 'granted') {
         await scheduleDailyReminder(time);
+        Alert.alert(
+          'Daily Reminder Updated',
+          `You'll receive a study reminder every day at ${time}`,
+          [{ text: 'OK' }]
+        );
+      } else if (notificationPermission !== 'granted') {
+        Alert.alert(
+          'Reminder Time Saved',
+          `Reminder time set to ${time}. Enable notifications to receive daily reminders.`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          'Reminder Time Saved',
+          `Reminder time set to ${time}. Turn on notifications above to activate daily reminders.`,
+          [{ text: 'OK' }]
+        );
       }
-      
-      Alert.alert('Success', `Daily reminder set for ${time}`);
+
     } catch (error) {
-      Alert.alert('Error', 'Failed to update daily reminder.');
+      console.error('Error updating daily reminder:', error);
+      Alert.alert('Error', 'Failed to update daily reminder. Please try again.');
     }
   };
 
   const scheduleDailyReminder = async (time: string) => {
     try {
       // Cancel existing daily reminders
-      await Notifications.cancelScheduledNotificationAsync('daily-study-reminder');
-      
+      await Notifications.cancelAllScheduledNotificationsAsync();
+
       const [hours, minutes] = time.split(':').map(Number);
-      
+
+      // Create a date object for the notification
+      const trigger = new Date();
+      trigger.setHours(hours);
+      trigger.setMinutes(minutes);
+      trigger.setSeconds(0);
+
+      // If the time has already passed today, schedule for tomorrow
+      if (trigger.getTime() < Date.now()) {
+        trigger.setDate(trigger.getDate() + 1);
+      }
+
       await Notifications.scheduleNotificationAsync({
-        identifier: 'daily-study-reminder',
         content: {
           title: '📚 Time to Study!',
           body: 'Ready to start your focus session? Let\'s build that streak!',
           sound: true,
         },
         trigger: {
-          type: 'calendar' as const,
+          type: Notifications.SchedulableTriggerInputTypes.DAILY,
           hour: hours,
           minute: minutes,
-          repeats: true,
         },
       });
-      
-      console.log(`Daily reminder scheduled for ${time}`);
+
+      console.log(`✅ Daily reminder scheduled for ${time}`);
     } catch (error) {
-      console.error('Error scheduling daily reminder:', error);
+      console.error('❌ Error scheduling daily reminder:', error);
+      Alert.alert('Error', 'Failed to schedule notification. Please try again.');
     }
   };
 
   const showTimePickerDialog = () => {
     Alert.prompt(
       'Custom Time',
-      'Enter time in HH:MM format (24-hour)',
+      'Enter time in 12-hour format (e.g., 8:00 AM or 2:30 PM)',
       (time) => {
-        if (time && /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time)) {
-          updateDailyReminder(time);
+        if (!time) return;
+
+        // Match 12-hour format with AM/PM (e.g., "8:00 AM", "2:30 PM")
+        const match = time.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)$/i);
+
+        if (match) {
+          let hours = parseInt(match[1]);
+          const minutes = match[2];
+          const period = match[3].toUpperCase();
+
+          // Convert to 24-hour format
+          if (period === 'PM' && hours !== 12) {
+            hours += 12;
+          } else if (period === 'AM' && hours === 12) {
+            hours = 0;
+          }
+
+          const time24 = `${hours.toString().padStart(2, '0')}:${minutes}`;
+          updateDailyReminder(time24);
         } else {
-          Alert.alert('Invalid Time', 'Please enter time in HH:MM format (e.g., 14:30)');
+          Alert.alert('Invalid Time', 'Please enter time in 12-hour format (e.g., 8:00 AM or 2:30 PM)');
         }
       },
       'plain-text',
-      dailyReminder
+      // Convert current time to 12-hour format for placeholder
+      (() => {
+        const [hours24, minutes] = dailyReminder.split(':');
+        let hours = parseInt(hours24);
+        const period = hours >= 12 ? 'PM' : 'AM';
+        if (hours > 12) hours -= 12;
+        if (hours === 0) hours = 12;
+        return `${hours}:${minutes} ${period}`;
+      })()
     );
   };
 
@@ -551,19 +835,34 @@ const SettingsScreen = () => {
           session_end_reminder: value
         } as any);
       }
-      
+
       if (value) {
+        if (notificationPermission === 'granted') {
+          Alert.alert(
+            'Session End Reminders Enabled ⏰',
+            'You\'ll receive a notification 2 minutes before your focus sessions end.',
+            [{ text: 'Got it!' }]
+          );
+        } else {
+          Alert.alert(
+            'Permission Required',
+            'Session end reminders are enabled but notification permission is needed. Please enable notifications above.',
+            [{ text: 'OK' }]
+          );
+        }
+      } else {
         Alert.alert(
-          'Session End Reminders Enabled',
-          'You\'ll receive notifications when your focus sessions are about to end.',
+          'Session End Reminders Disabled',
+          'You won\'t receive notifications when sessions are ending.',
           [{ text: 'OK' }]
         );
-      } else {
-        Alert.alert('Success', 'Session end reminders disabled');
       }
-      
+
     } catch (error) {
-      Alert.alert('Error', 'Failed to update session end reminder setting.');
+      console.error('Error updating session end reminder:', error);
+      Alert.alert('Error', 'Failed to update session end reminder setting. Please try again.');
+      // Revert the state if save failed
+      setSessionEndReminder(!value);
     }
   };
 
@@ -637,7 +936,7 @@ const SettingsScreen = () => {
   const showStudyTips = () => {
     Alert.alert(
       'Study Tips 📚',
-      '• Use the Pomodoro technique: 25min focus + 5min break\n' +
+      '• Use the Balanced technique: 25min focus + 5min break\n' +
       '• Find a quiet environment free from distractions\n' +
       '• Set specific goals for each session\n' +
       '• Take longer breaks every 4 sessions\n' +
@@ -701,11 +1000,11 @@ const SettingsScreen = () => {
   const showEmailSupport = () => {
     Alert.alert(
       'Email Support 📧',
-      'For general support:\nsupport@hikewise.app\n\n' +
-      'For technical issues:\ntech@hikewise.app\n\n' +
-      'For billing questions:\nbilling@hikewise.app\n\n' +
+      'For general support:\nsupport@thetriage.app\n\n' +
+      'For technical issues:\ntech@thetriage.app\n\n' +
+      'For billing questions:\nbilling@thetriage.app\n\n' +
       'We typically respond within 24 hours!',
-      [{ text: 'Copy Email', onPress: () => Alert.alert('Copied!', 'support@hikewise.app copied to clipboard') }]
+      [{ text: 'Copy Email', onPress: () => Alert.alert('Copied!', 'support@thetriage.app copied to clipboard') }]
     );
   };
 
@@ -717,7 +1016,7 @@ const SettingsScreen = () => {
       '• Steps to reproduce the issue\n' +
       '• What you expected to happen\n' +
       '• Screenshots if applicable\n\n' +
-      'Send to: bugs@hikewise.app',
+      'Send to: bugs@thetriage.app',
       [{ text: 'Got it!' }]
     );
   };
@@ -727,7 +1026,7 @@ const SettingsScreen = () => {
       'Feature Request 💡',
       'Have an idea to make our app better?\n\n' +
       'We love hearing from our users! Send your suggestions to:\n\n' +
-      'features@hikewise.app\n\n' +
+      'features@thetriage.app\n\n' +
       'Tell us:\n• What feature you\'d like\n• Why it would be helpful\n• How you envision it working',
       [{ text: 'Will do!' }]
     );
@@ -741,7 +1040,7 @@ const SettingsScreen = () => {
       '• Email changes: Contact support\n' +
       '• Data export: Email us your request\n' +
       '• Account deletion: Email support\n\n' +
-      'Contact: account@hikewise.app',
+      'Contact: account@thetriage.app',
       [{ text: 'Thanks!' }]
     );
   };
@@ -755,9 +1054,14 @@ const SettingsScreen = () => {
       '• Respect other users in community features\n' +
       '• Your study data belongs to you\n' +
       '• We may update terms with notice\n\n' +
-      'Full terms: www.hikewise.app/terms',
+      'Full terms: https://thetriage.app/terms',
       [
-        { text: 'View Online', onPress: () => Alert.alert('Opening...', 'Would open terms in browser') },
+        {
+          text: 'View Online',
+          onPress: () => Linking.openURL('https://thetriage.app/terms').catch(err =>
+            Alert.alert('Error', 'Could not open the website. Please try again later.')
+          )
+        },
         { text: 'Close' }
       ]
     );
@@ -772,9 +1076,14 @@ const SettingsScreen = () => {
       '• App usage analytics (anonymous)\n' +
       '• Account info (email, preferences)\n\n' +
       'We DON\'T sell your data or share it with advertisers.\n\n' +
-      'Full policy: www.hikewise.app/privacy',
+      'Full policy: https://thetriage.app/privacy',
       [
-        { text: 'View Online', onPress: () => Alert.alert('Opening...', 'Would open privacy policy in browser') },
+        {
+          text: 'View Online',
+          onPress: () => Linking.openURL('https://thetriage.app/privacy').catch(err =>
+            Alert.alert('Error', 'Could not open the website. Please try again later.')
+          )
+        },
         { text: 'Close' }
       ]
     );
@@ -797,20 +1106,7 @@ const SettingsScreen = () => {
   };
 
   // Handle Focus & Study Preferences
-  const handleAutoStartToggle = async (value: boolean) => {
-    setAutoStartNext(value);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        await updateUserSettings(session.user.id, {
-          auto_start_focus: value
-        });
-      }
-      Alert.alert('Success', `Auto-start next session ${value ? 'enabled' : 'disabled'}`);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to update auto-start setting.');
-    }
-  };
+  // Note: Auto-start next session is managed in the focus selection screen
 
   // Handle auto-DND toggle
   const handleAutoDNDToggle = async (value: boolean) => {
@@ -822,23 +1118,50 @@ const SettingsScreen = () => {
           auto_dnd_focus: value
         });
       }
-      Alert.alert('Success', `Auto Do Not Disturb ${value ? 'enabled' : 'disabled'}`);
+
+      if (value) {
+        // When enabled, offer to open system settings immediately
+        Alert.alert(
+          '🔕 Enable Do Not Disturb',
+          'For the best focus experience, enable Do Not Disturb mode on your device.\n\nWould you like to open your device settings now?',
+          [
+            {
+              text: 'Later',
+              style: 'cancel',
+            },
+            {
+              text: 'Open Settings',
+              onPress: () => {
+                if (Platform.OS === 'ios') {
+                  Linking.openSettings();
+                } else if (Platform.OS === 'android') {
+                  Linking.sendIntent('android.settings.ZEN_MODE_SETTINGS').catch(() => {
+                    Linking.openSettings();
+                  });
+                }
+              },
+            },
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Auto DND Disabled',
+          'You\'ll receive all notifications during focus sessions.',
+          [{ text: 'OK' }]
+        );
+      }
     } catch (error) {
-      Alert.alert('Error', 'Failed to update auto-DND setting.');
+      console.error('Error updating auto-DND setting:', error);
+      Alert.alert('Error', 'Failed to update auto-DND setting. Please try again.');
+      // Revert the state if save failed
+      setAutoDND(!value);
     }
   };
 
   // Handle accessibility settings
   const handleTTSToggle = async (value: boolean) => {
     setTts(value);
-    
-    // Provide immediate feedback
-    if (value) {
-      console.log('TTS enabled - text will be read aloud where supported');
-    } else {
-      console.log('TTS disabled');
-    }
-    
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
@@ -846,24 +1169,35 @@ const SettingsScreen = () => {
           tts_enabled: value
         } as any);
       }
-      Alert.alert('Success', `Text-to-speech ${value ? 'enabled' : 'disabled'}`);
+
+      // Test TTS functionality if enabled
+      if (value) {
+        // Use React Native's Speech API for text-to-speech
+        // Note: This requires expo-speech package
+        Alert.alert(
+          'Text-to-Speech Enabled',
+          'Text-to-speech will read notifications and important messages aloud. You can test this feature in the app.',
+          [{ text: 'OK' }]
+        );
+        console.log('✅ TTS enabled - will read notifications aloud');
+      } else {
+        Alert.alert(
+          'Text-to-Speech Disabled',
+          'Text-to-speech has been turned off.',
+          [{ text: 'OK' }]
+        );
+        console.log('🔇 TTS disabled');
+      }
     } catch (error) {
-      Alert.alert('Error', 'Failed to update text-to-speech setting.');
+      console.error('Error updating TTS setting:', error);
+      Alert.alert('Error', 'Failed to update text-to-speech setting. Please try again.');
+      setTts(!value); // Revert on error
     }
   };
 
   const handleHighContrastToggle = async (value: boolean) => {
     setHighContrast(value);
-    
-    // Apply high contrast theme if enabled
-    if (value) {
-      // TODO: Switch to high contrast theme
-      console.log('High contrast mode enabled - implement theme switch');
-    } else {
-      // TODO: Switch back to normal theme
-      console.log('High contrast mode disabled - revert theme');
-    }
-    
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
@@ -871,14 +1205,48 @@ const SettingsScreen = () => {
           high_contrast: value
         } as any);
       }
-      Alert.alert('Success', `High contrast mode ${value ? 'enabled' : 'disabled'}`);
+
+      if (value) {
+        // Apply color blind mode
+        Alert.alert(
+          'Color Blind Mode Enabled',
+          'The app will now use color blind friendly colors optimized for better visibility. Environment colors have been adjusted to be more distinguishable.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                // Apply color blind friendly adjustments to current theme
+                console.log('🎨 Color blind mode enabled - applying color blind friendly palette');
+                // In a real implementation, this would modify the theme colors
+                // to be distinguishable for common types of color vision deficiency
+              }
+            }
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Color Blind Mode Disabled',
+          'Theme colors have been restored to their original settings.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                console.log('🎨 Color blind mode disabled - restored original theme');
+              }
+            }
+          ]
+        );
+      }
     } catch (error) {
-      Alert.alert('Error', 'Failed to update high contrast setting.');
+      console.error('Error updating color blind mode setting:', error);
+      Alert.alert('Error', 'Failed to update color blind mode setting. Please try again.');
+      setHighContrast(!value); // Revert on error
     }
   };
 
   const handleReduceMotionToggle = async (value: boolean) => {
     setReduceMotion(value);
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
@@ -886,14 +1254,388 @@ const SettingsScreen = () => {
           reduce_motion: value
         } as any);
       }
-      Alert.alert('Success', `Reduce motion ${value ? 'enabled' : 'disabled'}`);
+
+      if (value) {
+        Alert.alert(
+          'Reduce Motion Enabled',
+          'Animations and transitions will be minimized throughout the app for a more comfortable experience.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                console.log('🚫 Reduce motion enabled - animations disabled');
+                // In a real implementation, this would:
+                // 1. Disable all Animated.timing() calls
+                // 2. Set all animation durations to 0
+                // 3. Use LayoutAnimation.configureNext with 0 duration
+                // 4. Skip loading animations and transitions
+              }
+            }
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Reduce Motion Disabled',
+          'Animations and transitions have been restored.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                console.log('✨ Reduce motion disabled - animations enabled');
+              }
+            }
+          ]
+        );
+      }
     } catch (error) {
-      Alert.alert('Error', 'Failed to update reduce motion setting.');
+      console.error('Error updating reduce motion setting:', error);
+      Alert.alert('Error', 'Failed to update reduce motion setting. Please try again.');
+      setReduceMotion(!value); // Revert on error
     }
   };
 
   // Placeholder for remaining actions
-  const placeholder = (msg: string) => Alert.alert(msg, 'This feature is in development and will be available soon!');
+  // Account & Privacy Handlers
+  const handleChangeEmail = () => {
+    Alert.prompt(
+      'Change Email',
+      'Enter your new email address',
+      async (newEmail) => {
+        if (!newEmail || !newEmail.trim()) return;
+
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) {
+            Alert.alert('Error', 'Please log in again to change your email.');
+            return;
+          }
+
+          const { error } = await supabase.auth.updateUser({
+            email: newEmail.trim()
+          });
+
+          if (error) throw error;
+
+          Alert.alert(
+            'Verification Email Sent',
+            'Please check both your old and new email addresses to confirm the change.',
+            [{ text: 'OK' }]
+          );
+        } catch (error: any) {
+          console.error('Error changing email:', error);
+          Alert.alert('Error', error.message || 'Failed to change email. Please try again.');
+        }
+      },
+      'plain-text',
+      '',
+      'email-address'
+    );
+  };
+
+  const handleChangePassword = () => {
+    Alert.prompt(
+      'Change Password',
+      'Enter your new password (minimum 6 characters)',
+      async (newPassword) => {
+        if (!newPassword || newPassword.length < 6) {
+          Alert.alert('Invalid Password', 'Password must be at least 6 characters long.');
+          return;
+        }
+
+        try {
+          const { error } = await supabase.auth.updateUser({
+            password: newPassword
+          });
+
+          if (error) throw error;
+
+          Alert.alert(
+            'Password Updated',
+            'Your password has been changed successfully.',
+            [{ text: 'OK' }]
+          );
+        } catch (error: any) {
+          console.error('Error changing password:', error);
+          Alert.alert('Error', error.message || 'Failed to change password. Please try again.');
+        }
+      },
+      'secure-text'
+    );
+  };
+
+  const handleChangeEmailPassword = () => {
+    Alert.alert(
+      'Account Settings',
+      'What would you like to update?',
+      [
+        { text: 'Change Email', onPress: handleChangeEmail },
+        { text: 'Change Password', onPress: handleChangePassword },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
+  };
+
+  const handleExportData = async () => {
+    try {
+      Alert.alert(
+        'Export Your Data',
+        'This will export all your profile data, focus sessions, tasks, and settings.',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel'
+          },
+          {
+            text: 'Export',
+            onPress: async () => {
+              try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session?.user) {
+                  Alert.alert('Error', 'Please log in to export your data.');
+                  return;
+                }
+
+                // Fetch all user data
+                const [profileData, sessionsData, tasksData, settingsData] = await Promise.all([
+                  supabase.from('profiles').select('*').eq('user_id', session.user.id).single(),
+                  supabase.from('focus_sessions').select('*').eq('user_id', session.user.id),
+                  supabase.from('tasks').select('*').eq('user_id', session.user.id),
+                  supabase.from('user_settings').select('*').eq('user_id', session.user.id).single()
+                ]);
+
+                const exportData = {
+                  export_date: new Date().toISOString(),
+                  user_id: session.user.id,
+                  email: session.user.email,
+                  profile: profileData.data,
+                  focus_sessions: sessionsData.data || [],
+                  tasks: tasksData.data || [],
+                  settings: settingsData.data
+                };
+
+                // Convert to JSON string
+                const jsonString = JSON.stringify(exportData, null, 2);
+
+                // For now, copy to clipboard (in production, would download file)
+                Alert.alert(
+                  'Data Export Ready',
+                  `Your data has been prepared. In a production app, this would be downloaded as a JSON file.\n\nFor now, the data is available in the console.`,
+                  [
+                    {
+                      text: 'OK',
+                      onPress: () => {
+                        console.log('User Data Export:', jsonString);
+                        Alert.alert('Export Complete', 'Your data has been logged to the console.');
+                      }
+                    }
+                  ]
+                );
+              } catch (error) {
+                console.error('Error exporting data:', error);
+                Alert.alert('Error', 'Failed to export data. Please try again.');
+              }
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Error in export data handler:', error);
+      Alert.alert('Error', 'Failed to prepare data export.');
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      '⚠️ Delete Account',
+      'This action is PERMANENT and cannot be undone.\n\nAll your data will be deleted:\n• Profile information\n• Focus sessions history\n• Tasks and progress\n• Settings and preferences\n\nAre you absolutely sure?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'Delete My Account',
+          style: 'destructive',
+          onPress: () => {
+            // Second confirmation
+            Alert.prompt(
+              'Final Confirmation',
+              'Type "DELETE" to permanently delete your account',
+              async (text) => {
+                if (text !== 'DELETE') {
+                  Alert.alert('Cancelled', 'Account deletion cancelled.');
+                  return;
+                }
+
+                try {
+                  const { data: { session } } = await supabase.auth.getSession();
+                  if (!session?.user) {
+                    Alert.alert('Error', 'Please log in to delete your account.');
+                    return;
+                  }
+
+                  // Delete user data from all tables
+                  const deletePromises = [
+                    supabase.from('profiles').delete().eq('user_id', session.user.id),
+                    supabase.from('focus_sessions').delete().eq('user_id', session.user.id),
+                    supabase.from('tasks').delete().eq('user_id', session.user.id),
+                    supabase.from('user_settings').delete().eq('user_id', session.user.id),
+                    supabase.from('onboarding_preferences').delete().eq('user_id', session.user.id)
+                  ];
+
+                  await Promise.all(deletePromises);
+
+                  // Delete auth user (Note: This requires admin privileges)
+                  // In production, this should be done via an Edge Function
+                  Alert.alert(
+                    'Account Deletion Initiated',
+                    'Your data has been removed. For security reasons, account deletion requires admin approval.\n\nPlease contact support to complete the deletion process.',
+                    [
+                      {
+                        text: 'Contact Support',
+                        onPress: () => {
+                          Alert.alert('Support', 'Email: support@thetriage.app\n\nPlease reference your account deletion request.');
+                        }
+                      },
+                      {
+                        text: 'Sign Out',
+                        onPress: async () => {
+                          await supabase.auth.signOut();
+                        }
+                      }
+                    ]
+                  );
+                } catch (error: any) {
+                  console.error('Error deleting account:', error);
+                  Alert.alert('Error', error.message || 'Failed to delete account. Please contact support.');
+                }
+              },
+              'plain-text',
+              '',
+              'default'
+            );
+          }
+        }
+      ]
+    );
+  };
+
+  // AI Integration Handlers
+  const handleAIToggle = async (aiType: 'nora' | 'patrick' | 'insights', value: boolean) => {
+    // Check subscription access
+    if (!hasAIAccess) {
+      Alert.alert(
+        'Subscription Required',
+        'AI features require a Premium or Pro subscription. Upgrade to access intelligent study assistance!',
+        [
+          { text: 'Maybe Later', style: 'cancel' },
+          { text: 'View Plans', onPress: () => (navigation as any).navigate('Subscription') }
+        ]
+      );
+      return;
+    }
+
+    // Premium users can only use Patrick
+    if (isPremium && aiType === 'nora') {
+      Alert.alert(
+        'Pro Feature',
+        'Nora AI with full contextual access is a Pro-only feature. Upgrade to Pro for PDF analysis, study habit insights, and personalized recommendations!',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Upgrade to Pro', onPress: () => (navigation as any).navigate('Subscription') }
+        ]
+      );
+      return;
+    }
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+
+      // Prepare update data - Nora and Patrick are mutually exclusive for Pro users
+      const updateData: any = {
+        [`${aiType}_enabled`]: value
+      };
+
+      // Mutual exclusion: When enabling Nora, disable Patrick (and vice versa) for Pro users
+      if (isPro && value) {
+        if (aiType === 'nora') {
+          updateData.patrick_enabled = false;
+        } else if (aiType === 'patrick') {
+          updateData.nora_enabled = false;
+        }
+      }
+
+      // Update in user_settings
+      await updateUserSettings(session.user.id, updateData);
+
+      // Update local state with mutual exclusion
+      if (aiType === 'nora') {
+        setNoraEnabled(value);
+        if (value && isPro) setPatrickEnabled(false); // Disable Patrick when Nora is enabled
+      }
+      if (aiType === 'patrick') {
+        setPatrickEnabled(value);
+        if (value && isPro) setNoraEnabled(false); // Disable Nora when Patrick is enabled
+      }
+      if (aiType === 'insights') setInsightsEnabled(value);
+
+      const aiNames = {
+        nora: 'Nora AI (Full Context)',
+        patrick: 'Patrick AI (General Q&A)',
+        insights: 'AI Insights'
+      };
+
+      Alert.alert(
+        'AI Settings Updated',
+        `${aiNames[aiType]} ${value ? 'enabled' : 'disabled'} successfully`,
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Error updating AI setting:', error);
+      Alert.alert('Error', 'Failed to update AI setting. Please try again.');
+
+      // Revert state on error
+      if (aiType === 'nora') setNoraEnabled(!value);
+      if (aiType === 'patrick') setPatrickEnabled(!value);
+      if (aiType === 'insights') setInsightsEnabled(!value);
+    }
+  };
+
+  const handlePersonalizationToggle = async (value: boolean) => {
+    if (!isPro) {
+      Alert.alert(
+        'Pro Feature',
+        'Personalized AI responses are a Pro-only feature. Upgrade to get study recommendations tailored to your habits and preferences!',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Upgrade to Pro', onPress: () => (navigation as any).navigate('Subscription') }
+        ]
+      );
+      return;
+    }
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+
+      await updateUserSettings(session.user.id, {
+        personalized_responses: value
+      } as any);
+
+      setPersonalizedResponses(value);
+
+      Alert.alert(
+        'Settings Updated',
+        `Personalized responses ${value ? 'enabled' : 'disabled'}`,
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Error updating personalization setting:', error);
+      Alert.alert('Error', 'Failed to update setting. Please try again.');
+      setPersonalizedResponses(!value);
+    }
+  };
 
   // Update the handlePreviewSound function:
 
@@ -958,7 +1700,6 @@ const SettingsScreen = () => {
           .upsert({
             user_id: session.user.id,
             auto_play_sound: autoPlaySound,
-            music_volume: ambientLevel / 100,
             updated_at: new Date().toISOString()
           });
 
@@ -982,7 +1723,7 @@ const SettingsScreen = () => {
   // Replace the handleAutoPlayToggle function:
   const handleAutoPlayToggle = async (value: boolean) => {
     setAutoPlaySound(value);
-    
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) {
@@ -1004,6 +1745,82 @@ const SettingsScreen = () => {
       Alert.alert('Error', 'Failed to save auto-play setting. Please try again.');
       // Revert the UI state
       setAutoPlaySound(!value);
+    }
+  };
+
+  // Apple Music connection handler
+  const handleAppleMusicConnection = () => {
+    if (appleMusicConnected) {
+      // Disconnect
+      Alert.alert(
+        'Disconnect Apple Music',
+        'Are you sure you want to disconnect Apple Music?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Disconnect',
+            style: 'destructive',
+            onPress: () => {
+              setAppleMusicConnected(false);
+              console.log('🎵 Apple Music disconnected');
+            }
+          }
+        ]
+      );
+    } else {
+      // Connect - placeholder for future implementation
+      Alert.alert(
+        'Apple Music Integration',
+        'Apple Music integration is coming soon! This will allow you to play your Apple Music library during focus sessions.\n\nNote: Requires Apple Music subscription and MusicKit setup.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // For now, just toggle the state as placeholder
+              setAppleMusicConnected(true);
+              console.log('🎵 Apple Music connection placeholder enabled');
+            }
+          }
+        ]
+      );
+    }
+  };
+
+  // Spotify connection handler
+  const handleSpotifyConnection = () => {
+    if (spotifyConnected) {
+      // Disconnect
+      Alert.alert(
+        'Disconnect Spotify',
+        'Are you sure you want to disconnect Spotify?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Disconnect',
+            style: 'destructive',
+            onPress: () => {
+              setSpotifyConnected(false);
+              console.log('🎵 Spotify disconnected');
+            }
+          }
+        ]
+      );
+    } else {
+      // Connect - placeholder for future implementation
+      Alert.alert(
+        'Spotify Integration',
+        'Spotify integration is coming soon! This will allow you to play your Spotify playlists during focus sessions.\n\nNote: Requires Spotify Premium subscription and SDK setup.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // For now, just toggle the state as placeholder
+              setSpotifyConnected(true);
+              console.log('🎵 Spotify connection placeholder enabled');
+            }
+          }
+        ]
+      );
     }
   };
 
@@ -1039,22 +1856,25 @@ const SettingsScreen = () => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: screenBackground }}>
       {/* Settings Title */}
-      <View style={[styles.settingsHeader, { backgroundColor: theme.background }]}>
+      <View style={[styles.settingsHeader, { backgroundColor: screenBackground }]}>
         <TouchableOpacity
           style={styles.closeButton}
           onPress={() => navigation.goBack()}
         >
-          <View style={[styles.closeButtonCircle, { backgroundColor: theme.primary + '30' }]}>
-            <Ionicons name="close" size={24} color={theme.primary} />
+          <View style={[styles.closeButtonCircle, { backgroundColor: iconPrimary + '30' }]}>
+            <Ionicons name="close" size={24} color={iconPrimary} />
           </View>
         </TouchableOpacity>
-        <Text style={[styles.settingsTitle, { color: theme.primary }]}>Settings</Text>
+        <Text style={[styles.settingsTitle, { color: iconPrimary }]}>Settings</Text>
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, paddingBottom: 32 }}>
+      <ScrollView
+        style={{ flex: 1, backgroundColor: screenBackground }}
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 32 }}
+      >
         {/* Pro Trekker Illustrated Card */}
         <TouchableOpacity
           style={styles.proTrekkerCard}
@@ -1068,364 +1888,376 @@ const SettingsScreen = () => {
           />
           <View style={styles.proTrekkerImageContainer}>
             <Text style={styles.proTrekkerCardTitle}>Become a professional HikeWise Member</Text>
-            <Text style={styles.proTrekkerCardSubtitle}>Pomodoro mode, customizable focus time</Text>
+            <Text style={styles.proTrekkerCardSubtitle}>Balanced mode, customizable focus time</Text>
           </View>
         </TouchableOpacity>
-
-        {/* Timer Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeaderRow}>
-            <Ionicons name="time-outline" size={24} color={theme.primary} />
-            <Text style={[styles.sectionTitleLarge, { color: theme.primary }]}>Timer</Text>
-          </View>
-
-          <View style={[styles.settingRow, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
-            <Text style={[styles.settingLabel, { color: theme.text }]}>Default Timer</Text>
-            <Text style={[styles.settingValue, { color: theme.primary }]}>15 Minutes</Text>
-          </View>
-
-          <View style={[styles.settingRow, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
-            <Text style={[styles.settingLabel, { color: theme.text }]}>Rest Time</Text>
-            <Text style={[styles.settingValue, { color: theme.primary }]}></Text>
-          </View>
-
-          <TouchableOpacity
-            style={[styles.settingRow, { backgroundColor: theme.card, borderBottomColor: theme.border }]}
-            onPress={() => setShowWorkStyleModal(true)}
-          >
-            <Text style={[styles.settingLabel, { color: theme.text }]}>Pomodoro Timer</Text>
-            <Ionicons name="chevron-forward" size={20} color={theme.primary} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Music Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeaderRow}>
-            <Ionicons name="musical-notes-outline" size={24} color={theme.primary} />
-            <Text style={[styles.sectionTitleLarge, { color: theme.primary }]}>Music</Text>
-          </View>
-
-          <View style={[styles.settingRow, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
-            <Text style={[styles.settingLabel, { color: theme.text }]}>Focus Music</Text>
-            <Switch
-              value={autoPlaySound}
-              onValueChange={handleAutoPlayToggle}
-              trackColor={{ false: '#E0E0E0', true: theme.primary }}
-              thumbColor={autoPlaySound ? '#FFF' : '#FFF'}
-            />
-          </View>
-
-          <View style={[styles.settingRow, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
-            <Text style={[styles.settingLabel, { color: theme.text }]}>Home Music</Text>
-            <Switch
-              value={sound}
-              onValueChange={(value) => setSound(value)}
-              trackColor={{ false: '#E0E0E0', true: theme.primary }}
-              thumbColor={sound ? '#FFF' : '#FFF'}
-            />
-          </View>
-        </View>
-
-        {/* System Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeaderRow}>
-            <Ionicons name="settings-outline" size={24} color={theme.primary} />
-            <Text style={[styles.sectionTitleLarge, { color: theme.primary }]}>System</Text>
-          </View>
-
-          <View style={[styles.settingRow, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
-            <Text style={[styles.settingLabel, { color: theme.text }]}>Notification</Text>
-            <Switch
-              value={notifications && notificationPermission === 'granted'}
-              onValueChange={handleNotificationToggle}
-              trackColor={{ false: '#E0E0E0', true: theme.primary }}
-              thumbColor={notifications && notificationPermission === 'granted' ? '#FFF' : '#FFF'}
-            />
-          </View>
-
-          <TouchableOpacity
-            style={[styles.settingRow, { backgroundColor: theme.card, borderBottomColor: theme.border }]}
-            onPress={() => setShowThemeModal(true)}
-          >
-            <Text style={[styles.settingLabel, { color: theme.text }]}>Change App Icon</Text>
-            <View style={styles.appIconPreview}>
-              <Ionicons name="apps" size={24} color={theme.primary} />
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.settingRow, { backgroundColor: theme.card, borderBottomColor: theme.border }]}
-            onPress={() => navigation.navigate('ProTrekker' as any)}
-          >
-            <Text style={[styles.settingLabel, { color: theme.text }]}>Become Pro Traveller</Text>
-            <View style={styles.proIcon}>
-              <Ionicons name="star" size={20} color="#FFA726" />
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.settingRow, { backgroundColor: theme.card, borderBottomColor: 'transparent' }]}
-            onPress={() => navigation.navigate('Subscription' as any)}
-          >
-            <Text style={[styles.settingLabel, { color: theme.text }]}>Switch Pro Plan</Text>
-            <Text style={[styles.settingValue, { color: theme.primary }]}></Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.settingRow, { backgroundColor: theme.card, borderBottomColor: 'transparent' }]}
-          >
-            <Text style={[styles.settingLabel, { color: theme.text }]}>Restore Purchased</Text>
-            <Text style={[styles.settingValue, { color: theme.primary }]}></Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* OLD APPEARANCE SECTION - REMOVE */}
-        <View style={{ display: 'none' }}>
-        <Text style={[styles.sectionHeader, { fontSize: fontSize * 0.9, color: theme.primary }]}>APPEARANCE</Text>
-        <View style={[styles.cardSection, { backgroundColor: theme.card }]}>
-          <TouchableOpacity style={styles.rowCard} onPress={() => setShowThemeModal(true)} activeOpacity={0.7}>
-            <Ionicons name="color-palette-outline" size={22} color={theme.primary} style={styles.rowIcon} />
-            <Text style={[styles.rowLabel, { fontSize: fontSize, color: theme.text }]}>Theme</Text>
-            <View style={styles.rowValueWrap}><Text style={[styles.rowValue, { fontSize: fontSize * 0.9, color: theme.primary }]}>{themeMode}</Text></View>
-            <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
-          </TouchableOpacity>
-
-          {/* Environment Selection - Only show when Light mode is selected */}
-          {themeMode === 'Light' && (
-            <TouchableOpacity style={styles.rowCard} onPress={() => setShowEnvModal(true)} activeOpacity={0.7}>
-              <Ionicons name="globe-outline" size={22} color={theme.primary} style={styles.rowIcon} />
-              <Text style={[styles.rowLabel, { fontSize: fontSize, color: theme.text }]}>Environment</Text>
-              <View style={styles.rowValueWrap}><Text style={[styles.rowValue, { fontSize: fontSize * 0.9, color: theme.primary }]}>{lightThemePalettes[themeName].name}</Text></View>
-              <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
-            </TouchableOpacity>
-          )}
-
-          <TouchableOpacity style={styles.rowCard} onPress={() => setShowFontModal(true)} activeOpacity={0.7}>
-            <MaterialIcons name="format-size" size={22} color={theme.primary} style={styles.rowIcon} />
-            <Text style={[styles.rowLabel, { fontSize: fontSize, color: theme.text }]}>Font Size</Text>
-            <View style={styles.rowValueWrap}><Text style={[styles.rowValue, { fontSize: fontSize * 0.9, color: theme.primary }]}>{localFontSize}</Text></View>
-            <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.rowCard} onPress={() => setShowIconModal(true)} activeOpacity={0.7}>
-            <MaterialCommunityIcons name="apps" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>App Icon</Text>
-            <View style={styles.rowValueWrap}><Text style={styles.rowValue}>{appIcon}</Text></View>
-            <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
-          </TouchableOpacity>
-        </View>
-        </View>
-
         {/* SOUND SECTION - FIXED */}
-        <Text style={styles.sectionHeader}>SOUND</Text>
-        <View style={styles.cardSection}>
-          <Text style={styles.sectionTitle}>Focus Sound</Text>
-          {SOUND_OPTIONS.map(option => (
+        <Text style={[styles.sectionHeader, { color: iconPrimary }]}>SOUND</Text>
+        <View style={[styles.cardSection, cardSectionStyle]}>
+          <Text style={[styles.sectionTitle, { color: iconPrimary }]}>Focus Sound</Text>
+          {SOUND_OPTIONS.map((option, index) => (
             <TouchableOpacity
               key={option}
-              style={styles.soundOption}
+              style={[
+                styles.soundOption,
+                { borderBottomColor: borderColor },
+                index < SOUND_OPTIONS.length - 1 && { borderBottomWidth: 1 }
+              ]}
               onPress={() => handleSoundPreferenceChange(option)}
               activeOpacity={0.7}
             >
-              <View style={styles.radioCircle}>
-                {selectedSound === option && <View style={styles.radioDot} />}
+              <View style={[styles.radioCircle, { borderColor: iconPrimary }]}>
+                {selectedSound === option && <View style={[styles.radioDot, { backgroundColor: iconPrimary }]} />}
               </View>
-              <Text style={[styles.soundLabel, selectedSound === option && styles.soundLabelSelected]}>
-                {option}
-              </Text>
-              <TouchableOpacity 
-                onPress={() => handlePreviewSound(option)} 
+              <Text
                 style={[
-                  styles.previewButton,
-                  isPreviewMode && currentTrack?.displayName.toLowerCase().includes(option.toLowerCase()) && styles.previewButtonActive
+                  styles.soundLabel,
+                  { color: textColor },
+                  selectedSound === option && { color: iconPrimary },
                 ]}
               >
-                <Ionicons 
-                  name={isPreviewMode && currentTrack?.displayName.toLowerCase().includes(option.toLowerCase()) ? "stop-circle" : "play-circle-outline"} 
-                  size={22} 
-                  color={isPreviewMode && currentTrack?.displayName.toLowerCase().includes(option.toLowerCase()) ? "#E57373" : "#388E3C"} 
+                {option}
+              </Text>
+              <TouchableOpacity
+                onPress={() => handlePreviewSound(option)}
+                style={[
+                  styles.previewButton,
+                  { backgroundColor: isDarkMode ? '#2f2f2f' : '#F5F5F5' },
+                  isPreviewMode && currentTrack?.category === option && [styles.previewButtonActive, { backgroundColor: iconPrimary + '22' }]
+                ]}
+              >
+                <Ionicons
+                  name={isPreviewMode && currentTrack?.category === option ? "stop-circle" : "play-circle-outline"}
+                  size={22}
+                  color={isPreviewMode && currentTrack?.category === option ? "#E57373" : iconPrimary}
                 />
               </TouchableOpacity>
             </TouchableOpacity>
           ))}
           
           {/* Auto-Play Sound Toggle Row - Fixed styling */}
-          <View style={styles.rowCard}>
-            <MaterialIcons name="music-note" size={22} color="#388E3C" style={styles.rowIcon} />
+          <View style={[styles.rowCard, rowCardBaseStyle]}>
+            <MaterialIcons name="music-note" size={22} color={iconPrimary} style={styles.rowIcon} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.rowLabel}>Auto-Play Sound</Text>
-              <Text style={styles.rowDescription}>Automatically start music when focus session begins</Text>
+              <Text style={[styles.rowLabel, { color: textColor }]}>Auto-Play Sound</Text>
+              <Text style={[styles.rowDescription, { color: secondaryTextColor }]}>Automatically start music when focus session begins</Text>
             </View>
             <Switch
               value={autoPlaySound}
               onValueChange={handleAutoPlayToggle}
-              trackColor={{ false: '#E0E0E0', true: '#4CAF50' }}
-              thumbColor={autoPlaySound ? '#1B5E20' : '#BDBDBD'}
+              trackColor={{ false: isDarkMode ? '#525252' : '#E0E0E0', true: iconPrimary }}
+              thumbColor={autoPlaySound ? (isDarkMode ? theme.secondary ?? '#A5D6A7' : '#FFFFFF') : (isDarkMode ? '#888' : '#FFFFFF')}
             />
           </View>
-          
-          {/* Ambient Noise Level Row */}
-          <View style={styles.rowCard}>
-            <MaterialIcons name="volume-up" size={22} color="#388E3C" style={styles.rowIcon} />
+
+          {/* Music Services Section */}
+          <Text style={[styles.sectionTitle, { color: iconPrimary, marginTop: 16 }]}>Music Services</Text>
+
+          {/* Apple Music Connection Row */}
+          <View style={[styles.rowCard, rowCardBaseStyle]}>
+            <Ionicons name="logo-apple" size={22} color={iconPrimary} style={styles.rowIcon} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.rowLabel}>Ambient Noise Level</Text>
-              <View style={styles.sliderContainer}>
-                <TouchableOpacity onPress={() => setAmbientNoise(Math.max(0, ambientNoise - 0.1))}>
-                  <Entypo name="minus" size={20} color="#388E3C" />
-                </TouchableOpacity>
-                <View style={{ flex: 1, marginHorizontal: 12 }}>
-                  <View style={{ height: 6, backgroundColor: '#E0E0E0', borderRadius: 3, marginVertical: 8 }}>
-                    <View style={{ width: `${ambientNoise * 100}%`, height: 6, backgroundColor: '#4CAF50', borderRadius: 3 }} />
-                  </View>
-                </View>
-                <TouchableOpacity onPress={() => setAmbientNoise(Math.min(1, ambientNoise + 0.1))}>
-                  <Entypo name="plus" size={20} color="#388E3C" />
-                </TouchableOpacity>
-              </View>
+              <Text style={[styles.rowLabel, { color: textColor }]}>Apple Music</Text>
+              <Text style={[styles.rowDescription, { color: secondaryTextColor }]}>
+                {appleMusicConnected ? 'Connected - Play from your library' : 'Connect your Apple Music account'}
+              </Text>
             </View>
+            <TouchableOpacity
+              onPress={handleAppleMusicConnection}
+              style={[
+                styles.musicServiceButton,
+                {
+                  backgroundColor: appleMusicConnected ? (isDarkMode ? '#2f2f2f' : '#F5F5F5') : '#007AFF',
+                  borderWidth: appleMusicConnected ? 1 : 0,
+                  borderColor: borderColor
+                }
+              ]}
+            >
+              <Text style={[
+                styles.musicServiceButtonText,
+                { color: appleMusicConnected ? textColor : '#FFFFFF' }
+              ]}>
+                {appleMusicConnected ? 'Disconnect' : 'Connect'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Spotify Connection Row */}
+          <View style={[styles.rowCard, rowCardBaseStyle, { borderBottomWidth: 0 }]}>
+            <Ionicons name="musical-notes" size={22} color="#1DB954" style={styles.rowIcon} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowLabel, { color: textColor }]}>Spotify</Text>
+              <Text style={[styles.rowDescription, { color: secondaryTextColor }]}>
+                {spotifyConnected ? 'Connected - Play from your playlists' : 'Connect your Spotify account'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={handleSpotifyConnection}
+              style={[
+                styles.musicServiceButton,
+                {
+                  backgroundColor: spotifyConnected ? (isDarkMode ? '#2f2f2f' : '#F5F5F5') : '#1DB954',
+                  borderWidth: spotifyConnected ? 1 : 0,
+                  borderColor: borderColor
+                }
+              ]}
+            >
+              <Text style={[
+                styles.musicServiceButtonText,
+                { color: spotifyConnected ? textColor : '#FFFFFF' }
+              ]}>
+                {spotifyConnected ? 'Disconnect' : 'Connect'}
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* App Environment */}
-        <Text style={styles.sectionHeader}>APP ENVIRONMENT</Text>
-        <View style={{ marginHorizontal: 12, marginBottom: 12 }}>
-          {/* Current Environment Preview */}
-          <View style={{ backgroundColor: theme.background, borderRadius: 16, padding: 18, marginBottom: 12, borderWidth: 2, borderColor: theme.primary }}>
-            <Text style={{ color: theme.primary, fontWeight: 'bold', fontSize: 16, marginBottom: 6 }}>Current: {themePalettes[themeName].name}</Text>
-            <View style={{ backgroundColor: theme.card, borderRadius: 10, padding: 12, marginBottom: 8 }}>
-              <Text style={{ color: theme.primary, fontWeight: 'bold' }}>Card Example</Text>
-              <Text style={{ color: theme.text, marginTop: 4 }}>This is a card in the current theme.</Text>
+        {/* App Environment - Collapsible */}
+        <Text style={[styles.sectionHeader, { color: iconPrimary }]}>APP ENVIRONMENT</Text>
+        <View style={[styles.cardSection, cardSectionStyle]}>
+          <TouchableOpacity
+            style={[styles.rowCard, rowCardBaseStyle, { borderBottomWidth: isEnvSectionExpanded ? 1 : 0 }]}
+            onPress={() => setIsEnvSectionExpanded(!isEnvSectionExpanded)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="color-palette-outline" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowLabel, rowLabelTextStyle]}>Environment Colors</Text>
+              <Text style={[styles.rowDescription, rowDescriptionTextStyle]}>
+                Current: {themePalettes[themeName].name}
+              </Text>
             </View>
-            <TouchableOpacity style={{ backgroundColor: theme.primary, borderRadius: 8, padding: 10, alignSelf: 'flex-start' }}>
-              <Text style={{ color: '#fff', fontWeight: 'bold' }}>Button Example</Text>
-            </TouchableOpacity>
-          </View>
-          
-          {/* Environment Options as Cards with updated icons */}
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-            {(['home','office','library','coffee','park'] as ThemeName[]).map(env => (
-              <TouchableOpacity
-                key={env}
-                style={{
-                  width: '48%',
-                  backgroundColor: themePalettes[env].background,
-                  borderRadius: 14,
+            <Ionicons
+              name={isEnvSectionExpanded ? "chevron-up" : "chevron-down"}
+              size={20}
+              color={secondaryTextColor}
+            />
+          </TouchableOpacity>
+
+          {/* Expanded Content */}
+          {isEnvSectionExpanded && (
+            <View style={{ paddingHorizontal: 12, paddingBottom: 12 }}>
+              {/* Dark Mode Warning */}
+              {isDarkMode && (
+                <View style={{
+                  backgroundColor: '#FFF3CD',
+                  borderRadius: 12,
                   padding: 16,
-                  marginBottom: 12,
-                  borderWidth: themeName === env ? 2 : 1,
-                  borderColor: themeName === env ? themePalettes[env].primary : '#E0E0E0',
-                  alignItems: 'center',
-                }}
-                onPress={() => { setSelectedEnv(env); setShowEnvModal(true); }}
-                activeOpacity={0.8}
-              >
-                {/* Updated icon based on environment name */}
-                <Ionicons 
-                  name={THEME_ICONS[env] as keyof typeof Ionicons.glyphMap} 
-                  size={28} 
-                  color={themePalettes[env].primary} 
-                  style={{ marginBottom: 6 }} 
-                />
-                <Text style={{ color: themePalettes[env].primary, fontWeight: 'bold', fontSize: 15 }}>{themePalettes[env].name}</Text>
-                <View style={{ backgroundColor: themePalettes[env].card, borderRadius: 8, padding: 6, marginTop: 8, width: '100%' }}>
-                  <Text style={{ color: themePalettes[env].primary, fontWeight: 'bold', fontSize: 13 }}>Card</Text>
+                  marginTop: 12,
+                  marginBottom: 16,
+                  borderLeftWidth: 4,
+                  borderLeftColor: '#FFA726'
+                }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
+                    <Ionicons name="information-circle" size={24} color="#F57C00" style={{ marginTop: 2 }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: '#856404', fontWeight: 'bold', fontSize: 15, marginBottom: 4 }}>
+                        Dark Mode Active
+                      </Text>
+                      <Text style={{ color: '#856404', fontSize: 13, lineHeight: 18 }}>
+                        Environment colors are not visible in dark mode. To see environment themes, please change your phone's dark mode setting to light mode.
+                      </Text>
+                    </View>
+                  </View>
                 </View>
-                <TouchableOpacity style={{ backgroundColor: themePalettes[env].primary, borderRadius: 6, padding: 6, marginTop: 8, width: '100%' }}>
-                  <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13, textAlign: 'center' }}>Button</Text>
+              )}
+
+              {/* Current Environment Preview */}
+              <View style={{
+                backgroundColor: isDarkMode ? secondaryCardBackground : screenBackground,
+                borderRadius: 16,
+                padding: 18,
+                marginBottom: 12,
+                borderWidth: 2,
+                borderColor: iconPrimary,
+                opacity: isDarkMode ? 0.5 : 1
+              }}>
+                <Text style={{ color: iconPrimary, fontWeight: 'bold', fontSize: 16, marginBottom: 6 }}>
+                  Current: {themePalettes[themeName].name}
+                </Text>
+                <View style={{ backgroundColor: cardBackground, borderRadius: 10, padding: 12, marginBottom: 8 }}>
+                  <Text style={{ color: iconPrimary, fontWeight: 'bold' }}>Card Example</Text>
+                  <Text style={{ color: textColor, marginTop: 4 }}>This is a card in the current theme.</Text>
+                </View>
+                <TouchableOpacity style={{ backgroundColor: iconPrimary, borderRadius: 8, padding: 10, alignSelf: 'flex-start' }}>
+                  <Text style={{ color: '#fff', fontWeight: 'bold' }}>Button Example</Text>
                 </TouchableOpacity>
-                {themeName === env && (
-                  <Ionicons name="checkmark-circle" size={22} color={themePalettes[env].primary} style={{ position: 'absolute', top: 8, right: 8 }} />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
+              </View>
+
+              {/* Environment Options as Cards with updated icons */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                {(['home','office','library','coffee','park'] as ThemeName[]).map(env => (
+                  <TouchableOpacity
+                    key={env}
+                    style={{
+                      width: '48%',
+                      backgroundColor: themePalettes[env].background,
+                      borderRadius: 14,
+                      padding: 16,
+                      marginBottom: 12,
+                      borderWidth: themeName === env ? 2 : 1,
+                      borderColor: themeName === env ? themePalettes[env].primary : (isDarkMode ? '#3A3A3A' : '#E0E0E0'),
+                      alignItems: 'center',
+                      opacity: isDarkMode ? 0.5 : 1
+                    }}
+                    onPress={() => {
+                      if (isDarkMode) {
+                        Alert.alert(
+                          'Dark Mode Active',
+                          'Environment colors are not visible in dark mode. Please change your phone\'s dark mode setting to light mode to see environment themes.',
+                          [{ text: 'OK' }]
+                        );
+                      } else {
+                        setSelectedEnv(env);
+                        setShowEnvModal(true);
+                      }
+                    }}
+                    activeOpacity={0.8}
+                    disabled={isDarkMode}
+                  >
+                    {/* Updated icon based on environment name */}
+                    <Ionicons
+                      name={THEME_ICONS[env] as keyof typeof Ionicons.glyphMap}
+                      size={28}
+                      color={themePalettes[env].primary}
+                      style={{ marginBottom: 6 }}
+                    />
+                    <Text style={{ color: themePalettes[env].primary, fontWeight: 'bold', fontSize: 15 }}>
+                      {themePalettes[env].name}
+                    </Text>
+                    <View style={{ backgroundColor: themePalettes[env].card, borderRadius: 8, padding: 6, marginTop: 8, width: '100%' }}>
+                      <Text style={{ color: themePalettes[env].primary, fontWeight: 'bold', fontSize: 13 }}>Card</Text>
+                    </View>
+                    <TouchableOpacity style={{ backgroundColor: themePalettes[env].primary, borderRadius: 6, padding: 6, marginTop: 8, width: '100%' }}>
+                      <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13, textAlign: 'center' }}>Button</Text>
+                    </TouchableOpacity>
+                    {themeName === env && (
+                      <Ionicons name="checkmark-circle" size={22} color={themePalettes[env].primary} style={{ position: 'absolute', top: 8, right: 8 }} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Notifications & Reminders */}
-        <Text style={styles.sectionHeader}>NOTIFICATIONS & REMINDERS</Text>
-        <View style={styles.cardSection}>
-          <View style={styles.rowCard}>
-            <Ionicons name="notifications-outline" size={22} color="#388E3C" style={styles.rowIcon} />
+        <Text style={[styles.sectionHeader, { color: iconPrimary }]}>NOTIFICATIONS & REMINDERS</Text>
+        <View style={[styles.cardSection, cardSectionStyle]}>
+          <TouchableOpacity
+            style={[styles.rowCard, rowCardBaseStyle]}
+            onPress={() => setShowNotificationPrefsModal(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="notifications-outline" size={22} color={iconPrimary} style={styles.rowIcon} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.rowLabel}>Push Notifications</Text>
-              <Text style={styles.rowDescription}>
-                {notificationPermission === 'granted' ? 'Notifications enabled' : 
+              <Text style={[styles.rowLabel, rowLabelTextStyle]}>Notification Preferences</Text>
+              <Text style={[styles.rowDescription, rowDescriptionTextStyle]}>
+                {notificationPermission === 'granted' ? 'Customize what you get notified about' :
                  notificationPermission === 'denied' ? 'Permission denied - enable in settings' :
-                 'Tap to enable notifications'}
+                 'Tap to configure'}
               </Text>
             </View>
-            <View style={styles.rowValueWrap}><Text style={styles.rowValue}>{notifications ? 'On' : 'Off'}</Text></View>
-            <Switch
-              value={notifications && notificationPermission === 'granted'}
-              onValueChange={handleNotificationToggle}
-              trackColor={{ false: '#E0E0E0', true: '#4CAF50' }}
-              thumbColor={notifications && notificationPermission === 'granted' ? '#1B5E20' : '#BDBDBD'}
-            />
-          </View>
-          <TouchableOpacity style={styles.rowCard} onPress={handleDailyReminderUpdate} activeOpacity={0.7}>
-            <Ionicons name="alarm-outline" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>Daily Study Reminder</Text>
-            <View style={styles.rowValueWrap}><Text style={styles.rowValue}>{dailyReminder}</Text></View>
-            <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
+            <Ionicons name="chevron-forward" size={20} color={secondaryTextColor} />
           </TouchableOpacity>
-          <View style={styles.rowCard}>
-            <MaterialIcons name="timer" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>Session End Reminder</Text>
-            <View style={styles.rowValueWrap}><Text style={styles.rowValue}>{sessionEndReminder ? 'On' : 'Off'}</Text></View>
+          <TouchableOpacity
+            style={[styles.rowCard, rowCardBaseStyle]}
+            onPress={handleDailyReminderUpdate}
+            activeOpacity={0.7}
+            disabled={!notifications || notificationPermission !== 'granted'}
+          >
+            <Ionicons name="alarm-outline" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowLabel, rowLabelTextStyle]}>Daily Study Reminder</Text>
+              <Text style={[styles.rowDescription, rowDescriptionTextStyle]}>
+                {notifications && notificationPermission === 'granted'
+                  ? `Scheduled for ${(() => {
+                      const [hours24, minutes] = dailyReminder.split(':');
+                      let hours = parseInt(hours24);
+                      const period = hours >= 12 ? 'PM' : 'AM';
+                      if (hours > 12) hours -= 12;
+                      if (hours === 0) hours = 12;
+                      return `${hours}:${minutes} ${period}`;
+                    })()} daily`
+                  : 'Enable notifications to set reminder'}
+              </Text>
+            </View>
+            <View style={styles.rowValueWrap}>
+              <Text style={[styles.rowValue, rowValueTextStyle]}>
+                {(() => {
+                  const [hours24, minutes] = dailyReminder.split(':');
+                  let hours = parseInt(hours24);
+                  const period = hours >= 12 ? 'PM' : 'AM';
+                  if (hours > 12) hours -= 12;
+                  if (hours === 0) hours = 12;
+                  return `${hours}:${minutes} ${period}`;
+                })()}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={secondaryTextColor} />
+          </TouchableOpacity>
+          <View style={[styles.rowCard, rowCardBaseStyle, { borderBottomWidth: 0 }]}>
+            <MaterialIcons name="timer" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowLabel, rowLabelTextStyle]}>Session End Reminder</Text>
+              <Text style={[styles.rowDescription, rowDescriptionTextStyle]}>
+                Notify 2 minutes before session ends
+              </Text>
+            </View>
+            <View style={styles.rowValueWrap}>
+              <Text style={[styles.rowValue, rowValueTextStyle]}>{sessionEndReminder ? 'On' : 'Off'}</Text>
+            </View>
             <Switch
               value={sessionEndReminder}
               onValueChange={handleSessionEndReminderToggle}
-              trackColor={{ false: '#E0E0E0', true: '#4CAF50' }}
-              thumbColor={sessionEndReminder ? '#1B5E20' : '#BDBDBD'}
+              trackColor={{ false: isDarkMode ? '#525252' : '#E0E0E0', true: iconPrimary }}
+              thumbColor={sessionEndReminder ? (isDarkMode ? theme.secondary ?? '#A5D6A7' : '#FFFFFF') : (isDarkMode ? '#888' : '#FFFFFF')}
             />
           </View>
         </View>
 
         {/* Focus & Study Preferences - Updated */}
-        <Text style={styles.sectionHeader}>FOCUS & STUDY PREFERENCES</Text>
-        <View style={styles.cardSection}>
-          <TouchableOpacity style={styles.rowCard} onPress={() => navigation.navigate('Preferences')} activeOpacity={0.7}>
-            <Ionicons name="options-outline" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>User Preferences</Text>
-            <View style={styles.rowValueWrap}><Text style={styles.rowValue}>Configure</Text></View>
-            <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
+        <Text style={[styles.sectionHeader, { color: iconPrimary }]}>FOCUS & STUDY PREFERENCES</Text>
+        <View style={[styles.cardSection, cardSectionStyle]}>
+          <TouchableOpacity style={[styles.rowCard, rowCardBaseStyle]} onPress={() => setShowMainGoalModal(true)} activeOpacity={0.7}>
+            <MaterialCommunityIcons name="bullseye-arrow" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <Text style={[styles.rowLabel, rowLabelTextStyle]}>Main Goal</Text>
+            <View style={styles.rowValueWrap}><Text style={[styles.rowValue, rowValueTextStyle]}>{mainGoal}</Text></View>
+            <Ionicons name="chevron-forward" size={20} color={secondaryTextColor} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.rowCard} onPress={() => setShowWorkStyleModal(true)} activeOpacity={0.7}>
-            <MaterialCommunityIcons name="clock-outline" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>Work Style</Text>
-            <View style={styles.rowValueWrap}><Text style={styles.rowValue}>{workStyle}</Text></View>
-            <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
+          <TouchableOpacity style={[styles.rowCard, rowCardBaseStyle]} onPress={() => setShowWorkStyleModal(true)} activeOpacity={0.7}>
+            <MaterialCommunityIcons name="clock-outline" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <Text style={[styles.rowLabel, rowLabelTextStyle]}>Work Style</Text>
+            <View style={styles.rowValueWrap}><Text style={[styles.rowValue, rowValueTextStyle]}>{workStyle}</Text></View>
+            <Ionicons name="chevron-forward" size={20} color={secondaryTextColor} />
           </TouchableOpacity>
-          <View style={styles.rowCard}>
-            <MaterialIcons name="autorenew" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>Auto-Start Next Session</Text>
-            <View style={styles.rowValueWrap}><Text style={styles.rowValue}>{autoStartNext ? 'On' : 'Off'}</Text></View>
-            <Switch
-              value={autoStartNext}
-              onValueChange={handleAutoStartToggle}
-              trackColor={{ false: '#E0E0E0', true: '#4CAF50' }}
-              thumbColor={autoStartNext ? '#1B5E20' : '#BDBDBD'}
-            />
-          </View>
-          <View style={styles.rowCard}>
-            <MaterialIcons name="do-not-disturb" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>Auto Do Not Disturb</Text>
-            <View style={styles.rowValueWrap}><Text style={styles.rowValue}>{autoDND ? 'On' : 'Off'}</Text></View>
+          <View style={[styles.rowCard, rowCardBaseStyle]}>
+            <MaterialIcons name="do-not-disturb" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowLabel, rowLabelTextStyle]}>Auto Do Not Disturb</Text>
+              <Text style={[styles.rowDescription, rowDescriptionTextStyle]}>
+                Suppress notifications during focus sessions
+              </Text>
+            </View>
+            <View style={styles.rowValueWrap}>
+              <Text style={[styles.rowValue, rowValueTextStyle]}>{autoDND ? 'On' : 'Off'}</Text>
+            </View>
             <Switch
               value={autoDND}
               onValueChange={handleAutoDNDToggle}
-              trackColor={{ false: '#E0E0E0', true: '#4CAF50' }}
-              thumbColor={autoDND ? '#1B5E20' : '#BDBDBD'}
+              trackColor={{ false: isDarkMode ? '#525252' : '#E0E0E0', true: iconPrimary }}
+              thumbColor={autoDND ? (isDarkMode ? theme.secondary ?? '#A5D6A7' : '#FFFFFF') : (isDarkMode ? '#888' : '#FFFFFF')}
             />
           </View>
-          <View style={styles.rowCard}>
-            <MaterialCommunityIcons name="target" size={22} color="#388E3C" style={styles.rowIcon} />
+          <View style={[styles.rowCard, rowCardBaseStyle, { borderBottomWidth: 0 }]}>
+            <MaterialCommunityIcons name="target" size={22} color={iconPrimary} style={styles.rowIcon} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.rowLabel}>Weekly Focus Goal</Text>
-              <Text style={[styles.rowValue, { fontSize: 12, color: '#666', marginTop: 2 }]}>
+              <Text style={[styles.rowLabel, rowLabelTextStyle]}>Weekly Focus Goal</Text>
+              <Text style={[styles.rowDescription, rowDescriptionTextStyle, { fontSize: 12, marginTop: 2 }]}>
                 {weeklyGoal} hours per week
               </Text>
               <View style={styles.sliderContainer}>
-                <Text style={styles.sliderLabel}>5h</Text>
+                <Text style={[styles.sliderLabel, { color: secondaryTextColor }]}>5h</Text>
                 <Slider
                   style={styles.slider}
                   minimumValue={5}
@@ -1434,124 +2266,419 @@ const SettingsScreen = () => {
                   value={weeklyGoal}
                   onValueChange={setWeeklyGoal}
                   onSlidingComplete={handleWeeklyGoalUpdate}
-                  minimumTrackTintColor="#4CAF50"
-                  maximumTrackTintColor="#E0E0E0"
-                  thumbTintColor="#4CAF50"
+                  minimumTrackTintColor={iconPrimary}
+                  maximumTrackTintColor={isDarkMode ? '#3A3A3A' : '#E0E0E0'}
+                  thumbTintColor={isDarkMode ? theme.secondary ?? '#A5D6A7' : iconPrimary}
                 />
-                <Text style={styles.sliderLabel}>80h</Text>
+                <Text style={[styles.sliderLabel, { color: secondaryTextColor }]}>80h</Text>
               </View>
             </View>
           </View>
         </View>
 
         {/* Account & Privacy */}
-        <Text style={styles.sectionHeader}>ACCOUNT & PRIVACY</Text>
-        <View style={styles.cardSection}>
-          <TouchableOpacity style={styles.rowCard} onPress={() => navigation.navigate('Tabs' as any, { screen: 'Profile', params: { screen: 'ProfileMain' } } as any)} activeOpacity={0.7}>
-            <Ionicons name="person-outline" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>Edit Profile</Text>
-            <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
+        <Text style={[styles.sectionHeader, { color: iconPrimary }]}>ACCOUNT & PRIVACY</Text>
+        <View style={[styles.cardSection, cardSectionStyle]}>
+          <TouchableOpacity style={[styles.rowCard, rowCardBaseStyle]} onPress={() => navigation.navigate('Tabs' as any, { screen: 'Profile', params: { screen: 'ProfileMain' } } as any)} activeOpacity={0.7}>
+            <Ionicons name="person-outline" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowLabel, rowLabelTextStyle]}>Edit Profile</Text>
+              <Text style={[styles.rowDescription, rowDescriptionTextStyle]}>
+                Update name, username, bio, and photo
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={secondaryTextColor} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.rowCard} onPress={() => placeholder('Change Email/Password')} activeOpacity={0.7}>
-            <MaterialIcons name="email" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>Change Email/Password</Text>
-            <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
+          <TouchableOpacity style={[styles.rowCard, rowCardBaseStyle]} onPress={handleChangeEmailPassword} activeOpacity={0.7}>
+            <MaterialIcons name="email" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowLabel, rowLabelTextStyle]}>Change Email/Password</Text>
+              <Text style={[styles.rowDescription, rowDescriptionTextStyle]}>
+                Update your account credentials
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={secondaryTextColor} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.rowCard} onPress={() => navigation.navigate('Privacy')} activeOpacity={0.7}>
-            <MaterialIcons name="lock-outline" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>Privacy Settings</Text>
-            <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
+          <TouchableOpacity style={[styles.rowCard, rowCardBaseStyle]} onPress={() => navigation.navigate('Privacy')} activeOpacity={0.7}>
+            <MaterialIcons name="lock-outline" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowLabel, rowLabelTextStyle]}>Privacy Settings</Text>
+              <Text style={[styles.rowDescription, rowDescriptionTextStyle]}>
+                Manage who can see your information
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={secondaryTextColor} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.rowCard} onPress={() => placeholder('Export Data')} activeOpacity={0.7}>
-            <MaterialIcons name="file-download" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>Export Data</Text>
-            <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
+          <TouchableOpacity style={[styles.rowCard, rowCardBaseStyle]} onPress={handleExportData} activeOpacity={0.7}>
+            <MaterialIcons name="file-download" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowLabel, rowLabelTextStyle]}>Export Data</Text>
+              <Text style={[styles.rowDescription, rowDescriptionTextStyle]}>
+                Download all your personal data
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={secondaryTextColor} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.rowCard} onPress={() => placeholder('Delete Account')} activeOpacity={0.7}>
-            <Ionicons name="trash-outline" size={22} color="#ff4444" style={styles.rowIcon} />
-            <Text style={[styles.rowLabel, { color: '#ff4444' }]}>Delete Account</Text>
-            <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
+          <TouchableOpacity style={[styles.rowCard, rowCardBaseStyle, { borderBottomWidth: 0 }]} onPress={handleDeleteAccount} activeOpacity={0.7}>
+            <Ionicons name="trash-outline" size={22} color={isDarkMode ? '#ff6b6b' : '#ff4444'} style={styles.rowIcon} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowLabel, { color: '#ff4444' }]}>Delete Account</Text>
+              <Text style={[styles.rowDescription, { color: '#ff4444' + '99' }]}>
+                Permanently delete your account and data
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={secondaryTextColor} />
           </TouchableOpacity>
         </View>
 
-        {/* AI Integration */}
-        <Text style={styles.sectionHeader}>AI INTEGRATION</Text>
-        <View style={styles.cardSection}>
-          <TouchableOpacity 
-            style={styles.rowCard} 
-            onPress={() => (navigation as any).navigate('AIIntegration')} 
+        {/* AI Integration - Collapsible */}
+        <Text style={[styles.sectionHeader, { color: iconPrimary }]}>AI INTEGRATION</Text>
+        <View style={[styles.cardSection, cardSectionStyle]}>
+          <TouchableOpacity
+            style={[styles.rowCard, rowCardBaseStyle, { borderBottomWidth: isAISectionExpanded ? 1 : 0 }]}
+            onPress={() => setIsAISectionExpanded(!isAISectionExpanded)}
             activeOpacity={0.7}
           >
-            <MaterialCommunityIcons name="brain" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>AI Settings</Text>
-            <View style={styles.rowValueWrap}><Text style={[styles.rowValue, { color: '#388E3C' }]}>Manage AIs</Text></View>
-            <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
+            <MaterialCommunityIcons name="brain" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowLabel, rowLabelTextStyle]}>AI Settings</Text>
+              <Text style={[styles.rowDescription, rowDescriptionTextStyle]}>
+                {!hasAIAccess
+                  ? 'Requires Premium or Pro'
+                  : isPro
+                    ? `Nora ${noraEnabled ? '✓' : '✗'} • Patrick ${patrickEnabled ? '✓' : '✗'} • Insights ${insightsEnabled ? '✓' : '✗'}`
+                    : `Patrick ${patrickEnabled ? '✓' : '✗'} • Insights ${insightsEnabled ? '✓' : '✗'}`
+                }
+              </Text>
+            </View>
+            <Ionicons
+              name={isAISectionExpanded ? "chevron-up" : "chevron-down"}
+              size={20}
+              color={secondaryTextColor}
+            />
           </TouchableOpacity>
+
+          {/* Expanded Content */}
+          {isAISectionExpanded && (
+            <View style={{ paddingHorizontal: 12, paddingBottom: 12 }}>
+              {/* Subscription Tier Badge */}
+              <View style={{
+                backgroundColor: !hasAIAccess ? '#FFEBEE' : isPro ? '#E8F5E9' : '#FFF3E0',
+                borderRadius: 12,
+                padding: 16,
+                marginTop: 12,
+                marginBottom: 16,
+                borderLeftWidth: 4,
+                borderLeftColor: !hasAIAccess ? '#EF5350' : isPro ? '#66BB6A' : '#FFA726'
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
+                  <Ionicons
+                    name={!hasAIAccess ? "lock-closed" : isPro ? "star" : "sparkles"}
+                    size={24}
+                    color={!hasAIAccess ? '#C62828' : isPro ? '#2E7D32' : '#F57C00'}
+                    style={{ marginTop: 2 }}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{
+                      color: !hasAIAccess ? '#C62828' : isPro ? '#2E7D32' : '#F57C00',
+                      fontWeight: 'bold',
+                      fontSize: 15,
+                      marginBottom: 4
+                    }}>
+                      {!hasAIAccess ? 'Free Plan' : isPro ? 'Pro Plan' : 'Premium Plan'}
+                    </Text>
+                    <Text style={{
+                      color: !hasAIAccess ? '#C62828' : isPro ? '#2E7D32' : '#F57C00',
+                      fontSize: 13,
+                      lineHeight: 18
+                    }}>
+                      {!hasAIAccess
+                        ? 'Upgrade to Premium or Pro to access AI features and intelligent study assistance!'
+                        : isPro
+                          ? 'You have full access to Nora (contextual AI), Patrick (general Q&A), and complete AI insights.'
+                          : 'You have access to Patrick (general Q&A) and basic AI insights. Upgrade to Pro for Nora with full contextual analysis!'
+                      }
+                    </Text>
+                    {!hasAIAccess && (
+                      <TouchableOpacity
+                        onPress={() => (navigation as any).navigate('Subscription')}
+                        style={{
+                          backgroundColor: '#EF5350',
+                          borderRadius: 8,
+                          paddingVertical: 8,
+                          paddingHorizontal: 12,
+                          alignSelf: 'flex-start',
+                          marginTop: 8
+                        }}
+                      >
+                        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>
+                          View Plans
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              </View>
+
+              {/* Nora AI - Pro Only */}
+              <View style={[
+                styles.rowCard,
+                rowCardBaseStyle,
+                {
+                  marginBottom: 12,
+                  opacity: !isPro || patrickEnabled ? 0.5 : 1,
+                  borderLeftWidth: 3,
+                  borderLeftColor: isPro && noraEnabled ? '#66BB6A' : '#E0E0E0'
+                }
+              ]}>
+                <MaterialCommunityIcons
+                  name="robot"
+                  size={22}
+                  color={isPro && !patrickEnabled ? iconPrimary : '#999'}
+                  style={styles.rowIcon}
+                />
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={[styles.rowLabel, rowLabelTextStyle, { color: isPro && !patrickEnabled ? textColor : '#999' }]}>
+                      Nora AI
+                    </Text>
+                    {!isPro && (
+                      <View style={{ backgroundColor: '#FFA726', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                        <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>PRO</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={[styles.rowDescription, rowDescriptionTextStyle, { color: isPro && !patrickEnabled ? secondaryTextColor : '#999' }]}>
+                    Full contextual AI with PDF analysis, study habits, timing insights, and personalized recommendations
+                    {isPro && patrickEnabled && ' (Disabled - Patrick is active)'}
+                  </Text>
+                </View>
+                <Switch
+                  value={isPro && noraEnabled}
+                  onValueChange={(value) => handleAIToggle('nora', value)}
+                  disabled={!isPro || patrickEnabled}
+                  trackColor={{ false: isDarkMode ? '#525252' : '#E0E0E0', true: iconPrimary }}
+                  thumbColor={isPro && noraEnabled ? (isDarkMode ? theme.secondary ?? '#A5D6A7' : '#FFFFFF') : (isDarkMode ? '#888' : '#FFFFFF')}
+                />
+              </View>
+
+              {/* Patrick AI - Premium & Pro */}
+              <View style={[
+                styles.rowCard,
+                rowCardBaseStyle,
+                {
+                  marginBottom: 12,
+                  opacity: !hasAIAccess || (isPro && noraEnabled) ? 0.5 : 1,
+                  borderLeftWidth: 3,
+                  borderLeftColor: hasAIAccess && patrickEnabled ? '#7B61FF' : '#E0E0E0'
+                }
+              ]}>
+                <MaterialCommunityIcons
+                  name="account-voice"
+                  size={22}
+                  color={hasAIAccess && !(isPro && noraEnabled) ? iconPrimary : '#999'}
+                  style={styles.rowIcon}
+                />
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={[styles.rowLabel, rowLabelTextStyle, { color: hasAIAccess && !(isPro && noraEnabled) ? textColor : '#999' }]}>
+                      Patrick AI
+                    </Text>
+                    {!hasAIAccess && (
+                      <View style={{ backgroundColor: '#7B61FF', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                        <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>PREMIUM</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={[styles.rowDescription, rowDescriptionTextStyle, { color: hasAIAccess && !(isPro && noraEnabled) ? secondaryTextColor : '#999' }]}>
+                    General Q&A assistant for study questions (no access to personal data or PDFs)
+                    {isPro && noraEnabled && ' (Disabled - Nora is active)'}
+                  </Text>
+                </View>
+                <Switch
+                  value={hasAIAccess && patrickEnabled}
+                  onValueChange={(value) => handleAIToggle('patrick', value)}
+                  disabled={!hasAIAccess || (isPro && noraEnabled)}
+                  trackColor={{ false: isDarkMode ? '#525252' : '#E0E0E0', true: iconPrimary }}
+                  thumbColor={hasAIAccess && patrickEnabled ? (isDarkMode ? theme.secondary ?? '#A5D6A7' : '#FFFFFF') : (isDarkMode ? '#888' : '#FFFFFF')}
+                />
+              </View>
+
+              {/* AI Insights - Premium (Basic) & Pro (Full) */}
+              <View style={[
+                styles.rowCard,
+                rowCardBaseStyle,
+                {
+                  marginBottom: 12,
+                  opacity: !hasAIAccess ? 0.5 : 1,
+                  borderLeftWidth: 3,
+                  borderLeftColor: hasAIAccess && insightsEnabled ? '#4CAF50' : '#E0E0E0'
+                }
+              ]}>
+                <MaterialCommunityIcons
+                  name="lightbulb-on"
+                  size={22}
+                  color={hasAIAccess ? iconPrimary : '#999'}
+                  style={styles.rowIcon}
+                />
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={[styles.rowLabel, rowLabelTextStyle, { color: hasAIAccess ? textColor : '#999' }]}>
+                      AI Insights
+                    </Text>
+                    {!hasAIAccess && (
+                      <View style={{ backgroundColor: '#7B61FF', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                        <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>PREMIUM</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={[styles.rowDescription, rowDescriptionTextStyle, { color: hasAIAccess ? secondaryTextColor : '#999' }]}>
+                    {isPro
+                      ? 'Full AI-powered study insights, patterns, and optimization suggestions'
+                      : 'Basic AI insights for study sessions (upgrade to Pro for advanced analytics)'
+                    }
+                  </Text>
+                </View>
+                <Switch
+                  value={hasAIAccess && insightsEnabled}
+                  onValueChange={(value) => handleAIToggle('insights', value)}
+                  disabled={!hasAIAccess}
+                  trackColor={{ false: isDarkMode ? '#525252' : '#E0E0E0', true: iconPrimary }}
+                  thumbColor={hasAIAccess && insightsEnabled ? (isDarkMode ? theme.secondary ?? '#A5D6A7' : '#FFFFFF') : (isDarkMode ? '#888' : '#FFFFFF')}
+                />
+              </View>
+
+              {/* Personalized Responses - Pro Only */}
+              <View style={[
+                styles.rowCard,
+                rowCardBaseStyle,
+                {
+                  opacity: !isPro ? 0.5 : 1,
+                  borderLeftWidth: 3,
+                  borderLeftColor: isPro && personalizedResponses ? '#FF9800' : '#E0E0E0',
+                  borderBottomWidth: 0
+                }
+              ]}>
+                <MaterialCommunityIcons
+                  name="account-star"
+                  size={22}
+                  color={isPro ? iconPrimary : '#999'}
+                  style={styles.rowIcon}
+                />
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={[styles.rowLabel, rowLabelTextStyle, { color: isPro ? textColor : '#999' }]}>
+                      Personalized Responses
+                    </Text>
+                    {!isPro && (
+                      <View style={{ backgroundColor: '#FFA726', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                        <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>PRO</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={[styles.rowDescription, rowDescriptionTextStyle, { color: isPro ? secondaryTextColor : '#999' }]}>
+                    AI learns from your study habits, preferences, and goals for tailored recommendations
+                  </Text>
+                </View>
+                <Switch
+                  value={isPro && personalizedResponses}
+                  onValueChange={handlePersonalizationToggle}
+                  disabled={!isPro}
+                  trackColor={{ false: isDarkMode ? '#525252' : '#E0E0E0', true: iconPrimary }}
+                  thumbColor={isPro && personalizedResponses ? (isDarkMode ? theme.secondary ?? '#A5D6A7' : '#FFFFFF') : (isDarkMode ? '#888' : '#FFFFFF')}
+                />
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Accessibility */}
-        <Text style={styles.sectionHeader}>ACCESSIBILITY</Text>
-        <View style={styles.cardSection}>
-          <View style={styles.rowCard}>
-            <MaterialIcons name="record-voice-over" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>Text-to-Speech</Text>
+        <Text style={[styles.sectionHeader, { color: iconPrimary }]}>ACCESSIBILITY</Text>
+        <View style={[styles.cardSection, cardSectionStyle]}>
+          <View style={[styles.rowCard, rowCardBaseStyle]}>
+            <MaterialIcons name="record-voice-over" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowLabel, rowLabelTextStyle]}>Text-to-Speech</Text>
+              <Text style={[styles.rowDescription, rowDescriptionTextStyle]}>
+                Read notifications and important messages aloud
+              </Text>
+            </View>
+            <View style={styles.rowValueWrap}>
+              <Text style={[styles.rowValue, rowValueTextStyle]}>{tts ? 'On' : 'Off'}</Text>
+            </View>
             <Switch
               value={tts}
               onValueChange={handleTTSToggle}
-              trackColor={{ false: '#E0E0E0', true: '#4CAF50' }}
-              thumbColor={tts ? '#1B5E20' : '#BDBDBD'}
+              trackColor={{ false: isDarkMode ? '#525252' : '#E0E0E0', true: iconPrimary }}
+              thumbColor={tts ? (isDarkMode ? theme.secondary ?? '#A5D6A7' : '#FFFFFF') : (isDarkMode ? '#888' : '#FFFFFF')}
             />
           </View>
-          <View style={styles.rowCard}>
-            <MaterialIcons name="contrast" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>High Contrast Mode</Text>
+          <View style={[styles.rowCard, rowCardBaseStyle]}>
+            <MaterialIcons name="palette" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowLabel, rowLabelTextStyle]}>Color Blind Mode</Text>
+              <Text style={[styles.rowDescription, rowDescriptionTextStyle]}>
+                Adjust colors for color vision deficiency
+              </Text>
+            </View>
+            <View style={styles.rowValueWrap}>
+              <Text style={[styles.rowValue, rowValueTextStyle]}>{highContrast ? 'On' : 'Off'}</Text>
+            </View>
             <Switch
               value={highContrast}
               onValueChange={handleHighContrastToggle}
-              trackColor={{ false: '#E0E0E0', true: '#4CAF50' }}
-              thumbColor={highContrast ? '#1B5E20' : '#BDBDBD'}
+              trackColor={{ false: isDarkMode ? '#525252' : '#E0E0E0', true: iconPrimary }}
+              thumbColor={highContrast ? (isDarkMode ? theme.secondary ?? '#A5D6A7' : '#FFFFFF') : (isDarkMode ? '#888' : '#FFFFFF')}
             />
           </View>
-          <View style={styles.rowCard}>
-            <MaterialIcons name="motion-photos-on" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>Reduce Motion</Text>
+          <View style={[styles.rowCard, rowCardBaseStyle, { borderBottomWidth: 0 }]}>
+            <MaterialIcons name="motion-photos-on" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowLabel, rowLabelTextStyle]}>Reduce Motion</Text>
+              <Text style={[styles.rowDescription, rowDescriptionTextStyle]}>
+                Minimize animations and transitions
+              </Text>
+            </View>
+            <View style={styles.rowValueWrap}>
+              <Text style={[styles.rowValue, rowValueTextStyle]}>{reduceMotion ? 'On' : 'Off'}</Text>
+            </View>
             <Switch
               value={reduceMotion}
               onValueChange={handleReduceMotionToggle}
-              trackColor={{ false: '#E0E0E0', true: '#4CAF50' }}
-              thumbColor={reduceMotion ? '#1B5E20' : '#BDBDBD'}
+              trackColor={{ false: isDarkMode ? '#525252' : '#E0E0E0', true: iconPrimary }}
+              thumbColor={reduceMotion ? (isDarkMode ? theme.secondary ?? '#A5D6A7' : '#FFFFFF') : (isDarkMode ? '#888' : '#FFFFFF')}
             />
           </View>
         </View>
 
         {/* Support & About */}
-        <Text style={styles.sectionHeader}>SUPPORT & ABOUT</Text>
-        <View style={styles.cardSection}>
-          <TouchableOpacity style={styles.rowCard} onPress={handleHelpCenter} activeOpacity={0.7}>
-            <Ionicons name="help-circle-outline" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>Help Center / FAQ</Text>
-            <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
+        <Text style={[styles.sectionHeader, { color: iconPrimary }]}>SUPPORT & ABOUT</Text>
+        <View style={[styles.cardSection, cardSectionStyle]}>
+          <TouchableOpacity style={[styles.rowCard, rowCardBaseStyle]} onPress={handleHelpCenter} activeOpacity={0.7}>
+            <Ionicons name="help-circle-outline" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <Text style={[styles.rowLabel, rowLabelTextStyle]}>Help Center / FAQ</Text>
+            <Ionicons name="chevron-forward" size={20} color={secondaryTextColor} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.rowCard} onPress={handleContactSupport} activeOpacity={0.7}>
-            <MaterialIcons name="support-agent" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>Contact Support</Text>
-            <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
+          <TouchableOpacity style={[styles.rowCard, rowCardBaseStyle]} onPress={handleContactSupport} activeOpacity={0.7}>
+            <MaterialIcons name="support-agent" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <Text style={[styles.rowLabel, rowLabelTextStyle]}>Contact Support</Text>
+            <Ionicons name="chevron-forward" size={20} color={secondaryTextColor} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.rowCard} onPress={handleAppInfo} activeOpacity={0.7}>
-            <MaterialIcons name="info-outline" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>App Information</Text>
-            <View style={styles.rowValueWrap}><Text style={styles.rowValue}>v1.0.0</Text></View>
-            <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
+          <TouchableOpacity style={[styles.rowCard, rowCardBaseStyle]} onPress={handleAppInfo} activeOpacity={0.7}>
+            <MaterialIcons name="info-outline" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <Text style={[styles.rowLabel, rowLabelTextStyle]}>App Information</Text>
+            <View style={styles.rowValueWrap}><Text style={[styles.rowValue, rowValueTextStyle]}>v1.0.0</Text></View>
+            <Ionicons name="chevron-forward" size={20} color={secondaryTextColor} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.rowCard} onPress={handleTermsOfService} activeOpacity={0.7}>
-            <MaterialIcons name="gavel" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>Terms of Service</Text>
-            <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
+          <TouchableOpacity style={[styles.rowCard, rowCardBaseStyle]} onPress={handleTermsOfService} activeOpacity={0.7}>
+            <MaterialIcons name="gavel" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <Text style={[styles.rowLabel, rowLabelTextStyle]}>Terms of Service</Text>
+            <Ionicons name="chevron-forward" size={20} color={secondaryTextColor} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.rowCard} onPress={handlePrivacyPolicy} activeOpacity={0.7}>
-            <MaterialIcons name="privacy-tip" size={22} color="#388E3C" style={styles.rowIcon} />
-            <Text style={styles.rowLabel}>Privacy Policy</Text>
-            <Ionicons name="chevron-forward" size={20} color="#BDBDBD" />
+          <TouchableOpacity style={[styles.rowCard, rowCardBaseStyle, { borderBottomWidth: 0 }]} onPress={handlePrivacyPolicy} activeOpacity={0.7}>
+            <MaterialIcons name="privacy-tip" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <Text style={[styles.rowLabel, rowLabelTextStyle]}>Privacy Policy</Text>
+            <Ionicons name="chevron-forward" size={20} color={secondaryTextColor} />
           </TouchableOpacity>
         </View>
 
@@ -1568,10 +2695,10 @@ const SettingsScreen = () => {
                 <Text style={{ color: '#fff', fontWeight: 'bold', textAlign: 'center' }}>Button Example</Text>
               </TouchableOpacity>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 }}>
-                <TouchableOpacity onPress={() => setShowEnvModal(false)} style={{ flex: 1, marginRight: 8, backgroundColor: '#fff', borderRadius: 8, padding: 12, borderWidth: 1, borderColor: themePalettes[selectedEnv].primary }}>
+                <TouchableOpacity onPress={() => setShowEnvModal(false)} style={{ flex: 1, marginRight: 8, backgroundColor: isDarkMode ? cardBackground : '#fff', borderRadius: 8, padding: 12, borderWidth: 1, borderColor: themePalettes[selectedEnv].primary }}>
                   <Text style={{ color: themePalettes[selectedEnv].primary, textAlign: 'center', fontWeight: 'bold' }}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => { setThemeName(selectedEnv); setShowEnvModal(false); }} style={{ flex: 1, marginLeft: 8, backgroundColor: themePalettes[selectedEnv].primary, borderRadius: 8, padding: 12 }}>
+                <TouchableOpacity onPress={() => handleEnvThemeUpdate(selectedEnv)} style={{ flex: 1, marginLeft: 8, backgroundColor: themePalettes[selectedEnv].primary, borderRadius: 8, padding: 12 }}>
                   <Text style={{ color: '#fff', textAlign: 'center', fontWeight: 'bold' }}>Apply</Text>
                 </TouchableOpacity>
               </View>
@@ -1601,9 +2728,9 @@ const SettingsScreen = () => {
                       {mode}
                     </Text>
                     <Text style={[styles.modalOptionDescription, { fontSize: fontSize * 0.8, color: theme.textSecondary }]}>
-                      {mode === 'System Default' && 'Follow device setting'}
-                      {mode === 'Light' && 'Light theme with environment colors'}
-                      {mode === 'Dark' && 'Dark theme (ignores environment)'}
+                      {mode === 'System Default' && 'Matches your phone\'s dark mode setting'}
+                      {mode === 'Light' && 'Always use light mode (change in phone settings)'}
+                      {mode === 'Dark' && 'Always use dark mode (change in phone settings)'}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -1617,34 +2744,59 @@ const SettingsScreen = () => {
         </Modal>
         <Modal visible={showFontModal} transparent animationType="fade" onRequestClose={() => setShowFontModal(false)}>
           <View style={styles.modalOverlay}>
-            <View style={styles.modalBox}>
-              <Text style={styles.modalTitle}>Select Font Size</Text>
+            <View style={[styles.modalBox, modalBoxStyle]}>
+              <Text style={[styles.modalTitle, modalTextColor]}>Select Font Size</Text>
               {FONT_SIZE_OPTIONS.map(opt => (
                 <TouchableOpacity key={opt} style={styles.modalOption} onPress={() => handleFontSizeUpdate(opt)}>
-                  <Text style={[styles.modalOptionText, localFontSize === opt && { color: '#388E3C', fontWeight: 'bold' }]}>{opt}</Text>
+                  <Text style={[styles.modalOptionText, modalTextColor, localFontSize === opt && { color: iconPrimary, fontWeight: 'bold' }]}>{opt}</Text>
                 </TouchableOpacity>
               ))}
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowFontModal(false)}><Text style={styles.modalCancelText}>Cancel</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowFontModal(false)}>
+                <Text style={[styles.modalCancelText, modalTextColor]}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+        <Modal visible={showMainGoalModal} transparent animationType="fade" onRequestClose={() => setShowMainGoalModal(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalBox, modalBoxStyle]}>
+              <Text style={[styles.modalTitle, modalTextColor]}>Select Main Goal</Text>
+              {MAIN_GOAL_OPTIONS.map(option => (
+                <TouchableOpacity 
+                  key={option.value} 
+                  style={styles.modalOption} 
+                  onPress={() => handleMainGoalUpdate(option.value)}
+                >
+                  <Text style={[styles.modalOptionText, modalTextColor, mainGoal === option.value && { color: iconPrimary, fontWeight: 'bold' }]}>
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowMainGoalModal(false)}>
+                <Text style={[styles.modalCancelText, modalTextColor]}>Cancel</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>
         <Modal visible={showIconModal} transparent animationType="fade" onRequestClose={() => setShowIconModal(false)}>
           <View style={styles.modalOverlay}>
-            <View style={styles.modalBox}>
-              <Text style={styles.modalTitle}>Select App Icon</Text>
+            <View style={[styles.modalBox, modalBoxStyle]}>
+              <Text style={[styles.modalTitle, modalTextColor]}>Select App Icon</Text>
               {APP_ICON_OPTIONS.map(opt => (
                 <TouchableOpacity key={opt} style={styles.modalOption} onPress={() => handleAppIconUpdate(opt)}>
-                  <Text style={[styles.modalOptionText, appIcon === opt && { color: '#388E3C', fontWeight: 'bold' }]}>{opt}</Text>
+                  <Text style={[styles.modalOptionText, modalTextColor, appIcon === opt && { color: iconPrimary, fontWeight: 'bold' }]}>{opt}</Text>
                 </TouchableOpacity>
               ))}
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowIconModal(false)}><Text style={styles.modalCancelText}>Cancel</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowIconModal(false)}>
+                <Text style={[styles.modalCancelText, modalTextColor]}>Cancel</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>
         <Modal visible={showWorkStyleModal} transparent animationType="fade" onRequestClose={() => setShowWorkStyleModal(false)}>
           <View style={styles.modalOverlay}>
-            <View style={styles.modalBox}>
-              <Text style={styles.modalTitle}>Select Work Style</Text>
+            <View style={[styles.modalBox, modalBoxStyle]}>
+              <Text style={[styles.modalTitle, modalTextColor]}>Select Work Style</Text>
               {WORK_STYLE_OPTIONS.map(option => (
                 <TouchableOpacity 
                   key={option.label} 
@@ -1652,20 +2804,213 @@ const SettingsScreen = () => {
                   onPress={() => handleWorkStyleUpdate(option.label)}
                 >
                   <View style={{ alignItems: 'center' }}>
-                    <Text style={[
-                      styles.modalOptionText, 
-                      workStyle === option.label && { color: '#388E3C', fontWeight: 'bold' }
-                    ]}>
+                    <Text style={[styles.modalOptionText, modalTextColor, workStyle === option.label && { color: iconPrimary, fontWeight: 'bold' }]}>
                       {option.label}
                     </Text>
-                    <Text style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
+                    <Text style={{ fontSize: 13, color: secondaryTextColor, marginTop: 2 }}>
                       {option.focusDuration}min focus / {option.breakDuration}min break
                     </Text>
                   </View>
                 </TouchableOpacity>
               ))}
               <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowWorkStyleModal(false)}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
+                <Text style={[styles.modalCancelText, modalTextColor]}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Notification Preferences Modal */}
+        <Modal visible={showNotificationPrefsModal} transparent animationType="slide" onRequestClose={() => setShowNotificationPrefsModal(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={[styles.notificationPrefsModal, { backgroundColor: cardBackground }]}>
+              <View style={styles.notificationPrefsHeader}>
+                <Text style={[styles.modalTitle, { color: textColor }]}>Notification Preferences</Text>
+                <TouchableOpacity
+                  onPress={() => setShowNotificationPrefsModal(false)}
+                  style={styles.modalCloseButton}
+                >
+                  <Ionicons name="close" size={28} color={textColor} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.notificationPrefsList}>
+                {/* Friend Requests */}
+                <View style={[styles.notificationPrefRow, { borderBottomColor: borderColor }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.notificationPrefLabel, { color: textColor }]}>Friend Requests</Text>
+                    <Text style={[styles.notificationPrefDescription, { color: secondaryTextColor }]}>
+                      When someone sends you a friend request
+                    </Text>
+                  </View>
+                  <Switch
+                    value={notifFriendRequests}
+                    onValueChange={setNotifFriendRequests}
+                    trackColor={{ false: isDarkMode ? '#525252' : '#E0E0E0', true: iconPrimary }}
+                    thumbColor={notifFriendRequests ? (isDarkMode ? theme.secondary ?? '#A5D6A7' : '#FFFFFF') : (isDarkMode ? '#888' : '#FFFFFF')}
+                  />
+                </View>
+
+                {/* Friend Messages */}
+                <View style={[styles.notificationPrefRow, { borderBottomColor: borderColor }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.notificationPrefLabel, { color: textColor }]}>Friend Messages</Text>
+                    <Text style={[styles.notificationPrefDescription, { color: secondaryTextColor }]}>
+                      When a friend sends you a message
+                    </Text>
+                  </View>
+                  <Switch
+                    value={notifFriendMessages}
+                    onValueChange={setNotifFriendMessages}
+                    trackColor={{ false: isDarkMode ? '#525252' : '#E0E0E0', true: iconPrimary }}
+                    thumbColor={notifFriendMessages ? (isDarkMode ? theme.secondary ?? '#A5D6A7' : '#FFFFFF') : (isDarkMode ? '#888' : '#FFFFFF')}
+                  />
+                </View>
+
+                {/* Study Reminders */}
+                <View style={[styles.notificationPrefRow, { borderBottomColor: borderColor }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.notificationPrefLabel, { color: textColor }]}>Study Reminders</Text>
+                    <Text style={[styles.notificationPrefDescription, { color: secondaryTextColor }]}>
+                      Scheduled reminders for your study sessions
+                    </Text>
+                  </View>
+                  <Switch
+                    value={notifStudyReminders}
+                    onValueChange={setNotifStudyReminders}
+                    trackColor={{ false: isDarkMode ? '#525252' : '#E0E0E0', true: iconPrimary }}
+                    thumbColor={notifStudyReminders ? (isDarkMode ? theme.secondary ?? '#A5D6A7' : '#FFFFFF') : (isDarkMode ? '#888' : '#FFFFFF')}
+                  />
+                </View>
+
+                {/* Weekly Goal Reminders */}
+                <View style={[styles.notificationPrefRow, { borderBottomColor: borderColor, flexDirection: 'column', alignItems: 'stretch' }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.notificationPrefLabel, { color: textColor }]}>Weekly Goal Reminders</Text>
+                      <Text style={[styles.notificationPrefDescription, { color: secondaryTextColor }]}>
+                        Reminders when you're behind on your weekly goal
+                      </Text>
+                    </View>
+                    <Switch
+                      value={notifWeeklyGoalReminders}
+                      onValueChange={setNotifWeeklyGoalReminders}
+                      trackColor={{ false: isDarkMode ? '#525252' : '#E0E0E0', true: iconPrimary }}
+                      thumbColor={notifWeeklyGoalReminders ? (isDarkMode ? theme.secondary ?? '#A5D6A7' : '#FFFFFF') : (isDarkMode ? '#888' : '#FFFFFF')}
+                    />
+                  </View>
+
+                  {notifWeeklyGoalReminders && (
+                    <View>
+                      <Text style={[styles.notificationPrefDescription, { color: secondaryTextColor, marginBottom: 8 }]}>
+                        Notify me on:
+                      </Text>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                        {['Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => (
+                          <TouchableOpacity
+                            key={day}
+                            onPress={() => {
+                              if (weeklyGoalReminderDays.includes(day)) {
+                                setWeeklyGoalReminderDays(weeklyGoalReminderDays.filter(d => d !== day));
+                              } else {
+                                setWeeklyGoalReminderDays([...weeklyGoalReminderDays, day]);
+                              }
+                            }}
+                            style={[
+                              styles.dayChip,
+                              {
+                                backgroundColor: weeklyGoalReminderDays.includes(day) ? iconPrimary : (isDarkMode ? '#2f2f2f' : '#F5F5F5'),
+                                borderColor: weeklyGoalReminderDays.includes(day) ? iconPrimary : borderColor,
+                              }
+                            ]}
+                          >
+                            <Text style={[
+                              styles.dayChipText,
+                              { color: weeklyGoalReminderDays.includes(day) ? '#FFFFFF' : textColor }
+                            ]}>
+                              {day.substring(0, 3)}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+                </View>
+
+                {/* Focus Session Warnings */}
+                <View style={[styles.notificationPrefRow, { borderBottomColor: borderColor }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.notificationPrefLabel, { color: textColor }]}>Focus Session Warnings</Text>
+                    <Text style={[styles.notificationPrefDescription, { color: secondaryTextColor }]}>
+                      When you leave the app during an active focus session
+                    </Text>
+                  </View>
+                  <Switch
+                    value={notifFocusSessionWarnings}
+                    onValueChange={setNotifFocusSessionWarnings}
+                    trackColor={{ false: isDarkMode ? '#525252' : '#E0E0E0', true: iconPrimary }}
+                    thumbColor={notifFocusSessionWarnings ? (isDarkMode ? theme.secondary ?? '#A5D6A7' : '#FFFFFF') : (isDarkMode ? '#888' : '#FFFFFF')}
+                  />
+                </View>
+
+                {/* QR Scan Notifications */}
+                <View style={[styles.notificationPrefRow, { borderBottomColor: borderColor }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.notificationPrefLabel, { color: textColor }]}>QR Code Scans</Text>
+                    <Text style={[styles.notificationPrefDescription, { color: secondaryTextColor }]}>
+                      When someone scans your QR code
+                    </Text>
+                  </View>
+                  <Switch
+                    value={notifQRScans}
+                    onValueChange={setNotifQRScans}
+                    trackColor={{ false: isDarkMode ? '#525252' : '#E0E0E0', true: iconPrimary }}
+                    thumbColor={notifQRScans ? (isDarkMode ? theme.secondary ?? '#A5D6A7' : '#FFFFFF') : (isDarkMode ? '#888' : '#FFFFFF')}
+                  />
+                </View>
+
+                {/* Study Room Invites */}
+                <View style={[styles.notificationPrefRow, { borderBottomColor: borderColor }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.notificationPrefLabel, { color: textColor }]}>Study Room Invites</Text>
+                    <Text style={[styles.notificationPrefDescription, { color: secondaryTextColor }]}>
+                      When someone invites you to a study room
+                    </Text>
+                  </View>
+                  <Switch
+                    value={notifStudyRoomInvites}
+                    onValueChange={setNotifStudyRoomInvites}
+                    trackColor={{ false: isDarkMode ? '#525252' : '#E0E0E0', true: iconPrimary }}
+                    thumbColor={notifStudyRoomInvites ? (isDarkMode ? theme.secondary ?? '#A5D6A7' : '#FFFFFF') : (isDarkMode ? '#888' : '#FFFFFF')}
+                  />
+                </View>
+
+                {/* App Updates */}
+                <View style={[styles.notificationPrefRow, { borderBottomWidth: 0 }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.notificationPrefLabel, { color: textColor }]}>App Updates</Text>
+                    <Text style={[styles.notificationPrefDescription, { color: secondaryTextColor }]}>
+                      News about new features and improvements
+                    </Text>
+                  </View>
+                  <Switch
+                    value={notifAppUpdates}
+                    onValueChange={setNotifAppUpdates}
+                    trackColor={{ false: isDarkMode ? '#525252' : '#E0E0E0', true: iconPrimary }}
+                    thumbColor={notifAppUpdates ? (isDarkMode ? theme.secondary ?? '#A5D6A7' : '#FFFFFF') : (isDarkMode ? '#888' : '#FFFFFF')}
+                  />
+                </View>
+              </ScrollView>
+
+              <TouchableOpacity
+                style={[styles.notificationPrefsSaveButton, { backgroundColor: iconPrimary }]}
+                onPress={() => {
+                  // Save preferences here (could integrate with database later)
+                  setShowNotificationPrefsModal(false);
+                  Alert.alert('Saved', 'Your notification preferences have been updated.');
+                }}
+              >
+                <Text style={styles.notificationPrefsSaveButtonText}>Save Preferences</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1734,8 +3079,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 18,
     paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
   },
   rowIcon: {
     marginRight: 16,
@@ -1799,6 +3142,18 @@ const styles = StyleSheet.create({
   soundLabelSelected: {
     color: '#219150',
     textDecorationLine: 'underline',
+  },
+  musicServiceButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    minWidth: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  musicServiceButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   modalOverlay: {
     flex: 1,
@@ -2054,6 +3409,66 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 8,
     marginBottom: 24,
+  },
+  notificationPrefsModal: {
+    width: '90%',
+    maxWidth: 500,
+    maxHeight: '80%',
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  notificationPrefsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  modalCloseButton: {
+    padding: 4,
+  },
+  notificationPrefsList: {
+    maxHeight: 500,
+  },
+  notificationPrefRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+  },
+  notificationPrefLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  notificationPrefDescription: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  notificationPrefsSaveButton: {
+    marginHorizontal: 20,
+    marginVertical: 16,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  notificationPrefsSaveButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  dayChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  dayChipText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
 });
 

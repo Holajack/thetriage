@@ -26,6 +26,10 @@ const OPENAI_ASSISTANT_ID = Deno.env.get('Nora_Assistant_ID') ?? '';
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 const OPENAI_ASSISTANTS_URL = 'https://api.openai.com/v1';
 
+// Web Search API (using Brave Search API)
+const BRAVE_SEARCH_API_KEY = Deno.env.get('BRAVE_SEARCH_API_KEY') ?? '';
+const BRAVE_SEARCH_URL = 'https://api.search.brave.com/res/v1/web/search';
+
 // OpenAI API headers
 const openAIHeaders = {
   'Authorization': `Bearer ${OPENAI_API_KEY}`,
@@ -38,12 +42,42 @@ You are Nora, the resident AI study companion inside HikeWise—the academic suc
 
 Mission:
 - Guide each HikeWise student toward consistent progress, stronger study habits, and confident mastery of their subjects.
-- Translate the student’s personal context (learning preferences, schedules, goals, and challenges) into actionable study support.
+- Translate the student's personal context (learning preferences, schedules, goals, and challenges) into actionable study support.
 
 Persona and tone:
 - Warm, encouraging, and deeply knowledgeable—like an elite academic coach who celebrates wins and keeps students accountable.
 - Stay practical and specific; avoid vague platitudes.
 - Ask clarifying questions when critical details are missing rather than guessing.
+
+🎯 AGENTIC THINKING & USER COMMUNICATION SUPPORT:
+You excel at understanding users who may not know how to communicate with AI effectively. Be proactive and adaptive:
+
+**Vague Follow-Ups:**
+- When users say "make it shorter", "explain more", "simplify this", or "what about it" - you MUST remember your previous response and apply the transformation.
+- If context is provided like "[Context: User is referring to your previous response: ...]", use that to understand what "it" or "this" refers to.
+- ALWAYS reference your own previous responses when users use pronouns like "it", "this", "that", "the above", "what you said".
+
+**Proactive Clarification:**
+- If a request is genuinely ambiguous (not just a follow-up), ask specific clarifying questions.
+- Example: User says "Help me study" → Ask: "I'd love to help! What subject are you studying, and what's your main challenge right now?"
+- Don't ask for clarification on obvious follow-ups like "make it shorter" when you just gave a long response.
+
+**Adaptive Communication:**
+- Recognize different user communication styles: brief/casual vs detailed/formal.
+- Match the user's energy and detail level in your responses.
+- If a user consistently asks short questions, give concise answers. If they write paragraphs, provide comprehensive responses.
+
+**Self-Awareness:**
+- Remember what YOU just said in your previous response.
+- Track conversation topics and detect when the user changes subjects.
+- When topics shift, acknowledge it naturally: "Switching gears to chemistry now..."
+
+**Intent Detection:**
+- "shorter" = Condense your previous response to key points
+- "more detail" / "elaborate" = Expand on specific aspects of your previous response
+- "explain" / "clarify" = Re-explain something from your previous response in a different way
+- "simplify" = Use simpler language and analogies from your previous response
+- "example" = Provide concrete examples for concepts from your previous response
 
 Context awareness:
 - Use all profile data provided (focus method, weekly_focus_goal, university, major, recent accomplishments, study streaks).
@@ -86,12 +120,164 @@ Keep responses concise yet thorough, prioritizing clarity and usefulness over le
 Additional capabilities:
 - Generate spaced-repetition plans, focus session templates, SMART goals, and reflection prompts.
 - Translate complex concepts into learner-friendly explanations, analogies, or step-by-step walkthroughs.
-- Surface relevant study techniques (Pomodoro, interleaving, Feynman method) and align them with the student’s focus method.
+- Surface relevant study techniques (Balanced, interleaving, Feynman method) and align them with the student’s focus method.
 - Provide quick-glance tables for study schedules, progress tracking, or assignment timelines when helpful.
 
 Identity:
 - Always stay in character as Nora, the HikeWise AI study companion who is fully invested in each student’s academic journey.
 `.trim();
+
+// Fetch user study data for deep analysis
+async function fetchUserStudyData(supabaseClient: any, userId: string): Promise<string> {
+  try {
+    console.log('📊 Fetching user study data for deep analysis...');
+
+    // Fetch recent study sessions
+    const { data: sessions, error: sessionsError } = await supabaseClient
+      .from('study_sessions')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    // Fetch user profile and goals
+    const { data: profile, error: profileError } = await supabaseClient
+      .from('profiles')
+      .select('full_name, university, major, flint_balance, weekly_focus_goal')
+      .eq('id', userId)
+      .single();
+
+    // Fetch onboarding preferences
+    const { data: preferences, error: prefsError } = await supabaseClient
+      .from('onboarding_preferences')
+      .select('focus_method, weekly_focus_goal, study_environment')
+      .eq('user_id', userId)
+      .single();
+
+    // Fetch leaderboard stats
+    const { data: stats, error: statsError } = await supabaseClient
+      .from('leaderboard_stats')
+      .select('level, total_focus_time, current_streak, longest_streak')
+      .eq('user_id', userId)
+      .single();
+
+    // Build comprehensive user data summary
+    let userDataSummary = '📊 **User Study Data Summary:**\n\n';
+
+    if (profile && !profileError) {
+      userDataSummary += `**Profile:**\n`;
+      userDataSummary += `- Name: ${profile.full_name || 'Unknown'}\n`;
+      userDataSummary += `- University: ${profile.university || 'Not specified'}\n`;
+      userDataSummary += `- Major: ${profile.major || 'Not specified'}\n`;
+      userDataSummary += `- Flint Balance: ${profile.flint_balance || 0} Flint\n`;
+      userDataSummary += `- Weekly Focus Goal: ${profile.weekly_focus_goal || 5} hours\n\n`;
+    }
+
+    if (preferences && !prefsError) {
+      userDataSummary += `**Study Preferences:**\n`;
+      userDataSummary += `- Focus Method: ${preferences.focus_method || 'Balanced Focus'}\n`;
+      userDataSummary += `- Weekly Goal: ${preferences.weekly_focus_goal || 5} hours\n`;
+      userDataSummary += `- Study Environment: ${preferences.study_environment || 'Standard'}\n\n`;
+    }
+
+    if (stats && !statsError) {
+      const totalHours = Math.floor((stats.total_focus_time || 0) / 3600);
+      userDataSummary += `**Performance Stats:**\n`;
+      userDataSummary += `- Level: ${stats.level || 1}\n`;
+      userDataSummary += `- Total Focus Time: ${totalHours} hours\n`;
+      userDataSummary += `- Current Streak: ${stats.current_streak || 0} days\n`;
+      userDataSummary += `- Longest Streak: ${stats.longest_streak || 0} days\n\n`;
+    }
+
+    if (sessions && !sessionsError && sessions.length > 0) {
+      const totalRecentMinutes = sessions.reduce((sum, s) => sum + (s.duration || 0), 0) / 60;
+      const avgSessionMinutes = Math.round(totalRecentMinutes / sessions.length);
+
+      userDataSummary += `**Recent Study Activity (Last 10 Sessions):**\n`;
+      userDataSummary += `- Total Recent Study Time: ${Math.round(totalRecentMinutes)} minutes\n`;
+      userDataSummary += `- Average Session Length: ${avgSessionMinutes} minutes\n`;
+      userDataSummary += `- Sessions Completed: ${sessions.length}\n`;
+
+      // Add details of most recent session
+      const lastSession = sessions[0];
+      const lastSessionDate = new Date(lastSession.created_at).toLocaleDateString();
+      userDataSummary += `- Most Recent Session: ${lastSessionDate}, ${Math.round((lastSession.duration || 0) / 60)} minutes\n\n`;
+    } else {
+      userDataSummary += `**Recent Study Activity:**\n`;
+      userDataSummary += `- No recent study sessions found\n\n`;
+    }
+
+    console.log('✅ User study data fetched successfully');
+    return userDataSummary;
+  } catch (error) {
+    console.error('Error fetching user study data:', error);
+    return '📊 User study data temporarily unavailable.';
+  }
+}
+
+// Web search function for gathering information
+async function searchWeb(query: string): Promise<string> {
+  try {
+    if (!BRAVE_SEARCH_API_KEY || BRAVE_SEARCH_API_KEY === '') {
+      console.warn('Brave Search API key not configured, skipping web search');
+      return 'Web search is currently unavailable. I will provide an answer based on my training data.';
+    }
+
+    console.log('🔍 Performing web search for:', query);
+    const response = await fetch(`${BRAVE_SEARCH_URL}?q=${encodeURIComponent(query)}&count=5`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Accept-Encoding': 'gzip',
+        'X-Subscription-Token': BRAVE_SEARCH_API_KEY,
+      },
+    });
+
+    if (!response.ok) {
+      console.error('Brave Search API error:', response.status);
+      return 'Unable to perform web search at this time.';
+    }
+
+    const data = await response.json();
+    const results = data.web?.results || [];
+
+    if (results.length === 0) {
+      return 'No relevant web results found for this query.';
+    }
+
+    // Format search results
+    const formattedResults = results.slice(0, 3).map((result: any, index: number) => {
+      return `${index + 1}. ${result.title}\n   ${result.description}\n   Source: ${result.url}`;
+    }).join('\n\n');
+
+    console.log('✅ Web search completed with', results.length, 'results');
+    return `🌐 **Web Search Results:**\n\n${formattedResults}`;
+  } catch (error) {
+    console.error('Error performing web search:', error);
+    return 'Web search encountered an error. Providing answer based on training data.';
+  }
+}
+
+// Define function tools for OpenAI
+const functionTools = [
+  {
+    type: 'function',
+    function: {
+      name: 'search_web',
+      description: 'Search the internet for current information, facts, research, or answers to questions that may require up-to-date knowledge. Use this when the user asks about recent events, current statistics, or topics that may have changed since your training data.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'The search query to look up on the internet',
+          },
+        },
+        required: ['query'],
+      },
+    },
+  },
+];
 
 // Build system prompt with user context
 function buildSystemPrompt(userContext: any, pdfContext: any): string {
@@ -147,7 +333,7 @@ The student has attached a PDF titled: "${pdfContext.title}"
 }
 
 // Call OpenAI API for response generation
-async function generateNoraResponseWithOpenAI(message: string, userContext: any, pdfContext: any): Promise<string> {
+async function generateNoraResponseWithOpenAI(message: string, userContext: any, pdfContext: any, thinkingMode: 'fast' | 'deep' = 'fast', supabaseClient: any, userId: string, conversationHistory: any[] = []): Promise<string> {
   // Fallback function for when OpenAI is not available
   const generateFallbackResponse = (message: string, userContext: any, pdfContext: any): string => {
   const lowerMessage = message.toLowerCase();
@@ -393,32 +579,90 @@ What would you like to work on together today? I'm here to provide detailed, act
 
     const hasPdfContent = pdfContext && pdfContext.content && pdfContext.hasContent;
 
-    console.log('Calling OpenAI API for Nora with model: gpt-4-turbo-preview');
+    // Configure model and parameters based on thinking mode
+    const modelConfig = thinkingMode === 'deep'
+      ? {
+          model: 'gpt-4o',  // More powerful model for deep thinking
+          temperature: 0.8,  // Higher creativity for deeper analysis
+          max_tokens: hasPdfContent ? 3000 : 2000,  // More tokens for comprehensive responses
+        }
+      : {
+          model: 'gpt-4-turbo-preview',  // Faster model for quick responses
+          temperature: 0.7,
+          max_tokens: hasPdfContent ? 2000 : 1000,
+        };
+
+    console.log(`Calling OpenAI API for Nora with ${thinkingMode} thinking mode`);
+    console.log('Model:', modelConfig.model);
     console.log('PDF context active:', !!pdfContext);
     console.log('PDF content included:', hasPdfContent);
     console.log('User message length:', message.length);
     console.log('System prompt length:', systemPrompt.length);
 
-    const response = await fetch(OPENAI_API_URL, {
+    // Deep thinking mode: Force web search and fetch user data
+    let enrichedMessage = message;
+    if (thinkingMode === 'deep') {
+      console.log('🔍 Deep thinking mode activated - gathering comprehensive context...');
+
+      // Fetch user study data
+      const userData = await fetchUserStudyData(supabaseClient, userId);
+
+      // Determine if web search is needed based on question type
+      const needsWebSearch = /\b(research|current|latest|recent|news|2024|2025|trends|statistics)\b/i.test(message);
+
+      let webSearchResults = '';
+      if (needsWebSearch) {
+        console.log('🌐 Question requires web search, performing search...');
+        webSearchResults = await searchWeb(message);
+      }
+
+      // Build enriched message with context
+      enrichedMessage = `${message}\n\n---\n\n`;
+
+      if (webSearchResults) {
+        enrichedMessage += `${webSearchResults}\n\n`;
+      }
+
+      enrichedMessage += `${userData}\n\n`;
+      enrichedMessage += `**Instructions:** Use the above user data and web search results (if provided) to give a comprehensive, personalized answer. Reference specific data points from the user's profile when relevant.`;
+
+      console.log('✅ Deep context gathered, enriched message length:', enrichedMessage.length);
+    }
+
+    // Build messages array with conversation history for context
+    let messages: any[] = [
+      {
+        role: 'system',
+        content: systemPrompt
+      }
+    ];
+
+    // Add conversation history if available (for context continuity)
+    if (conversationHistory && conversationHistory.length > 0) {
+      console.log('📝 Adding', conversationHistory.length, 'previous messages for conversation context');
+      messages.push(...conversationHistory);
+    }
+
+    // Add current message
+    messages.push({
+      role: 'user',
+      content: enrichedMessage
+    });
+
+    // Make initial API call with function calling enabled
+    let response = await fetch(OPENAI_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'gpt-4-turbo-preview',
-        messages: [
-          {
-            role: 'system',
-            content: systemPrompt
-          },
-          {
-            role: 'user',
-            content: message
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: hasPdfContent ? 2000 : 1000, // More tokens when analyzing PDFs
+        model: modelConfig.model,
+        messages: messages,
+        tools: functionTools,
+        tool_choice: 'auto',
+        temperature: modelConfig.temperature,
+        max_tokens: modelConfig.max_tokens,
       }),
     });
 
@@ -428,8 +672,60 @@ What would you like to work on together today? I'm here to provide detailed, act
       throw new Error(`OpenAI API error: ${response.status}`);
     }
 
-    const data = await response.json();
-    const aiResponse = data.choices?.[0]?.message?.content;
+    let data = await response.json();
+    let assistantMessage = data.choices?.[0]?.message;
+
+    // Handle function calls
+    if (assistantMessage?.tool_calls && assistantMessage.tool_calls.length > 0) {
+      console.log('Function call requested:', assistantMessage.tool_calls[0].function.name);
+
+      // Add assistant's message with tool call to conversation
+      messages.push(assistantMessage);
+
+      // Execute the function
+      const toolCall = assistantMessage.tool_calls[0];
+      const functionName = toolCall.function.name;
+      const functionArgs = JSON.parse(toolCall.function.arguments);
+
+      let functionResult = '';
+      if (functionName === 'search_web') {
+        functionResult = await searchWeb(functionArgs.query);
+        console.log('Web search completed, result length:', functionResult.length);
+      }
+
+      // Add function result to conversation
+      messages.push({
+        role: 'tool',
+        tool_call_id: toolCall.id,
+        content: functionResult,
+      });
+
+      // Make second API call with function result
+      response = await fetch(OPENAI_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: modelConfig.model,
+          messages: messages,
+          temperature: modelConfig.temperature,
+          max_tokens: modelConfig.max_tokens,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        console.error('OpenAI API error on second call:', response.status, error);
+        throw new Error(`OpenAI API error: ${response.status}`);
+      }
+
+      data = await response.json();
+      assistantMessage = data.choices?.[0]?.message;
+    }
+
+    const aiResponse = assistantMessage?.content;
 
     if (!aiResponse) {
       console.error('OpenAI returned empty response');
@@ -730,7 +1026,7 @@ Deno.serve(async (req) => {
     );
 
     // Parse request body
-    const { message, userId, userSettings, pdfContext } = await req.json();
+    const { message, userId, userSettings, pdfContext, thinkingMode = 'fast', conversationHistory = [] } = await req.json();
 
     if (!message) {
       return new Response(JSON.stringify({
@@ -938,7 +1234,7 @@ Deno.serve(async (req) => {
     }
 
     if (!response) {
-      response = await generateNoraResponseWithOpenAI(message, userContext, enhancedPdfContext);
+      response = await generateNoraResponseWithOpenAI(message, userContext, enhancedPdfContext, thinkingMode, supabaseClient, user.id, conversationHistory);
     }
 
     // Save Nora's response to database

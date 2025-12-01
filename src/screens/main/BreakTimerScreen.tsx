@@ -20,7 +20,7 @@ const getBreakDuration = (focusMethod?: string, sessionDuration?: number) => {
       return Math.max(15, Math.floor(sessionMinutes * 0.2)); // 20% of session, min 15 min
     case 'sprint':
     case 'Sprint Focus':
-      return 5; // Standard Pomodoro break
+      return 5; // Standard Balanced break
     case 'extended':
     case 'Extended Focus':
       return Math.max(10, Math.floor(sessionMinutes * 0.15)); // 15% of session, min 10 min

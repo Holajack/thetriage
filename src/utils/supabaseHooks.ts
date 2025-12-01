@@ -106,6 +106,7 @@ export interface Profile {
   universityVisibility?: string;
   locationVisibility?: string;
   classesVisibility?: string;
+  subscription_tier?: 'free' | 'premium' | 'pro';
   created_at: string;
   updated_at: string;
 }
@@ -381,7 +382,8 @@ export const useSupabaseLeaderboardWithFriends = () => {
       setLoading(true);
       setError(null);
 
-      // Fix 1: Use correct table name 'leaderboard_stats' instead of 'leaderboard'
+      // Fetch all users who have begun using the app (have leaderboard stats)
+      // Show top 100 users to display everyone while maintaining performance
       const { data: globalData, error: globalError } = await supabase
         .from('leaderboard_stats')
         .select(`
@@ -389,39 +391,49 @@ export const useSupabaseLeaderboardWithFriends = () => {
           profiles!leaderboard_stats_user_id_fkey(username, full_name, avatar_url)
         `)
         .order('points', { ascending: false })
-        .limit(50);
+        .limit(100);
 
       if (globalError) {
-        console.error('Global leaderboard error:', globalError);
+        console.error('❌ Global leaderboard error:', globalError);
         throw globalError;
       }
 
+      console.log(`✅ Loaded ${globalData?.length || 0} users from global leaderboard (all app users)`);
+
       // Fix 2: Try to get friends from user_friends table (if it exists)
-      let friendsData = [];
+      let friendsData: any[] = [];
+      let friendIds: string[] = [];
       try {
-        // First, get the user's friends
+        // Fetch accepted friendships in either direction
         const { data: userFriends, error: friendsError } = await supabase
           .from('user_friends')
-          .select('friend_id')
-          .eq('user_id', user.id)
-          .eq('status', 'accepted');
+          .select('user_id, friend_id, status')
+          .or(`and(user_id.eq.${user.id},status.eq.accepted),and(friend_id.eq.${user.id},status.eq.accepted)`);
 
         if (!friendsError && userFriends && userFriends.length > 0) {
-          const friendIds = userFriends.map(f => f.friend_id);
-          
-          // Get leaderboard data for friends
-          const { data: friendsLeaderboard, error: friendsLeaderboardError } = await supabase
-            .from('leaderboard_stats')
-            .select(`
-              *,
-              profiles!leaderboard_stats_user_id_fkey(username, full_name, avatar_url)
-            `)
-            .in('user_id', friendIds)
-            .order('points', { ascending: false });
+          friendIds = Array.from(new Set(userFriends.map(rel => rel.user_id === user.id ? rel.friend_id : rel.user_id).filter(Boolean)));
+          console.log(`✅ Found ${friendIds.length} accepted friends from Supabase user_friends table`);
 
-          if (!friendsLeaderboardError) {
-            friendsData = friendsLeaderboard || [];
+          if (friendIds.length > 0) {
+            // Get leaderboard data for friends
+            const { data: friendsLeaderboard, error: friendsLeaderboardError } = await supabase
+              .from('leaderboard_stats')
+              .select(`
+                *,
+                profiles!leaderboard_stats_user_id_fkey(username, full_name, avatar_url)
+              `)
+              .in('user_id', friendIds)
+              .order('points', { ascending: false });
+
+            if (!friendsLeaderboardError) {
+              friendsData = friendsLeaderboard || [];
+              console.log(`✅ Loaded leaderboard stats for ${friendsData.length} friends from Supabase`);
+            } else {
+              console.error('❌ Error loading friends leaderboard:', friendsLeaderboardError);
+            }
           }
+        } else {
+          console.log('ℹ️ No accepted friends found in Supabase user_friends table');
         }
       } catch (friendsErr) {
         console.warn('Friends data not available (table may not exist):', friendsErr);
@@ -443,18 +455,120 @@ export const useSupabaseLeaderboardWithFriends = () => {
         avatar_url: entry.profiles?.avatar_url
       }));
 
+      // Ensure we have entries for friends without leaderboard stats
+      if (friendIds.length > 0) {
+        const friendsWithEntries = new Set(formattedFriends.map(f => f.user_id));
+        const missingFriendIds = friendIds.filter(id => !friendsWithEntries.has(id));
+        if (missingFriendIds.length > 0) {
+          const { data: missingProfiles } = await supabase
+            .from('profiles')
+            .select('id, full_name, username, avatar_url')
+            .in('id', missingFriendIds);
+
+          (missingProfiles || []).forEach(profile => {
+            formattedFriends.push({
+              id: profile.id,
+              user_id: profile.id,
+              total_focus_time: 0,
+              weekly_focus_time: 0,
+              points: 0,
+              level: 1,
+              current_streak: 0,
+              is_current_user: profile.id === user.id,
+              display_name: profile.id === user.id ? 'You' : (profile.full_name || profile.username || 'Unknown User'),
+              avatar_url: profile.avatar_url,
+            });
+          });
+        }
+      }
+
       // Add current user to friends leaderboard if not already there
       const currentUserInFriends = formattedFriends.find(f => f.is_current_user);
       if (!currentUserInFriends) {
         const currentUserEntry = formattedGlobal.find(g => g.is_current_user);
         if (currentUserEntry) {
           formattedFriends.push(currentUserEntry);
+        } else {
+          // Add a placeholder entry using profile info
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('id, full_name, username, avatar_url')
+            .eq('id', user.id)
+            .single();
+
+          formattedFriends.push({
+            id: profile?.id || user.id,
+            user_id: user.id,
+            total_focus_time: 0,
+            weekly_focus_time: 0,
+            points: 0,
+            level: 1,
+            current_streak: 0,
+            is_current_user: true,
+            display_name: (profile?.full_name || profile?.username || 'You'),
+            avatar_url: profile?.avatar_url,
+          });
         }
       }
 
+      // Ensure current user exists in global leaderboard
+      const currentUserInGlobal = formattedGlobal.find(g => g.is_current_user);
+      if (!currentUserInGlobal) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id, full_name, username, avatar_url')
+          .eq('id', user.id)
+          .single();
+
+        formattedGlobal.push({
+          id: profile?.id || user.id,
+          user_id: user.id,
+          total_focus_time: 0,
+          weekly_focus_time: 0,
+          points: 0,
+          level: 1,
+          current_streak: 0,
+          is_current_user: true,
+          display_name: profile?.full_name || profile?.username || 'You',
+          avatar_url: profile?.avatar_url,
+        });
+      }
+
+      const sortLeaderboard = (entries: Leaderboard[]) => {
+        return [...entries].sort((a, b) => {
+          const pointsA = a.points ?? 0;
+          const pointsB = b.points ?? 0;
+          if (pointsA !== pointsB) return pointsB - pointsA;
+          const weeklyA = a.weekly_focus_time ?? 0;
+          const weeklyB = b.weekly_focus_time ?? 0;
+          if (weeklyA !== weeklyB) return weeklyB - weeklyA;
+          const totalA = a.total_focus_time ?? 0;
+          const totalB = b.total_focus_time ?? 0;
+          return totalB - totalA;
+        });
+      };
+
+      const dedupeByUser = (entries: Leaderboard[]) => {
+        const map = new Map<string, Leaderboard>();
+        let counter = 0;
+        entries.forEach(entry => {
+          const baseKey = entry.user_id || entry.id || entry.display_name;
+          const key = baseKey ? String(baseKey) : `unknown-${counter++}`;
+          map.set(key, entry);
+        });
+        return Array.from(map.values());
+      };
+
+      const friendsSorted = sortLeaderboard(dedupeByUser(formattedFriends));
+      const globalSorted = sortLeaderboard(dedupeByUser(formattedGlobal));
+
+      console.log(`📊 Leaderboard Summary:`);
+      console.log(`   Friends: ${friendsSorted.length} users (from Supabase user_friends)`);
+      console.log(`   Global: ${globalSorted.length} users (all app users)`);
+
       setData({
-        friendsLeaderboard: formattedFriends,
-        globalLeaderboard: formattedGlobal,
+        friendsLeaderboard: friendsSorted,
+        globalLeaderboard: globalSorted,
       });
     } catch (err: any) {
       console.error('Leaderboard fetch error:', err);
@@ -820,6 +934,29 @@ export const useSupabaseFocusSession = () => {
       const endTime = new Date().toISOString();
       const duration = Math.floor((new Date(endTime).getTime() - new Date(currentSession.start_time).getTime()) / 1000);
 
+      // Don't save sessions under 5 minutes (300 seconds)
+      if (duration < 300) {
+        console.log(`⏭️ Session too short (${Math.floor(duration / 60)} minutes), not saving to database`);
+
+        // Delete the session from database
+        await supabase
+          .from('focus_sessions')
+          .delete()
+          .eq('id', currentSession.id);
+
+        setCurrentSession(null);
+        setSessionDuration(0);
+        setIsSessionActive(false);
+
+        return {
+          id: currentSession.id,
+          duration: duration,
+          end_time: endTime,
+          status: 'too_short',
+          message: 'Session was less than 5 minutes and was not saved'
+        };
+      }
+
       // Try with different column names for backward compatibility
       let updateData: any = {
         end_time: endTime,
@@ -852,6 +989,54 @@ export const useSupabaseFocusSession = () => {
         .single();
 
       if (error) throw error;
+
+      // Award Flint currency for completed session
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          const minutesCompleted = duration / 60; // Convert seconds to minutes
+          const flintEarned = Math.floor(minutesCompleted); // 1 Flint per completed minute
+
+          if (flintEarned > 0) {
+            // Get current profile data
+            const { data: profile, error: profileError } = await supabase
+              .from('profiles')
+              .select('flint_currency, first_session_bonus_claimed')
+              .eq('id', session.user.id)
+              .single();
+
+            if (!profileError && profile) {
+              let totalFlintToAward = flintEarned;
+              let bonusAwarded = false;
+
+              // Check if this is the first completed session
+              if (!profile.first_session_bonus_claimed) {
+                totalFlintToAward += 0.5; // Add first session bonus
+                bonusAwarded = true;
+              }
+
+              const newFlintBalance = (profile.flint_currency || 0) + totalFlintToAward;
+
+              // Update profile with new flint balance
+              const updateData: any = { flint_currency: newFlintBalance };
+              if (bonusAwarded) {
+                updateData.first_session_bonus_claimed = true;
+              }
+
+              await supabase
+                .from('profiles')
+                .update(updateData)
+                .eq('id', session.user.id);
+
+              console.log(`✨ Flint awarded: ${totalFlintToAward} (${flintEarned} for ${minutesCompleted.toFixed(0)} minutes${bonusAwarded ? ' + 0.5 first session bonus' : ''})`);
+
+            }
+          }
+        }
+      } catch (flintError) {
+        console.error('Error awarding Flint:', flintError);
+        // Don't throw - we don't want to break session completion if Flint award fails
+      }
 
       setCurrentSession(null);
       setSessionDuration(0);

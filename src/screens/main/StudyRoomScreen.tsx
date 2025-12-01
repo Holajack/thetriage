@@ -90,6 +90,45 @@ const StudyRoomScreen = () => {
     loadFriends();
   }, [user?.id]);
 
+  // Check if current user is the room owner
+  const isOwner = user?.id && roomData && (
+    roomData.owner_id === user.id ||
+    (roomData as any).creator_id === user.id
+  );
+
+  const handleDeleteRoom = async () => {
+    if (!roomData?.id) return;
+
+    Alert.alert(
+      'Delete Study Room',
+      'Are you sure you want to delete this study room? This action cannot be undone.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const result = await StudyRoomService.deleteStudyRoom(roomData.id);
+              if (result.success) {
+                Alert.alert('Success', 'Study room deleted successfully');
+                navigation.goBack();
+              } else {
+                Alert.alert('Error', result.error || 'Failed to delete study room');
+              }
+            } catch (error) {
+              console.error('Error deleting room:', error);
+              Alert.alert('Error', 'An unexpected error occurred');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const handleSendInvitations = async () => {
     if (!roomData?.id || selectedFriends.length === 0) {
       Alert.alert('Error', 'Please select at least one friend to invite');
@@ -97,7 +136,7 @@ const StudyRoomScreen = () => {
     }
 
     try {
-      const promises = selectedFriends.map(friendId => 
+      const promises = selectedFriends.map(friendId =>
         StudyRoomService.sendStudyRoomInvitation(
           roomData.id,
           friendId,
@@ -208,9 +247,10 @@ const StudyRoomScreen = () => {
         <Text style={[styles.messageSender, { color: isMyMessage ? '#fff' : theme.primary }]}>{isMyMessage ? 'You' : senderName}:</Text>
         <Text style={[styles.messageText, { color: isMyMessage ? '#fff' : theme.text }]}>{item.content}</Text>
         <Text style={[styles.messageTime, { color: isMyMessage ? 'rgba(255,255,255,0.7)' : theme.textSecondary }]}>
-          {new Date(item.created_at).toLocaleTimeString([], { 
-            hour: '2-digit', 
-            minute: '2-digit' 
+          {new Date(item.created_at).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
           })}
         </Text>
       </View>
@@ -233,10 +273,17 @@ const StudyRoomScreen = () => {
             <TouchableOpacity style={[styles.inviteBtn, { backgroundColor: theme.primary + '20' }]} onPress={() => setShowInviteModal(true)}>
               <Ionicons name="person-add-outline" size={18} color={theme.primary} />
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.leaveBtnTop, { backgroundColor: theme.card, borderColor: '#E57373' }]} onPress={handleLeaveRoom}>
-              <Ionicons name="exit-outline" size={20} color="#E57373" style={{ marginRight: 4 }} />
-              <Text style={styles.leaveBtnTopText}>Leave</Text>
-            </TouchableOpacity>
+            {isOwner ? (
+              <TouchableOpacity style={[styles.deleteBtnTop, { backgroundColor: theme.card, borderColor: '#E57373' }]} onPress={handleDeleteRoom}>
+                <Ionicons name="trash-outline" size={20} color="#E57373" style={{ marginRight: 4 }} />
+                <Text style={styles.deleteBtnTopText}>Delete</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={[styles.leaveBtnTop, { backgroundColor: theme.card, borderColor: '#E57373' }]} onPress={handleLeaveRoom}>
+                <Ionicons name="exit-outline" size={20} color="#E57373" style={{ marginRight: 4 }} />
+                <Text style={styles.leaveBtnTopText}>Leave</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
         {/* Info card and session button can scroll if needed */}
@@ -355,11 +402,11 @@ const StudyRoomScreen = () => {
                   <View style={styles.friendInfo}>
                     <View style={[styles.avatarCircle, { backgroundColor: theme.primary }]}>
                       <Text style={styles.avatarText}>
-                        {item.friend?.full_name?.[0] || item.friend?.username?.[0] || 'U'}
+                        {item.friend_profile?.full_name?.[0] || item.friend_profile?.username?.[0] || 'U'}
                       </Text>
                     </View>
                     <Text style={[styles.friendName, { color: theme.text }]}>
-                      {item.friend?.full_name || item.friend?.username || 'Unknown'}
+                      {item.friend_profile?.full_name || item.friend_profile?.username || 'Unknown'}
                     </Text>
                   </View>
                   {selectedFriends.includes(item.id) && (
@@ -438,6 +485,20 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   leaveBtnTopText: {
+    color: '#E57373',
+    fontWeight: 'bold',
+    fontSize: 15,
+  },
+  deleteBtnTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginLeft: 8,
+  },
+  deleteBtnTopText: {
     color: '#E57373',
     fontWeight: 'bold',
     fontSize: 15,
