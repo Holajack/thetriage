@@ -1,13 +1,29 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, AppState } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, AppState, Dimensions, ImageBackground } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { useBackgroundMusic } from '../../hooks/useBackgroundMusic';
 import { useTheme } from '../../context/ThemeContext';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withSequence,
+  withRepeat,
+  Easing,
+  interpolate
+} from 'react-native-reanimated';
+import { Typography, AnimationConfig, TimingConfig } from '../../theme/premiumTheme';
+import { useEntranceAnimation, useFloatingAnimation, useProgressAnimation, triggerHaptic } from '../../utils/animationUtils';
+import { ParallaxForestBackground } from '../../components/ParallaxForestBackground';
+import * as Haptics from 'expo-haptics';
 const { useUserAppData } = require('../../utils/userAppData');
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Break duration based on focus method
 const getBreakDuration = (focusMethod?: string, sessionDuration?: number) => {
@@ -56,6 +72,8 @@ export const BreakTimerScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute();
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
+  const [showSessionInfo, setShowSessionInfo] = useState(false);
 
   const params = route.params as {
     sessionData?: {
@@ -96,6 +114,33 @@ export const BreakTimerScreen = () => {
   const [showConfirmEndModal, setShowConfirmEndModal] = useState(false);
   const [showNextSessionWarning, setShowNextSessionWarning] = useState(false);
   const [warningCountdown, setWarningCountdown] = useState(3);
+
+  // Premium animations - gentle and relaxed for break time
+  const headerAnimStyle = useEntranceAnimation(0);
+  const cardAnimStyle = useEntranceAnimation(200);
+  const timerAnimStyle = useEntranceAnimation(400);
+  const floatingStyle = useFloatingAnimation();
+
+  // Progress animation for timer
+  const progress = (breakDurationMinutes * 60 - timer) / (breakDurationMinutes * 60);
+  const progressStyle = useProgressAnimation(progress);
+
+  // Soft pulse for timer
+  const timerPulse = useSharedValue(1);
+  const timerPulseStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: timerPulse.value }]
+  }));
+
+  useEffect(() => {
+    timerPulse.value = withRepeat(
+      withSequence(
+        withTiming(1.02, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) })
+      ),
+      -1,
+      true
+    );
+  }, []);
 
   // Background timer functionality
   const startBackgroundTimer = () => {
@@ -237,6 +282,9 @@ export const BreakTimerScreen = () => {
     console.log('🎯 Tasks:', params?.tasks?.length || 0);
     console.log('🎯 Next Task Index:', params?.nextTaskIndex);
 
+    // Soft haptic feedback for break end
+    triggerHaptic('warning');
+
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
@@ -377,106 +425,154 @@ export const BreakTimerScreen = () => {
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]} edges={["top", "left", "right"]}>
-      {/* Top Navigation Bar - Same style as HomeScreen */}
-      <View style={[styles.topNavBar, { backgroundColor: theme.background }]}>
-        <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Main', { screen: 'Home' })}>
-          <Ionicons name="arrow-back" size={24} color={theme.text} />
+    <View style={styles.fullScreenContainer}>
+      {/* Full Screen Background - Same as Focus Screen */}
+      <ParallaxForestBackground style={StyleSheet.absoluteFillObject} />
+
+      {/* Dark overlay for better text visibility */}
+      <View style={styles.darkOverlay} />
+
+      {/* Top Controls Bar */}
+      <View style={[styles.topControlsBar, { paddingTop: insets.top + 8 }]}>
+        {/* Back Button (Top Left) */}
+        <TouchableOpacity
+          style={[styles.backButton, { backgroundColor: theme.primary }]}
+          onPress={() => navigation.navigate('Main', { screen: 'Home' })}
+        >
+          <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
-        <View style={styles.topNavTitleRow}>
-          <Text style={[styles.topNavTitle, { color: theme.text }]}>
-            Break Timer: {getBreakTypeText(userData?.onboarding?.focus_method)}
-          </Text>
-        </View>
-        <View style={styles.iconBtn} />
+
+        {/* Break Timer (Top Center) - Large and prominent */}
+        <Animated.View style={[styles.breakTimerContainer, timerPulseStyle]}>
+          <Text style={styles.breakLabel}>Break Time</Text>
+          <Text style={styles.breakTimerText}>{formatTime(timer)}</Text>
+        </Animated.View>
+
+        {/* Pause/Play Button (Top Right) */}
+        <TouchableOpacity
+          style={[styles.pausePlayButton, { backgroundColor: theme.primary }]}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            handlePause();
+          }}
+        >
+          <Ionicons name={isPaused ? "play" : "pause"} size={24} color="#fff" />
+        </TouchableOpacity>
       </View>
 
-      {/* Main Content */}
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Session Summary Card */}
-        {sessionData && (
-          <View style={[styles.sessionSummaryCard, { backgroundColor: theme.card, borderLeftColor: theme.primary, borderColor: theme.primary + '33' }]}>
-            <Text style={[styles.sessionSummaryTitle, { color: theme.text }]}>Session Complete!</Text>
+      {/* Session Info Button (Lower Left) */}
+      <TouchableOpacity
+        style={[styles.infoButton, { backgroundColor: theme.primary, bottom: 100 + insets.bottom }]}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          setShowSessionInfo(true);
+        }}
+      >
+        <Ionicons name="information-circle-outline" size={28} color="#fff" />
+      </TouchableOpacity>
 
-            <View style={styles.summaryRow}>
-              <MaterialIcons name="schedule" size={20} color={theme.primary} />
-              <Text style={[styles.summaryText, { color: theme.text }]}>
-                Duration: {sessionData.duration} min {sessionData.completedFullSession ? '(Full session)' : '(Ended early)'}
-              </Text>
-            </View>
-
-            <View style={styles.summaryRow}>
-              <MaterialIcons name="task-alt" size={20} color={theme.primary} />
-              <Text style={[styles.summaryText, { color: theme.text }]}>Task: {sessionData.task}</Text>
-            </View>
-
-            <View style={styles.summaryRow}>
-              <MaterialIcons name="subject" size={20} color={theme.primary} />
-              <Text style={[styles.summaryText, { color: theme.text }]}>Subject: {sessionData.subject}</Text>
-            </View>
-
-            <View style={styles.summaryRow}>
-              <MaterialIcons name="psychology" size={20} color={theme.primary} />
-              <Text style={[styles.summaryText, { color: theme.text }]}>Focus: </Text>
-              <View style={styles.starsRow}>
-                {renderStars(sessionData.focusRating)}
+      {/* Relaxed Character Area (Center) */}
+      <View style={styles.characterContainer}>
+        {/* Relaxed Nora character - lying down smiling */}
+        <Animated.View style={[styles.relaxedCharacter, floatingStyle]}>
+          <View style={styles.characterBody}>
+            {/* Simple relaxed character representation */}
+            <View style={styles.relaxedFace}>
+              {/* Closed happy eyes */}
+              <View style={styles.relaxedEyesRow}>
+                <Text style={styles.relaxedEye}>◡</Text>
+                <Text style={styles.relaxedEye}>◡</Text>
               </View>
+              {/* Happy smile */}
+              <Text style={styles.relaxedSmile}>⌣</Text>
+            </View>
+            {/* Relaxed body indication */}
+            <View style={styles.relaxedBodyHint}>
+              <MaterialIcons name="self-improvement" size={60} color="rgba(255,255,255,0.8)" />
+            </View>
+          </View>
+        </Animated.View>
+
+        {/* Relaxation message */}
+        <Animated.Text style={[styles.relaxMessage, headerAnimStyle]}>
+          Take a moment to relax...
+        </Animated.Text>
+        <Text style={styles.breakTip}>
+          {['Stretch your body', 'Hydrate with water', 'Rest your eyes', 'Take deep breaths'][Math.floor(timer / 15) % 4]}
+        </Text>
+      </View>
+
+      {/* End Break Button (Bottom Center) */}
+      <TouchableOpacity
+        style={[styles.endBreakButton, { backgroundColor: theme.primary, bottom: 40 + insets.bottom }]}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          handleEndBreak();
+        }}
+      >
+        <MaterialIcons name="skip-next" size={24} color="#fff" />
+        <Text style={styles.endBreakButtonText}>End Break</Text>
+      </TouchableOpacity>
+
+      {/* Session Info Modal (Hidden by default) */}
+      <Modal visible={showSessionInfo} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.infoModalBox, { backgroundColor: theme.card }]}>
+            <View style={styles.infoModalHeader}>
+              <Text style={[styles.infoModalTitle, { color: theme.text }]}>Session Complete!</Text>
+              <TouchableOpacity onPress={() => setShowSessionInfo(false)}>
+                <Ionicons name="close" size={24} color={theme.text} />
+              </TouchableOpacity>
             </View>
 
-            <View style={styles.summaryRow}>
-              <MaterialIcons name="trending-up" size={20} color={theme.primary} />
-              <Text style={[styles.summaryText, { color: theme.text }]}>Productivity: </Text>
-              <View style={styles.starsRow}>
-                {renderStars(sessionData.productivityRating)}
-              </View>
-            </View>
-
-            {sessionData.notes && (
-              <View style={[styles.notesSection, { backgroundColor: theme.card + '80' }]}>
-                <Text style={[styles.notesLabel, { color: theme.text }]}>Notes:</Text>
-                <Text style={[styles.notesText, { color: theme.text + '99' }]}>"{sessionData.notes}"</Text>
-              </View>
+            {sessionData && (
+              <>
+                <View style={styles.infoRow}>
+                  <MaterialIcons name="schedule" size={20} color={theme.primary} />
+                  <Text style={[styles.infoText, { color: theme.text }]}>
+                    Duration: {sessionData.duration} min
+                  </Text>
+                </View>
+                <View style={styles.infoRow}>
+                  <MaterialIcons name="task-alt" size={20} color={theme.primary} />
+                  <Text style={[styles.infoText, { color: theme.text }]}>
+                    Task: {sessionData.task}
+                  </Text>
+                </View>
+                <View style={styles.infoRow}>
+                  <MaterialIcons name="subject" size={20} color={theme.primary} />
+                  <Text style={[styles.infoText, { color: theme.text }]}>
+                    Subject: {sessionData.subject}
+                  </Text>
+                </View>
+                <View style={styles.infoRow}>
+                  <MaterialIcons name="psychology" size={20} color={theme.primary} />
+                  <Text style={[styles.infoText, { color: theme.text }]}>Focus: </Text>
+                  <View style={styles.starsRow}>{renderStars(sessionData.focusRating)}</View>
+                </View>
+                <View style={styles.infoRow}>
+                  <MaterialIcons name="trending-up" size={20} color={theme.primary} />
+                  <Text style={[styles.infoText, { color: theme.text }]}>Productivity: </Text>
+                  <View style={styles.starsRow}>{renderStars(sessionData.productivityRating)}</View>
+                </View>
+                {sessionData.notes && (
+                  <View style={[styles.notesSection, { backgroundColor: theme.background }]}>
+                    <Text style={[styles.notesLabel, { color: theme.text }]}>Notes:</Text>
+                    <Text style={[styles.notesText, { color: theme.textSecondary }]}>"{sessionData.notes}"</Text>
+                  </View>
+                )}
+              </>
             )}
-          </View>
-        )}
 
-        {/* Break Timer Card - Same style as HomeScreen timer */}
-        <View style={[styles.timerCard, { backgroundColor: theme.cardBackground, borderColor: theme.border }]}>
-          <MaterialIcons name="free-breakfast" size={32} color={theme.primary} />
-          <Text style={[styles.timerCardTitle, { color: theme.text }]}>Take a Well-Deserved Break</Text>
-
-          {/* Timer Display - Fixed width to prevent layout shifts */}
-          <View style={[styles.timerBox, { backgroundColor: theme.background }]}>
-            <Text style={[styles.timerText, { color: theme.text }]}>{formatTime(timer)}</Text>
-          </View>
-
-          {/* Break Tips */}
-          <View style={styles.tipsSection}>
-            <Text style={[styles.tipsTitle, { color: theme.text }]}>Break Suggestions:</Text>
-            <Text style={[styles.tipText, { color: theme.textSecondary }]}>• Stretch your body and neck</Text>
-            <Text style={[styles.tipText, { color: theme.textSecondary }]}>• Hydrate with water</Text>
-            <Text style={[styles.tipText, { color: theme.textSecondary }]}>• Rest your eyes from screens</Text>
-            <Text style={[styles.tipText, { color: theme.textSecondary, marginTop: 10 }]}>
-              Taking full breaks helps maintain your focus for the next session.
-            </Text>
-          </View>
-
-          {/* Controls */}
-          <View style={styles.controlsRow}>
-            <TouchableOpacity style={[styles.pauseBtn, { borderColor: theme.border, backgroundColor: 'rgba(255, 255, 255, 0.05)' }]} onPress={handlePause}>
-              <Ionicons name={isPaused ? "play" : "pause"} size={22} color={theme.text} />
-              <Text style={[styles.pauseBtnText, { color: theme.text }]}>{isPaused ? 'Resume' : 'Pause'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.endBtn, { backgroundColor: theme.primary }]} onPress={handleEndBreak}>
-              <MaterialIcons name="timer-off" size={22} color="#fff" />
-              <Text style={styles.endBtnText}>End Break</Text>
+            <TouchableOpacity
+              style={[styles.closeInfoBtn, { backgroundColor: theme.primary }]}
+              onPress={() => setShowSessionInfo(false)}
+            >
+              <Text style={styles.closeInfoBtnText}>Close</Text>
             </TouchableOpacity>
           </View>
         </View>
-        
-        {/* Add music controls */}
-        {renderMusicStatus()}
-      </ScrollView>
+      </Modal>
       
       {/* End Break Modal */}
       <Modal visible={showEndModal} transparent animationType="fade">
@@ -548,29 +644,205 @@ export const BreakTimerScreen = () => {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1 },
-  topNavBar: {
+  // Full screen layout
+  fullScreenContainer: {
+    flex: 1,
+    backgroundColor: '#1a2f1a',
+  },
+  darkOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  topControlsBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    minHeight: 56,
+    paddingBottom: 12,
+    zIndex: 10,
   },
-  topNavTitleRow: {
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  breakTimerContainer: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 16,
+  },
+  breakLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginBottom: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  breakTimerText: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#fff',
+    fontVariant: ['tabular-nums'],
+  },
+  pausePlayButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  infoButton: {
+    position: 'absolute',
+    left: 20,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  characterContainer: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  relaxedCharacter: {
+    alignItems: 'center',
+    marginBottom: 30,
+  },
+  characterBody: {
     alignItems: 'center',
   },
-  topNavTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#222',
+  relaxedFace: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 60,
+    width: 120,
+    height: 120,
+    justifyContent: 'center',
+    marginBottom: 10,
   },
+  relaxedEyesRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 20,
+    marginBottom: 5,
+  },
+  relaxedEye: {
+    fontSize: 30,
+    color: '#fff',
+  },
+  relaxedSmile: {
+    fontSize: 40,
+    color: '#fff',
+  },
+  relaxedBodyHint: {
+    opacity: 0.8,
+  },
+  relaxMessage: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 12,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  breakTip: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.8)',
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  endBreakButton: {
+    position: 'absolute',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: 25,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  endBreakButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginLeft: 8,
+  },
+  // Info Modal styles
+  infoModalBox: {
+    borderRadius: 16,
+    padding: 20,
+    width: '85%',
+    maxWidth: 400,
+  },
+  infoModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  infoModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  infoText: {
+    fontSize: 15,
+    marginLeft: 12,
+    flex: 1,
+  },
+  closeInfoBtn: {
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  closeInfoBtnText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  // Legacy styles kept for modals
   iconBtn: { 
     padding: 8,
     minWidth: 40,
@@ -654,6 +926,17 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 1,
+  },
+  progressBarContainer: {
+    width: '80%',
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginVertical: 16,
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 3,
   },
   timerText: {
     fontSize: 48,

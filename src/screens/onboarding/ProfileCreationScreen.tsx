@@ -9,6 +9,12 @@ import { useAuth } from '../../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../context/ThemeContext';
+import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
+import { AnimatedButton } from '../../components/premium/AnimatedButton';
+import { StaggeredItem } from '../../components/premium/StaggeredList';
+import { useEntranceAnimation } from '../../utils/animationUtils';
+import { ShimmerLoader } from '../../components/premium/ShimmerLoader';
 
 type ProfileCreationNavigationProp = NativeStackNavigationProp<OnboardingStackParamList, 'ProfileCreation'>;
 type ProfileCreationRouteProp = RouteProp<OnboardingStackParamList, 'ProfileCreation'>;
@@ -16,8 +22,9 @@ type ProfileCreationRouteProp = RouteProp<OnboardingStackParamList, 'ProfileCrea
 export default function ProfileCreationScreen({ route }: { route: ProfileCreationRouteProp }) {
   const { updateOnboarding, updateProfile, user } = useAuth();
   const navigation = useNavigation<ProfileCreationNavigationProp>();
-  const { focusMethod, email } = route.params || {}; // Handle undefined params
+  const { focusMethod, email } = route.params || {};
   const { theme } = useTheme();
+  const headerAnimation = useEntranceAnimation(0);
 
   const [profilePicUri, setProfilePicUri] = useState<string | null>(null);
   const [bio, setBio] = useState('');
@@ -26,6 +33,7 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
   const [classes, setClasses] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [imageLoading, setImageLoading] = useState(false);
 
   const [permissionsGranted, setPermissionsGranted] = useState(false);
 
@@ -53,14 +61,14 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
         'To add a profile photo, we need access to your photo library. You can still continue without adding a photo.',
         [
           { text: 'Continue Without Photo', style: 'cancel' },
-          { 
-            text: 'Grant Permission', 
+          {
+            text: 'Grant Permission',
             onPress: async () => {
               try {
                 const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
                 if (status === 'granted') {
                   setPermissionsGranted(true);
-                  pickImage(); // Recursively call after permission granted
+                  pickImage();
                 }
               } catch (error) {
                 console.error('❌ Permission request failed:', error);
@@ -73,6 +81,8 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
     }
 
     try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setImageLoading(true);
       let result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -82,9 +92,12 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         setProfilePicUri(result.assets[0].uri);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
+      setImageLoading(false);
     } catch (error) {
       console.error('❌ Image picker failed:', error);
+      setImageLoading(false);
       Alert.alert('Error', 'Failed to pick image. Please try again.');
     }
   };
@@ -92,20 +105,20 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
   const handleContinue = async () => {
     setError('');
     setLoading(true);
-    
+
     try {
       if (!user || !user.id) {
         setError('User session not found. Please try again.');
         setLoading(false);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         Alert.alert('Error', 'User session not found. Please go back and try creating your account again.');
         return;
       }
 
-      // Only update profile picture and bio if provided
       const updateData: any = {
         id: user.id,
         focus_method: focusMethod,
-        onboarding_completed: false, // Onboarding is not yet fully completed
+        onboarding_completed: false,
       };
 
       if (profilePicUri) {
@@ -129,11 +142,13 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
       }
 
       await updateOnboarding(updateData);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setLoading(false);
       navigation.navigate('StudyPreferences', { focusMethod });
     } catch (e: any) {
       setLoading(false);
       setError(e.message || 'Failed to update profile.');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Profile Update Error', e.message || 'An unexpected error occurred.');
     }
   };
@@ -146,9 +161,9 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
     >
       <SafeAreaView style={styles.safeArea}>
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          <View style={styles.header}>
-            <TouchableOpacity 
-              onPress={() => navigation.goBack()} 
+          <Animated.View style={[styles.header, headerAnimation]}>
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
               style={styles.backButton}
             >
               <Ionicons name="arrow-back" size={24} color={theme.isDark ? theme.text : '#E8F5E9'} />
@@ -158,87 +173,100 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
             <Text style={[styles.headerSubtitle, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>
               Step 3 of 6 • Optional: Add a photo and bio to personalize your profile.
             </Text>
-          </View>
+          </Animated.View>
 
           <View style={styles.formContainer}>
-            <TouchableOpacity style={[styles.avatarContainer, { backgroundColor: theme.isDark ? theme.card : 'rgba(255, 255, 255, 0.1)', borderColor: theme.isDark ? theme.border : 'rgba(232, 245, 233, 0.3)' }]} onPress={pickImage}>
-              {profilePicUri ? (
-                <Image source={{ uri: profilePicUri }} style={styles.avatarImage} />
-              ) : (
-                <View style={styles.avatarPlaceholder}>
-                  <Ionicons name="camera-outline" size={40} color={theme.isDark ? theme.textSecondary : '#B8E6C1'} />
-                  <Text style={[styles.avatarPlaceholderText, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>Add Photo</Text>
-                </View>
-              )}
-            </TouchableOpacity>
+            <StaggeredItem index={0} delay="normal">
+              <TouchableOpacity style={[styles.avatarContainer, { backgroundColor: theme.isDark ? theme.card : 'rgba(255, 255, 255, 0.1)', borderColor: theme.isDark ? theme.border : 'rgba(232, 245, 233, 0.3)' }]} onPress={pickImage}>
+                {imageLoading ? (
+                  <ShimmerLoader variant="circle" height={120} />
+                ) : profilePicUri ? (
+                  <Animated.Image entering={ZoomIn.duration(400)} source={{ uri: profilePicUri }} style={styles.avatarImage} />
+                ) : (
+                  <View style={styles.avatarPlaceholder}>
+                    <Ionicons name="camera-outline" size={40} color={theme.isDark ? theme.textSecondary : '#B8E6C1'} />
+                    <Text style={[styles.avatarPlaceholderText, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>Add Photo</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </StaggeredItem>
 
-            <Text style={[styles.inputLabel, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>Bio (Optional)</Text>
-            <TextInput
-              style={[styles.input, styles.bioInput, { backgroundColor: theme.isDark ? theme.card : 'rgba(255, 255, 255, 0.05)', color: theme.isDark ? theme.text : '#E8F5E9', borderColor: theme.isDark ? theme.border : 'rgba(232, 245, 233, 0.2)' }]}
-              placeholder="Tell us a bit about yourself..."
-              placeholderTextColor={theme.isDark ? theme.textSecondary : '#B8E6C1'}
-              value={bio}
-              onChangeText={setBio}
-              multiline
-              numberOfLines={3}
-              maxLength={150}
-              textAlignVertical="top"
-            />
-            <Text style={[styles.bioHint, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>
-              {bio.length}/150 characters
-            </Text>
+            <StaggeredItem index={1} delay="fast">
+              <View>
+                <Text style={[styles.inputLabel, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>Bio (Optional)</Text>
+                <TextInput
+                  style={[styles.input, styles.bioInput, { backgroundColor: theme.isDark ? theme.card : 'rgba(255, 255, 255, 0.05)', color: theme.isDark ? theme.text : '#E8F5E9', borderColor: theme.isDark ? theme.border : 'rgba(232, 245, 233, 0.2)' }]}
+                  placeholder="Tell us a bit about yourself..."
+                  placeholderTextColor={theme.isDark ? theme.textSecondary : '#B8E6C1'}
+                  value={bio}
+                  onChangeText={setBio}
+                  multiline
+                  numberOfLines={3}
+                  maxLength={150}
+                  textAlignVertical="top"
+                />
+                <Text style={[styles.bioHint, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>
+                  {bio.length}/150 characters
+                </Text>
+              </View>
+            </StaggeredItem>
 
-            <Text style={[styles.inputLabel, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>University / School (Optional)</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: theme.isDark ? theme.card : 'rgba(255, 255, 255, 0.05)', color: theme.isDark ? theme.text : '#E8F5E9', borderColor: theme.isDark ? theme.border : 'rgba(232, 245, 233, 0.2)' }]}
-              placeholder="Enter your university or school"
-              placeholderTextColor={theme.isDark ? theme.textSecondary : '#B8E6C1'}
-              value={university}
-              onChangeText={setUniversity}
-            />
+            <StaggeredItem index={2} delay="fast">
+              <View>
+                <Text style={[styles.inputLabel, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>University / School (Optional)</Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: theme.isDark ? theme.card : 'rgba(255, 255, 255, 0.05)', color: theme.isDark ? theme.text : '#E8F5E9', borderColor: theme.isDark ? theme.border : 'rgba(232, 245, 233, 0.2)' }]}
+                  placeholder="Enter your university or school"
+                  placeholderTextColor={theme.isDark ? theme.textSecondary : '#B8E6C1'}
+                  value={university}
+                  onChangeText={setUniversity}
+                />
+              </View>
+            </StaggeredItem>
 
-            <Text style={[styles.inputLabel, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>Location (Optional)</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: theme.isDark ? theme.card : 'rgba(255, 255, 255, 0.05)', color: theme.isDark ? theme.text : '#E8F5E9', borderColor: theme.isDark ? theme.border : 'rgba(232, 245, 233, 0.2)' }]}
-              placeholder="City, Country"
-              placeholderTextColor={theme.isDark ? theme.textSecondary : '#B8E6C1'}
-              value={location}
-              onChangeText={setLocation}
-            />
+            <StaggeredItem index={3} delay="fast">
+              <View>
+                <Text style={[styles.inputLabel, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>Location (Optional)</Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: theme.isDark ? theme.card : 'rgba(255, 255, 255, 0.05)', color: theme.isDark ? theme.text : '#E8F5E9', borderColor: theme.isDark ? theme.border : 'rgba(232, 245, 233, 0.2)' }]}
+                  placeholder="City, Country"
+                  placeholderTextColor={theme.isDark ? theme.textSecondary : '#B8E6C1'}
+                  value={location}
+                  onChangeText={setLocation}
+                />
+              </View>
+            </StaggeredItem>
 
-            <Text style={[styles.inputLabel, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>Current Classes (Optional)</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: theme.isDark ? theme.card : 'rgba(255, 255, 255, 0.05)', color: theme.isDark ? theme.text : '#E8F5E9', borderColor: theme.isDark ? theme.border : 'rgba(232, 245, 233, 0.2)' }]}
-              placeholder="e.g., Math 101, Physics 202"
-              placeholderTextColor={theme.isDark ? theme.textSecondary : '#B8E6C1'}
-              value={classes}
-              onChangeText={setClasses}
-            />
+            <StaggeredItem index={4} delay="fast">
+              <View>
+                <Text style={[styles.inputLabel, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>Current Classes (Optional)</Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: theme.isDark ? theme.card : 'rgba(255, 255, 255, 0.05)', color: theme.isDark ? theme.text : '#E8F5E9', borderColor: theme.isDark ? theme.border : 'rgba(232, 245, 233, 0.2)' }]}
+                  placeholder="e.g., Math 101, Physics 202"
+                  placeholderTextColor={theme.isDark ? theme.textSecondary : '#B8E6C1'}
+                  value={classes}
+                  onChangeText={setClasses}
+                />
+              </View>
+            </StaggeredItem>
 
             {error ? <Text style={[styles.errorText, { backgroundColor: theme.isDark ? 'rgba(255, 107, 107, 0.15)' : 'rgba(255, 107, 107, 0.1)', borderColor: theme.isDark ? 'rgba(255, 107, 107, 0.4)' : 'rgba(255, 107, 107, 0.3)' }]}>{error}</Text> : null}
           </View>
         </ScrollView>
 
         <View style={[styles.bottomContainer, { backgroundColor: theme.isDark ? theme.background + 'CC' : 'rgba(15, 36, 25, 0.8)', borderTopColor: theme.isDark ? theme.border : 'rgba(232, 245, 233, 0.1)' }]}>
-          <TouchableOpacity
-            style={[styles.continueButton, loading && styles.continueButtonDisabled]}
+          <AnimatedButton
+            title="Save Profile & Continue"
             onPress={handleContinue}
+            gradient={true}
+            gradientColors={['#4CAF50', '#66BB6A', '#4CAF50']}
+            size="large"
+            fullWidth={true}
+            loading={loading}
             disabled={loading}
-            activeOpacity={0.8}
-          >
-            {loading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <LinearGradient
-                colors={['#4CAF50', '#66BB6A', '#4CAF50']}
-                locations={[0, 0.5, 1]}
-                style={styles.buttonGradient}
-              >
-                <Text style={styles.continueButtonText}>Save Profile & Continue</Text>
-                <Ionicons name="arrow-forward" size={20} color="#FFFFFF" style={{ marginLeft: 8 }} />
-              </LinearGradient>
-            )}
-          </TouchableOpacity>
+            icon={<Ionicons name="arrow-forward" size={20} color="#FFFFFF" />}
+            iconPosition="right"
+          />
           <View style={styles.progressIndicator}>
             <View style={styles.progressDot} />
             <View style={styles.progressDot} />
@@ -369,34 +397,9 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: 25, 
+    paddingBottom: 25,
     borderTopWidth: 1,
-  },
-  continueButton: {
-    borderRadius: 12,
-    marginBottom: 20,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    height: 56,
-    justifyContent: 'center',
-  },
-  continueButtonDisabled: {
-    opacity: 0.6,
-  },
-  buttonGradient: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 12,
-    height: '100%',
-  },
-  continueButtonText: {
-    color: '#FFFFFF',
-    fontSize: 17,
-    fontWeight: '600',
+    gap: 20,
   },
   progressIndicator: {
     flexDirection: 'row',

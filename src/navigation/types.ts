@@ -99,6 +99,7 @@ export type MainTabParamList = {
   Profile: undefined;
   Shop: undefined;
   Settings: undefined;
+  TrailBuddySelection: undefined;
   ProfileMain: undefined;
   ProfileCustomization: undefined;
   PersonalInformation: undefined;

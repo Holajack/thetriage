@@ -1,20 +1,20 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  ActivityIndicator,
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
   Alert,
   Share,
   Platform,
   Linking
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { WebView } from 'react-native-webview';
 import { useTheme } from '../../context/ThemeContext';
+import { ShimmerLoader } from '../../components/premium/ShimmerLoader';
 
 interface PDFViewerParams {
   url: string;
@@ -72,9 +72,9 @@ const PDFViewerScreen = () => {
       {/* Header */}
       <View style={[styles.header, { backgroundColor: theme.card }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
-          <Ionicons name="arrow-back" size={24} color={theme.text} />
+          <Ionicons name="arrow-back-outline" size={24} color={theme.text} />
         </TouchableOpacity>
-        
+
         <View style={styles.headerCenter}>
           <Text style={[styles.headerTitle, { color: theme.text }]} numberOfLines={1}>
             {title}
@@ -83,14 +83,14 @@ const PDFViewerScreen = () => {
             PDF Document
           </Text>
         </View>
-        
+
         <View style={styles.headerActions}>
           <TouchableOpacity onPress={openInExternalApp} style={styles.headerButton}>
             <Ionicons name="open-outline" size={24} color={theme.text} />
           </TouchableOpacity>
-          
+
           <TouchableOpacity onPress={sendToPatrick} style={styles.headerButton}>
-            <MaterialCommunityIcons name="robot" size={24} color="#FF5722" />
+            <Ionicons name="chatbot-outline" size={24} color="#FF5722" />
           </TouchableOpacity>
         </View>
       </View>
@@ -99,11 +99,11 @@ const PDFViewerScreen = () => {
       <View style={styles.pdfContainer}>
         {loading && (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={theme.primary} />
+            <ShimmerLoader variant="circular" size={48} />
             <Text style={[styles.loadingText, { color: theme.text }]}>
               Loading PDF...
             </Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.openExternalButton, { backgroundColor: theme.primary }]}
               onPress={openInExternalApp}
             >
@@ -114,11 +114,11 @@ const PDFViewerScreen = () => {
         
         {error && (
           <View style={styles.errorContainer}>
-            <MaterialCommunityIcons name="file-pdf-box" size={64} color={theme.text + '33'} />
+            <Ionicons name="document-text-outline" size={64} color={theme.text + '33'} />
             <Text style={[styles.errorText, { color: theme.text }]}>
               Could not load PDF in app
             </Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.retryButton, { backgroundColor: theme.primary }]}
               onPress={openInExternalApp}
             >
@@ -155,19 +155,19 @@ const PDFViewerScreen = () => {
 
       {/* Bottom Actions */}
       <View style={[styles.bottomActions, { backgroundColor: theme.card }]}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.actionButton, { backgroundColor: theme.primary }]}
           onPress={sendToPatrick}
         >
-          <MaterialCommunityIcons name="robot" size={20} color="#fff" />
+          <Ionicons name="chatbot-outline" size={20} color="#fff" />
           <Text style={styles.actionButtonText}>Ask Patrick</Text>
         </TouchableOpacity>
-        
-        <TouchableOpacity 
+
+        <TouchableOpacity
           style={[styles.actionButton, { backgroundColor: theme.text + '15' }]}
-          onPress={() => navigation.navigate('StudySessionScreen' as any, { 
+          onPress={() => navigation.navigate('StudySessionScreen' as any, {
             taskName: `Study ${title}`,
-            fromPDF: true 
+            fromPDF: true
           })}
         >
           <Ionicons name="timer-outline" size={20} color={theme.text} />

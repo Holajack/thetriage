@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Modal, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Modal, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -9,6 +9,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { UnifiedHeader } from '../../components/UnifiedHeader';
 import { supabase } from '../../utils/supabase';
 import { sendQRFriendRequest, waitForQRAcceptance } from '../../utils/qrAcceptanceService';
+import { ShimmerLoader } from '../../components/premium/ShimmerLoader';
 
 interface ScannedUser {
   userId: string;
@@ -285,7 +286,7 @@ const QRScannerScreen = () => {
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         <UnifiedHeader title="Scan QR Code" onClose={() => navigation.navigate('Community' as any, { initialTab: 'friends' })} />
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={theme.primary} />
+          <ShimmerLoader variant="circular" size={48} />
           <Text style={[styles.messageText, { color: theme.text }]}>Requesting camera permission...</Text>
         </View>
       </SafeAreaView>
@@ -397,7 +398,7 @@ const QRScannerScreen = () => {
 
             {loading ? (
               <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={theme.primary} />
+                <ShimmerLoader variant="circular" size={48} />
                 <Text style={[styles.loadingText, { color: theme.text }]}>Loading profile...</Text>
               </View>
             ) : scannedUser ? (
@@ -435,7 +436,7 @@ const QRScannerScreen = () => {
                 {/* Waiting State */}
                 {waitingForAcceptance && (
                   <View style={styles.waitingContainer}>
-                    <ActivityIndicator size="large" color={theme.primary} />
+                    <ShimmerLoader variant="circular" size={48} />
                     <Text style={[styles.waitingTitle, { color: theme.text }]}>
                       Waiting for {scannedUser.fullName}...
                     </Text>
@@ -462,7 +463,7 @@ const QRScannerScreen = () => {
                       disabled={sending}
                     >
                       {sending ? (
-                        <ActivityIndicator size="small" color="#FFFFFF" />
+                        <ShimmerLoader variant="circular" size={20} />
                       ) : (
                         <>
                           <Ionicons name="person-add" size={20} color="#FFFFFF" />

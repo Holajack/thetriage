@@ -32,7 +32,6 @@ export interface Friend {
     username?: string;
     full_name?: string;
     avatar_url?: string;
-    bio?: string;
   };
 }
 
@@ -111,7 +110,7 @@ export async function sendFriendRequest(
       if (profiles) {
         const profileMap = new Map(profiles.map(p => [p.id, p]));
         enhancedData = {
-          ...data,
+          ...result.data,
           sender: profileMap.get(session.user.id),
           recipient: profileMap.get(recipientId)
         };
@@ -324,10 +323,10 @@ export async function getSentFriendRequests(): Promise<{
 /**
  * Get user's friends list
  */
-export async function getFriendsList(): Promise<{ 
-  success: boolean; 
-  error?: string; 
-  data?: Friend[] 
+export async function getFriendsList(): Promise<{
+  success: boolean;
+  error?: string;
+  data?: Friend[]
 }> {
   try {
     const { data: { session } } = await supabase.auth.getSession();
@@ -342,33 +341,66 @@ export async function getFriendsList(): Promise<{
       .order('created_at', { ascending: false });
 
     if (error) {
+      console.error('Error fetching friends:', error.message);
       return { success: false, error: error.message };
     }
 
     // Enhance with friend profiles separately
-    let enhancedData = data || [];
+    let enhancedData: Friend[] = [];
     if (data && data.length > 0) {
       try {
         const friendIds = [...new Set(data.map(friendship => friendship.friend_id))];
-        const { data: profiles } = await supabase
+        console.log('Fetching profiles for friend IDs:', friendIds);
+
+        const { data: profiles, error: profileError } = await supabase
           .from('profiles')
-          .select('id, username, full_name, avatar_url, bio')
+          .select('id, username, full_name, avatar_url')
           .in('id', friendIds);
-        
-        if (profiles) {
+
+        if (profileError) {
+          console.error('Error fetching friend profiles:', profileError.message);
+        }
+
+        console.log('Fetched profiles:', profiles?.length || 0);
+
+        if (profiles && profiles.length > 0) {
           const profileMap = new Map(profiles.map(p => [p.id, p]));
           enhancedData = data.map(friendship => ({
             ...friendship,
-            friend_profile: profileMap.get(friendship.friend_id)
+            friend_profile: profileMap.get(friendship.friend_id) || {
+              id: friendship.friend_id,
+              username: 'Unknown',
+              full_name: 'Study Friend',
+            }
+          }));
+        } else {
+          // No profiles found, create placeholder data
+          enhancedData = data.map(friendship => ({
+            ...friendship,
+            friend_profile: {
+              id: friendship.friend_id,
+              username: 'Unknown',
+              full_name: 'Study Friend',
+            }
           }));
         }
-      } catch (profileError) {
-        console.warn('Could not fetch friend profiles');
+      } catch (profileError: any) {
+        console.error('Exception fetching friend profiles:', profileError.message);
+        // Fallback: return friendships with placeholder profile data
+        enhancedData = data.map(friendship => ({
+          ...friendship,
+          friend_profile: {
+            id: friendship.friend_id,
+            username: 'Unknown',
+            full_name: 'Study Friend',
+          }
+        }));
       }
     }
 
     return { success: true, data: enhancedData };
   } catch (error: any) {
+    console.error('getFriendsList error:', error.message);
     return { success: false, error: error.message };
   }
 }
@@ -425,7 +457,7 @@ export async function searchUsers(query: string): Promise<{
 
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, username, full_name, avatar_url, bio')
+      .select('id, username, full_name, avatar_url')
       .or(`username.ilike.%${query}%,full_name.ilike.%${query}%`)
       .neq('id', session.user.id) // Exclude current user
       .limit(20);

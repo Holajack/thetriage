@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Animated, Alert, Modal, FlatList } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, KeyboardAvoidingView, Platform, Animated, Alert, Modal, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../../utils/supabase';
@@ -7,8 +7,15 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
+import * as Haptics from 'expo-haptics';
 import NoraOnboarding from '../../components/NoraOnboarding';
+import { NoraSideNav, NavItem } from '../../components/NoraSideNav';
+// NoraLoupeAnimation temporarily disabled for stability
+// import NoraLoupeAnimation from '../../components/NoraLoupeAnimation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AnimatedButton } from '../../components/premium/AnimatedButton';
+import { ShimmerLoader } from '../../components/premium/ShimmerLoader';
+import { MascotState, MascotAnimationDurations } from '../../theme/premiumTheme';
 const { useUserAppData } = require('../../utils/userAppData');
 
 interface NoraMessage {
@@ -102,7 +109,7 @@ const NoraScreen = () => {
       ),
       headerRight: () => (
         <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 8 }}>
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={() => navigation.navigate('Settings' as never)}
             activeOpacity={0.7}
             style={{
@@ -118,7 +125,7 @@ const NoraScreen = () => {
           >
             <Ionicons name="help-circle-outline" size={20} color={theme.primary} />
           </TouchableOpacity>
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={() => setShowChatDrawer(true)}
             activeOpacity={0.7}
             style={{
@@ -132,32 +139,20 @@ const NoraScreen = () => {
               borderColor: 'rgba(123, 97, 255, 0.2)',
             }}
           >
-            <Ionicons name="menu-outline" size={20} color={theme.primary} />
+            <Ionicons name="chatbubbles-outline" size={20} color={theme.primary} />
           </TouchableOpacity>
-          <TouchableOpacity 
-            onPress={handleNewChat}
-            activeOpacity={0.8}
-            style={{
-              padding: 8,
-              borderRadius: 8,
-              backgroundColor: theme.primary,
-              justifyContent: 'center',
-              alignItems: 'center',
-              shadowColor: theme.primary,
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.3,
-              shadowRadius: 4,
-              elevation: 3,
-            }}
-          >
-            <Ionicons name="add" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
+          <NoraSideNav
+            items={navItems}
+            activeItemId={activeNavItem}
+            onItemSelect={handleNavItemSelect}
+            onNewChat={handleNewChat}
+          />
         </View>
       ),
     });
     fetchChatHistory();
     fetchUploadedPdfs();
-  }, [navigation, theme, handleNewChat]);
+  }, [navigation, theme, handleNewChat, activeNavItem, navItems, handleNavItemSelect]);
   
   const [input, setInput] = useState('');
   const [chat, setChat] = useState<NoraMessage[]>([]);
@@ -173,6 +168,53 @@ const NoraScreen = () => {
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [thinkingMode, setThinkingMode] = useState<'fast' | 'deep'>('fast');
   const [lastNoraResponse, setLastNoraResponse] = useState<string>(''); // Track last response for context
+  const [mascotState, setMascotState] = useState<MascotState>('waving');
+  const [activeNavItem, setActiveNavItem] = useState<string>('chat');
+
+  // Navigation items for side nav
+  const navItems: NavItem[] = [
+    {
+      id: 'chat',
+      label: 'Study Assistant',
+      icon: 'chatbubbles-outline',
+    },
+    {
+      id: 'pdf',
+      label: 'PDF Reader',
+      icon: 'document-text-outline',
+    },
+    {
+      id: 'focus',
+      label: 'Focus Timer',
+      icon: 'timer-outline',
+    },
+    {
+      id: 'progress',
+      label: 'Progress Tracker',
+      icon: 'trophy-outline',
+    },
+  ];
+
+  const handleNavItemSelect = useCallback((itemId: string) => {
+    setActiveNavItem(itemId);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    switch (itemId) {
+      case 'chat':
+        setShowLandingScreen(true);
+        setSelectedMode('Study Assistant');
+        break;
+      case 'pdf':
+        setShowPdfModal(true);
+        break;
+      case 'focus':
+        navigation.navigate('StudySession' as never);
+        break;
+      case 'progress':
+        navigation.navigate('Analytics' as never);
+        break;
+    }
+  }, [navigation]);
 
   const scrollViewRef = useRef<ScrollView>(null);
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -180,6 +222,11 @@ const NoraScreen = () => {
   useEffect(() => {
     fetchChatHistory();
     checkNoraOnboardingStatus();
+
+    // Wave on screen entry, then transition to idle
+    setTimeout(() => {
+      setMascotState('idle');
+    }, MascotAnimationDurations.waving);
   }, []);
 
   useEffect(() => {
@@ -503,6 +550,8 @@ const NoraScreen = () => {
 
     // Start loading for Nora's response with mode indicator
     setIsLoading(true);
+    setMascotState('thinking');
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     // Add "thinking deeply" message if in deep mode
     if (detectedMode === 'deep' || thinkingMode === 'deep') {
@@ -626,12 +675,15 @@ const NoraScreen = () => {
 
         setChat(prev => [...prev, noraMsg]);
         await saveMessage(cleanResponse, 'nora');
+        setMascotState('idle');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
         throw new Error('No response from Nora');
       }
-      
+
     } catch (error) {
       console.error('Nora request error:', error);
+      setMascotState('idle');
       
       // Add fallback response
       const fallbackMsg: NoraMessage = {
@@ -655,17 +707,19 @@ const NoraScreen = () => {
 
   const renderLandingScreen = () => {
     return (
-      <Animated.View style={[styles.landingContainer, { opacity: fadeAnim }]}>
+      <View style={styles.landingContainer}>
         <View style={styles.welcomeSection}>
           <View style={styles.noraAvatar}>
             <Ionicons name="chatbubble-ellipses" size={40} color="#7B61FF" />
           </View>
-          <Text style={[styles.welcomeTitle, { color: theme.text }]}>
-            Hi! I'm Nora
-          </Text>
-          <Text style={[styles.welcomeSubtitle, { color: theme.textSecondary }]}>
-            Your AI study assistant. How can I help you today?
-          </Text>
+          <View>
+            <Text style={[styles.welcomeTitle, { color: theme.text }]}>
+              Hi! I'm Nora
+            </Text>
+            <Text style={[styles.welcomeSubtitle, { color: theme.textSecondary }]}>
+              Your AI study assistant. How can I help you today?
+            </Text>
+          </View>
         </View>
 
         <View style={styles.modesContainer}>
@@ -673,7 +727,10 @@ const NoraScreen = () => {
             <TouchableOpacity
               key={index}
               style={[styles.modeCard, { backgroundColor: theme.surface }]}
-              onPress={() => handleModePress(mode)}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                handleModePress(mode);
+              }}
               activeOpacity={0.7}
             >
               <View style={[styles.modeIcon, { backgroundColor: mode.color + '20' }]}>
@@ -691,7 +748,7 @@ const NoraScreen = () => {
             </TouchableOpacity>
           ))}
         </View>
-      </Animated.View>
+      </View>
     );
   };
 
@@ -954,14 +1011,14 @@ const NoraScreen = () => {
       >
         {chat.map((message, index) => renderMessage(message, index))}
 
-        {/* Loading Indicator */}
+        {/* Loading Indicator - Simple version for stability */}
         {isLoading && (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color="#7B61FF" />
-            <Text style={[styles.loadingDots, { color: theme.textSecondary }]}>
+            <View style={[styles.simpleLoadingDot, { backgroundColor: theme.primary }]} />
+            <Text style={[styles.loadingDots, { color: theme.textSecondary, marginTop: 12 }]}>
               {selectedPdf
-                ? `Nora is analyzing "${selectedPdf.name}" and your question...`
-                : 'Nora is processing your request...'}
+                ? `Analyzing "${selectedPdf.name}"...`
+                : mascotState === 'thinking' ? 'Thinking...' : 'Processing...'}
             </Text>
           </View>
         )}
@@ -972,7 +1029,7 @@ const NoraScreen = () => {
   if (isFirstLoad) {
     return (
       <View style={[styles.container, styles.centered, { backgroundColor: theme.background }]}>
-        <ActivityIndicator size="large" color="#7B61FF" />
+        <ShimmerLoader variant="circle" height={48} />
         <Text style={[styles.loadingText, { color: theme.text }]}>
           Loading Nora...
         </Text>
@@ -1106,13 +1163,17 @@ const NoraScreen = () => {
               <Ionicons name="mic" size={20} color="#FFFFFF" />
             </TouchableOpacity>
             {input.trim().length > 0 && (
-              <TouchableOpacity 
-                style={[styles.actionButton, { backgroundColor: theme.primary }]}
+              <AnimatedButton
+                title=""
                 onPress={() => handleSend()}
                 disabled={isLoading}
-              >
-                <Ionicons name="send" size={20} color="#FFFFFF" />
-              </TouchableOpacity>
+                loading={isLoading}
+                variant="primary"
+                size="small"
+                icon={<Ionicons name="send" size={20} color="#FFFFFF" />}
+                hapticFeedback={true}
+                style={{ paddingHorizontal: 12, paddingVertical: 8 }}
+              />
             )}
           </View>
         </View>
@@ -1323,6 +1384,34 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 20,
   },
+  welcomeSection: {
+    alignItems: 'center',
+    marginBottom: 32,
+    paddingTop: 20,
+  },
+  noraAvatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(123, 97, 255, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  welcomeTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  welcomeSubtitle: {
+    fontSize: 16,
+    textAlign: 'center',
+    paddingHorizontal: 20,
+  },
+  modesContainer: {
+    flex: 1,
+  },
   modesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1331,14 +1420,13 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   modeCard: {
-    width: '48%',
-    aspectRatio: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1,
+    borderColor: 'rgba(123, 97, 255, 0.2)',
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   modeIcon: {
     width: 48,
@@ -1352,6 +1440,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  modeContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  modeDescription: {
+    fontSize: 13,
+    marginTop: 4,
+    lineHeight: 18,
   },
   voiceSection: {
     flexDirection: 'row',
@@ -1406,15 +1503,23 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   loadingContainer: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    marginVertical: 8,
+    marginVertical: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  simpleLoadingDot: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    opacity: 0.7,
   },
   loadingDots: {
-    marginLeft: 8,
     fontSize: 14,
     fontStyle: 'italic',
+    textAlign: 'center',
   },
   loadingText: {
     marginTop: 12,
@@ -1519,187 +1624,6 @@ const styles = StyleSheet.create({
   emptyStateText: {
     fontSize: 16,
     marginTop: 12,
-  },
-  // Landing Screen Styles
-  landingContainer: {
-    flex: 1,
-    padding: 20,
-  },
-  welcomeSection: {
-    alignItems: 'center',
-    marginBottom: 40,
-    paddingTop: 60,
-  },
-  noraAvatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#7B61FF20',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  welcomeTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  welcomeSubtitle: {
-    fontSize: 16,
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  modesContainer: {
-    flex: 1,
-  },
-  modeCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  modeIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  modeContent: {
-    flex: 1,
-  },
-  modeTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  modeDescription: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  // Chat Screen Styles
-  chatContainer: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  chatContent: {
-    paddingVertical: 16,
-  },
-  messageContainer: {
-    marginBottom: 16,
-    maxWidth: '80%',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 18,
-  },
-  userMessage: {
-    alignSelf: 'flex-end',
-    backgroundColor: '#7B61FF',
-  },
-  noraMessage: {
-    alignSelf: 'flex-start',
-  },
-  messageText: {
-    fontSize: 16,
-    lineHeight: 22,
-  },
-  // PDF Modal Styles
-  pdfModalContainer: {
-    flex: 1,
-  },
-  pdfModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-  },
-  pdfModalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  pdfModalContent: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-  },
-  uploadPdfButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 12,
-    marginBottom: 24,
-  },
-  uploadPdfButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  pdfListTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  pdfListContent: {
-    flexGrow: 1,
-    paddingBottom: 20,
-  },
-  pdfListItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-  },
-  pdfIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  pdfInfo: {
-    flex: 1,
-  },
-  pdfName: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  pdfSize: {
-    fontSize: 14,
-    marginBottom: 2,
-  },
-  pdfDate: {
-    fontSize: 12,
-  },
-  emptyPdfState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 80,
-  },
-  emptyPdfText: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginTop: 16,
-  },
-  emptyPdfSubtext: {
-    fontSize: 14,
-    marginTop: 8,
-    textAlign: 'center',
   },
   selectedPdfBanner: {
     flexDirection: 'row',

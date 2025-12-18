@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
 import { UnifiedHeader } from '../../components/UnifiedHeader';
 import LinearGradient from 'react-native-linear-gradient';
+import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
+import { useFocusAnimationKey } from '../../utils/animationUtils';
 
 const { width } = Dimensions.get('window');
 
@@ -13,6 +15,9 @@ const ProTrekkerScreen = () => {
   const navigation = useNavigation();
   const { theme } = useTheme();
   const [selectedPlan, setSelectedPlan] = useState<'yearly' | 'monthly' | 'lifetime'>('yearly');
+
+  // Force animations to replay on every screen focus
+  const focusKey = useFocusAnimationKey();
 
   const handleSubscribe = () => {
     // Handle subscription logic here
@@ -22,18 +27,24 @@ const ProTrekkerScreen = () => {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Back Button */}
-      <View style={styles.backButtonContainer}>
+      <Animated.View
+        key={`back-${focusKey}`}
+        entering={FadeIn.duration(200)}
+        style={styles.backButtonContainer}
+      >
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.navigate('Settings' as any)}
         >
           <View style={[styles.backButtonCircle, { backgroundColor: theme.primary + '20' }]}>
-            <Ionicons name="arrow-back" size={24} color={theme.primary} />
+            <Ionicons name="arrow-back-outline" size={24} color={theme.primary} />
           </View>
         </TouchableOpacity>
-      </View>
+      </Animated.View>
 
-      <ScrollView
+      <Animated.ScrollView
+        key={`content-${focusKey}`}
+        entering={FadeInUp.delay(100).duration(300)}
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -47,7 +58,7 @@ const ProTrekkerScreen = () => {
           />
           <View style={styles.badgeContainer}>
             <View style={styles.badge}>
-              <Ionicons name="star" size={28} color="#FFA726" />
+              <Ionicons name="star-outline" size={28} color="#FFA726" />
             </View>
           </View>
         </View>
@@ -85,7 +96,7 @@ const ProTrekkerScreen = () => {
               <Text style={styles.recommendText}>Most Popular</Text>
             </View>
             <View style={styles.checkmark}>
-              <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+              <Ionicons name="checkmark-circle-outline" size={24} color="#4CAF50" />
             </View>
             <Text style={[styles.priceAmount, { color: '#FFF' }]}>Pro $14.99/mo</Text>
             <Text style={[styles.priceDescription, { color: '#E3F2FD' }]}>Ultimate study experience with all features</Text>
@@ -134,7 +145,7 @@ const ProTrekkerScreen = () => {
           {/* Feature 1 - AI-Powered Insights */}
           <View style={styles.featureCard}>
             <View style={[styles.featureIcon, { backgroundColor: '#7B61FF' }]}>
-              <Ionicons name="bulb" size={32} color="#FFF" />
+              <Ionicons name="bulb-outline" size={32} color="#FFF" />
             </View>
             <Text style={[styles.featureTitle, { color: theme.text }]}>Unlimited AI Insights</Text>
             <Text style={[styles.featureDesc, { color: theme.textSecondary }]}>Get personalized study recommendations powered by AI</Text>
@@ -143,7 +154,7 @@ const ProTrekkerScreen = () => {
           {/* Feature 2 - Personalized Study Plans */}
           <View style={styles.featureCard}>
             <View style={[styles.featureIcon, { backgroundColor: '#4CAF50' }]}>
-              <Ionicons name="calendar" size={32} color="#FFF" />
+              <Ionicons name="calendar-outline" size={32} color="#FFF" />
             </View>
             <Text style={[styles.featureTitle, { color: theme.text }]}>AI-Generated Study Plans</Text>
             <Text style={[styles.featureDesc, { color: theme.textSecondary }]}>Custom schedules tailored to your learning style</Text>
@@ -152,7 +163,7 @@ const ProTrekkerScreen = () => {
           {/* Feature 3 - E-Books Library */}
           <View style={styles.featureCard}>
             <View style={[styles.featureIcon, { backgroundColor: '#FF9500' }]}>
-              <Ionicons name="book" size={32} color="#FFF" />
+              <Ionicons name="book-outline" size={32} color="#FFF" />
             </View>
             <Text style={[styles.featureTitle, { color: theme.text }]}>E-Books Library Access</Text>
             <Text style={[styles.featureDesc, { color: theme.textSecondary }]}>Exclusive study guides and educational resources</Text>
@@ -161,7 +172,7 @@ const ProTrekkerScreen = () => {
           {/* Feature 4 - Session Analytics */}
           <View style={styles.featureCard}>
             <View style={[styles.featureIcon, { backgroundColor: '#2196F3' }]}>
-              <Ionicons name="stats-chart" size={32} color="#FFF" />
+              <Ionicons name="stats-chart-outline" size={32} color="#FFF" />
             </View>
             <Text style={[styles.featureTitle, { color: theme.text }]}>Advanced Analytics</Text>
             <Text style={[styles.featureDesc, { color: theme.textSecondary }]}>Detailed reports and progress tracking</Text>
@@ -170,7 +181,7 @@ const ProTrekkerScreen = () => {
           {/* Feature 5 - Soundscapes */}
           <View style={styles.featureCard}>
             <View style={[styles.featureIcon, { backgroundColor: '#00BCD4' }]}>
-              <Ionicons name="musical-notes" size={32} color="#FFF" />
+              <Ionicons name="musical-notes-outline" size={32} color="#FFF" />
             </View>
             <Text style={[styles.featureTitle, { color: theme.text }]}>Focus Soundscapes</Text>
             <Text style={[styles.featureDesc, { color: theme.textSecondary }]}>Curated audio for deep concentration</Text>
@@ -179,7 +190,7 @@ const ProTrekkerScreen = () => {
           {/* Feature 6 - Brain Mapping */}
           <View style={styles.featureCard}>
             <View style={[styles.featureIcon, { backgroundColor: '#9C27B0' }]}>
-              <MaterialCommunityIcons name="brain" size={32} color="#FFF" />
+              <Ionicons name="color-filter-outline" size={32} color="#FFF" />
             </View>
             <Text style={[styles.featureTitle, { color: theme.text }]}>Brain Mapping Profile</Text>
             <Text style={[styles.featureDesc, { color: theme.textSecondary }]}>Discover your unique learning patterns</Text>
@@ -188,7 +199,7 @@ const ProTrekkerScreen = () => {
           {/* Feature 7 - Self-Discovery Quizzes */}
           <View style={styles.featureCard}>
             <View style={[styles.featureIcon, { backgroundColor: '#FF6B35' }]}>
-              <Ionicons name="help-circle" size={32} color="#FFF" />
+              <Ionicons name="help-circle-outline" size={32} color="#FFF" />
             </View>
             <Text style={[styles.featureTitle, { color: theme.text }]}>Self-Discovery Quizzes</Text>
             <Text style={[styles.featureDesc, { color: theme.textSecondary }]}>Unlock insights about your study habits</Text>
@@ -197,7 +208,7 @@ const ProTrekkerScreen = () => {
           {/* Feature 8 - Protection Center */}
           <View style={styles.featureCard}>
             <View style={[styles.featureIcon, { backgroundColor: '#EF5350' }]}>
-              <Ionicons name="shield-checkmark" size={32} color="#FFF" />
+              <Ionicons name="shield-checkmark-outline" size={32} color="#FFF" />
             </View>
             <Text style={[styles.featureTitle, { color: theme.text }]}>App Blocking</Text>
             <Text style={[styles.featureDesc, { color: theme.textSecondary }]}>Block distracting apps and websites during focus time</Text>
@@ -206,7 +217,7 @@ const ProTrekkerScreen = () => {
           {/* Feature 9 - Pro Badge */}
           <View style={styles.featureCard}>
             <View style={[styles.featureIcon, { backgroundColor: '#FFA726' }]}>
-              <Ionicons name="trophy" size={32} color="#FFF" />
+              <Ionicons name="trophy-outline" size={32} color="#FFF" />
             </View>
             <Text style={[styles.featureTitle, { color: theme.text }]}>Pro Badge</Text>
             <Text style={[styles.featureDesc, { color: theme.textSecondary }]}>Stand out in the community leaderboard</Text>
@@ -230,7 +241,7 @@ const ProTrekkerScreen = () => {
               <View style={styles.testimonialFooter}>
                 <Text style={styles.testimonialAuthor}>Sarah K., College Student</Text>
                 <View style={styles.testimonialAvatar}>
-                  <Ionicons name="person" size={20} color="#FFF" />
+                  <Ionicons name="person-outline" size={20} color="#FFF" />
                 </View>
               </View>
             </View>
@@ -242,7 +253,7 @@ const ProTrekkerScreen = () => {
               <View style={styles.testimonialFooter}>
                 <Text style={styles.testimonialAuthor}>Marcus T., Graduate Student</Text>
                 <View style={styles.testimonialAvatar}>
-                  <Ionicons name="person" size={20} color="#FFF" />
+                  <Ionicons name="person-outline" size={20} color="#FFF" />
                 </View>
               </View>
             </View>
@@ -254,7 +265,7 @@ const ProTrekkerScreen = () => {
               <View style={styles.testimonialFooter}>
                 <Text style={styles.testimonialAuthor}>Emma L., Medical Student</Text>
                 <View style={styles.testimonialAvatar}>
-                  <Ionicons name="person" size={20} color="#FFF" />
+                  <Ionicons name="person-outline" size={20} color="#FFF" />
                 </View>
               </View>
             </View>
@@ -269,8 +280,8 @@ const ProTrekkerScreen = () => {
             resizeMode="cover"
           />
           <View style={styles.editorPicksOverlay}>
-            <Ionicons name="trophy" size={40} color="#FFA726" style={styles.leftIcon} />
-            <Ionicons name="star" size={40} color="#FFA726" style={[styles.leftIcon, styles.rightIcon]} />
+            <Ionicons name="trophy-outline" size={40} color="#FFA726" style={styles.leftIcon} />
+            <Ionicons name="star-outline" size={40} color="#FFA726" style={[styles.leftIcon, styles.rightIcon]} />
             <Text style={styles.editorPicksText}>HIKEWISE PRO</Text>
             <Text style={styles.editorPicksSubtext}>Unlock Your Potential</Text>
           </View>
@@ -278,7 +289,7 @@ const ProTrekkerScreen = () => {
 
         {/* Bottom Padding */}
         <View style={{ height: 40 }} />
-      </ScrollView>
+      </Animated.ScrollView>
     </SafeAreaView>
   );
 };

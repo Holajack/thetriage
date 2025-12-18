@@ -1,14 +1,14 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platform, KeyboardAvoidingView } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 
 const QUIZ_OPTIONS = [
-  { label: 'Create a quiz on my current topic', icon: <MaterialCommunityIcons name="clipboard-text-outline" size={22} color="#1B5E20" /> },
+  { label: 'Create a quiz on my current topic', icon: <Ionicons name="clipboard-outline" size={22} color="#1B5E20" /> },
   { label: 'Practice with a random quiz', icon: <Ionicons name="shuffle-outline" size={22} color="#1B5E20" /> },
   { label: 'Teach me this topic', icon: <Ionicons name="school-outline" size={22} color="#1B5E20" /> },
   { label: 'Review my quiz results', icon: <Ionicons name="bar-chart-outline" size={22} color="#1B5E20" /> },
-  { label: 'More quiz options', icon: <Ionicons name="ellipsis-horizontal" size={22} color="#1B5E20" /> },
+  { label: 'More quiz options', icon: <Ionicons name="ellipsis-horizontal-outline" size={22} color="#1B5E20" /> },
 ];
 
 const QuizPromptScreen: React.FC = () => {
@@ -31,7 +31,7 @@ const QuizPromptScreen: React.FC = () => {
             <View style={styles.inputBarRow}>
               <TextInput style={styles.inputBar} placeholder="Ask anything about quizzes..." placeholderTextColor="#BDBDBD" />
               <TouchableOpacity style={styles.micBtn}>
-                <Ionicons name="mic" size={22} color="#FFF" />
+                <Ionicons name="mic-outline" size={22} color="#FFF" />
               </TouchableOpacity>
             </View>
           </View>

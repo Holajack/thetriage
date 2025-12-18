@@ -1,24 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  FlatList, 
-  Alert, 
-  Modal, 
-  ActivityIndicator,
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  FlatList,
+  Alert,
+  Modal,
   Platform,
   Linking
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
 import { supabase } from '../../utils/supabase';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import { WebView } from 'react-native-webview';
+import { ShimmerLoader } from '../../components/premium/ShimmerLoader';
+import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
+import { useFocusAnimationKey } from '../../utils/animationUtils';
 
 const BUCKET = 'e-books';
 
@@ -34,6 +36,9 @@ interface UploadedBook {
 const EBooksScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const { theme } = useTheme();
+
+  // Force animations to replay on every screen focus
+  const focusKey = useFocusAnimationKey();
 
   const [books, setBooks] = useState<UploadedBook[]>([]);
   const [loading, setLoading] = useState(false);
@@ -108,7 +113,7 @@ const EBooksScreen: React.FC = () => {
           onPress={() => navigation.navigate('Bonuses' as never)}
           style={{ marginLeft: 8 }}
         >
-          <Ionicons name="arrow-back" size={24} color={theme.primary} />
+          <Ionicons name="arrow-back-outline" size={24} color={theme.primary} />
         </TouchableOpacity>
       ),
       headerRight: () => null, // Remove hamburger menu
@@ -386,30 +391,39 @@ const EBooksScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={styles.content}>
-        <Text style={[styles.subtitle, { color: theme.text }]}>
-          Upload your textbooks and class materials to access them anytime, anywhere.
-        </Text>
-
-        <TouchableOpacity
-          style={[styles.uploadArea, { borderColor: theme.primary }]}
-          onPress={() => setShowDisclaimer(true)}
-          disabled={loading}
+      <Animated.View
+        key={`content-${focusKey}`}
+        entering={FadeInUp.duration(300)}
+        style={styles.content}
+      >
+        <Animated.Text
+          entering={FadeIn.delay(100).duration(250)}
+          style={[styles.subtitle, { color: theme.text }]}
         >
-          {loading ? (
-            <ActivityIndicator size="large" color={theme.primary} />
-          ) : (
-            <>
-              <MaterialCommunityIcons name="cloud-upload" size={40} color={theme.primary} />
-              <Text style={[styles.uploadText, { color: theme.text }]}>
-                Upload New E-Book
-              </Text>
-              <Text style={[styles.uploadSubtext, { color: theme.text + '99' }]}>
-                Tap to select PDF files (up to 100MB)
-              </Text>
-            </>
-          )}
-        </TouchableOpacity>
+          Upload your textbooks and class materials to access them anytime, anywhere.
+        </Animated.Text>
+
+        <Animated.View entering={FadeInUp.delay(150).duration(300)}>
+          <TouchableOpacity
+            style={[styles.uploadArea, { borderColor: theme.primary }]}
+            onPress={() => setShowDisclaimer(true)}
+            disabled={loading}
+          >
+            {loading ? (
+              <ShimmerLoader variant="circular" size={48} />
+            ) : (
+              <>
+                <Ionicons name="cloud-upload-outline" size={40} color={theme.primary} />
+                <Text style={[styles.uploadText, { color: theme.text }]}>
+                  Upload New E-Book
+                </Text>
+                <Text style={[styles.uploadSubtext, { color: theme.text + '99' }]}>
+                  Tap to select PDF files (up to 100MB)
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </Animated.View>
 
         <FlatList
           data={books}
@@ -417,7 +431,7 @@ const EBooksScreen: React.FC = () => {
           renderItem={({ item }) => (
             <View style={[styles.bookItem, { backgroundColor: theme.card }]}>
               <View style={styles.bookIcon}>
-                <MaterialCommunityIcons name="file-pdf-box" size={32} color={theme.primary} />
+                <Ionicons name="document-text-outline" size={32} color={theme.primary} />
               </View>
               <View style={styles.bookInfo}>
                 <Text style={[styles.bookTitle, { color: theme.text }]} numberOfLines={2}>
@@ -437,11 +451,11 @@ const EBooksScreen: React.FC = () => {
                   <Ionicons name="eye-outline" size={18} color={theme.primary} />
                 </TouchableOpacity>
                 
-                <TouchableOpacity 
-                  onPress={() => sendToNora(item)} 
+                <TouchableOpacity
+                  onPress={() => sendToNora(item)}
                   style={[styles.actionButton, { backgroundColor: '#FF5722' + '15' }]}
                 >
-                  <MaterialCommunityIcons name="robot" size={18} color="#FF5722" />
+                  <Ionicons name="chatbubble-ellipses-outline" size={18} color="#FF5722" />
                 </TouchableOpacity>
                 
                 <TouchableOpacity 
@@ -456,7 +470,7 @@ const EBooksScreen: React.FC = () => {
           contentContainerStyle={styles.listContainer}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <MaterialCommunityIcons name="book-open-page-variant" size={64} color={theme.text + '33'} />
+              <Ionicons name="book-outline" size={64} color={theme.text + '33'} />
               <Text style={[styles.emptyText, { color: theme.text + '99' }]}>
                 No e-books uploaded yet
               </Text>
@@ -466,14 +480,14 @@ const EBooksScreen: React.FC = () => {
             </View>
           }
         />
-      </View>
+      </Animated.View>
 
       {/* Enhanced Disclaimer Modal */}
       <Modal visible={showDisclaimer} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
             <View style={styles.modalHeader}>
-              <MaterialCommunityIcons name="shield-check" size={32} color={theme.primary} />
+              <Ionicons name="shield-checkmark-outline" size={32} color={theme.primary} />
               <Text style={[styles.modalTitle, { color: theme.text }]}>
                 Upload Agreement
               </Text>

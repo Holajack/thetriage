@@ -41,25 +41,25 @@ const getWeekBounds = (): { startOfWeek: Date; endOfWeek: Date } => {
  */
 export const getWeeklyProgress = async (userId: string): Promise<WeeklyProgress | null> => {
   try {
-    // Get user's weekly goal
+    // Get user's weekly goal from onboarding_preferences table
     const { data: onboarding, error: onboardingError } = await supabase
-      .from('onboarding')
+      .from('onboarding_preferences')
       .select('weekly_focus_goal')
       .eq('user_id', userId)
       .single();
 
     if (onboardingError || !onboarding) {
-      console.error('Error fetching weekly goal:', onboardingError);
-      return null;
+      // If no onboarding data, use default of 10 hours
+      console.log('No onboarding data found, using default weekly goal');
     }
 
-    const goalHours = onboarding.weekly_focus_goal || 10;
+    const goalHours = onboarding?.weekly_focus_goal || 10;
     const { startOfWeek, endOfWeek } = getWeekBounds();
 
     // Fetch all completed sessions for this week
     const { data: sessions, error: sessionsError } = await supabase
       .from('focus_sessions')
-      .select('duration_minutes, duration_seconds, start_time')
+      .select('duration_seconds, start_time')
       .eq('user_id', userId)
       .eq('status', 'completed')
       .gte('start_time', startOfWeek.toISOString())
@@ -70,9 +70,9 @@ export const getWeeklyProgress = async (userId: string): Promise<WeeklyProgress 
       return null;
     }
 
-    // Calculate total minutes (use duration_seconds if duration_minutes is not set)
+    // Calculate total minutes from duration_seconds
     const totalMinutes = (sessions || []).reduce((sum, session) => {
-      const minutes = session.duration_minutes || Math.floor((session.duration_seconds || 0) / 60);
+      const minutes = Math.floor((session.duration_seconds || 0) / 60);
       return sum + minutes;
     }, 0);
 

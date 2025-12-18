@@ -1,9 +1,14 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../../utils/supabase';
+import { AnimatedButton } from '../../components/premium/AnimatedButton';
+import { useEntranceAnimation, useSuccessAnimation, triggerHaptic } from '../../utils/animationUtils';
+import { Spacing } from '../../theme/premiumTheme';
 
 const ForgotPasswordScreen = () => {
   const navigation = useNavigation();
@@ -12,18 +17,30 @@ const ForgotPasswordScreen = () => {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
+  // Entrance animations
+  const headerAnimation = useEntranceAnimation(0);
+  const formAnimation = useEntranceAnimation(200);
+  const buttonAnimation = useEntranceAnimation(400);
+  const { animatedStyle: successStyle, celebrate } = useSuccessAnimation();
+
   const handleReset = async () => {
     setLoading(true);
     setMessage('');
     setError('');
+    triggerHaptic('buttonPress');
+
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: 'hikewise://reset-password',
     });
     setLoading(false);
+
     if (error) {
       setError(error.message);
+      triggerHaptic('error');
     } else {
       setMessage('Password reset email sent! Check your inbox and click the link to reset your password.');
+      triggerHaptic('success');
+      celebrate();
     }
   };
 
@@ -34,31 +51,65 @@ const ForgotPasswordScreen = () => {
       style={styles.container}
     >
       <SafeAreaView style={styles.safeArea}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Text style={styles.backArrow}>{'<'} </Text>
-          <Text style={styles.backText}>Back to Login</Text>
-        </TouchableOpacity>
-        <View style={styles.content}>
-          <Text style={styles.title}>Forgot Password?</Text>
-          <Text style={styles.subtitle}>Enter your email to receive a password reset link.</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor="#B8E6C1"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-          {message ? <Text style={styles.success}>{message}</Text> : null}
-          <TouchableOpacity 
-            style={[styles.button, (loading || !email) && styles.buttonDisabled]} 
-            onPress={handleReset} 
-            disabled={loading || !email}
+        <Animated.View style={headerAnimation}>
+          <TouchableOpacity
+            onPress={() => {
+              triggerHaptic('buttonPress');
+              navigation.goBack();
+            }}
+            style={styles.backButton}
           >
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Send Reset Link</Text>}
+            <Text style={styles.backArrow}>{'<'} </Text>
+            <Text style={styles.backText}>Back to Login</Text>
           </TouchableOpacity>
+        </Animated.View>
+
+        <View style={styles.content}>
+          <Animated.View style={formAnimation}>
+            <Ionicons name="mail-outline" size={64} color="#4CAF50" style={styles.icon} />
+            <Text style={styles.title}>Forgot Password?</Text>
+            <Text style={styles.subtitle}>Enter your email to receive a password reset link.</Text>
+          </Animated.View>
+
+          <Animated.View style={[formAnimation, { width: '100%' }]}>
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor="#B8E6C1"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+            {error ? (
+              <Animated.View entering={FadeIn} exiting={FadeOut}>
+                <Text style={styles.error}>{error}</Text>
+              </Animated.View>
+            ) : null}
+            {message ? (
+              <Animated.View style={successStyle} entering={FadeIn} exiting={FadeOut}>
+                <View style={styles.successContainer}>
+                  <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+                  <Text style={styles.success}>{message}</Text>
+                </View>
+              </Animated.View>
+            ) : null}
+          </Animated.View>
+
+          <Animated.View style={[buttonAnimation, { width: '100%' }]}>
+            <AnimatedButton
+              title="Send Reset Link"
+              onPress={handleReset}
+              variant="primary"
+              size="large"
+              disabled={loading || !email}
+              loading={loading}
+              gradient={true}
+              gradientColors={['#4CAF50', '#45A049']}
+              fullWidth={true}
+              hapticFeedback={true}
+            />
+          </Animated.View>
         </View>
       </SafeAreaView>
     </LinearGradient>
@@ -94,6 +145,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
+  },
+  icon: {
+    alignSelf: 'center',
+    marginBottom: 24,
   },
   title: {
     fontSize: 28,
@@ -159,14 +214,21 @@ const styles = StyleSheet.create({
   },
   success: {
     color: '#4CAF50',
-    marginBottom: 12,
     textAlign: 'center',
+    fontSize: 15,
+    fontWeight: '600',
+    marginLeft: 8,
+    flex: 1,
+  },
+  successContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: 'rgba(76, 175, 80, 0.1)',
-    padding: 8,
+    padding: 12,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(76, 175, 80, 0.3)',
-    width: '100%',
+    marginBottom: 12,
   },
 });
 

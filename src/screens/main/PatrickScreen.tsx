@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Image, ScrollView, Modal, Platform, KeyboardAvoidingView, Alert, ActivityIndicator } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import SessionReportScreen from './SessionReportScreen';
@@ -8,6 +8,21 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import { supabase } from '../../utils/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import * as Haptics from 'expo-haptics';
+import { AnimatedButton } from '../../components/premium/AnimatedButton';
+import { ShimmerLoader } from '../../components/premium/ShimmerLoader';
+import { StaggeredItem } from '../../components/premium/StaggeredList';
+import { useFloatingAnimation, usePulseAnimation, useEntranceAnimation } from '../../utils/animationUtils';
+import { MascotState, MascotAnimationDurations } from '../../theme/premiumTheme';
+import AnimatedView, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withRepeat,
+  withSequence,
+  withTiming,
+  Easing
+} from 'react-native-reanimated';
 
 interface PDFContext {
   title: string;
@@ -93,11 +108,26 @@ const PatrickHomeScreen = ({ nickname }: { nickname: string }) => {
   const [chatModalVisible, setChatModalVisible] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [mascotState, setMascotState] = useState<MascotState>('pumped');
   const { user } = useAuth();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
+  // Patrick animations - more energetic
+  const floatingAnim = useFloatingAnimation();
+  const entranceAnim = useEntranceAnimation(100);
+
   useEffect(() => {
     fetchChatHistory();
+
+    // Patrick stays pumped for motivation
+    setTimeout(() => {
+      setMascotState('cheering');
+    }, MascotAnimationDurations.celebrating);
+
+    // Then goes back to coaching
+    setTimeout(() => {
+      setMascotState('coaching');
+    }, MascotAnimationDurations.celebrating + 2000);
   }, []);
 
   const fetchChatHistory = async () => {
@@ -124,6 +154,8 @@ const PatrickHomeScreen = ({ nickname }: { nickname: string }) => {
   };
 
   const handleCardPress = (title: string, action: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setMascotState('excited');
     navigation.navigate('PatrickSpeak', { initialMessage: title });
   };
 
@@ -155,25 +187,26 @@ const PatrickHomeScreen = ({ nickname }: { nickname: string }) => {
       
       <KeyboardAwareScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 120 }} enableOnAndroid={true} extraScrollHeight={80}>
         {FOCUS_TOPICS.map((topic, idx) => (
-          <TouchableOpacity
-            key={topic.title}
-            style={{ 
-              backgroundColor: theme.card, 
-              borderRadius: 20, 
-              marginHorizontal: 16, 
-              marginBottom: 18, 
-              padding: 20, 
-              shadowColor: '#000', 
-              shadowOpacity: 0.03, 
-              shadowRadius: 4, 
-              elevation: 1
-            }}
-            activeOpacity={0.85}
-            onPress={() => handleCardPress(topic.title, topic.action)}
-          >
-            <Text style={{ fontSize: 20, fontWeight: 'bold', color: theme.text, marginBottom: 4 }}>{topic.title}</Text>
-            <Text style={{ color: theme.text, fontSize: 15 }}>{topic.subtitle}</Text>
-          </TouchableOpacity>
+          <StaggeredItem key={topic.title} index={idx} delay="fast" direction="up">
+            <TouchableOpacity
+              style={{
+                backgroundColor: theme.card,
+                borderRadius: 20,
+                marginHorizontal: 16,
+                marginBottom: 18,
+                padding: 20,
+                shadowColor: '#000',
+                shadowOpacity: 0.03,
+                shadowRadius: 4,
+                elevation: 1
+              }}
+              activeOpacity={0.85}
+              onPress={() => handleCardPress(topic.title, topic.action)}
+            >
+              <Text style={{ fontSize: 20, fontWeight: 'bold', color: theme.text, marginBottom: 4 }}>{topic.title}</Text>
+              <Text style={{ color: theme.text, fontSize: 15 }}>{topic.subtitle}</Text>
+            </TouchableOpacity>
+          </StaggeredItem>
         ))}
         
         {/* Recent chat history */}
@@ -234,14 +267,16 @@ const PatrickHomeScreen = ({ nickname }: { nickname: string }) => {
               returnKeyType="send"
               onSubmitEditing={handleSendChat}
             />
-            <TouchableOpacity
-              style={{ backgroundColor: theme.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginBottom: 8 }}
+            <AnimatedButton
+              title="Send"
               onPress={handleSendChat}
               disabled={!chatInput.trim()}
-              activeOpacity={0.85}
-            >
-              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 17 }}>Send</Text>
-            </TouchableOpacity>
+              variant="primary"
+              size="large"
+              fullWidth={true}
+              hapticFeedback={true}
+              style={{ marginBottom: 8 }}
+            />
             <TouchableOpacity style={{ alignItems: 'center', marginTop: 2 }} onPress={() => setChatModalVisible(false)}>
               <Text style={{ color: theme.text, fontSize: 16 }}>Cancel</Text>
             </TouchableOpacity>
@@ -262,8 +297,13 @@ export const PatrickSpeakScreen = ({ route }: { route: PatrickSpeakRouteProp }) 
   const [streamedText, setStreamedText] = useState('');
   const [error, setError] = useState('');
   const [activePDF, setActivePDF] = useState<PDFContext | null>(pdfContext || null);
+  const [mascotState, setMascotState] = useState<MascotState>('coaching');
   const scrollViewRef = React.useRef<ScrollView>(null);
   const { theme } = useTheme();
+
+  // Patrick animations
+  const pulseAnim = usePulseAnimation(streaming);
+  const entranceAnim = useEntranceAnimation(0);
 
   useEffect(() => {
     fetchChatHistory();
@@ -336,6 +376,8 @@ export const PatrickSpeakScreen = ({ route }: { route: PatrickSpeakRouteProp }) 
     await saveMessage(textToSend, 'user');
     setStreaming(true);
     setStreamedText('');
+    setMascotState('thinking');
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -392,6 +434,8 @@ export const PatrickSpeakScreen = ({ route }: { route: PatrickSpeakRouteProp }) 
         };
         setChat((prev) => [...prev, patrickMsg]);
         await saveMessage(cleanResponse, 'patrick');
+        setMascotState('coaching');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
         throw new Error('No response from Patrick');
       }
@@ -399,6 +443,7 @@ export const PatrickSpeakScreen = ({ route }: { route: PatrickSpeakRouteProp }) 
       console.error('Patrick request error:', error);
       setError('Sorry, I had trouble connecting. Please try again.');
       setStreaming(false);
+      setMascotState('coaching');
       
       // Add fallback response
       const fallbackMsg: ChatMessage = {
@@ -439,11 +484,11 @@ export const PatrickSpeakScreen = ({ route }: { route: PatrickSpeakRouteProp }) 
   return (
     <View style={speakStyles.container}>
       <View style={speakStyles.headerRow}>
-        <TouchableOpacity 
-          style={speakStyles.backBtn} 
+        <TouchableOpacity
+          style={speakStyles.backBtn}
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="arrow-back" size={24} color={theme.primary} />
+          <Ionicons name="arrow-back-outline" size={24} color={theme.primary} />
         </TouchableOpacity>
         <Text style={speakStyles.speakTitle}>Patrick AI Chat</Text>
         <View style={speakStyles.gridBtn} />
@@ -452,7 +497,7 @@ export const PatrickSpeakScreen = ({ route }: { route: PatrickSpeakRouteProp }) 
       {/* PDF Context Banner */}
       {activePDF && (
         <View style={[speakStyles.pdfBanner, { backgroundColor: theme.primary + '15' }]}>
-          <MaterialCommunityIcons name="file-pdf-box" size={20} color={theme.primary} />
+          <Ionicons name="document-text-outline" size={20} color={theme.primary} />
           <View style={{ flex: 1, marginLeft: 8 }}>
             <Text style={[speakStyles.pdfTitle, { color: theme.primary }]} numberOfLines={1}>
               📖 {activePDF.title}
@@ -461,11 +506,11 @@ export const PatrickSpeakScreen = ({ route }: { route: PatrickSpeakRouteProp }) 
               Patrick can help you study from this document
             </Text>
           </View>
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={() => setActivePDF(null)}
             style={speakStyles.removePdfButton}
           >
-            <Ionicons name="close" size={16} color={theme.primary} />
+            <Ionicons name="close-outline" size={16} color={theme.primary} />
           </TouchableOpacity>
         </View>
       )}
@@ -484,10 +529,12 @@ export const PatrickSpeakScreen = ({ route }: { route: PatrickSpeakRouteProp }) 
         >
           {chat.map(renderBubble)}
           {streaming && (
-            <View style={{ alignSelf: 'flex-start', backgroundColor: '#fff', borderRadius: 18, marginVertical: 4, marginHorizontal: 8, padding: 14, maxWidth: '80%' }}>
-              <Text style={{ color: theme.text, fontSize: 16 }}>{streamedText}<Text style={{ opacity: 0.5 }}>|</Text></Text>
-              <Text style={{ color: '#BDBDBD', fontSize: 11, marginTop: 4 }}>Patrick is typing...</Text>
-            </View>
+            <AnimatedView style={[{ alignSelf: 'flex-start', marginVertical: 4, marginHorizontal: 8, maxWidth: '80%' }, pulseAnim]}>
+              <ShimmerLoader variant="custom" width={200} height={60} />
+              <Text style={{ color: theme.textSecondary, fontSize: 11, marginTop: 4 }}>
+                {mascotState === 'thinking' ? 'Patrick is thinking...' : 'Patrick is typing...'}
+              </Text>
+            </AnimatedView>
           )}
         </ScrollView>
         
@@ -531,20 +578,17 @@ export const PatrickSpeakScreen = ({ route }: { route: PatrickSpeakRouteProp }) 
             multiline
             textAlignVertical="top"
           />
-          <TouchableOpacity
-            style={{
-              backgroundColor: theme.primary,
-              borderRadius: 12,
-              padding: 12,
-              alignItems: 'center',
-              justifyContent: 'center',
-              opacity: input.trim() && !streaming ? 1 : 0.5
-            }}
+          <AnimatedButton
+            title=""
             onPress={() => handleSend()}
             disabled={!input.trim() || streaming}
-          >
-            <Ionicons name="send" size={22} color="#fff" />
-          </TouchableOpacity>
+            loading={streaming}
+            variant="primary"
+            size="medium"
+            icon={<Ionicons name="send-outline" size={22} color="#fff" />}
+            hapticFeedback={true}
+            style={{ padding: 12 }}
+          />
         </View>
       </KeyboardAvoidingView>
       

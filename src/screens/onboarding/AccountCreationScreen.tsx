@@ -1,15 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TextInput, 
-  TouchableOpacity, 
-  Animated, 
-  Alert, 
-  Platform, 
-  ScrollView, 
-  ActivityIndicator 
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  Alert,
+  Platform,
+  ScrollView,
+  ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,6 +17,11 @@ import { useNavigation, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { OnboardingStackParamList } from '../../navigation/types';
 import { useAuth } from '../../context/AuthContext';
+import Animated, { FadeIn, FadeInRight, withSequence, withSpring, useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
+import { AnimatedButton } from '../../components/premium/AnimatedButton';
+import { StaggeredItem } from '../../components/premium/StaggeredList';
+import { useEntranceAnimation, useProgressAnimation } from '../../utils/animationUtils';
 
 type AccountCreationNavigationProp = NativeStackNavigationProp<OnboardingStackParamList, 'AccountCreation'>;
 type AccountCreationRouteProp = RouteProp<OnboardingStackParamList, 'AccountCreation'>;
@@ -25,8 +29,8 @@ type AccountCreationRouteProp = RouteProp<OnboardingStackParamList, 'AccountCrea
 export default function AccountCreationScreen({ route }: { route: AccountCreationRouteProp }) {
   const navigation = useNavigation<AccountCreationNavigationProp>();
   const { signUp } = useAuth();
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
+  const headerAnimation = useEntranceAnimation(0);
+  const progressAnimation = useProgressAnimation(2 / 5); // Step 2 of 5
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -37,53 +41,83 @@ export default function AccountCreationScreen({ route }: { route: AccountCreatio
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
   const [error, setError] = useState('');
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
+  const [validationStates, setValidationStates] = useState({
+    fullName: false,
+    username: false,
+    email: false,
+    password: false,
+    confirmPassword: false,
+  });
 
   const validateEmail = (email: string) => {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    const isValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    setValidationStates(prev => ({ ...prev, email: isValid }));
+    return isValid;
   }
 
   const validatePassword = (password: string) => {
-    return password.length >= 6; // Simplified for now
+    const isValid = password.length >= 6;
+    setValidationStates(prev => ({ ...prev, password: isValid }));
+    return isValid;
+  }
+
+  const handleFullNameChange = (text: string) => {
+    setFullName(text);
+    setValidationStates(prev => ({ ...prev, fullName: text.trim().length > 0 }));
+  }
+
+  const handleUsernameChange = (text: string) => {
+    setUsername(text);
+    setValidationStates(prev => ({ ...prev, username: text.trim().length > 0 }));
+  }
+
+  const handleEmailChange = (text: string) => {
+    setEmail(text);
+    if (text.trim()) validateEmail(text);
+  }
+
+  const handlePasswordChange = (text: string) => {
+    setPassword(text);
+    if (text) validatePassword(text);
+    if (confirmPassword) {
+      setValidationStates(prev => ({ ...prev, confirmPassword: text === confirmPassword }));
+    }
+  }
+
+  const handleConfirmPasswordChange = (text: string) => {
+    setConfirmPassword(text);
+    setValidationStates(prev => ({ ...prev, confirmPassword: text === password && text.length > 0 }));
   }
 
   const handleSignUp = async () => {
     setError('');
     if (!fullName.trim()) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setError('Please enter your full name.');
       return;
     }
     if (!username.trim()) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setError('Please enter a username.');
       return;
     }
     if (!validateEmail(email)) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setError('Please enter a valid email address.');
       return;
     }
     if (!validatePassword(password)) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setError('Password must be at least 6 characters long.');
       return;
     }
     if (password !== confirmPassword) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setError('Passwords do not match.');
       return;
     }
 
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setIsLoading(true);
     const { error: signUpError } = await signUp(email, password, {
       username: username,
@@ -92,14 +126,16 @@ export default function AccountCreationScreen({ route }: { route: AccountCreatio
     setIsLoading(false);
 
     if (signUpError) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setError(signUpError);
       Alert.alert('Sign Up Failed', signUpError);
     } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert('Success', 'Account created successfully! Please check your email to verify your account before logging in.');
       // Navigate to next step in onboarding flow
-      navigation.navigate('ProfileCreation', { 
+      navigation.navigate('ProfileCreation', {
         focusMethod: route.params?.focusMethod,
-        email: email 
+        email: email
       });
     }
   };
@@ -111,18 +147,17 @@ export default function AccountCreationScreen({ route }: { route: AccountCreatio
       style={styles.container}
     >
       <SafeAreaView style={styles.safeArea}>
-        <ScrollView 
-          contentContainerStyle={styles.scrollContent} 
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           keyboardDismissMode="on-drag"
           automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
           contentInsetAdjustmentBehavior="automatic"
-          keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.header}>
-            <TouchableOpacity 
-              onPress={() => navigation.goBack()} 
+          <Animated.View style={[styles.header, headerAnimation]}>
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
               style={styles.backButton}
             >
               <Ionicons name="arrow-back" size={24} color="#E8F5E9" />
@@ -132,95 +167,142 @@ export default function AccountCreationScreen({ route }: { route: AccountCreatio
             <Text style={styles.headerSubtitle}>
               Step 2 of 5 • Let's get your account set up.
             </Text>
-          </View>
+          </Animated.View>
 
           <View style={styles.formContainer}>
-            <Text style={styles.inputLabel}>Full Name *</Text>
-            <TextInput
-              style={styles.input}
-              value={fullName}
-              onChangeText={setFullName}
-              placeholder="Enter your full name"
-              placeholderTextColor="#B8E6C1"
-              autoCapitalize="words"
-            />
+            <StaggeredItem index={0} delay="fast">
+              <View>
+                <Text style={styles.inputLabel}>Full Name *</Text>
+                <View style={styles.inputWrapper}>
+                  <TextInput
+                    style={styles.input}
+                    value={fullName}
+                    onChangeText={handleFullNameChange}
+                    placeholder="Enter your full name"
+                    placeholderTextColor="#B8E6C1"
+                    autoCapitalize="words"
+                  />
+                  {validationStates.fullName && fullName.trim() && (
+                    <Animated.View entering={FadeIn.duration(200)} style={styles.validationIcon}>
+                      <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                    </Animated.View>
+                  )}
+                </View>
+              </View>
+            </StaggeredItem>
 
-            <Text style={styles.inputLabel}>Username *</Text>
-            <TextInput
-              style={styles.input}
-              value={username}
-              onChangeText={setUsername}
-              placeholder="Choose a unique username"
-              placeholderTextColor="#B8E6C1"
-              autoCapitalize="none"
-            />
+            <StaggeredItem index={1} delay="fast">
+              <View>
+                <Text style={styles.inputLabel}>Username *</Text>
+                <View style={styles.inputWrapper}>
+                  <TextInput
+                    style={styles.input}
+                    value={username}
+                    onChangeText={handleUsernameChange}
+                    placeholder="Choose a unique username"
+                    placeholderTextColor="#B8E6C1"
+                    autoCapitalize="none"
+                  />
+                  {validationStates.username && username.trim() && (
+                    <Animated.View entering={FadeIn.duration(200)} style={styles.validationIcon}>
+                      <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                    </Animated.View>
+                  )}
+                </View>
+              </View>
+            </StaggeredItem>
 
-            <Text style={styles.inputLabel}>Email Address *</Text>
-            <TextInput
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="you@example.com"
-              placeholderTextColor="#B8E6C1"
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
+            <StaggeredItem index={2} delay="fast">
+              <View>
+                <Text style={styles.inputLabel}>Email Address *</Text>
+                <View style={styles.inputWrapper}>
+                  <TextInput
+                    style={styles.input}
+                    value={email}
+                    onChangeText={handleEmailChange}
+                    placeholder="you@example.com"
+                    placeholderTextColor="#B8E6C1"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
+                  {validationStates.email && email.trim() && (
+                    <Animated.View entering={FadeIn.duration(200)} style={styles.validationIcon}>
+                      <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                    </Animated.View>
+                  )}
+                </View>
+              </View>
+            </StaggeredItem>
 
-            <Text style={styles.inputLabel}>Password *</Text>
-            <View style={styles.passwordInputContainer}>
-              <TextInput
-                style={styles.input}
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Enter your password"
-                placeholderTextColor="#B8E6C1"
-                secureTextEntry={!isPasswordVisible}
-              />
-              <TouchableOpacity onPress={() => setIsPasswordVisible(!isPasswordVisible)} style={styles.showPasswordButton}>
-                <Ionicons name={isPasswordVisible ? "eye-off-outline" : "eye-outline"} size={24} color="#B8E6C1" />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.passwordHint}>Must be at least 6 characters.</Text>
+            <StaggeredItem index={3} delay="fast">
+              <View>
+                <Text style={styles.inputLabel}>Password *</Text>
+                <View style={styles.passwordInputContainer}>
+                  <TextInput
+                    style={styles.input}
+                    value={password}
+                    onChangeText={handlePasswordChange}
+                    placeholder="Enter your password"
+                    placeholderTextColor="#B8E6C1"
+                    secureTextEntry={!isPasswordVisible}
+                  />
+                  {validationStates.password && password && (
+                    <Animated.View entering={FadeIn.duration(200)} style={styles.validationIconPassword}>
+                      <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                    </Animated.View>
+                  )}
+                  <TouchableOpacity onPress={() => setIsPasswordVisible(!isPasswordVisible)} style={styles.showPasswordButton}>
+                    <Ionicons name={isPasswordVisible ? "eye-off-outline" : "eye-outline"} size={24} color="#B8E6C1" />
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.passwordHint}>Must be at least 6 characters.</Text>
+              </View>
+            </StaggeredItem>
 
+            <StaggeredItem index={4} delay="fast">
+              <View>
+                <Text style={styles.inputLabel}>Confirm Password *</Text>
+                <View style={styles.passwordInputContainer}>
+                  <TextInput
+                    style={styles.input}
+                    value={confirmPassword}
+                    onChangeText={handleConfirmPasswordChange}
+                    placeholder="Confirm your password"
+                    placeholderTextColor="#B8E6C1"
+                    secureTextEntry={!isConfirmPasswordVisible}
+                  />
+                  {validationStates.confirmPassword && confirmPassword && (
+                    <Animated.View entering={FadeIn.duration(200)} style={styles.validationIconPassword}>
+                      <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                    </Animated.View>
+                  )}
+                  <TouchableOpacity onPress={() => setIsConfirmPasswordVisible(!isConfirmPasswordVisible)} style={styles.showPasswordButton}>
+                    <Ionicons name={isConfirmPasswordVisible ? "eye-off-outline" : "eye-outline"} size={24} color="#B8E6C1" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </StaggeredItem>
 
-            <Text style={styles.inputLabel}>Confirm Password *</Text>
-            <View style={styles.passwordInputContainer}>
-              <TextInput
-                style={styles.input}
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                placeholder="Confirm your password"
-                placeholderTextColor="#B8E6C1"
-                secureTextEntry={!isConfirmPasswordVisible}
-              />
-              <TouchableOpacity onPress={() => setIsConfirmPasswordVisible(!isConfirmPasswordVisible)} style={styles.showPasswordButton}>
-                <Ionicons name={isConfirmPasswordVisible ? "eye-off-outline" : "eye-outline"} size={24} color="#B8E6C1" />
-              </TouchableOpacity>
-            </View>
-
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            {error ? (
+              <Animated.View entering={FadeInRight.duration(300)}>
+                <Text style={styles.errorText}>{error}</Text>
+              </Animated.View>
+            ) : null}
           </View>
         </ScrollView>
         <View style={styles.bottomContainer}>
-          <TouchableOpacity
-            style={[styles.continueButton, isLoading && styles.continueButtonDisabled]}
+          <AnimatedButton
+            title="Create Account & Continue"
             onPress={handleSignUp}
+            gradient={true}
+            gradientColors={['#4CAF50', '#66BB6A', '#4CAF50']}
+            size="large"
+            fullWidth={true}
+            loading={isLoading}
             disabled={isLoading}
-            activeOpacity={0.8}
-          >
-            {isLoading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <LinearGradient
-                colors={['#4CAF50', '#66BB6A', '#4CAF50']}
-                locations={[0, 0.5, 1]}
-                style={styles.buttonGradient}
-              >
-                <Text style={styles.continueButtonText}>Create Account & Continue</Text>
-                <Ionicons name="arrow-forward" size={20} color="#FFFFFF" style={{ marginLeft: 8 }} />
-              </LinearGradient>
-            )}
-          </TouchableOpacity>
+            icon={<Ionicons name="arrow-forward" size={20} color="#FFFFFF" />}
+            iconPosition="right"
+          />
           <View style={styles.progressIndicator}>
             <View style={styles.progressDot} />
             <View style={[styles.progressDot, styles.progressDotActive]} />
@@ -282,14 +364,18 @@ const styles = StyleSheet.create({
   },
   formContainer: {
     width: '100%',
-    marginBottom: 20, // Add some space before the bottom container might overlap
+    marginBottom: 20,
   },
   inputLabel: {
     fontSize: 16,
     fontWeight: '500',
     color: '#E8F5E9',
     marginBottom: 8,
-    marginTop: 16, // Space between input fields
+    marginTop: 16,
+  },
+  inputWrapper: {
+    position: 'relative',
+    width: '100%',
   },
   input: {
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
@@ -300,20 +386,32 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: 'rgba(232, 245, 233, 0.2)',
-    width: '100%', // Ensure input takes full width of its container
+    width: '100%',
+  },
+  validationIcon: {
+    position: 'absolute',
+    right: 15,
+    top: '50%',
+    marginTop: -10,
   },
   passwordInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    position: 'relative', // For absolute positioning of the button
+    position: 'relative',
     width: '100%',
+  },
+  validationIconPassword: {
+    position: 'absolute',
+    right: 50,
+    top: '50%',
+    marginTop: -10,
   },
   showPasswordButton: {
     position: 'absolute',
     right: 15,
-    height: '100%', 
+    height: '100%',
     justifyContent: 'center',
-    paddingHorizontal: 5, 
+    paddingHorizontal: 5,
   },
   passwordHint: {
     fontSize: 13,
@@ -341,37 +439,11 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: 25, // Adjusted for safe area and progress dots
-    backgroundColor: 'rgba(15, 36, 25, 0.8)', // Slight dark overlay to distinguish
+    paddingBottom: 25,
+    backgroundColor: 'rgba(15, 36, 25, 0.8)',
     borderTopWidth: 1,
     borderTopColor: 'rgba(232, 245, 233, 0.1)',
-  },
-  continueButton: {
-    borderRadius: 12,
-    marginBottom: 20,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    height: 56, // Fixed height for the button
-    justifyContent: 'center', // Center content vertically
-  },
-  continueButtonDisabled: {
-    opacity: 0.6,
-  },
-  buttonGradient: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 16, // This might be redundant if height is fixed on continueButton
-    borderRadius: 12,
-    height: '100%', // Ensure gradient fills the button
-  },
-  continueButtonText: {
-    color: '#FFFFFF',
-    fontSize: 17,
-    fontWeight: '600',
+    gap: 20,
   },
   progressIndicator: {
     flexDirection: 'row',

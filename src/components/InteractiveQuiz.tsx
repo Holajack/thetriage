@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Modal } from 'react-native';
-import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { QuizQuestion, QuizResult, STUDY_HABITS_QUESTIONS, LEARNING_STYLE_QUESTIONS, MOTIVATION_PROFILE_QUESTIONS, FOCUS_TYPE_QUESTIONS, STUDY_HABITS_RESULTS, LEARNING_STYLE_RESULTS, MOTIVATION_PROFILE_RESULTS, FOCUS_TYPE_RESULTS } from '../data/quizData';
 import { saveQuizResultLocally, saveQuizResultToDatabase } from '../utils/quizStorage';
@@ -324,7 +324,7 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({ quizType, onComplete,
   if (quizQuestions.length === 0) {
     return (
       <View style={styles.loadingContainer}>
-        <MaterialCommunityIcons name="loading" size={40} color={theme.primary} />
+        <Ionicons name="hourglass-outline" size={40} color={theme.primary} />
         <Text style={styles.loadingText}>Preparing your quiz...</Text>
       </View>
     );
@@ -335,7 +335,7 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({ quizType, onComplete,
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={handleExit} style={styles.exitButton}>
-          <Ionicons name="close" size={24} color={theme.text} />
+          <Ionicons name="close-outline" size={24} color={theme.text} />
         </TouchableOpacity>
         <View style={styles.headerInfo}>
           <Text style={[styles.questionCounter, { color: theme.text }]}>
@@ -394,7 +394,7 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({ quizType, onComplete,
                     }
                   ]}>
                     {isSelected && (
-                      <Ionicons name="checkmark" size={16} color="#FFF" />
+                      <Ionicons name="checkmark-outline" size={16} color="#FFF" />
                     )}
                   </View>
                   <Text style={[
@@ -415,7 +415,7 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({ quizType, onComplete,
         <TouchableOpacity
           style={[
             styles.navButton,
-            { 
+            {
               backgroundColor: currentQuestionIndex > 0 ? theme.card : 'transparent',
               opacity: currentQuestionIndex > 0 ? 1 : 0.5
             }
@@ -423,7 +423,7 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({ quizType, onComplete,
           onPress={goToPreviousQuestion}
           disabled={currentQuestionIndex === 0}
         >
-          <Ionicons name="chevron-back" size={20} color={theme.text} />
+          <Ionicons name="chevron-back-outline" size={20} color={theme.text} />
           <Text style={[styles.navButtonText, { color: theme.text }]}>Previous</Text>
         </TouchableOpacity>
 
@@ -445,9 +445,9 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({ quizType, onComplete,
               {isSaving ? 'Saving...' : 'Complete Quiz'}
             </Text>
             {isSaving ? (
-              <MaterialCommunityIcons name="loading" size={20} color="#FFF" />
+              <Ionicons name="hourglass-outline" size={20} color="#FFF" />
             ) : (
-              <Ionicons name="checkmark" size={20} color="#FFF" />
+              <Ionicons name="checkmark-outline" size={20} color="#FFF" />
             )}
           </TouchableOpacity>
         )}
@@ -462,7 +462,7 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({ quizType, onComplete,
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
-            <MaterialCommunityIcons name="alert-circle-outline" size={48} color="#FF9800" />
+            <Ionicons name="alert-circle-outline" size={48} color="#FF9800" />
             <Text style={[styles.modalTitle, { color: theme.text }]}>Exit Quiz?</Text>
             <Text style={[styles.modalDescription, { color: theme.text }]}>
               You've answered {Object.keys(answers).length} questions. Your progress will be lost if you exit now.

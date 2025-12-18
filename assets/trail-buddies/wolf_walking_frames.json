@@ -1,0 +1,208 @@
+{
+  "spriteSheet": "wolf_walking_optimized.png",
+  "frameWidth": 200,
+  "frameHeight": 200,
+  "sheetWidth": 5600,
+  "sheetHeight": 200,
+  "columns": 28,
+  "rows": 1,
+  "totalFrames": 28,
+  "frames": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 200,
+      "frameIndex": 0
+    },
+    {
+      "x": 200,
+      "y": 0,
+      "width": 200,
+      "height": 200,
+      "frameIndex": 1
+    },
+    {
+      "x": 400,
+      "y": 0,
+      "width": 200,
+      "height": 200,
+      "frameIndex": 2
+    },
+    {
+      "x": 600,
+      "y": 0,
+      "width": 200,
+      "height": 200,
+      "frameIndex": 3
+    },
+    {
+      "x": 800,
+      "y": 0,
+      "width": 200,
+      "height": 200,
+      "frameIndex": 4
+    },
+    {
+      "x": 1000,
+      "y": 0,
+      "width": 200,
+      "height": 200,
+      "frameIndex": 5
+    },
+    {
+      "x": 1200,
+      "y": 0,
+      "width": 200,
+      "height": 200,
+      "frameIndex": 6
+    },
+    {
+      "x": 1400,
+      "y": 0,
+      "width": 200,
+      "height": 200,
+      "frameIndex": 7
+    },
+    {
+      "x": 1600,
+      "y": 0,
+      "width": 200,
+      "height": 200,
+      "frameIndex": 8
+    },
+    {
+      "x": 1800,
+      "y": 0,
+      "width": 200,
+      "height": 200,
+      "frameIndex": 9
+    },
+    {
+      "x": 2000,
+      "y": 0,
+      "width": 200,
+      "height": 200,
+      "frameIndex": 10
+    },
+    {
+      "x": 2200,
+      "y": 0,
+      "width": 200,
+      "height": 200,
+      "frameIndex": 11
+    },
+    {
+      "x": 2400,
+      "y": 0,
+      "width": 200,
+      "height": 200,
+      "frameIndex": 12
+    },
+    {
+      "x": 2600,
+      "y": 0,
+      "width": 200,
+      "height": 200,
+      "frameIndex": 13
+    },
+    {
+      "x": 2800,
+      "y": 0,
+      "width": 200,
+      "height": 200,
+      "frameIndex": 14
+    },
+    {
+      "x": 3000,
+      "y": 0,
+      "width": 200,
+      "height": 200,
+      "frameIndex": 15
+    },
+    {
+      "x": 3200,
+      "y": 0,
+      "width": 200,
+      "height": 200,
+      "frameIndex": 16
+    },
+    {
+      "x": 3400,
+      "y": 0,
+      "width": 200,
+      "height": 200,
+      "frameIndex": 17
+    },
+    {
+      "x": 3600,
+      "y": 0,
+      "width": 200,
+      "height": 200,
+      "frameIndex": 18
+    },
+    {
+      "x": 3800,
+      "y": 0,
+      "width": 200,
+      "height": 200,
+      "frameIndex": 19
+    },
+    {
+      "x": 4000,
+      "y": 0,
+      "width": 200,
+      "height": 200,
+      "frameIndex": 20
+    },
+    {
+      "x": 4200,
+      "y": 0,
+      "width": 200,
+      "height": 200,
+      "frameIndex": 21
+    },
+    {
+      "x": 4400,
+      "y": 0,
+      "width": 200,
+      "height": 200,
+      "frameIndex": 22
+    },
+    {
+      "x": 4600,
+      "y": 0,
+      "width": 200,
+      "height": 200,
+      "frameIndex": 23
+    },
+    {
+      "x": 4800,
+      "y": 0,
+      "width": 200,
+      "height": 200,
+      "frameIndex": 24
+    },
+    {
+      "x": 5000,
+      "y": 0,
+      "width": 200,
+      "height": 200,
+      "frameIndex": 25
+    },
+    {
+      "x": 5200,
+      "y": 0,
+      "width": 200,
+      "height": 200,
+      "frameIndex": 26
+    },
+    {
+      "x": 5400,
+      "y": 0,
+      "width": 200,
+      "height": 200,
+      "frameIndex": 27
+    }
+  ]
+}

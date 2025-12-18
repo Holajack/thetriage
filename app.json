@@ -56,7 +56,12 @@
     "plugins": [
       "expo-localization",
       "expo-asset",
-      "expo-barcode-scanner"
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera for QR code scanning and document capture."
+        }
+      ]
     ],
     "owner": "hollaj"
   }

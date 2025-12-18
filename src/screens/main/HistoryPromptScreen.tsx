@@ -1,14 +1,14 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platform, KeyboardAvoidingView } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 
 const HISTORY_OPTIONS = [
   { label: 'Show my last chat summary', icon: <Ionicons name="time-outline" size={22} color="#1B5E20" /> },
-  { label: 'Pull up an old quiz I created', icon: <MaterialCommunityIcons name="clipboard-text-outline" size={22} color="#1B5E20" /> },
+  { label: 'Pull up an old quiz I created', icon: <Ionicons name="clipboard-outline" size={22} color="#1B5E20" /> },
   { label: 'Review my past answers', icon: <Ionicons name="document-text-outline" size={22} color="#1B5E20" /> },
   { label: 'See my chat history with Patrick', icon: <Ionicons name="chatbubble-ellipses-outline" size={22} color="#1B5E20" /> },
-  { label: 'More history options', icon: <Ionicons name="ellipsis-horizontal" size={22} color="#1B5E20" /> },
+  { label: 'More history options', icon: <Ionicons name="ellipsis-horizontal-outline" size={22} color="#1B5E20" /> },
 ];
 
 const HistoryPromptScreen: React.FC = () => {
@@ -31,7 +31,7 @@ const HistoryPromptScreen: React.FC = () => {
             <View style={styles.inputBarRow}>
               <TextInput style={styles.inputBar} placeholder="Ask anything about your history..." placeholderTextColor="#BDBDBD" />
               <TouchableOpacity style={styles.micBtn}>
-                <Ionicons name="mic" size={22} color="#FFF" />
+                <Ionicons name="mic-outline" size={22} color="#FFF" />
               </TouchableOpacity>
             </View>
           </View>

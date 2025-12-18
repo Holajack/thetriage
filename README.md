@@ -1,4 +1,4 @@
-# Triage System: Study Tracker App
+# Hike Wise: Study Tracker App
 
 A powerful study tracking application designed to help students stay focused, track their progress, and achieve academic goals.
 
@@ -9,22 +9,25 @@ A powerful study tracking application designed to help students stay focused, tr
 - **Progress Tracking**: Track your study time and achievements
 - **Leaderboards**: Compare your progress with friends
 - **Analytics**: Gain insights into your study habits
+- **AI Study Companion (Nora)**: Get personalized study guidance
 - **Personalized Experience**: Customizable settings and preferences
 
 ## Tech Stack
 
 - **Frontend**: React Native with Expo
 - **Backend**: Supabase (PostgreSQL, Authentication, Storage)
+- **AI**: OpenAI GPT integration via Supabase Edge Functions
 - **State Management**: React Context API
 - **Navigation**: React Navigation v6
 - **Styling**: StyleSheet API with custom theming
+- **Animations**: React Native Reanimated
 
 ## Setup
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/your-username/StudyTrackerNew.git
-cd StudyTrackerNew
+git clone https://github.com/your-username/hikewise.git
+cd hikewise
 ```
 
 2. Install dependencies:
@@ -45,9 +48,7 @@ npm start
 
 5. Apply database migrations:
 ```bash
-# In Supabase SQL Editor, run:
-# 1. create_onboarding_tables.sql
-# 2. 20240729000000_add_rls_to_leaderboard_stats.sql
+# In Supabase SQL Editor, run the migrations in order
 ```
 
 ## Deployment
@@ -58,10 +59,11 @@ npm start
 ./deploy.sh
 ```
 
-### Expo
+### Expo / EAS Build
 
 ```bash
-./publish-expo.sh
+npx eas build --platform ios
+npx eas build --platform android
 ```
 
 ## Screenshots
@@ -70,4 +72,4 @@ npm start
 
 ## Credits
 
-© The Triage System
+Hike Wise - Focus. Learn. Succeed.

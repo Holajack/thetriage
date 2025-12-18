@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Animated } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -7,10 +7,81 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 const { useUserAppData } = require('../../utils/userAppData');
 import { BottomTabBar } from '../../components/BottomTabBar';
-import { CircularChart } from '../../components/CircularChart';
+import { CircularChart, AnimatedCircularChart } from '../../components/CircularChart';
 import { UnifiedHeader } from '../../components/UnifiedHeader';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withSpring,
+  withDelay,
+  withSequence,
+  interpolate,
+  runOnJS,
+  Easing,
+  FadeIn,
+  FadeInUp,
+  FadeInDown,
+} from 'react-native-reanimated';
+import {
+  useCounterAnimation,
+  useProgressAnimation,
+  triggerHaptic,
+  useFocusAnimationKey,
+} from '../../utils/animationUtils';
+import { ShimmerLoader, SkeletonStatsGrid } from '../../components/premium/ShimmerLoader';
+import { StaggeredList, StaggeredItem } from '../../components/premium/StaggeredList';
+import { Typography, Spacing, AnimationConfig, TimingConfig } from '../../theme/premiumTheme';
 
 const { width } = Dimensions.get('window');
+
+// Animated Bar Column Component - extracted to properly use hooks
+interface AnimatedBarColumnProps {
+  height: number;
+  maxHeight: number;
+  index: number;
+  label: string;
+  theme: any;
+  timeRange: string;
+  animationProgress: Animated.SharedValue<number>;
+}
+
+const AnimatedBarColumn: React.FC<AnimatedBarColumnProps> = ({
+  height,
+  maxHeight,
+  index,
+  label,
+  theme,
+  timeRange,
+  animationProgress,
+}) => {
+  const animatedStyle = useAnimatedStyle(() => {
+    const percentage = maxHeight > 0 ? (height / maxHeight) * 100 : 0;
+    return {
+      height: `${percentage * animationProgress.value}%`,
+    };
+  });
+
+  return (
+    <Animated.View
+      entering={FadeIn.delay(index * 30).duration(300)}
+      style={styles.barColumn}
+    >
+      <View style={styles.barWrapper}>
+        <Animated.View
+          style={[
+            styles.bar,
+            { backgroundColor: theme.primary },
+            animatedStyle,
+          ]}
+        />
+      </View>
+      <Text style={[styles.barLabel, { color: theme.primary, fontSize: timeRange === 'day' ? 7 : 9 }]}>
+        {label}
+      </Text>
+    </Animated.View>
+  );
+};
 
 const AnalyticsScreen = () => {
   const navigation = useNavigation();
@@ -20,6 +91,9 @@ const AnalyticsScreen = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const { data: userData, isLoading } = useUserAppData();
+
+  // Force animations to replay on every screen focus
+  const focusKey = useFocusAnimationKey();
 
   // Calculate real stats from user data
   const allSessions = userData?.sessions || [];
@@ -179,34 +253,20 @@ const AnalyticsScreen = () => {
     });
   }, [timeRange, currentDate, sessions]);
 
-  // Create animated values for each bar
-  const animatedValues = useRef<Animated.Value[]>([]).current;
+  // Animated stats counters
+  const deepWorkCounter = useCounterAnimation(deepWorkCount, 1000);
+  const balancedCounter = useCounterAnimation(balancedCount, 1000);
+  const sprintCounter = useCounterAnimation(sprintCount, 1000);
+  const totalSessionsCounter = useCounterAnimation(totalSessions, 1200);
 
-  // Animate bars when data changes
+  // Bar animation - single shared value for all bars
+  const barAnimationProgress = useSharedValue(0);
+
+  // Trigger bar animation when data changes
   useEffect(() => {
-    // Ensure we have the right number of animated values
-    while (animatedValues.length < barHeights.length) {
-      animatedValues.push(new Animated.Value(0));
-    }
-    while (animatedValues.length > barHeights.length) {
-      animatedValues.pop();
-    }
-
-    // Reset all animations
-    animatedValues.forEach(anim => anim.setValue(0));
-
-    // Stagger the animations for a wave effect
-    const animations = animatedValues.map((anim, index) =>
-      Animated.timing(anim, {
-        toValue: 1,
-        duration: 800,
-        delay: index * 50, // 50ms delay between each bar
-        useNativeDriver: false,
-      })
-    );
-
-    Animated.parallel(animations).start();
-  }, [timeRange, currentDate, JSON.stringify(barHeights)]);
+    barAnimationProgress.value = 0;
+    barAnimationProgress.value = withDelay(200, withSpring(1, AnimationConfig.gentle));
+  }, [timeRange, currentDate, barHeights.length]);
 
   // Format date display
   const getDateDisplay = () => {
@@ -248,22 +308,101 @@ const AnalyticsScreen = () => {
     setCurrentDate(newDate);
   };
 
+  // Animated Stat Card Component with subtle bounce effect
+  const AnimatedStatCard = ({
+    icon,
+    iconColor,
+    value,
+    label,
+    index
+  }: {
+    icon: string;
+    iconColor: string;
+    value: Animated.SharedValue<number>;
+    label: string;
+    index: number;
+  }) => {
+    // Subtle bounce animation on mount
+    const bounceScale = useSharedValue(0.95);
+
+    useEffect(() => {
+      // Reset and trigger subtle bounce animation with staggered delay
+      bounceScale.value = 0.95;
+      bounceScale.value = withDelay(
+        200 + index * 100, // Staggered delay
+        withSequence(
+          withSpring(1.03, { damping: 12, stiffness: 180 }), // Slight overshoot
+          withSpring(1, { damping: 14, stiffness: 200 }) // Settle smoothly
+        )
+      );
+    }, [focusKey]); // Re-trigger on screen focus
+
+    const bounceStyle = useAnimatedStyle(() => ({
+      transform: [{ scale: bounceScale.value }],
+    }));
+
+    const animatedTextProps = useAnimatedStyle(() => ({
+      opacity: withDelay(index * 100, withTiming(1, { duration: 300 })),
+    }));
+
+    return (
+      <Animated.View
+        style={[styles.smallStatCard, { backgroundColor: theme.card }, bounceStyle]}
+      >
+        <View style={styles.smallStatIcon}>
+          <Ionicons name={icon as any} size={28} color={iconColor} />
+        </View>
+        <Animated.Text style={[styles.smallStatNumber, { color: theme.text }, animatedTextProps]}>
+          {Math.round(value.value)}
+        </Animated.Text>
+        <Text style={[styles.smallStatLabel, { color: theme.primary }]}>{label}</Text>
+      </Animated.View>
+    );
+  };
+
+  // Loading state with shimmer
+  if (isLoading) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+        <UnifiedHeader title="Analytics" onClose={() => navigation.navigate('Home')} />
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 16 }}>
+          <View style={{ marginTop: 20 }}>
+            <SkeletonStatsGrid columns={3} />
+          </View>
+          <View style={{ marginTop: 24, marginBottom: 16 }}>
+            <ShimmerLoader variant="card" height={200} />
+          </View>
+          <View style={{ marginBottom: 16 }}>
+            <ShimmerLoader variant="card" height={300} />
+          </View>
+        </ScrollView>
+        <BottomTabBar currentRoute="Results" />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Unified Header */}
-      <UnifiedHeader title="Pathfinder" onClose={() => navigation.navigate('Home')} />
+      <UnifiedHeader title="Analytics" onClose={() => navigation.navigate('Home')} />
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }}>
+      <ScrollView key={focusKey} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }}>
         {/* Time Range Selector */}
-        <View style={styles.timeRangeContainer}>
-          {['Day', 'Week', 'Month', 'Year'].map((range) => (
+        <Animated.View
+          entering={FadeInDown.delay(100).duration(400).duration(400)}
+          style={styles.timeRangeContainer}
+        >
+          {['Day', 'Week', 'Month', 'Year'].map((range, index) => (
             <TouchableOpacity
               key={range}
               style={[
                 styles.timeRangeButton,
                 timeRange === range.toLowerCase() && [styles.timeRangeButtonActive, { backgroundColor: 'transparent' }]
               ]}
-              onPress={() => setTimeRange(range.toLowerCase())}
+              onPress={() => {
+                triggerHaptic('selection');
+                setTimeRange(range.toLowerCase());
+              }}
             >
               <Text style={[
                 styles.timeRangeText,
@@ -273,50 +412,67 @@ const AnalyticsScreen = () => {
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
+        </Animated.View>
 
         {/* Date Display */}
-        <View style={styles.dateContainer}>
-          <TouchableOpacity onPress={() => navigateDate('prev')}>
+        <Animated.View
+          entering={FadeIn.delay(200).duration(400)}
+          style={styles.dateContainer}
+        >
+          <TouchableOpacity
+            onPress={() => {
+              triggerHaptic('buttonPress');
+              navigateDate('prev');
+            }}
+          >
             <Ionicons name="chevron-back" size={24} color={theme.primary} />
           </TouchableOpacity>
           <Text style={[styles.dateText, { color: theme.primary }]}>
             {getDateDisplay()}
           </Text>
-          <TouchableOpacity onPress={() => navigateDate('next')}>
+          <TouchableOpacity
+            onPress={() => {
+              triggerHaptic('buttonPress');
+              navigateDate('next');
+            }}
+          >
             <Ionicons name="chevron-forward" size={24} color={theme.primary} />
           </TouchableOpacity>
-        </View>
+        </Animated.View>
 
         {/* Stats Cards Row - Session Types */}
-        <View style={styles.statsRow}>
-          <View style={[styles.smallStatCard, { backgroundColor: theme.card }]}>
-            <View style={styles.smallStatIcon}>
-              <Ionicons name="bulb" size={28} color="#9C27B0" />
-            </View>
-            <Text style={[styles.smallStatNumber, { color: theme.text }]}>{deepWorkCount}</Text>
-            <Text style={[styles.smallStatLabel, { color: theme.primary }]}>Deep Work</Text>
-          </View>
-
-          <View style={[styles.smallStatCard, { backgroundColor: theme.card }]}>
-            <View style={styles.smallStatIcon}>
-              <Ionicons name="fitness" size={28} color="#FF9800" />
-            </View>
-            <Text style={[styles.smallStatNumber, { color: theme.text }]}>{balancedCount}</Text>
-            <Text style={[styles.smallStatLabel, { color: theme.primary }]}>Balanced</Text>
-          </View>
-
-          <View style={[styles.smallStatCard, { backgroundColor: theme.card }]}>
-            <View style={styles.smallStatIcon}>
-              <Ionicons name="flash" size={28} color="#2196F3" />
-            </View>
-            <Text style={[styles.smallStatNumber, { color: theme.text }]}>{sprintCount}</Text>
-            <Text style={[styles.smallStatLabel, { color: theme.primary }]}>Sprint</Text>
-          </View>
-        </View>
+        <Animated.View
+          entering={FadeInUp.delay(300).duration(400)}
+          style={styles.statsRow}
+        >
+          <AnimatedStatCard
+            icon="bulb"
+            iconColor="#9C27B0"
+            value={deepWorkCounter}
+            label="Deep Work"
+            index={0}
+          />
+          <AnimatedStatCard
+            icon="fitness"
+            iconColor="#FF9800"
+            value={balancedCounter}
+            label="Balanced"
+            index={1}
+          />
+          <AnimatedStatCard
+            icon="flash"
+            iconColor="#2196F3"
+            value={sprintCounter}
+            label="Sprint"
+            index={2}
+          />
+        </Animated.View>
 
         {/* Bar Chart */}
-        <View style={[styles.chartContainer, { backgroundColor: theme.card }]}>
+        <Animated.View
+          entering={FadeInUp.delay(400).duration(400)}
+          style={[styles.chartContainer, { backgroundColor: theme.card }]}
+        >
           {/* Y-axis label */}
           <View style={styles.yAxisContainer}>
             <Text style={[styles.axisLabel, { color: theme.text + '88' }]}>
@@ -338,31 +494,18 @@ const AnalyticsScreen = () => {
 
             {/* Chart bars */}
             <View style={styles.chartBars}>
-              {barHeights.map((height, index) => {
-                const animatedHeight = animatedValues[index]?.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: ['0%', `${(height / maxHeight) * 100}%`],
-                }) || '0%';
-
-                return (
-                  <View key={index} style={styles.barColumn}>
-                    <View style={styles.barWrapper}>
-                      <Animated.View
-                        style={[
-                          styles.bar,
-                          {
-                            height: animatedHeight,
-                            backgroundColor: theme.primary,
-                          },
-                        ]}
-                      />
-                    </View>
-                    <Text style={[styles.barLabel, { color: theme.primary, fontSize: timeRange === 'day' ? 7 : 9 }]}>
-                      {chartLabels[index]}
-                    </Text>
-                  </View>
-                );
-              })}
+              {barHeights.map((height, index) => (
+                <AnimatedBarColumn
+                  key={index}
+                  height={height}
+                  maxHeight={maxHeight}
+                  index={index}
+                  label={chartLabels[index]}
+                  theme={theme}
+                  timeRange={timeRange}
+                  animationProgress={barAnimationProgress}
+                />
+              ))}
             </View>
           </View>
 
@@ -377,22 +520,29 @@ const AnalyticsScreen = () => {
           <Text style={[styles.chartTotal, { color: theme.primary }]}>
             Total: {totalHours}h {remainingMinutes}m
           </Text>
-        </View>
+        </Animated.View>
 
-        {/* Subject Distribution - Circular Chart */}
-        <View style={[styles.circularChartContainer, { backgroundColor: theme.card }]}>
+        {/* Subject Distribution - Animated Circular Chart */}
+        <Animated.View
+          entering={FadeInUp.delay(500).duration(400)}
+          style={[styles.circularChartContainer, { backgroundColor: theme.card }]}
+        >
           <Text style={[styles.chartSectionTitle, { color: theme.text }]}>Time by Subject</Text>
           {subjectBreakdown.length > 0 ? (
             <>
-              <CircularChart
-                percentage={100}
+              <AnimatedCircularChart
+                key={focusKey} // Re-animate on focus
+                segments={subjectBreakdown.map((item, index) => ({
+                  subject: item.subject,
+                  percentage: totalMinutes > 0 ? (item.minutes / totalMinutes) * 100 : 0,
+                  color: subjectColors[index % subjectColors.length],
+                }))}
                 totalHours={totalHours}
                 totalMinutes={remainingMinutes}
-                color={subjectColors[0]}
                 size={180}
                 strokeWidth={18}
               />
-              <View style={styles.legendContainer}>
+              <StaggeredList delay="fast" style={styles.legendContainer}>
                 {subjectBreakdown.map((item, index) => (
                   <View key={item.subject} style={styles.legendItem}>
                     <View style={[styles.legendDot, { backgroundColor: subjectColors[index % subjectColors.length] }]} />
@@ -404,31 +554,36 @@ const AnalyticsScreen = () => {
                     </Text>
                   </View>
                 ))}
-              </View>
+              </StaggeredList>
             </>
           ) : (
             <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
               No session data available
             </Text>
           )}
-        </View>
+        </Animated.View>
 
         {/* Insights Section */}
-        <View style={[styles.insightsContainer, { backgroundColor: theme.card }]}>
+        <Animated.View
+          entering={FadeInUp.delay(600).duration(400)}
+          style={[styles.insightsContainer, { backgroundColor: theme.card }]}
+        >
           <Text style={[styles.insightsTitle, { color: theme.text }]}>Insights</Text>
-          <View style={styles.insightItem}>
-            <Ionicons name="bulb" size={20} color={theme.primary} style={{ marginRight: 12 }} />
-            <Text style={[styles.insightText, { color: theme.text }]}>
-              You're doing great! Keep up the consistent study sessions.
-            </Text>
-          </View>
-          <View style={styles.insightItem}>
-            <Ionicons name="trending-up" size={20} color={theme.primary} style={{ marginRight: 12 }} />
-            <Text style={[styles.insightText, { color: theme.text }]}>
-              Your focus time has increased by 15% this week!
-            </Text>
-          </View>
-        </View>
+          <StaggeredList delay="fast">
+            <View style={styles.insightItem}>
+              <Ionicons name="bulb" size={20} color={theme.primary} style={{ marginRight: 12 }} />
+              <Text style={[styles.insightText, { color: theme.text }]}>
+                You're doing great! Keep up the consistent study sessions.
+              </Text>
+            </View>
+            <View style={styles.insightItem}>
+              <Ionicons name="trending-up" size={20} color={theme.primary} style={{ marginRight: 12 }} />
+              <Text style={[styles.insightText, { color: theme.text }]}>
+                Your focus time has increased by 15% this week!
+              </Text>
+            </View>
+          </StaggeredList>
+        </Animated.View>
       </ScrollView>
 
       {/* Bottom Tab Bar */}
@@ -500,7 +655,7 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     paddingHorizontal: 16,
-    gap: 12,
+    gap: 16, // Increased gap between cards
     marginBottom: 16,
   },
   smallStatCard: {
@@ -510,6 +665,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 2,
     borderColor: 'rgba(76, 175, 80, 0.3)',
+    marginHorizontal: 2, // Additional horizontal margin
   },
   smallStatIcon: {
     marginBottom: 4,

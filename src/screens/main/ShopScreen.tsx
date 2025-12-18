@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Alert, Dimensions } from 'react-native';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const ITEM_MARGIN = 8;
+const ITEM_WIDTH = (SCREEN_WIDTH - 32 - ITEM_MARGIN) / 2; // 2 items per row with padding
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -10,6 +14,21 @@ import { useSupabaseProfile } from '../../utils/supabaseHooks';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { UnifiedHeader } from '../../components/UnifiedHeader';
 import { FlintIcon } from '../../components/FlintIcon';
+import Animated, {
+  FadeInUp,
+  Layout,
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withSequence,
+  withTiming,
+  interpolate
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
+import { AnimatedButton } from '../../components/premium/AnimatedButton';
+import { StaggeredItem } from '../../components/premium/StaggeredList';
+import { useCounterAnimation, usePulseAnimation, useSuccessAnimation } from '../../utils/animationUtils';
+import { AnimationConfig, Spacing, BorderRadius, Shadows, PremiumColors } from '../../theme/premiumTheme';
 import {
   addToInventory,
   equipItem,
@@ -64,6 +83,8 @@ const SHOP_ITEMS: ShopItem[] = [
   { id: 'northern', name: 'Northern Lights', description: 'Aurora borealis path', cost: 95, category: 'trail', icon: '🌌' },
 ];
 
+const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
+
 const ShopScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<MainTabParamList>>();
   const { theme } = useTheme();
@@ -75,9 +96,13 @@ const ShopScreen = () => {
   const [loading, setLoading] = useState(true);
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<ShopItem | null>(null);
+  const [isPurchasing, setIsPurchasing] = useState(false);
 
   // Get Flint currency from profile
   const flintCurrency = profile?.flint_currency || 0;
+
+  // Animate currency counter
+  const animatedFlint = useCounterAnimation(flintCurrency, 800);
 
   // Load inventory and equipped items
   useEffect(() => {
@@ -154,7 +179,10 @@ const ShopScreen = () => {
   };
 
   const handlePurchaseAndApply = async () => {
-    if (!selectedItem) return;
+    if (!selectedItem || isPurchasing) return;
+
+    setIsPurchasing(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
       // Deduct Flint
@@ -179,6 +207,10 @@ const ShopScreen = () => {
 
       await loadInventoryData();
       setShowApplyModal(false);
+      setIsPurchasing(false);
+
+      // Success haptic
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       Alert.alert(
         'Equipped! 🎉',
@@ -186,12 +218,17 @@ const ShopScreen = () => {
         [{ text: 'Awesome!' }]
       );
     } catch (error) {
+      setIsPurchasing(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Error', 'Failed to purchase item. Please try again.');
     }
   };
 
   const handlePurchaseAndSave = async () => {
-    if (!selectedItem) return;
+    if (!selectedItem || isPurchasing) return;
+
+    setIsPurchasing(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
       // Deduct Flint
@@ -208,6 +245,10 @@ const ShopScreen = () => {
 
       await loadInventoryData();
       setShowApplyModal(false);
+      setIsPurchasing(false);
+
+      // Success haptic
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       Alert.alert(
         'Added to Backpack! 🎒',
@@ -215,6 +256,8 @@ const ShopScreen = () => {
         [{ text: 'Great!' }]
       );
     } catch (error) {
+      setIsPurchasing(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Error', 'Failed to purchase item. Please try again.');
     }
   };
@@ -233,28 +276,39 @@ const ShopScreen = () => {
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }}>
         {/* Flint Balance Card */}
-        <View style={[styles.balanceCard, { backgroundColor: theme.card }]}>
+        <Animated.View
+          entering={FadeInUp.delay(50).duration(300)}
+          style={[styles.balanceCard, { backgroundColor: theme.card }]}
+        >
           <View style={styles.balanceContent}>
             <View style={[styles.flintIcon, { backgroundColor: '#FF570020' }]}>
               <FlintIcon size={40} color="#FF5700" />
             </View>
             <View style={styles.balanceInfo}>
               <Text style={[styles.balanceLabel, { color: theme.textSecondary }]}>Your Flint</Text>
-              <Text style={[styles.balanceAmount, { color: theme.text }]}>{flintCurrency.toFixed(1)}</Text>
+              <Animated.Text style={[styles.balanceAmount, { color: theme.text }]}>
+                {Math.round(animatedFlint.value * 10) / 10}
+              </Animated.Text>
               <Text style={[styles.balanceHint, { color: theme.textSecondary }]}>Earn 1 Flint per focus minute completed</Text>
             </View>
           </View>
-        </View>
+        </Animated.View>
 
         {/* Category Tabs */}
-        <View style={[styles.categoryTabs, { backgroundColor: theme.surface }]}>
+        <Animated.View
+          entering={FadeInUp.delay(80).duration(300)}
+          style={[styles.categoryTabs, { backgroundColor: theme.surface }]}
+        >
           <TouchableOpacity
             style={[
               styles.categoryTab,
               selectedCategory === 'gear' && styles.categoryTabActive,
               selectedCategory === 'gear' && { backgroundColor: theme.card }
             ]}
-            onPress={() => setSelectedCategory('gear')}
+            onPress={() => {
+              Haptics.selectionAsync();
+              setSelectedCategory('gear');
+            }}
           >
             <Text style={[
               styles.categoryTabText,
@@ -270,7 +324,10 @@ const ShopScreen = () => {
               selectedCategory === 'shelter' && styles.categoryTabActive,
               selectedCategory === 'shelter' && { backgroundColor: theme.card }
             ]}
-            onPress={() => setSelectedCategory('shelter')}
+            onPress={() => {
+              Haptics.selectionAsync();
+              setSelectedCategory('shelter');
+            }}
           >
             <Text style={[
               styles.categoryTabText,
@@ -286,7 +343,10 @@ const ShopScreen = () => {
               selectedCategory === 'trail' && styles.categoryTabActive,
               selectedCategory === 'trail' && { backgroundColor: theme.card }
             ]}
-            onPress={() => setSelectedCategory('trail')}
+            onPress={() => {
+              Haptics.selectionAsync();
+              setSelectedCategory('trail');
+            }}
           >
             <Text style={[
               styles.categoryTabText,
@@ -295,45 +355,54 @@ const ShopScreen = () => {
               Trails
             </Text>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
 
         {/* Shop Items Grid */}
         <View style={styles.itemsGrid}>
-          {filteredItems.map((item) => {
+          {filteredItems.map((item, index) => {
             const canAfford = flintCurrency >= item.cost;
             const owned = isOwned(item.id);
             const equipped = isEquipped(item.id);
 
             return (
-              <TouchableOpacity
+              <StaggeredItem
                 key={item.id}
-                style={[
-                  styles.itemCard,
-                  {
-                    backgroundColor: theme.card,
-                    borderColor: equipped ? theme.primary : (owned ? '#4CAF50' : (canAfford ? '#FF5700' : theme.border))
-                  },
-                  !canAfford && !owned && styles.itemCardLocked
-                ]}
-                onPress={() => handleItemPress(item)}
-                activeOpacity={0.7}
+                index={index}
+                delay="fast"
+                direction="fade"
+                subtle={true}
               >
+                <AnimatedTouchable
+                  style={[
+                    styles.itemCard,
+                    {
+                      backgroundColor: theme.card,
+                      borderColor: equipped ? theme.primary : (owned ? '#4CAF50' : (canAfford ? '#FF5700' : theme.border))
+                    },
+                    !canAfford && !owned && styles.itemCardLocked
+                  ]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    handleItemPress(item);
+                  }}
+                  activeOpacity={0.7}
+                >
                 {/* Icon */}
                 <View style={[styles.itemIconContainer, { backgroundColor: theme.surface }]}>
                   <Text style={styles.itemIcon}>{item.icon}</Text>
                   {equipped && (
                     <View style={[styles.statusBadge, { backgroundColor: theme.primary }]}>
-                      <Ionicons name="checkmark" size={12} color="#FFF" />
+                      <Ionicons name="checkmark-outline" size={10} color="#FFF" />
                     </View>
                   )}
                   {owned && !equipped && (
                     <View style={[styles.statusBadge, { backgroundColor: '#4CAF50' }]}>
-                      <Ionicons name="cube" size={12} color="#FFF" />
+                      <Ionicons name="cube-outline" size={10} color="#FFF" />
                     </View>
                   )}
                   {!canAfford && !owned && (
                     <View style={[styles.statusBadge, { backgroundColor: '#666' }]}>
-                      <Ionicons name="lock-closed" size={12} color="#FFF" />
+                      <Ionicons name="lock-closed-outline" size={10} color="#FFF" />
                     </View>
                   )}
                 </View>
@@ -357,13 +426,14 @@ const ShopScreen = () => {
                   </View>
                 ) : (
                   <View style={[styles.priceTag, { backgroundColor: canAfford ? '#FF570015' : theme.surface }]}>
-                    <FlintIcon size={14} color={canAfford ? "#FF5700" : theme.textSecondary} />
+                    <FlintIcon size={12} color={canAfford ? "#FF5700" : theme.textSecondary} />
                     <Text style={[styles.itemCost, { color: canAfford ? '#FF5700' : theme.textSecondary }]}>
                       {item.cost}
                     </Text>
                   </View>
                 )}
-              </TouchableOpacity>
+                </AnimatedTouchable>
+              </StaggeredItem>
             );
           })}
         </View>
@@ -404,25 +474,31 @@ const ShopScreen = () => {
                 </Text>
 
                 <View style={styles.modalButtons}>
-                  <TouchableOpacity
-                    style={[styles.modalButton, styles.modalButtonSecondary, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                  <AnimatedButton
+                    title="Save to Backpack"
                     onPress={handlePurchaseAndSave}
-                  >
-                    <Ionicons name="cube-outline" size={20} color={theme.text} />
-                    <Text style={[styles.modalButtonText, { color: theme.text }]}>
-                      Save to Backpack
-                    </Text>
-                  </TouchableOpacity>
+                    variant="outline"
+                    size="medium"
+                    loading={isPurchasing}
+                    disabled={isPurchasing}
+                    icon={<Ionicons name="cube-outline" size={20} color={theme.text} />}
+                    iconPosition="left"
+                    style={{ flex: 1 }}
+                  />
 
-                  <TouchableOpacity
-                    style={[styles.modalButton, styles.modalButtonPrimary, { backgroundColor: theme.primary }]}
+                  <AnimatedButton
+                    title="Apply Now"
                     onPress={handlePurchaseAndApply}
-                  >
-                    <Ionicons name="flash" size={20} color="#FFF" />
-                    <Text style={[styles.modalButtonText, { color: '#FFF' }]}>
-                      Apply Now
-                    </Text>
-                  </TouchableOpacity>
+                    variant="primary"
+                    size="medium"
+                    gradient
+                    gradientColors={[theme.primary, PremiumColors.gradients.primary[1]]}
+                    loading={isPurchasing}
+                    disabled={isPurchasing}
+                    icon={<Ionicons name="flash-outline" size={20} color="#FFF" />}
+                    iconPosition="left"
+                    style={{ flex: 1 }}
+                  />
                 </View>
 
                 <TouchableOpacity
@@ -511,82 +587,81 @@ const styles = StyleSheet.create({
   itemsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: 8,
-    gap: 12,
+    paddingHorizontal: 16,
+    gap: ITEM_MARGIN,
   },
   itemCard: {
-    width: '47%',
+    width: ITEM_WIDTH,
+    height: ITEM_WIDTH, // Square aspect ratio
     borderRadius: 16,
-    padding: 16,
+    padding: 12,
     borderWidth: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
-    marginBottom: 8,
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   itemCardLocked: {
     opacity: 0.6,
   },
   itemIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
     alignSelf: 'center',
-    marginBottom: 12,
     position: 'relative',
   },
   itemIcon: {
-    fontSize: 40,
+    fontSize: 32,
   },
   statusBadge: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    bottom: -2,
+    right: -2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
     borderColor: '#FFF',
   },
   itemName: {
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: '600',
-    marginBottom: 4,
     textAlign: 'center',
   },
   itemDescription: {
-    fontSize: 12,
-    marginBottom: 12,
+    fontSize: 10,
     textAlign: 'center',
-    minHeight: 32,
+    lineHeight: 13,
   },
   statusTag: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
     alignItems: 'center',
   },
   statusText: {
-    fontSize: 12,
+    fontSize: 9,
     fontWeight: '600',
   },
   priceTag: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    gap: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    gap: 4,
   },
   itemCost: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
   },
   modalOverlay: {

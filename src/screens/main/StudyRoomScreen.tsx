@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, TextInput, FlatList, Platform, KeyboardAvoidingView, ActivityIndicator, Alert, Modal } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, TouchableOpacity, Image, TextInput, FlatList, Platform, KeyboardAvoidingView, Alert, Modal } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
@@ -10,6 +10,13 @@ import * as StudyRoomService from '../../utils/studyRoomService';
 import * as FriendService from '../../utils/friendRequestService';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import Animated, { FadeInUp, FadeInDown, SlideInRight, useAnimatedStyle, withSpring, useSharedValue } from 'react-native-reanimated';
+import { AnimatedButton } from '../../components/premium/AnimatedButton';
+import { AnimatedFlatList } from '../../components/premium/StaggeredList';
+import { useButtonPressAnimation } from '../../utils/animationUtils';
+import * as Haptics from 'expo-haptics';
+import { AnimationConfig } from '../../theme/premiumTheme';
+import { ShimmerLoader } from '../../components/premium/ShimmerLoader';
 
 
 const StudyRoomScreen = () => {
@@ -17,6 +24,7 @@ const StudyRoomScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { user } = useAuth();
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   // @ts-ignore
   const { room } = route.params || {};
   const [messages, setMessages] = useState<StudyRoomService.StudyRoomMessage[]>([]);
@@ -25,6 +33,9 @@ const StudyRoomScreen = () => {
   const [sending, setSending] = useState(false);
   const [roomData, setRoomData] = useState<StudyRoomService.StudyRoom | null>(room || null);
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showMembersModal, setShowMembersModal] = useState(false);
+  const [members, setMembers] = useState<StudyRoomService.StudyRoomParticipant[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
   const [friends, setFriends] = useState<FriendService.Friend[]>([]);
   const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
   const [inviteMessage, setInviteMessage] = useState('');
@@ -95,6 +106,63 @@ const StudyRoomScreen = () => {
     roomData.owner_id === user.id ||
     (roomData as any).creator_id === user.id
   );
+
+  // Load members when modal opens
+  const loadMembers = async () => {
+    if (!roomData?.id) return;
+
+    setLoadingMembers(true);
+    try {
+      const result = await StudyRoomService.getStudyRoomMembers(roomData.id);
+      if (result.success) {
+        setMembers(result.data || []);
+      } else {
+        console.error('Error loading members:', result.error);
+      }
+    } catch (error) {
+      console.error('Error loading members:', error);
+    } finally {
+      setLoadingMembers(false);
+    }
+  };
+
+  // Handle opening members modal
+  const handleOpenMembersModal = () => {
+    setShowMembersModal(true);
+    loadMembers();
+  };
+
+  // Handle removing a member
+  const handleRemoveMember = async (memberId: string, memberName: string) => {
+    if (!roomData?.id) return;
+
+    Alert.alert(
+      'Remove Member',
+      `Are you sure you want to remove ${memberName} from this study room?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const result = await StudyRoomService.removeMemberFromStudyRoom(roomData.id, memberId);
+              if (result.success) {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                Alert.alert('Success', `${memberName} has been removed from the study room`);
+                loadMembers(); // Refresh the members list
+              } else {
+                Alert.alert('Error', result.error || 'Failed to remove member');
+              }
+            } catch (error) {
+              console.error('Error removing member:', error);
+              Alert.alert('Error', 'An unexpected error occurred');
+            }
+          }
+        }
+      ]
+    );
+  };
 
   const handleDeleteRoom = async () => {
     if (!roomData?.id) return;
@@ -228,22 +296,27 @@ const StudyRoomScreen = () => {
     );
   };
 
-  const renderMessage = ({ item }: { item: StudyRoomService.StudyRoomMessage }) => {
+  const renderMessage = ({ item, index }: { item: StudyRoomService.StudyRoomMessage; index: number }) => {
     const isMyMessage = item.sender_id === user?.id;
     const senderName = item.sender?.full_name || item.sender?.username || 'Unknown';
-    
+
     if (item.message_type === 'join' || item.message_type === 'leave') {
       return (
-        <View style={styles.systemMessage}>
+        <Animated.View entering={FadeInDown.delay(index * 30).duration(400)} style={styles.systemMessage}>
           <Text style={[styles.systemMessageText, { backgroundColor: theme.background, color: theme.textSecondary }]}>
             {senderName} {item.content}
           </Text>
-        </View>
+        </Animated.View>
       );
     }
 
+    const AnimationDirection = isMyMessage ? SlideInRight : FadeInUp;
+
     return (
-      <View style={[styles.messageBubble, isMyMessage ? [styles.messageBubbleMe, { backgroundColor: theme.primary + 'CC' }] : [styles.messageBubbleOther, { backgroundColor: theme.card }]]}>
+      <Animated.View
+        entering={AnimationDirection.delay(index * 30).duration(400)}
+        style={[styles.messageBubble, isMyMessage ? [styles.messageBubbleMe, { backgroundColor: theme.primary + 'CC' }] : [styles.messageBubbleOther, { backgroundColor: theme.card }]]}
+      >
         <Text style={[styles.messageSender, { color: isMyMessage ? '#fff' : theme.primary }]}>{isMyMessage ? 'You' : senderName}:</Text>
         <Text style={[styles.messageText, { color: isMyMessage ? '#fff' : theme.text }]}>{item.content}</Text>
         <Text style={[styles.messageTime, { color: isMyMessage ? 'rgba(255,255,255,0.7)' : theme.textSecondary }]}>
@@ -253,18 +326,19 @@ const StudyRoomScreen = () => {
             hour12: true
           })}
         </Text>
-      </View>
+      </Animated.View>
     );
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
-        <View style={[styles.headerRow, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
+        {/* Header with proper safe area padding for camera island */}
+        <View style={[styles.headerRow, { backgroundColor: theme.card, borderBottomColor: theme.border, paddingTop: insets.top + 8 }]}>
           <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={26} color={theme.text} />
           </TouchableOpacity>
@@ -273,6 +347,11 @@ const StudyRoomScreen = () => {
             <TouchableOpacity style={[styles.inviteBtn, { backgroundColor: theme.primary + '20' }]} onPress={() => setShowInviteModal(true)}>
               <Ionicons name="person-add-outline" size={18} color={theme.primary} />
             </TouchableOpacity>
+            {isOwner && (
+              <TouchableOpacity style={[styles.inviteBtn, { backgroundColor: theme.primary + '20' }]} onPress={handleOpenMembersModal}>
+                <Ionicons name="people-outline" size={18} color={theme.primary} />
+              </TouchableOpacity>
+            )}
             {isOwner ? (
               <TouchableOpacity style={[styles.deleteBtnTop, { backgroundColor: theme.card, borderColor: '#E57373' }]} onPress={handleDeleteRoom}>
                 <Ionicons name="trash-outline" size={20} color="#E57373" style={{ marginRight: 4 }} />
@@ -311,11 +390,11 @@ const StudyRoomScreen = () => {
             <Text style={styles.startSessionBtnText}>Start Group Study Session</Text>
           </TouchableOpacity>
         </KeyboardAwareScrollView>
-        {/* FlatList for chat messages - NOT inside any ScrollView */}
-        <View style={styles.chatContainerWrapper}>
+        {/* FlatList for chat messages - NOT inside any ScrollView. Added margin for input row */}
+        <View style={[styles.chatContainerWrapper, { marginBottom: 70 + insets.bottom }]}>
           {loading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={theme.primary} />
+              <ShimmerLoader variant="circular" size={48} />
               <Text style={[styles.loadingText, { color: theme.primary }]}>Loading messages...</Text>
             </View>
           ) : (
@@ -338,7 +417,7 @@ const StudyRoomScreen = () => {
           )}
         </View>
         {/* Message Input above bottom safe area */}
-        <View style={[styles.inputRowSticky, { backgroundColor: theme.card, borderTopColor: theme.border }]}>
+        <View style={[styles.inputRowSticky, { backgroundColor: theme.card, borderTopColor: theme.border, paddingBottom: insets.bottom + 8 }]}>
           <TextInput
             style={[styles.input, { backgroundColor: theme.background, color: theme.text }]}
             placeholder="Type a message..."
@@ -348,19 +427,23 @@ const StudyRoomScreen = () => {
             onSubmitEditing={handleSend}
             returnKeyType="send"
           />
-          <TouchableOpacity 
-            style={styles.sendBtn} 
-            onPress={handleSend} 
+          <TouchableOpacity
+            style={styles.sendBtn}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              handleSend();
+            }}
             disabled={!input.trim() || sending}
           >
             {sending ? (
-              <ActivityIndicator size={20} color={theme.primary} />
+              <ShimmerLoader variant="circular" size={22} />
             ) : (
-              <Ionicons name="send" size={22} color={input.trim() ? theme.primary : theme.textSecondary} />
+              <Animated.View entering={FadeInUp.duration(400)}>
+                <Ionicons name="send" size={22} color={input.trim() ? theme.primary : theme.textSecondary} />
+              </Animated.View>
             )}
           </TouchableOpacity>
         </View>
-        <View style={styles.bottomSpacer} />
       </KeyboardAvoidingView>
 
       {/* Invite Friends Modal */}
@@ -448,7 +531,97 @@ const StudyRoomScreen = () => {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+
+      {/* Manage Members Modal (Owner Only) */}
+      <Modal
+        visible={showMembersModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowMembersModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: theme.primary }]}>Manage Members</Text>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setShowMembersModal(false)}
+              >
+                <Ionicons name="close" size={24} color={theme.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.modalSubtitle, { color: theme.textSecondary }]}>
+              {members.length} member{members.length !== 1 ? 's' : ''} in {roomData?.name}
+            </Text>
+
+            {loadingMembers ? (
+              <View style={styles.loadingContainer}>
+                <ShimmerLoader variant="circular" size={48} />
+                <Text style={[styles.loadingText, { color: theme.primary }]}>Loading members...</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={members}
+                keyExtractor={(item) => item.id}
+                style={styles.friendsList}
+                renderItem={({ item }) => {
+                  const isOwnerMember = item.role === 'owner';
+                  const memberName = item.user?.full_name || item.user?.username || 'Unknown';
+
+                  return (
+                    <View
+                      style={[
+                        styles.memberItem,
+                        { backgroundColor: theme.background },
+                        isOwnerMember && { borderColor: theme.primary, borderWidth: 1 }
+                      ]}
+                    >
+                      <View style={styles.friendInfo}>
+                        <View style={[styles.avatarCircle, { backgroundColor: isOwnerMember ? theme.primary : theme.textSecondary }]}>
+                          <Text style={styles.avatarText}>
+                            {memberName[0]?.toUpperCase() || 'U'}
+                          </Text>
+                        </View>
+                        <View style={styles.memberTextContainer}>
+                          <Text style={[styles.friendName, { color: theme.text }]}>
+                            {memberName}
+                          </Text>
+                          {isOwnerMember && (
+                            <Text style={[styles.ownerBadge, { color: theme.primary }]}>Owner</Text>
+                          )}
+                        </View>
+                      </View>
+                      {!isOwnerMember && (
+                        <TouchableOpacity
+                          style={styles.removeBtn}
+                          onPress={() => handleRemoveMember(item.user_id, memberName)}
+                        >
+                          <Ionicons name="person-remove-outline" size={20} color="#E57373" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  );
+                }}
+                ListEmptyComponent={
+                  <View style={styles.emptyContainer}>
+                    <Text style={[styles.emptyText, { color: theme.primary }]}>No members found</Text>
+                    <Text style={[styles.emptySubtext, { color: theme.textSecondary }]}>Invite friends to join!</Text>
+                  </View>
+                }
+              />
+            )}
+
+            <TouchableOpacity
+              style={[styles.sendInviteButton, { backgroundColor: theme.primary }]}
+              onPress={() => setShowMembersModal(false)}
+            >
+              <Text style={styles.sendInviteButtonText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 };
 
@@ -465,7 +638,7 @@ const styles = StyleSheet.create({
   avatarCircle: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginRight: 8 },
   startSessionBtn: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 28, alignSelf: 'center', marginTop: 0, marginBottom: 12 },
   startSessionBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-  chatContainerWrapper: { flex: 1, minHeight: 180, maxHeight: 260 },
+  chatContainerWrapper: { flex: 1, minHeight: 180 },  /* Removed maxHeight to allow chat to expand */
   chatContainer: { borderRadius: 16, marginHorizontal: 16, marginBottom: 16, flex: 1 },
   messageBubble: { marginBottom: 8, padding: 10, borderRadius: 10, maxWidth: '80%' },
   messageBubbleMe: { alignSelf: 'flex-end' },
@@ -502,10 +675,6 @@ const styles = StyleSheet.create({
     color: '#E57373',
     fontWeight: 'bold',
     fontSize: 15,
-  },
-  bottomSpacer: {
-    height: 18,
-    backgroundColor: 'transparent',
   },
   loadingContainer: {
     flex: 1,
@@ -625,6 +794,30 @@ const styles = StyleSheet.create({
     // Color set dynamically
   },
   sendInviteButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  memberItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  memberTextContainer: {
+    marginLeft: 12,
+  },
+  ownerBadge: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  removeBtn: {
+    padding: 8,
+  },
+  avatarText: {
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 16,

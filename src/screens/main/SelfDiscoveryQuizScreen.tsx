@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, ScrollView } from 'react-native';
-import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
 import InteractiveQuiz from '../../components/InteractiveQuiz';
@@ -8,6 +8,8 @@ import QuizResults from '../../components/QuizResults';
 import { QuizResult } from '../../data/quizData';
 import { getQuizCompletionStatus } from '../../utils/quizStorage';
 import { useAuth } from '../../context/AuthContext';
+import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
+import { useFocusAnimationKey } from '../../utils/animationUtils';
 
 interface Quiz {
   id: string;
@@ -28,7 +30,7 @@ const QUIZ_DATA: Quiz[] = [
     description: 'Assess your current study methods',
     detail: 'This comprehensive quiz will help you identify your best and worst study habits, providing personalized recommendations to improve your learning efficiency and academic performance.',
     progress: 0.7,
-    icon: 'book-open-page-variant',
+    icon: 'book-outline',
     color: '#2196F3',
     estimatedTime: '5-7 min',
     questions: 15,
@@ -39,7 +41,7 @@ const QUIZ_DATA: Quiz[] = [
     description: 'Identify your optimal focus style',
     detail: 'Discover your unique focus patterns and learn what environmental factors, techniques, and strategies help you concentrate best during study sessions.',
     progress: 0.3,
-    icon: 'target',
+    icon: 'radio-button-on-outline',
     color: '#F44336',
     estimatedTime: '4-6 min',
     questions: 12,
@@ -50,7 +52,7 @@ const QUIZ_DATA: Quiz[] = [
     description: 'Understand what drives you',
     detail: 'Uncover your main sources of motivation and learn how to leverage them effectively to maintain consistent study habits and achieve your academic goals.',
     progress: 1.0,
-    icon: 'heart',
+    icon: 'heart-outline',
     color: '#FF9800',
     estimatedTime: '6-8 min',
     questions: 18,
@@ -61,7 +63,7 @@ const QUIZ_DATA: Quiz[] = [
     description: 'Discover how you learn best',
     detail: 'Determine whether you\'re a visual, auditory, or kinesthetic learner, and get tailored study strategies that match your preferred learning style.',
     progress: 0.5,
-    icon: 'brain',
+    icon: 'bulb-outline',
     color: '#4CAF50',
     estimatedTime: '5-7 min',
     questions: 14,
@@ -72,6 +74,10 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const { theme } = useTheme();
   const { user } = useAuth();
+
+  // Force animations to replay on every screen focus
+  const focusKey = useFocusAnimationKey();
+
   const [selectedQuiz, setSelectedQuiz] = useState<Quiz | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
@@ -89,7 +95,7 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
           onPress={() => navigation.navigate('Bonuses' as never)}
           style={{ marginLeft: 8 }}
         >
-          <Ionicons name="arrow-back" size={24} color={theme.primary} />
+          <Ionicons name="arrow-back-outline" size={24} color={theme.primary} />
         </TouchableOpacity>
       ),
       headerRight: () => null, // Remove hamburger menu
@@ -197,28 +203,28 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
       activeOpacity={0.8}
     >
       <View style={[styles.iconContainer, { backgroundColor: `${item.color}15` }]}>
-        <MaterialCommunityIcons 
-          name={item.icon as any} 
-          size={32} 
-          color={item.color} 
+        <Ionicons
+          name={item.icon as any}
+          size={32}
+          color={item.color}
         />
       </View>
       
       <View style={styles.quizContent}>
         <View style={styles.quizHeader}>
           <Text style={styles.quizTitle}>{item.name}</Text>
-          <Ionicons name="chevron-forward" size={20} color="#666" />
+          <Ionicons name="chevron-forward-outline" size={20} color="#666" />
         </View>
         
         <Text style={styles.quizDescription}>{item.description}</Text>
         
         <View style={styles.quizMeta}>
           <View style={styles.metaItem}>
-            <MaterialCommunityIcons name="clock-outline" size={16} color="#666" />
+            <Ionicons name="time-outline" size={16} color="#666" />
             <Text style={styles.metaText}>{item.estimatedTime}</Text>
           </View>
           <View style={styles.metaItem}>
-            <MaterialCommunityIcons name="help-circle-outline" size={16} color="#666" />
+            <Ionicons name="help-circle-outline" size={16} color="#666" />
             <Text style={styles.metaText}>{item.questions} questions</Text>
           </View>
         </View>
@@ -269,16 +275,29 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={styles.headerContent}>
+    <Animated.View
+      key={`container-${focusKey}`}
+      entering={FadeIn.duration(250)}
+      style={[styles.container, { backgroundColor: theme.background }]}
+    >
+      <Animated.View
+        entering={FadeInUp.delay(100).duration(300)}
+        style={styles.headerContent}
+      >
         <Text style={styles.subtitle}>
           Discover your unique learning style, study habits, and motivation patterns through our comprehensive self-assessment quizzes.
         </Text>
-      </View>
+      </Animated.View>
 
-      <Text style={styles.sectionTitle}>Available Quizzes</Text>
+      <Animated.Text
+        entering={FadeIn.delay(150).duration(250)}
+        style={styles.sectionTitle}
+      >
+        Available Quizzes
+      </Animated.Text>
 
-      <FlatList
+      <Animated.FlatList
+        entering={FadeInUp.delay(200).duration(300)}
         data={quizData}
         renderItem={renderQuizCard}
         keyExtractor={(item) => item.id}
@@ -302,14 +321,14 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
               <>
                 <View style={styles.modalHeader}>
                   <View style={[styles.modalIcon, { backgroundColor: `${selectedQuiz.color}15` }]}>
-                    <MaterialCommunityIcons 
-                      name={selectedQuiz.icon as any} 
-                      size={40} 
-                      color={selectedQuiz.color} 
+                    <Ionicons
+                      name={selectedQuiz.icon as any}
+                      size={40}
+                      color={selectedQuiz.color}
                     />
                   </View>
                   <TouchableOpacity style={styles.closeButton} onPress={closeDetail}>
-                    <Ionicons name="close" size={24} color="#666" />
+                    <Ionicons name="close-outline" size={24} color="#666" />
                   </TouchableOpacity>
                 </View>
 
@@ -318,11 +337,11 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
 
                 <View style={styles.modalMeta}>
                   <View style={styles.modalMetaItem}>
-                    <MaterialCommunityIcons name="clock-outline" size={20} color="#666" />
+                    <Ionicons name="time-outline" size={20} color="#666" />
                     <Text style={styles.modalMetaText}>{selectedQuiz.estimatedTime}</Text>
                   </View>
                   <View style={styles.modalMetaItem}>
-                    <MaterialCommunityIcons name="help-circle-outline" size={20} color="#666" />
+                    <Ionicons name="help-circle-outline" size={20} color="#666" />
                     <Text style={styles.modalMetaText}>{selectedQuiz.questions} questions</Text>
                   </View>
                 </View>
@@ -358,7 +377,7 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
-    </View>
+    </Animated.View>
   );
 };
 

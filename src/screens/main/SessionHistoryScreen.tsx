@@ -8,6 +8,11 @@ import { useTheme } from '../../context/ThemeContext';
 import { supabase } from '../../utils/supabase';
 import { BottomTabBar } from '../../components/BottomTabBar';
 import { UnifiedHeader } from '../../components/UnifiedHeader';
+import Animated, { FadeIn, FadeInUp, FadeInDown } from 'react-native-reanimated';
+import { useButtonPressAnimation, useCounterAnimation, triggerHaptic, useFocusAnimationKey } from '../../utils/animationUtils';
+import { ShimmerLoader, SkeletonCard } from '../../components/premium/ShimmerLoader';
+import { AnimatedFlatList, StaggeredItem } from '../../components/premium/StaggeredList';
+import { Typography, Spacing, AnimationConfig } from '../../theme/premiumTheme';
 
 interface SessionHistoryItem {
   id: string;
@@ -31,12 +36,15 @@ const SessionHistoryScreen = () => {
   const { user } = useAuth();
   const { theme } = useTheme();
   const navigation = useNavigation();
-  
+
   const [sessions, setSessions] = useState<SessionHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [timeFilter, setTimeFilter] = useState<'all' | 'week' | 'month'>('all');
+
+  // Force animations to replay on every screen focus
+  const focusKey = useFocusAnimationKey();
 
   const onRefresh = () => {
     fetchSessionHistory(true);
@@ -229,121 +237,128 @@ const SessionHistoryScreen = () => {
     ));
   };
 
-  const renderSessionCard = (session: SessionHistoryItem) => (
-    <TouchableOpacity
-      key={session.id}
-      style={[styles.sessionCard, { backgroundColor: theme.card, borderColor: theme.primary }]}
-      onPress={() => {
-        // Navigate to session detail view (could extend SessionReportScreen)
-        console.log('Session tapped:', session.id);
-      }}
-      activeOpacity={0.7}
-    >
-      {/* Header */}
-      <View style={styles.sessionHeader}>
-        <View style={styles.sessionTitleRow}>
-          <Text style={[styles.sessionTitle, { color: theme.text }]}>
-            {session.task_title || session.subject || `${session.session_type} Session`}
-          </Text>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(session.status) }]}>
-            <Ionicons 
-              name={getStatusIcon(session.status) as any} 
-              size={12} 
-              color="#FFF" 
-              style={{ marginRight: 4 }} 
-            />
-            <Text style={styles.statusText}>{session.status}</Text>
-          </View>
-        </View>
-        <Text style={[styles.sessionDate, { color: theme.text }]}>
-          {formatDate(session.created_at)}
-        </Text>
-      </View>
+  // Animated session card component - MUST be a separate component to use hooks properly
+  const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
-      {/* Session Stats */}
-      <View style={styles.sessionStats}>
-        <View style={styles.statItem}>
-          <Ionicons name="time-outline" size={16} color={theme.primary} />
-          <Text style={[styles.statLabel, { color: theme.text }]}>Duration</Text>
-          <Text style={[styles.statValue, { color: theme.text }]}>
-            {formatDuration(session.duration_minutes || 0)}
-          </Text>
-        </View>
+  // SessionCard as a proper component to follow Rules of Hooks
+  const SessionCard: React.FC<{ session: SessionHistoryItem; index: number }> = ({ session, index }) => {
+    const { animatedStyle, onPressIn, onPressOut } = useButtonPressAnimation();
 
-        <View style={styles.statItem}>
-          <Ionicons name="calendar-outline" size={16} color={theme.primary} />
-          <Text style={[styles.statLabel, { color: theme.text }]}>Type</Text>
-          <Text style={[styles.statValue, { color: theme.text }]}>
-            {session.session_type === 'individual' ? 'Solo' : 'Group'}
-          </Text>
-        </View>
-
-        {session.focus_quality && (
-          <View style={styles.statItem}>
-            <Ionicons name="eye-outline" size={16} color={theme.primary} />
-            <Text style={[styles.statLabel, { color: theme.text }]}>Focus</Text>
-            <View style={styles.starsContainer}>
-              {renderStars(session.focus_quality)}
+    return (
+      <StaggeredItem index={index} delay="normal" direction="up">
+        <AnimatedTouchable
+          style={[
+            styles.sessionCard,
+            { backgroundColor: theme.card, borderColor: theme.primary },
+            animatedStyle,
+          ]}
+          onPress={() => {
+            triggerHaptic('buttonPress');
+            console.log('Session tapped:', session.id);
+          }}
+          onPressIn={onPressIn}
+          onPressOut={onPressOut}
+          activeOpacity={1}
+        >
+          {/* Header */}
+          <View style={styles.sessionHeader}>
+            <View style={styles.sessionTitleRow}>
+              <Text style={[styles.sessionTitle, { color: theme.text }]}>
+                {session.task_title || session.subject || `${session.session_type} Session`}
+              </Text>
+              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(session.status) }]}>
+                <Ionicons
+                  name={getStatusIcon(session.status) as any}
+                  size={12}
+                  color="#FFF"
+                  style={{ marginRight: 4 }}
+                />
+                <Text style={styles.statusText}>{session.status}</Text>
+              </View>
             </View>
-          </View>
-        )}
-      </View>
-
-      {/* Notes Preview - only show if notes exist */}
-      {session.notes && (
-        <View style={styles.notesPreview}>
-          <Ionicons name="document-text-outline" size={14} color={theme.primary} />
-          <Text style={[styles.notesText, { color: theme.text }]} numberOfLines={2}>
-            {session.notes}
-          </Text>
-        </View>
-      )}
-
-      {/* Session Footer */}
-      <View style={styles.sessionFooter}>
-        <View style={styles.footerItem}>
-          <Ionicons name="time-outline" size={14} color={theme.primary} />
-          <Text style={[styles.footerText, { color: theme.text }]}>
-            {new Date(session.start_time).toLocaleTimeString('en-US', {
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: true
-            })}
-          </Text>
-        </View>
-        {session.end_time && (
-          <View style={styles.footerItem}>
-            <Ionicons name="checkmark-circle-outline" size={14} color={theme.primary} />
-            <Text style={[styles.footerText, { color: theme.text }]}>
-              Completed
+            <Text style={[styles.sessionDate, { color: theme.text }]}>
+              {formatDate(session.created_at)}
             </Text>
           </View>
-        )}
-      </View>
-    </TouchableOpacity>
-  );
+
+          {/* Session Stats */}
+          <View style={styles.sessionStats}>
+            <View style={styles.statItem}>
+              <Ionicons name="time-outline" size={16} color={theme.primary} />
+              <Text style={[styles.statLabel, { color: theme.text }]}>Duration</Text>
+              <Text style={[styles.statValue, { color: theme.text }]}>
+                {formatDuration(session.duration_minutes || 0)}
+              </Text>
+            </View>
+
+            <View style={styles.statItem}>
+              <Ionicons name="calendar-outline" size={16} color={theme.primary} />
+              <Text style={[styles.statLabel, { color: theme.text }]}>Type</Text>
+              <Text style={[styles.statValue, { color: theme.text }]}>
+                {session.session_type === 'individual' ? 'Solo' : 'Group'}
+              </Text>
+            </View>
+
+            {session.focus_quality ? (
+              <View style={styles.statItem}>
+                <Ionicons name="eye-outline" size={16} color={theme.primary} />
+                <Text style={[styles.statLabel, { color: theme.text }]}>Focus</Text>
+                <View style={styles.starsContainer}>
+                  {renderStars(session.focus_quality)}
+                </View>
+              </View>
+            ) : null}
+          </View>
+
+          {/* Notes Preview - only show if notes exist */}
+          {session.notes ? (
+            <View style={styles.notesPreview}>
+              <Ionicons name="document-text-outline" size={14} color={theme.primary} />
+              <Text style={[styles.notesText, { color: theme.text }]} numberOfLines={2}>
+                {session.notes}
+              </Text>
+            </View>
+          ) : null}
+
+          {/* Session Footer */}
+          <View style={styles.sessionFooter}>
+            <View style={styles.footerItem}>
+              <Ionicons name="time-outline" size={14} color={theme.primary} />
+              <Text style={[styles.footerText, { color: theme.text }]}>
+                {new Date(session.start_time).toLocaleTimeString('en-US', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: true
+                })}
+              </Text>
+            </View>
+            {session.end_time && (
+              <View style={styles.footerItem}>
+                <Ionicons name="checkmark-circle-outline" size={14} color={theme.primary} />
+                <Text style={[styles.footerText, { color: theme.text }]}>
+                  Completed
+                </Text>
+              </View>
+            )}
+          </View>
+        </AnimatedTouchable>
+      </StaggeredItem>
+    );
+  };
 
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-        {/* Header with X button and Title */}
-        <View style={[styles.header, { backgroundColor: theme.background }]}>
-          <TouchableOpacity
-            style={styles.closeButton}
-            onPress={() => navigation.navigate('Home')}
-          >
-            <View style={[styles.closeButtonCircle, { backgroundColor: theme.text + '20' }]}>
-              <Ionicons name="close" size={24} color={theme.text} />
-            </View>
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>Traveller</Text>
-          <View style={styles.headerSpacer} />
-        </View>
+        <UnifiedHeader title="History" onClose={() => navigation.navigate('Home')} />
 
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.primary} />
-          <Text style={[styles.loadingText, { color: theme.text }]}>Loading session history...</Text>
-        </View>
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+          <View style={styles.loadingContainer}>
+            <ShimmerLoader variant="card" height={100} style={{ marginBottom: 16 }} />
+            <SkeletonCard showImage={false} style={{ marginBottom: 16 }} />
+            <SkeletonCard showImage={false} style={{ marginBottom: 16 }} />
+            <SkeletonCard showImage={false} style={{ marginBottom: 16 }} />
+          </View>
+        </ScrollView>
 
         <BottomTabBar currentRoute="SessionHistory" />
       </SafeAreaView>
@@ -353,10 +368,14 @@ const SessionHistoryScreen = () => {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Unified Header */}
-      <UnifiedHeader title="Pathfinder" onClose={() => navigation.navigate('Home')} />
+      <UnifiedHeader title="History" onClose={() => navigation.navigate('Home')} />
 
       {/* Time Filter */}
-      <View style={[styles.filterContainer, { backgroundColor: theme.card }]}>
+      <Animated.View
+        key={`filter-${focusKey}`}
+        entering={FadeInDown.delay(100).duration(400).duration(400)}
+        style={[styles.filterContainer, { backgroundColor: theme.card }]}
+      >
         {(['all', 'week', 'month'] as const).map((filter) => (
           <TouchableOpacity
             key={filter}
@@ -365,7 +384,10 @@ const SessionHistoryScreen = () => {
               timeFilter === filter && { backgroundColor: theme.primary },
               { borderColor: theme.primary }
             ]}
-            onPress={() => setTimeFilter(filter)}
+            onPress={() => {
+              triggerHaptic('selection');
+              setTimeFilter(filter);
+            }}
           >
             <Text style={[
               styles.filterText,
@@ -375,7 +397,7 @@ const SessionHistoryScreen = () => {
             </Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </Animated.View>
 
       {/* Error State */}
       {error && (
@@ -416,35 +438,49 @@ const SessionHistoryScreen = () => {
         ) : (
           <>
             {/* Summary Stats */}
-            <View style={[styles.summaryContainer, { backgroundColor: theme.card }]}>
+            <Animated.View
+              entering={FadeInUp.delay(300).duration(400)}
+              style={[styles.summaryContainer, { backgroundColor: theme.card }]}
+            >
               <Text style={[styles.summaryTitle, { color: theme.text }]}>
-                {timeFilter === 'all' ? 'All Time' : 
+                {timeFilter === 'all' ? 'All Time' :
                  timeFilter === 'week' ? 'This Week' : 'This Month'} Summary
               </Text>
               <View style={styles.summaryStats}>
-                <View style={styles.summaryItem}>
+                <Animated.View
+                  entering={FadeIn.delay(400).duration(400)}
+                  style={styles.summaryItem}
+                >
                   <Text style={[styles.summaryValue, { color: theme.primary }]}>
                     {sessions.length}
                   </Text>
                   <Text style={[styles.summaryLabel, { color: theme.text }]}>Sessions</Text>
-                </View>
-                <View style={styles.summaryItem}>
+                </Animated.View>
+                <Animated.View
+                  entering={FadeIn.delay(500).duration(400)}
+                  style={styles.summaryItem}
+                >
                   <Text style={[styles.summaryValue, { color: theme.primary }]}>
                     {Math.round(sessions.reduce((total, session) => total + (session.duration_minutes || 0), 0) / 60 * 10) / 10}h
                   </Text>
                   <Text style={[styles.summaryLabel, { color: theme.text }]}>Total Time</Text>
-                </View>
-                <View style={styles.summaryItem}>
+                </Animated.View>
+                <Animated.View
+                  entering={FadeIn.delay(600).duration(400)}
+                  style={styles.summaryItem}
+                >
                   <Text style={[styles.summaryValue, { color: theme.primary }]}>
                     {sessions.filter(s => s.status === 'completed').length}
                   </Text>
                   <Text style={[styles.summaryLabel, { color: theme.text }]}>Completed</Text>
-                </View>
+                </Animated.View>
               </View>
-            </View>
+            </Animated.View>
 
             {/* Sessions List */}
-            {sessions.map(renderSessionCard)}
+            {sessions.map((session, index) => (
+              <SessionCard key={session.id} session={session} index={index} />
+            ))}
           </>
         )}
       </ScrollView>

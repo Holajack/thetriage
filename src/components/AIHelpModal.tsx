@@ -8,7 +8,7 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 
 interface AIHelpModalProps {
@@ -159,7 +159,7 @@ export default function AIHelpModal({ visible, onClose, aiType }: AIHelpModalPro
               <Text style={styles.title}>{currentAI.name}</Text>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color="#666" />
+              <Ionicons name="close-outline" size={24} color="#666" />
             </TouchableOpacity>
           </View>
 
@@ -171,7 +171,7 @@ export default function AIHelpModal({ visible, onClose, aiType }: AIHelpModalPro
               {currentAI.capabilities.map((capability, index) => (
                 <View key={index} style={styles.listItem}>
                   <View style={styles.bullet}>
-                    <Ionicons name="checkmark" size={16} color={currentAI.color} />
+                    <Ionicons name="checkmark-outline" size={16} color={currentAI.color} />
                   </View>
                   <Text style={styles.listText}>{capability}</Text>
                 </View>
@@ -183,7 +183,7 @@ export default function AIHelpModal({ visible, onClose, aiType }: AIHelpModalPro
               {currentAI.limitations.map((limitation, index) => (
                 <View key={index} style={styles.listItem}>
                   <View style={styles.bullet}>
-                    <Ionicons name="alert-circle" size={16} color="#FF9800" />
+                    <Ionicons name="alert-circle-outline" size={16} color="#FF9800" />
                   </View>
                   <Text style={styles.listText}>{limitation}</Text>
                 </View>
@@ -195,7 +195,7 @@ export default function AIHelpModal({ visible, onClose, aiType }: AIHelpModalPro
               {currentAI.dataCollected.map((data, index) => (
                 <View key={index} style={styles.listItem}>
                   <View style={styles.bullet}>
-                    <Ionicons name="information-circle" size={16} color="#2196F3" />
+                    <Ionicons name="information-circle-outline" size={16} color="#2196F3" />
                   </View>
                   <Text style={styles.listText}>{data}</Text>
                 </View>
@@ -207,7 +207,7 @@ export default function AIHelpModal({ visible, onClose, aiType }: AIHelpModalPro
               {currentAI.policies.map((policy, index) => (
                 <View key={index} style={styles.listItem}>
                   <View style={styles.bullet}>
-                    <Ionicons name="shield-checkmark" size={16} color="#9C27B0" />
+                    <Ionicons name="shield-checkmark-outline" size={16} color="#9C27B0" />
                   </View>
                   <Text style={styles.listText}>{policy}</Text>
                 </View>
@@ -216,7 +216,7 @@ export default function AIHelpModal({ visible, onClose, aiType }: AIHelpModalPro
 
             <View style={styles.supportSection}>
               <TouchableOpacity style={styles.supportButton} onPress={handleContactSupport}>
-                <MaterialCommunityIcons name="help-circle-outline" size={24} color="#FFF" />
+                <Ionicons name="help-circle-outline" size={24} color="#FFF" />
                 <Text style={styles.supportButtonText}>Need Help or Have Concerns?</Text>
               </TouchableOpacity>
             </View>
