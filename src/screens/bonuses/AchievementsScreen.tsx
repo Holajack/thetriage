@@ -1,18 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, ActivityIndicator } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSupabaseAchievements } from '../../utils/supabaseHooks';
 import { supabase } from '../../utils/supabase';
 import { useTheme } from '../../context/ThemeContext';
+import Animated, { FadeInUp, FadeIn } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
+import { HolographicBadge, BadgeGrid } from '../../components/premium/HolographicBadge';
+import { AnimatedButton } from '../../components/premium/AnimatedButton';
+import { StaggeredItem } from '../../components/premium/StaggeredList';
+import { Typography, Spacing, BorderRadius, Shadows, PremiumColors } from '../../theme/premiumTheme';
 
 interface Achievement {
   id: string;
   title: string;
   description: string;
   icon: string;
-  iconFamily: 'Ionicons' | 'MaterialCommunityIcons';
+  iconFamily: 'Ionicons';
   category: string;
   requiredValue: number;
   currentValue?: number;
@@ -20,6 +26,7 @@ interface Achievement {
   earnedAt?: string;
   color: string;
   reward?: string;
+  rarity: 'common' | 'rare' | 'epic' | 'legendary';
 }
 
 const AchievementsScreen = () => {
@@ -51,166 +58,180 @@ const AchievementsScreen = () => {
       color: '#4CAF50',
       earned: false,
       reward: '50 points',
+      rarity: 'common',
     },
     {
       id: 'focus_master_10',
       title: 'Focus Master',
       description: 'Complete 10 hours of focused study',
-      icon: 'timer',
-      iconFamily: 'MaterialCommunityIcons',
+      icon: 'timer-outline',
+      iconFamily: 'Ionicons',
       category: 'Focus Time',
       requiredValue: 10,
       color: '#2196F3',
       earned: false,
       reward: '200 points',
+      rarity: 'rare',
     },
     {
       id: 'deep_focus_50',
       title: 'Deep Focus',
       description: 'Complete 50 hours of focused study',
-      icon: 'brain',
-      iconFamily: 'MaterialCommunityIcons',
+      icon: 'bulb-outline',
+      iconFamily: 'Ionicons',
       category: 'Focus Time',
       requiredValue: 50,
       color: '#9C27B0',
       earned: false,
       reward: '500 points',
+      rarity: 'epic',
     },
     {
       id: 'zen_master_100',
       title: 'Zen Master',
       description: 'Complete 100 hours of focused study',
-      icon: 'meditation',
-      iconFamily: 'MaterialCommunityIcons',
+      icon: 'flower-outline',
+      iconFamily: 'Ionicons',
       category: 'Focus Time',
       requiredValue: 100,
       color: '#FF9800',
       earned: false,
       reward: '1000 points',
+      rarity: 'legendary',
     },
     // Streak Achievements
     {
       id: 'getting_started_3',
       title: 'Getting Started',
       description: 'Maintain a 3-day study streak',
-      icon: 'fire',
-      iconFamily: 'MaterialCommunityIcons',
+      icon: 'flame-outline',
+      iconFamily: 'Ionicons',
       category: 'Streaks',
       requiredValue: 3,
       color: '#F44336',
       earned: false,
       reward: '100 points',
+      rarity: 'common',
     },
     {
       id: 'week_warrior_7',
       title: 'Week Warrior',
       description: 'Maintain a 7-day study streak',
-      icon: 'calendar-week',
-      iconFamily: 'MaterialCommunityIcons',
+      icon: 'calendar-outline',
+      iconFamily: 'Ionicons',
       category: 'Streaks',
       requiredValue: 7,
       color: '#E91E63',
       earned: false,
       reward: '250 points',
+      rarity: 'rare',
     },
     {
       id: 'habit_builder_30',
       title: 'Habit Builder',
       description: 'Maintain a 30-day study streak',
-      icon: 'trending-up',
+      icon: 'trending-up-outline',
       iconFamily: 'Ionicons',
       category: 'Streaks',
       requiredValue: 30,
       color: '#673AB7',
       earned: false,
       reward: '750 points',
+      rarity: 'epic',
     },
     // Task Achievements
     {
       id: 'task_starter_5',
       title: 'Task Starter',
       description: 'Complete 5 tasks',
-      icon: 'checkbox-marked-circle',
-      iconFamily: 'MaterialCommunityIcons',
+      icon: 'checkmark-circle-outline',
+      iconFamily: 'Ionicons',
       category: 'Tasks',
       requiredValue: 5,
       color: '#00BCD4',
       earned: false,
       reward: '75 points',
+      rarity: 'common',
     },
     {
       id: 'productive_25',
       title: 'Productive',
       description: 'Complete 25 tasks',
-      icon: 'clipboard-check',
-      iconFamily: 'MaterialCommunityIcons',
+      icon: 'clipboard-outline',
+      iconFamily: 'Ionicons',
       category: 'Tasks',
       requiredValue: 25,
       color: '#009688',
       earned: false,
       reward: '300 points',
+      rarity: 'rare',
     },
     {
       id: 'task_master_100',
       title: 'Task Master',
       description: 'Complete 100 tasks',
-      icon: 'trophy',
+      icon: 'trophy-outline',
       iconFamily: 'Ionicons',
       category: 'Tasks',
       requiredValue: 100,
       color: '#FFD700',
       earned: false,
       reward: '1000 points',
+      rarity: 'legendary',
     },
     // Social Achievements
     {
       id: 'social_butterfly_5',
       title: 'Social Butterfly',
       description: 'Add 5 friends',
-      icon: 'people',
+      icon: 'people-outline',
       iconFamily: 'Ionicons',
       category: 'Social',
       requiredValue: 5,
       color: '#3F51B5',
       earned: false,
       reward: '150 points',
+      rarity: 'common',
     },
     {
       id: 'community_builder_10',
       title: 'Community Builder',
       description: 'Add 10 friends',
-      icon: 'account-group',
-      iconFamily: 'MaterialCommunityIcons',
+      icon: 'person-outline',
+      iconFamily: 'Ionicons',
       category: 'Social',
       requiredValue: 10,
       color: '#2196F3',
       earned: false,
       reward: '300 points',
+      rarity: 'rare',
     },
     // Level Achievements
     {
       id: 'level_5',
       title: 'Rising Star',
       description: 'Reach Level 5',
-      icon: 'star',
+      icon: 'star-outline',
       iconFamily: 'Ionicons',
       category: 'Levels',
       requiredValue: 5,
       color: '#FFC107',
       earned: false,
       reward: 'Special Badge',
+      rarity: 'rare',
     },
     {
       id: 'level_10',
       title: 'Scholar',
       description: 'Reach Level 10',
-      icon: 'school',
+      icon: 'school-outline',
       iconFamily: 'Ionicons',
       category: 'Levels',
       requiredValue: 10,
       color: '#795548',
       earned: false,
       reward: 'Exclusive Theme',
+      rarity: 'epic',
     },
   ];
 
@@ -331,12 +352,8 @@ const AchievementsScreen = () => {
   const renderIcon = (achievement: Achievement) => {
     const size = 32;
     const color = achievement.earned ? achievement.color : '#BDBDBD';
-    
-    if (achievement.iconFamily === 'Ionicons') {
-      return <Ionicons name={achievement.icon as any} size={size} color={color} />;
-    } else {
-      return <MaterialCommunityIcons name={achievement.icon as any} size={size} color={color} />;
-    }
+
+    return <Ionicons name={achievement.icon as any} size={size} color={color} />;
   };
 
   if (loading) {
@@ -356,74 +373,67 @@ const AchievementsScreen = () => {
         showsVerticalScrollIndicator={false}
       >
         {/* Stats Summary */}
-        <View style={styles.statsContainer}>
-          <Text style={styles.statsTitle}>Your Progress</Text>
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{earnedAchievements.length}</Text>
-              <Text style={styles.statLabel}>Unlocked</Text>
+        <Animated.View
+          entering={FadeInUp.delay(100).springify()}
+          style={[styles.statsContainer, { backgroundColor: theme.primary + '15' }]}
+        >
+          <LinearGradient
+            colors={[theme.primary + '10', theme.primary + '05']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.statsGradient}
+          >
+            <Text style={[styles.statsTitle, { color: theme.text }]}>Your Progress</Text>
+            <View style={styles.statsRow}>
+              <Animated.View entering={FadeIn.delay(200)} style={styles.statItem}>
+                <Text style={[styles.statValue, { color: theme.primary }]}>{earnedAchievements.length}</Text>
+                <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Unlocked</Text>
+              </Animated.View>
+              <Animated.View entering={FadeIn.delay(250)} style={styles.statItem}>
+                <Text style={[styles.statValue, { color: theme.primary }]}>{achievementsList.length}</Text>
+                <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Total</Text>
+              </Animated.View>
+              <Animated.View entering={FadeIn.delay(300)} style={styles.statItem}>
+                <Text style={[styles.statValue, { color: theme.primary }]}>
+                  {Math.round((earnedAchievements.length / achievementsList.length) * 100)}%
+                </Text>
+                <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Complete</Text>
+              </Animated.View>
             </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{achievementsList.length}</Text>
-              <Text style={styles.statLabel}>Total</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>
-                {Math.round((earnedAchievements.length / achievementsList.length) * 100)}%
-              </Text>
-              <Text style={styles.statLabel}>Complete</Text>
-            </View>
-          </View>
-        </View>
+          </LinearGradient>
+        </Animated.View>
 
         {/* Achievement Categories */}
-        {Object.entries(groupedAchievements).map(([category, achievements]) => (
-          <View key={category} style={styles.categoryContainer}>
-            <Text style={styles.categoryTitle}>{category}</Text>
+        {Object.entries(groupedAchievements).map(([category, achievements], categoryIndex) => (
+          <StaggeredItem
+            key={category}
+            index={categoryIndex}
+            delay="normal"
+            direction="up"
+            style={styles.categoryContainer}
+          >
+            <Text style={[styles.categoryTitle, { color: theme.text }]}>{category}</Text>
             <View style={styles.achievementsGrid}>
-              {achievements.map((achievement) => (
-                <TouchableOpacity
+              {achievements.map((achievement, index) => (
+                <HolographicBadge
                   key={achievement.id}
-                  style={[
-                    styles.achievementCard,
-                    achievement.earned && styles.achievementCardEarned,
-                  ]}
-                  onPress={() => setSelectedAchievement(achievement)}
-                >
-                  <View style={styles.achievementIcon}>
-                    {renderIcon(achievement)}
-                  </View>
-                  <Text style={[
-                    styles.achievementTitle,
-                    achievement.earned && styles.achievementTitleEarned,
-                  ]} numberOfLines={1}>
-                    {achievement.title}
-                  </Text>
-                  {!achievement.earned && (
-                    <View style={styles.progressBar}>
-                      <View 
-                        style={[
-                          styles.progressFill,
-                          { 
-                            width: `${achievement.currentValue || 0}%`,
-                            backgroundColor: achievement.color,
-                          }
-                        ]} 
-                      />
-                    </View>
-                  )}
-                  {achievement.earned && (
-                    <Ionicons 
-                      name="checkmark-circle" 
-                      size={20} 
-                      color={achievement.color}
-                      style={styles.earnedIcon}
-                    />
-                  )}
-                </TouchableOpacity>
+                  title={achievement.title}
+                  description={achievement.description}
+                  icon={renderIcon(achievement)}
+                  unlocked={achievement.earned}
+                  rarity={achievement.rarity}
+                  progress={achievement.earned ? 1 : (achievement.currentValue || 0) / 100}
+                  size="small"
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setSelectedAchievement(achievement);
+                  }}
+                  showCelebration={false}
+                  style={styles.achievementBadge}
+                />
               ))}
             </View>
-          </View>
+          </StaggeredItem>
         ))}
       </ScrollView>
 
@@ -482,12 +492,18 @@ const AchievementsScreen = () => {
                   </View>
                 )}
                 
-                <TouchableOpacity
-                  style={styles.closeButton}
-                  onPress={() => setSelectedAchievement(null)}
-                >
-                  <Text style={styles.closeButtonText}>Close</Text>
-                </TouchableOpacity>
+                <AnimatedButton
+                  title="Close"
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setSelectedAchievement(null);
+                  }}
+                  variant="primary"
+                  size="large"
+                  gradient
+                  gradientColors={PremiumColors.gradients.primary as [string, string, ...string[]]}
+                  style={{ marginTop: Spacing.md }}
+                />
               </>
             )}
           </View>
@@ -539,11 +555,14 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   statsContainer: {
-    backgroundColor: '#E8F5E9',
-    marginHorizontal: 20,
-    marginBottom: 24,
-    borderRadius: 16,
-    padding: 20,
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    overflow: 'hidden',
+    ...Shadows.md,
+  },
+  statsGradient: {
+    padding: Spacing.lg,
   },
   statsTitle: {
     fontSize: 18,
@@ -581,7 +600,12 @@ const styles = StyleSheet.create({
   achievementsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: 16,
+    paddingHorizontal: Spacing.md,
+    gap: Spacing.sm,
+    justifyContent: 'center',
+  },
+  achievementBadge: {
+    marginBottom: Spacing.xs,
   },
   achievementCard: {
     width: '31%',

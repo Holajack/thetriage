@@ -1,7 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeInUp, FadeIn, Layout } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
+import { AnimatedButton } from '../../components/premium/AnimatedButton';
+import { StaggeredItem } from '../../components/premium/StaggeredList';
+import { usePulseAnimation } from '../../utils/animationUtils';
+import { useTheme } from '../../context/ThemeContext';
+import { Typography, Spacing, BorderRadius, Shadows, PremiumColors } from '../../theme/premiumTheme';
 
 const plans = [
   {
@@ -57,59 +65,138 @@ const plans = [
 ];
 
 const SubscriptionScreen = () => {
+  const { theme } = useTheme();
+  const [selectedPlan, setSelectedPlan] = useState<string | null>('Basic');
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const handlePlanSelect = (planName: string) => {
+    if (planName !== 'Basic') {
+      Haptics.selectionAsync();
+      setSelectedPlan(planName);
+    }
+  };
+
+  const handleUpgrade = async (planName: string) => {
+    if (planName === 'Basic') return;
+
+    setIsProcessing(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    // TODO: Implement actual purchase flow
+    setTimeout(() => {
+      setIsProcessing(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }, 1500);
+  };
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.title}>Choose Your Plan</Text>
-        <Text style={styles.subtitle}>Unlock your full potential with advanced features and insights.</Text>
+        <Animated.View entering={FadeInUp.delay(100).duration(400)}>
+          <Text style={[styles.title, { color: theme.text }]}>Choose Your Plan</Text>
+          <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
+            Unlock your full potential with advanced features and insights.
+          </Text>
+        </Animated.View>
+
         <View style={styles.cardsColumn}>
-          {plans.map((plan, idx) => (
-            <View key={plan.name} style={styles.cardWrapper}>
-              {plan.badge && (
-                <View style={styles.badgeAboveCard}>
-                  <Text style={styles.badgeText}>{plan.badge}</Text>
-                </View>
-              )}
-              <View
-                style={[styles.card, plan.highlight && styles.cardHighlight]}
+          {plans.map((plan, idx) => {
+            const isSelected = selectedPlan === plan.name;
+            const isPremiumPlan = !plan.highlight;
+
+            return (
+              <StaggeredItem
+                key={plan.name}
+                index={idx}
+                delay="normal"
+                direction="up"
+                style={styles.cardWrapper}
               >
-                <View style={styles.headerRow}>
-                  <Text style={styles.planName}>{plan.name}</Text>
-                  <Text style={styles.planPrice}>{plan.price}</Text>
-                </View>
-                <View style={styles.featuresList}>
-                  {plan.features.map((feature, i) => (
-                    <View key={i} style={styles.featureRow}>
-                      <Ionicons
-                        name="checkmark-circle"
-                        size={18}
-                        color={plan.highlight ? '#388E3C' : '#7B61FF'}
-                        style={{ marginRight: 8 }}
-                      />
-                      <Text style={styles.featureText}>{feature}</Text>
-                    </View>
-                  ))}
-                </View>
+                {plan.badge && (
+                  <Animated.View
+                    entering={FadeIn.delay(300 + idx * 150)}
+                    style={[styles.badgeAboveCard, { backgroundColor: theme.primary }]}
+                  >
+                    <LinearGradient
+                      colors={PremiumColors.gradients.gold as [string, string, ...string[]]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.badgeGradient}
+                    >
+                      <Text style={styles.badgeText}>✨ {plan.badge}</Text>
+                    </LinearGradient>
+                  </Animated.View>
+                )}
+
                 <TouchableOpacity
-                  style={[
-                    styles.ctaBtn,
-                    plan.highlight && styles.ctaBtnCurrent,
-                    !plan.highlight && styles.ctaBtnActive,
-                  ]}
-                  disabled={plan.highlight}
-                  activeOpacity={plan.highlight ? 1 : 0.8}
+                  activeOpacity={0.9}
+                  onPress={() => handlePlanSelect(plan.name)}
                 >
-                  <Text style={[
-                    styles.ctaText,
-                    plan.highlight && styles.ctaTextCurrent,
-                    !plan.highlight && styles.ctaTextActive,
-                  ]}>
-                    {plan.cta}
-                  </Text>
+                  <Animated.View
+                    layout={Layout.duration(400)}
+                    style={[
+                      styles.card,
+                      { backgroundColor: theme.card, borderColor: theme.border },
+                      plan.highlight && styles.cardHighlight,
+                      isSelected && isPremiumPlan && {
+                        borderColor: theme.primary,
+                        borderWidth: 2.5,
+                        ...Shadows.glow(theme.primary),
+                      },
+                    ]}
+                  >
+                    <View style={styles.headerRow}>
+                      <Text style={[styles.planName, { color: theme.primary }]}>{plan.name}</Text>
+                      <Animated.View entering={FadeIn.delay(400 + idx * 150)}>
+                        <Text style={[styles.planPrice, { color: theme.primary }]}>{plan.price}</Text>
+                      </Animated.View>
+                    </View>
+
+                    <View style={styles.featuresList}>
+                      {plan.features.map((feature, i) => (
+                        <Animated.View
+                          key={i}
+                          entering={FadeInUp.delay(450 + idx * 150 + i * 50).duration(400)}
+                          style={styles.featureRow}
+                        >
+                          <Ionicons
+                            name="checkmark-circle"
+                            size={18}
+                            color={plan.highlight ? PremiumColors.success.main : theme.primary}
+                            style={{ marginRight: 8 }}
+                          />
+                          <Text style={[styles.featureText, { color: theme.text }]}>{feature}</Text>
+                        </Animated.View>
+                      ))}
+                    </View>
+
+                    {plan.highlight ? (
+                      <View style={[styles.ctaBtn, styles.ctaBtnCurrent, { borderColor: theme.border }]}>
+                        <Ionicons name="checkmark-circle" size={20} color={PremiumColors.success.main} />
+                        <Text style={[styles.ctaText, styles.ctaTextCurrent, { color: theme.textSecondary }]}>
+                          {plan.cta}
+                        </Text>
+                      </View>
+                    ) : (
+                      <AnimatedButton
+                        title={plan.cta}
+                        onPress={() => handleUpgrade(plan.name)}
+                        variant="primary"
+                        size="large"
+                        gradient
+                        gradientColors={PremiumColors.gradients.primary as [string, string, ...string[]]}
+                        loading={isProcessing && isSelected}
+                        disabled={isProcessing}
+                        fullWidth
+                        icon={<Ionicons name="arrow-forward" size={20} color="#FFF" />}
+                        iconPosition="right"
+                      />
+                    )}
+                  </Animated.View>
                 </TouchableOpacity>
-              </View>
-            </View>
-          ))}
+              </StaggeredItem>
+            );
+          })}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -219,21 +306,30 @@ const styles = StyleSheet.create({
     color: '#888',
   },
   badgeAboveCard: {
-    backgroundColor: '#7B61FF',
     borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 4,
     marginBottom: -12,
     zIndex: 2,
     alignSelf: 'center',
     minWidth: 90,
     marginTop: 0,
+    overflow: 'hidden',
+  },
+  badgeGradient: {
+    paddingHorizontal: 14,
+    paddingVertical: 4,
   },
   badgeText: {
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 12,
     letterSpacing: 0.5,
+    textAlign: 'center',
+  },
+  ctaBtnCurrent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
 });
 

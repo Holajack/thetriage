@@ -16,6 +16,21 @@ import { useBackgroundMusic } from '../../hooks/useBackgroundMusic';
 import { getSoundPreference, getAutoPlaySetting } from '../../utils/musicPreferences';
 import { endFocusSessionWithDND } from '../../utils/doNotDisturb';
 import { useTheme } from '../../context/ThemeContext';
+import ReAnimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withSequence,
+  withRepeat,
+  Easing,
+  interpolate,
+  runOnJS
+} from 'react-native-reanimated';
+import { Typography, AnimationConfig, TimingConfig } from '../../theme/premiumTheme';
+import { useSuccessAnimation, triggerHaptic } from '../../utils/animationUtils';
+import { ParallaxForestBackground } from '../../components/ParallaxForestBackground';
+import { useSupabaseProfile } from '../../utils/supabaseHooks';
 const { useUserAppData } = require('../../utils/userAppData');
 
 
@@ -65,6 +80,7 @@ export const StudySessionScreen = () => {
   const { theme } = useTheme();
   const environmentColors = theme;
   const { data: userData } = useUserAppData();
+  const { profile } = useSupabaseProfile();
   const {
     startPlaylist,
     stopPlayback,
@@ -90,6 +106,7 @@ export const StudySessionScreen = () => {
     autoStart?: boolean;
     selectedTask?: any;
     manualSelection?: boolean;
+    selectionMode?: 'auto' | 'manual';
     focusMode?: 'basecamp' | 'summit';
     tasks?: any[];
     duration?: number;
@@ -103,6 +120,7 @@ export const StudySessionScreen = () => {
   const [showBackConfirmModal, setShowBackConfirmModal] = useState(false);
   const [musicEnabled, setMusicEnabled] = useState(true);
   const [sessionStarted, setSessionStarted] = useState(false);
+  const [showHoldTooltip, setShowHoldTooltip] = useState(false);
 
   // Timer refs for background functionality
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -144,14 +162,23 @@ export const StudySessionScreen = () => {
   }, [musicEnabled, stopSessionMusic]);
   
   // Pre-session selection state - updated logic
+  // Only show modal for SUMMIT mode with MANUAL progression (for task order selection)
+  // Basecamp mode already selected subject in FocusPreparationScreen - no additional selection needed
   const [showPreSessionModal, setShowPreSessionModal] = useState(() => {
-    // Show modal for custom/manual selection and ensure we have task data
-    return params?.manualSelection === true;
+    // Only show for Summit + Manual mode (needs task order selection)
+    const isSummitManual = params?.focusMode === 'summit' && params?.manualSelection === true;
+    return isSummitManual;
   });
   const [selectionMode, setSelectionMode] = useState<'auto' | 'manual' | null>(() => {
     // Set initial selection mode based on navigation params
-    if (params?.autoStart === true) return 'auto';
+    // Priority: explicit selectionMode > manualSelection > focusMode inference > autoStart
+    if (params?.selectionMode) return params.selectionMode;
     if (params?.manualSelection === true) return 'manual';
+    // Basecamp mode is always manual
+    if (params?.focusMode === 'basecamp') return 'manual';
+    // Summit with autoProgress false means manual
+    if (params?.focusMode === 'summit' && params?.autoProgress === false) return 'manual';
+    if (params?.autoStart === true) return 'auto';
     return null;
   });
   
@@ -166,7 +193,13 @@ export const StudySessionScreen = () => {
   });
   const [selectedTasks, setSelectedTasks] = useState<Task[]>([]);
   const [taskOrder, setTaskOrder] = useState<Task[]>([]);
-  const [selectedSubject, setSelectedSubject] = useState<string>('');
+  // Initialize subject from task param (for Basecamp mode where subject was already selected)
+  const [selectedSubject, setSelectedSubject] = useState<string>(() => {
+    // Get subject from task param if available
+    if (params?.task?.subject) return params.task.subject;
+    if (params?.task?.category) return params.task.category;
+    return '';
+  });
   const [customMinutes, setCustomMinutes] = useState('');
 
   // Calculate initial timer duration based on user's focus method or selection
@@ -203,6 +236,31 @@ export const StudySessionScreen = () => {
   // Summit mode multi-task state
   const [currentTaskIndex, setCurrentTaskIndex] = useState(params?.currentTaskIndex || 0);
   const [completedTasksData, setCompletedTasksData] = useState<any[]>(params?.completedTasksData || []);
+
+  // Premium timer animations
+  const timerScale = useSharedValue(1);
+  const timerOpacity = useSharedValue(1);
+  const prevTimer = useRef(timer);
+
+  // Success celebration animation
+  const { animatedStyle: celebrationStyle, celebrate } = useSuccessAnimation();
+
+  // Animated timer style with tick effect
+  const timerAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: timerScale.value }],
+    opacity: timerOpacity.value,
+  }));
+
+  // Trigger tick animation when timer changes
+  useEffect(() => {
+    if (prevTimer.current !== timer && timer > 0) {
+      timerScale.value = withSequence(
+        withTiming(1.05, { duration: 100, easing: Easing.out(Easing.ease) }),
+        withSpring(1, AnimationConfig.quick)
+      );
+      prevTimer.current = timer;
+    }
+  }, [timer]);
 
   // Enhanced task selection logic using real Supabase data
   const currentTask = useMemo(() => {
@@ -614,6 +672,10 @@ export const StudySessionScreen = () => {
   const handleTimerComplete = async () => {
     try {
       console.log('🎵 Timer complete - disabling auto-advance FIRST');
+
+      // Trigger success celebration animation
+      celebrate();
+      triggerHaptic('success');
 
       // CRITICAL: Disable auto-advance FIRST (synchronous) before async operations
       disableAutoAdvance();
@@ -1233,11 +1295,10 @@ export const StudySessionScreen = () => {
       {/* New Focus Screen Layout - Full Screen Background */}
       {(sessionStarted || params?.autoStart) && (
         <>
-          <ThemedImageBackground 
-            source={require('../../../assets/nora-walking-cute.png')} 
-            style={styles.fullScreenBackgroundFixed}
-            resizeMode="cover"
-            applyFilter={true}
+          <ParallaxForestBackground
+            trailBuddyType={profile?.trail_buddy_type || 'bear'}
+            isActive={true}
+            showTrailBuddy={true}
           />
           <View style={styles.newContainer}>
 
@@ -1255,19 +1316,27 @@ export const StudySessionScreen = () => {
             </TouchableOpacity>
 
             {/* Small Discrete Timer (Top Center) - Matches IMG_0022.PNG */}
-            <View style={styles.discreteTimerContainer}>
+            <ReAnimated.View style={[styles.discreteTimerContainer, timerAnimatedStyle]}>
               <Text style={styles.discreteTimerText}>{formatTime(timer)}</Text>
-            </View>
+            </ReAnimated.View>
 
-            {/* Long-press End Session Button (Top Right) */}
-            <TouchableOpacity
-              style={[styles.endSessionButton, { backgroundColor: environmentColors.primary }]}
-              onPressIn={handleLongPressStart}
-              onPressOut={handleLongPressEnd}
-              onPress={() => {}} // Empty onPress to prevent accidental taps
-            >
-              <Ionicons name="checkmark" size={24} color={environmentColors.card} />
-            </TouchableOpacity>
+            {/* Long-press End Session Button (Top Right) - X icon with hold instruction */}
+            <View style={styles.endSessionButtonContainer}>
+              <TouchableOpacity
+                style={[styles.endSessionButton, { backgroundColor: environmentColors.primary }]}
+                onPressIn={handleLongPressStart}
+                onPressOut={handleLongPressEnd}
+                onPress={() => {
+                  // Show centered liquid glass popup
+                  setShowHoldTooltip(true);
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  // Auto-hide after 2 seconds
+                  setTimeout(() => setShowHoldTooltip(false), 2000);
+                }}
+              >
+                <Ionicons name="close" size={24} color={environmentColors.card} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Task Info Icon (Left Side, Further Down) */}
@@ -1281,17 +1350,34 @@ export const StudySessionScreen = () => {
             <Ionicons name="information-circle-outline" size={28} color={environmentColors.card} />
           </TouchableOpacity>
 
-          {/* Mode Notification for Full Screen */}
+          {/* Mode Notification for Full Screen - Enlarged to show subject info */}
           <View style={styles.modeNotificationFullScreen}>
             <Text style={styles.modeNotificationFullScreenText}>
               {selectionMode === 'manual' ? 'Manual Mode' : 'Auto Mode'}
             </Text>
+            <Text style={styles.modeNotificationSubjectText}>
+              {currentTask?.subject || currentTask?.category || selectedSubject || 'General Study'}
+            </Text>
+            {selectionMode === 'auto' && currentTask && (
+              <Text style={styles.modeNotificationTaskText}>
+                {currentTask.title || 'Current Task'}
+              </Text>
+            )}
           </View>
 
+          {/* Centered Liquid Glass Popup - Long press instruction */}
+          {showHoldTooltip && (
+            <View style={styles.liquidGlassOverlay}>
+              <View style={styles.liquidGlassPopup}>
+                <Text style={styles.liquidGlassPopupText}>Long press to end session</Text>
+              </View>
+            </View>
+          )}
+
           {/* Music Bottom Sheet Modal - Matches IMG_0025.PNG */}
-          <Modal 
-            visible={showMusicControls} 
-            transparent 
+          <Modal
+            visible={showMusicControls}
+            transparent
             animationType="none"
             onRequestClose={closeMusicModal}
           >
@@ -1688,34 +1774,42 @@ export const StudySessionScreen = () => {
             </View>
           </Modal>
 
-          {/* Session Complete Modal */}
+          {/* Session Complete Modal - Compact layout without scrolling */}
           <Modal visible={showSessionCompleteModal} transparent animationType="fade">
             <View style={modalStyles.overlay}>
-              <View style={[modalStyles.modalBox, { maxHeight: '80%' }]}>
-                <ScrollView showsVerticalScrollIndicator={false}>
-                  <View style={modalStyles.iconCircle}>
-                    <MaterialIcons name="emoji-events" size={48} color="#4CAF50" />
+              <View style={[modalStyles.modalBox, { paddingVertical: 20, paddingHorizontal: 16 }]}>
+                {/* Compact header */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                  <View style={[modalStyles.iconCircle, { width: 44, height: 44, marginRight: 12, marginBottom: 0 }]}>
+                    <MaterialIcons name="emoji-events" size={28} color="#4CAF50" />
                   </View>
-                  <Text style={modalStyles.modalTitle}>Session Complete!</Text>
-                  <Text style={modalStyles.modalDesc}>
-                    Great job! Rate your session to help improve your future focus sessions.
-                  </Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[modalStyles.modalTitle, { marginBottom: 2, fontSize: 18 }]}>Session Complete!</Text>
+                    <Text style={[modalStyles.modalDesc, { marginBottom: 0, fontSize: 12 }]}>
+                      Rate your session
+                    </Text>
+                  </View>
+                </View>
 
+                {/* Compact ratings - side by side */}
+                <View style={{ flexDirection: 'row', marginBottom: 12 }}>
                   {/* Focus Rating */}
-                  <View style={modalStyles.ratingSection}>
-                    <Text style={modalStyles.ratingLabel}>How was your focus? (1-5)</Text>
-                    <View style={modalStyles.ratingRow}>
+                  <View style={{ flex: 1, marginRight: 8 }}>
+                    <Text style={[modalStyles.ratingLabel, { fontSize: 11, marginBottom: 6 }]}>Focus</Text>
+                    <View style={[modalStyles.ratingRow, { justifyContent: 'space-between' }]}>
                       {[1, 2, 3, 4, 5].map((rating) => (
                         <TouchableOpacity
                           key={rating}
                           style={[
                             modalStyles.ratingButton,
+                            { width: 32, height: 32, marginHorizontal: 1 },
                             focusRating === rating && modalStyles.ratingButtonSelected
                           ]}
                           onPress={() => setFocusRating(rating)}
                         >
                           <Text style={[
                             modalStyles.ratingButtonText,
+                            { fontSize: 12 },
                             focusRating === rating && modalStyles.ratingButtonTextSelected
                           ]}>{rating}</Text>
                         </TouchableOpacity>
@@ -1724,51 +1818,59 @@ export const StudySessionScreen = () => {
                   </View>
 
                   {/* Productivity Rating */}
-                  <View style={modalStyles.ratingSection}>
-                    <Text style={modalStyles.ratingLabel}>How productive did you feel? (1-5)</Text>
-                    <View style={modalStyles.ratingRow}>
+                  <View style={{ flex: 1, marginLeft: 8 }}>
+                    <Text style={[modalStyles.ratingLabel, { fontSize: 11, marginBottom: 6 }]}>Productivity</Text>
+                    <View style={[modalStyles.ratingRow, { justifyContent: 'space-between' }]}>
                       {[1, 2, 3, 4, 5].map((rating) => (
                         <TouchableOpacity
                           key={rating}
                           style={[
                             modalStyles.ratingButton,
+                            { width: 32, height: 32, marginHorizontal: 1 },
                             productivityRating === rating && modalStyles.ratingButtonSelected
                           ]}
                           onPress={() => setProductivityRating(rating)}
                         >
                           <Text style={[
                             modalStyles.ratingButtonText,
+                            { fontSize: 12 },
                             productivityRating === rating && modalStyles.ratingButtonTextSelected
                           ]}>{rating}</Text>
                         </TouchableOpacity>
                       ))}
                     </View>
                   </View>
+                </View>
 
-                  {/* Session Notes */}
-                  <View style={modalStyles.notesSection}>
-                    <Text style={modalStyles.ratingLabel}>Session Notes (optional)</Text>
-                    <TextInput
-                      style={modalStyles.notesInput}
-                      placeholder="What did you work on? Any insights?"
-                      multiline
-                      numberOfLines={3}
-                      value={sessionNotes}
-                      onChangeText={setSessionNotes}
-                      placeholderTextColor="#888"
-                    />
-                  </View>
+                {/* Compact Notes */}
+                <View style={{ marginBottom: 12 }}>
+                  <Text style={[modalStyles.ratingLabel, { fontSize: 11, marginBottom: 4 }]}>Quick Notes (optional)</Text>
+                  <TextInput
+                    style={[modalStyles.notesInput, { height: 50, fontSize: 13 }]}
+                    placeholder="Brief notes..."
+                    multiline
+                    numberOfLines={2}
+                    value={sessionNotes}
+                    onChangeText={setSessionNotes}
+                    placeholderTextColor="#888"
+                  />
+                </View>
 
-                  {/* Action Buttons */}
-                  <View style={modalStyles.actionButtonsContainer}>
-                    <TouchableOpacity style={modalStyles.submitBtn} onPress={handleSessionReportSubmit}>
-                      <Text style={modalStyles.submitBtnText}>Continue to Break</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={modalStyles.skipBtn} onPress={handleSkipSessionReport}>
-                      <Text style={modalStyles.skipBtnText}>Skip for now</Text>
-                    </TouchableOpacity>
-                  </View>
-                </ScrollView>
+                {/* Compact Action Buttons - side by side */}
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <TouchableOpacity
+                    style={[modalStyles.skipBtn, { flex: 1, paddingVertical: 10 }]}
+                    onPress={handleSkipSessionReport}
+                  >
+                    <Text style={[modalStyles.skipBtnText, { fontSize: 13 }]}>Skip</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[modalStyles.submitBtn, { flex: 2, paddingVertical: 10 }]}
+                    onPress={handleSessionReportSubmit}
+                  >
+                    <Text style={[modalStyles.submitBtnText, { fontSize: 13 }]}>Continue to Break</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           </Modal>
@@ -2101,6 +2203,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
+  endSessionButtonContainer: {
+    position: 'relative',
+    alignItems: 'center',
+  },
   endSessionButton: {
     width: 50,
     height: 50,
@@ -2112,6 +2218,37 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 5,
+  },
+  // Centered liquid glass popup overlay
+  liquidGlassOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+    pointerEvents: 'none',
+  },
+  liquidGlassPopup: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderRadius: 16,
+    borderWidth: 0.5,
+    borderColor: 'rgba(255, 255, 255, 0.8)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 15,
+  },
+  liquidGlassPopupText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    textAlign: 'center',
   },
   discreteTimerContainer: {
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
@@ -2147,23 +2284,42 @@ const styles = StyleSheet.create({
   },
   modeNotificationFullScreen: {
     position: 'absolute',
-    top: 120,
+    top: 110,
     alignSelf: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 16,
+    minWidth: 180,
+    maxWidth: 280,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   modeNotificationFullScreenText: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#fff',
+    fontWeight: '700',
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  modeNotificationSubjectText: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.9)',
     fontWeight: '600',
     textAlign: 'center',
+  },
+  modeNotificationTaskText: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontWeight: '400',
+    textAlign: 'center',
+    marginTop: 2,
+    fontStyle: 'italic',
   },
   timerSection: {
     flex: 1,

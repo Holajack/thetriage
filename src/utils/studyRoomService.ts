@@ -760,6 +760,129 @@ export function subscribeToStudyRoomMessages(
 }
 
 /**
+ * Get study room members
+ */
+export async function getStudyRoomMembers(
+  roomId: string
+): Promise<{ success: boolean; error?: string; data?: StudyRoomParticipant[] }> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) {
+      return { success: false, error: 'Not authenticated' };
+    }
+
+    // Fetch participants
+    const { data: participants, error } = await supabase
+      .from('study_room_participants')
+      .select('*')
+      .eq('room_id', roomId)
+      .eq('is_active', true);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    if (!participants || participants.length === 0) {
+      return { success: true, data: [] };
+    }
+
+    // Get unique user IDs
+    const userIds = [...new Set(participants.map(p => p.user_id))];
+
+    // Fetch user profiles separately
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, username, full_name, avatar_url')
+      .in('id', userIds);
+
+    if (profilesError) {
+      console.warn('Failed to fetch user profiles:', profilesError);
+      return { success: true, data: participants };
+    }
+
+    // Map profiles to participants
+    const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+    const enrichedParticipants = participants.map(participant => ({
+      ...participant,
+      user: profileMap.get(participant.user_id)
+    }));
+
+    return { success: true, data: enrichedParticipants };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Remove a member from study room (owner only)
+ */
+export async function removeMemberFromStudyRoom(
+  roomId: string,
+  userId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) {
+      return { success: false, error: 'Not authenticated' };
+    }
+
+    // Verify the current user is the owner of the room
+    const { data: room, error: fetchError } = await supabase
+      .from('study_rooms')
+      .select('owner_id, creator_id')
+      .eq('id', roomId)
+      .single();
+
+    if (fetchError) {
+      return { success: false, error: fetchError.message };
+    }
+
+    if (!room) {
+      return { success: false, error: 'Study room not found' };
+    }
+
+    // Check if user is owner
+    const isOwner = room.owner_id === session.user.id || room.creator_id === session.user.id;
+    if (!isOwner) {
+      return { success: false, error: 'Only the room owner can remove members' };
+    }
+
+    // Cannot remove yourself
+    if (userId === session.user.id) {
+      return { success: false, error: 'You cannot remove yourself. Use "Leave Room" instead.' };
+    }
+
+    // Remove the member by setting is_active to false
+    const { error } = await supabase
+      .from('study_room_participants')
+      .update({
+        is_active: false,
+        left_at: new Date().toISOString()
+      })
+      .eq('room_id', roomId)
+      .eq('user_id', userId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    // Add system message about removal
+    await supabase
+      .from('study_room_messages')
+      .insert({
+        room_id: roomId,
+        sender_id: userId,
+        content: 'was removed from the study room',
+        message_type: 'leave'
+      });
+
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Delete a study room (owner only)
  */
 export async function deleteStudyRoom(

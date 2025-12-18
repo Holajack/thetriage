@@ -17,6 +17,12 @@ import MessageNotification from '../../components/MessageNotification';
 import StudyRoomInvitations from '../../components/StudyRoomInvitations';
 import { BottomTabBar } from '../../components/BottomTabBar';
 import { UnifiedHeader } from '../../components/UnifiedHeader';
+import { AnimatedFlatList } from '../../components/premium/StaggeredList';
+import { AnimatedButton } from '../../components/premium/AnimatedButton';
+import { useButtonPressAnimation, useFocusAnimationKey } from '../../utils/animationUtils';
+import Animated, { FadeIn, FadeInDown, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
+import { AnimationConfig } from '../../theme/premiumTheme';
 
 const TABS = ['Friends', 'Messages', 'Study Rooms'];
 const MOCK_FRIENDS = [
@@ -115,11 +121,135 @@ interface FriendRequest {
   };
 }
 
+// Premium Animated Conversation Card Component
+interface AnimatedConversationCardProps {
+  item: any;
+  currentUserId: string | undefined;
+  theme: any;
+  onPress: () => void;
+  getStatusLabel: (status?: string) => string;
+}
+
+const AnimatedConversationCard: React.FC<AnimatedConversationCardProps> = ({
+  item,
+  currentUserId,
+  theme,
+  onPress,
+  getStatusLabel,
+}) => {
+  const { animatedStyle: pressStyle, onPressIn, onPressOut } = useButtonPressAnimation();
+  const partner = item.partner;
+  const lastMessage = item.lastMessage;
+  const timeAgo = lastMessage ? new Date(lastMessage.created_at).toLocaleString() : '';
+
+  return (
+    <TouchableOpacity
+      activeOpacity={1}
+      onPressIn={() => {
+        onPressIn();
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }}
+      onPressOut={onPressOut}
+      onPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        onPress();
+      }}
+    >
+      <Animated.View style={[styles.friendCard, { backgroundColor: theme.card, borderColor: theme.primary + '33' }, pressStyle]}>
+        <View style={[styles.avatarContainer, { backgroundColor: theme.primary + '22' }]}>
+          {partner.avatar_url ? (
+            <Image source={{ uri: partner.avatar_url }} style={styles.avatar} />
+          ) : (
+            <View style={[styles.avatarPlaceholder, { backgroundColor: theme.primary + '22' }]}>
+              <Text style={[styles.avatarText, { color: theme.primary }]}>
+                {partner.full_name?.[0] || partner.username?.[0] || partner.email?.[0] || '?'}
+              </Text>
+            </View>
+          )}
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.friendName, { color: theme.text }]}>
+            {partner.full_name || partner.username || partner.email}
+          </Text>
+          <Text style={[styles.lastMessage, { color: theme.text + '99' }]} numberOfLines={1}>
+            {lastMessage.sender_id === currentUserId ? 'You: ' : ''}
+            {lastMessage.content}
+          </Text>
+        </View>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={[styles.timeText, { color: theme.text + '99' }]}>{timeAgo}</Text>
+          {item.unreadCount > 0 && (
+            <View style={[styles.unreadBadge, { backgroundColor: theme.primary }]}>
+              <Text style={styles.unreadText}>{item.unreadCount}</Text>
+            </View>
+          )}
+        </View>
+      </Animated.View>
+    </TouchableOpacity>
+  );
+};
+
+// Premium Animated Friend Card Component
+const AnimatedFriendCard = ({ item, onMessage, theme }: any) => {
+  const { animatedStyle: pressStyle, onPressIn, onPressOut } = useButtonPressAnimation();
+
+  return (
+    <View>
+      <TouchableOpacity
+        activeOpacity={1}
+        onPressIn={() => {
+          onPressIn();
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }}
+        onPressOut={onPressOut}
+      >
+        <Animated.View
+          style={[
+            styles.friendCard,
+            { backgroundColor: theme.card, borderColor: theme.primary },
+            pressStyle,
+          ]}
+        >
+          <View style={styles.avatarCircle}>
+            {item.friend_profile?.avatar_url ? (
+              <Image source={{ uri: item.friend_profile.avatar_url }} style={styles.avatarCircle} />
+            ) : (
+              <Text style={[styles.avatarText, { color: theme.primary }]}>
+                {(item.friend_profile?.full_name || item.friend_profile?.username || '?')[0]}
+              </Text>
+            )}
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.friendName, { color: theme.text }]}>
+              {item.friend_profile?.full_name || item.friend_profile?.username || 'Study Friend'}
+            </Text>
+            <Text style={[styles.friendJoined, { color: theme.text + '99' }]}>
+              Connected on {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'recently'}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.friendIconBtn}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              onMessage(item);
+            }}
+          >
+            <Ionicons name="chatbubble-outline" size={22} color={theme.primary} />
+          </TouchableOpacity>
+        </Animated.View>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
 const CommunityScreen = () => {
   const route = useRoute<any>();
   const initialTab = route.params?.initialTab || 'Friends';
   const [activeTab, setActiveTab] = useState(initialTab);
   const [search, setSearch] = useState('');
+
+  // Force animations to replay on every screen focus
+  const focusKey = useFocusAnimationKey();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newRoomName, setNewRoomName] = useState('');
@@ -1005,7 +1135,7 @@ const CommunityScreen = () => {
       <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.background }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <SafeAreaView style={styles.container}>
           {/* Unified Header */}
-          <UnifiedHeader title="Pathfinder" onClose={() => navigation.navigate('Home')} />
+          <UnifiedHeader title="Community" onClose={() => navigation.navigate('Home')} />
 
           {/* Search Bar with Friend Request Button */}
           <View style={[styles.searchContainer, { backgroundColor: theme.card, marginTop: 20 }]}>
@@ -1251,64 +1381,29 @@ const CommunityScreen = () => {
                 </View>
               )}
 
-              <FlatList
+              <AnimatedFlatList
+                key={`friends-${focusKey}`}
                 data={friendsList}
                 keyExtractor={item => item.id}
                 contentContainerStyle={{ paddingBottom: 24 }}
-                renderItem={({ item }) => {
-                  const profile =
-                    item.friend_profile ||
-                    userProfileMap.get(item.friend_id) ||
-                    {};
-                  const displayName =
-                    (profile as any).full_name ||
-                    (profile as any).username ||
-                    (profile as any).email ||
-                    'Study Friend';
-
-                  return (
-                    <View
-                      style={[
-                        styles.friendCard,
-                        { backgroundColor: theme.card, borderColor: theme.primary },
-                      ]}
-                    >
-                      <View style={styles.avatarCircle}>
-                        {(profile as any).avatar_url ? (
-                          <Image source={{ uri: (profile as any).avatar_url }} style={styles.avatarCircle} />
-                        ) : (
-                          <Text style={[styles.avatarText, { color: theme.primary }]}>
-                            {displayName[0] || '?'}
-                          </Text>
-                        )}
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.friendName, { color: theme.text }]}>{displayName}</Text>
-                        <Text style={[styles.friendJoined, { color: theme.text + '99' }]}>
-                          Connected on{' '}
-                          {item.created_at
-                            ? new Date(item.created_at).toLocaleDateString()
-                            : 'recently'}
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.friendIconBtn}
-                        onPress={() =>
-                          navigation.navigate('MessageScreen' as any, {
-                            contact: {
-                              id: (profile as any).id || item.friend_id,
-                              name: displayName,
-                              avatar: (profile as any).avatar_url,
-                              status: getStatusLabel((profile as any).status),
-                            },
-                          })
-                        }
-                      >
-                        <Ionicons name="chatbubble-outline" size={22} color={theme.primary} />
-                      </TouchableOpacity>
-                    </View>
-                  );
-                }}
+                delay="normal"
+                direction="up"
+                renderItem={({ item }) => (
+                  <AnimatedFriendCard
+                    item={item}
+                    theme={theme}
+                    onMessage={(friendItem: any) =>
+                      navigation.navigate('MessageScreen' as any, {
+                        contact: {
+                          id: friendItem.friend_profile?.id || friendItem.friend_id,
+                          name: friendItem.friend_profile?.full_name || friendItem.friend_profile?.username || 'Study Friend',
+                          avatar: friendItem.friend_profile?.avatar_url,
+                          status: getStatusLabel(friendItem.friend_profile?.status),
+                        },
+                      })
+                    }
+                  />
+                )}
                 refreshing={loading}
                 onRefresh={refreshData}
                 ListEmptyComponent={
@@ -1325,67 +1420,37 @@ const CommunityScreen = () => {
 
           {/* Messages Tab */}
           {!search.trim() && activeTab === 'Messages' && (
-            <FlatList
+            <AnimatedFlatList
+              key={`messages-${focusKey}`}
               data={userConversations}
               keyExtractor={item => item.id}
               contentContainerStyle={{ paddingBottom: 24 }}
+              delay="fast"
+              direction="right"
               refreshing={loading}
               onRefresh={async () => {
                 setLoading(true);
                 await refreshData();
                 setLoading(false);
               }}
-              renderItem={({ item }) => {
-                const partner = item.partner;
-                const lastMessage = item.lastMessage;
-                const timeAgo = lastMessage ? new Date(lastMessage.created_at).toLocaleString() : '';
-                
-                return (
-                  <TouchableOpacity
-                    onPress={() => {
-                      navigation.navigate('MessageScreen' as any, {
-                        contact: {
-                          id: partner.id,
-                          name: partner.full_name || partner.username || partner.email,
-                          avatar: partner.avatar_url,
-                          status: getStatusLabel(partner.status)
-                        }
-                      });
-                    }}
-                  >
-                    <View style={[styles.friendCard, { backgroundColor: theme.card, borderColor: theme.primary + '33' }]}>
-                      <View style={[styles.avatarContainer, { backgroundColor: theme.primary + '22' }]}>
-                        {partner.avatar_url ? (
-                          <Image source={{ uri: partner.avatar_url }} style={styles.avatar} />
-                        ) : (
-                          <View style={[styles.avatarPlaceholder, { backgroundColor: theme.primary + '22' }]}>
-                            <Text style={[styles.avatarText, { color: theme.primary }]}>
-                              {partner.full_name?.[0] || partner.username?.[0] || partner.email?.[0] || '?'}
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.friendName, { color: theme.text }]}>
-                          {partner.full_name || partner.username || partner.email}
-                        </Text>
-                        <Text style={[styles.lastMessage, { color: theme.text + '99' }]} numberOfLines={1}>
-                          {lastMessage.sender_id === currentUser?.id ? 'You: ' : ''}
-                          {lastMessage.content}
-                        </Text>
-                      </View>
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={[styles.timeText, { color: theme.text + '99' }]}>{timeAgo}</Text>
-                        {item.unreadCount > 0 && (
-                          <View style={[styles.unreadBadge, { backgroundColor: theme.primary }]}>
-                            <Text style={styles.unreadText}>{item.unreadCount}</Text>
-                          </View>
-                        )}
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                );
-              }}
+              renderItem={({ item }) => (
+                <AnimatedConversationCard
+                  item={item}
+                  currentUserId={currentUser?.id}
+                  theme={theme}
+                  getStatusLabel={getStatusLabel}
+                  onPress={() => {
+                    navigation.navigate('MessageScreen' as any, {
+                      contact: {
+                        id: item.partner.id,
+                        name: item.partner.full_name || item.partner.username || item.partner.email,
+                        avatar: item.partner.avatar_url,
+                        status: getStatusLabel(item.partner.status)
+                      }
+                    });
+                  }}
+                />
+              )}
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
                   <Text style={[styles.emptyText, { color: theme.text }]}>No conversations yet</Text>
@@ -1397,7 +1462,7 @@ const CommunityScreen = () => {
 
           {/* Study Rooms Tab */}
           {!search.trim() && activeTab === 'Study Rooms' && (
-            <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
+            <ScrollView key={`studyrooms-${focusKey}`} contentContainerStyle={{ paddingBottom: 24 }}>
               <TouchableOpacity style={[styles.createRoomBtn, { backgroundColor: theme.card, borderColor: theme.primary }]} onPress={() => setShowCreateModal(true)}>
                 <Ionicons name="add" size={20} color={theme.primary} />
                 <Text style={[styles.createRoomBtnText, { color: theme.text }]}>Create Study Room</Text>

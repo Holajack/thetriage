@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Alert, TextInput, Modal, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Alert, TextInput, Modal, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { MainTabParamList } from '../../navigation/types';
 import { useTheme } from '../../context/ThemeContext';
@@ -16,13 +16,39 @@ import { useSupabaseProfile } from '../../utils/supabaseHooks';
 import { getUserBadges } from '../../utils/achievementManager';
 import { Badge } from '../../data/achievements';
 import QRCode from 'react-native-qrcode-svg';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withDelay,
+  FadeIn,
+  FadeInUp,
+  SlideInRight,
+  Easing,
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
+import { AnimationConfig, TimingConfig, Typography } from '../../theme/premiumTheme';
+import { useButtonPressAnimation, useNavigationSlideAnimation, useFocusAnimationKey } from '../../utils/animationUtils';
+import { ShimmerLoader } from '../../components/premium/ShimmerLoader';
+import { glassStyles } from '../../components/premium/LiquidGlass';
+import { ImageSourcePropType } from 'react-native';
+
+// Trail buddy portrait images (first frame of each animation)
+const TRAIL_BUDDY_IMAGES: Record<string, ImageSourcePropType> = {
+  fox: require('../../../assets/trail-buddies/fox-frames/fox_frame_00.png'),
+  bear: require('../../../assets/trail-buddies/bear-frames/bear_frame_00.png'),
+  deer: require('../../../assets/trail-buddies/deer-frames/deer_frame_00.png'),
+  nora: require('../../../assets/trail-buddies/nora-frames/nora_frame_00.png'),
+  wolf: require('../../../assets/trail-buddies/wolf-frames/wolf_frame_00.png'),
+};
 
 const ProfileScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<MainTabParamList>>();
   const { user } = useAuth();
   const { data: userData, refetch } = useUserAppData();
-  const { theme } = useTheme();
-  const { profile, updateProfile, uploadProfileImage } = useSupabaseProfile();
+  const { theme, isDark } = useTheme();
+  const { profile, updateProfile, uploadProfileImage, refetch: refetchProfile } = useSupabaseProfile();
 
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -34,6 +60,19 @@ const ProfileScreen = () => {
   const [editedLocation, setEditedLocation] = useState('');
   const [editedClasses, setEditedClasses] = useState('');
   const [userBadges, setUserBadges] = useState<Badge[]>([]);
+
+  // Force animations to replay on every screen focus
+  const focusKey = useFocusAnimationKey();
+
+  // Refetch profile when screen comes into focus (e.g., after changing trail buddy)
+  useFocusEffect(
+    useCallback(() => {
+      refetchProfile();
+    }, [refetchProfile])
+  );
+
+  // Navigation slide animations
+  const shopSlideAnimation = useNavigationSlideAnimation();
 
   // Load user badges
   useEffect(() => {
@@ -149,36 +188,47 @@ const ProfileScreen = () => {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Unified Header */}
-      <UnifiedHeader title="Pathfinder" onClose={() => navigation.navigate('Home')} />
+      <UnifiedHeader title="Profile" onClose={() => navigation.navigate('Home')} />
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }}>
+      <ScrollView key={focusKey} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }}>
         {/* Profile Card Section - Top Row */}
-        <View style={styles.profileCardSection}>
-          <View style={[styles.profileCard, { backgroundColor: theme.card }]}>
-            <Image
-              source={avatarSource ? { uri: avatarSource } : require('../../../assets/homescreen-image.png')}
-              style={styles.profileCardImage}
-              resizeMode="cover"
-            />
-            <TouchableOpacity
-              style={[styles.changeButton, { backgroundColor: '#FFFFFF' }]}
-              onPress={handlePickImage}
-              activeOpacity={0.85}
+        <Animated.View
+          entering={FadeIn.duration(400)}
+          style={styles.profileCardSection}
+        >
+          <View style={[styles.profileCard, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}>
+            {uploading ? (
+              <View style={[styles.profileCardImage, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ShimmerLoader variant="custom" width="100%" height="100%" borderRadius={12} />
+              </View>
+            ) : (
+              <Image
+                source={avatarSource ? { uri: avatarSource } : require('../../../assets/homescreen-image.png')}
+                style={styles.profileCardImage}
+                resizeMode="cover"
+              />
+            )}
+            <Pressable
+              style={[styles.changeButton, { backgroundColor: isDark ? theme.card : '#FFFFFF' }]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                handlePickImage();
+              }}
               disabled={uploading}
             >
-              {uploading ? (
-                <ActivityIndicator size="small" color={theme.primary} />
-              ) : (
-                <Text style={[styles.changeButtonText, { color: theme.primary }]}>Change</Text>
-              )}
-            </TouchableOpacity>
+              <Text style={[styles.changeButtonText, { color: theme.primary }]}>
+                {uploading ? 'Uploading...' : 'Change'}
+              </Text>
+            </Pressable>
           </View>
 
           {/* Compact Info Card - Name & Username Only */}
-          <TouchableOpacity
-            style={[styles.infoCardCompact, { backgroundColor: theme.card }]}
-            onPress={() => setShowEditModal(true)}
-            activeOpacity={0.8}
+          <Pressable
+            style={[styles.infoCardCompact, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setShowEditModal(true);
+            }}
           >
             <View style={styles.infoCardContent}>
               <Text style={[styles.infoCardLabel, { color: theme.text + '99' }]}>NAME</Text>
@@ -192,96 +242,137 @@ const ProfileScreen = () => {
               </Text>
             </View>
             <View style={styles.iconRow}>
-              <TouchableOpacity onPress={() => setShowQRModal(true)} style={{ marginRight: 16 }}>
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowQRModal(true);
+                }}
+                style={{ marginRight: 16 }}
+              >
                 <Ionicons name="qr-code-outline" size={24} color={theme.primary} />
-              </TouchableOpacity>
+              </Pressable>
               <Ionicons name="create-outline" size={24} color={theme.primary} style={styles.editIcon} />
             </View>
-          </TouchableOpacity>
-        </View>
+          </Pressable>
+        </Animated.View>
 
         {/* Full-Width Details Card - University, Location, Classes */}
-        <TouchableOpacity
-          style={[styles.detailsCard, { backgroundColor: theme.card }]}
-          onPress={() => setShowEditModal(true)}
-          activeOpacity={0.8}
-        >
-          <View style={styles.detailsCardContent}>
-            <Text style={[styles.infoCardLabel, { color: theme.text + '99' }]}>UNIVERSITY</Text>
-            <Text style={[styles.infoCardValue, { color: theme.text }]} numberOfLines={1}>
-              {profile?.university || 'Add your university'}
-            </Text>
+        <Animated.View entering={FadeIn.delay(50).duration(400)}>
+          <Pressable
+            style={[styles.detailsCard, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setShowEditModal(true);
+            }}
+          >
+            <View style={styles.detailsCardContent}>
+              <Text style={[styles.infoCardLabel, { color: theme.text + '99' }]}>UNIVERSITY</Text>
+              <Text style={[styles.infoCardValue, { color: theme.text }]} numberOfLines={1}>
+                {profile?.university || 'Add your university'}
+              </Text>
 
-            <Text style={[styles.infoCardLabel, { color: theme.text + '99', marginTop: 12 }]}>LOCATION</Text>
-            <Text style={[styles.infoCardValue, { color: theme.text }]} numberOfLines={1}>
-              {profile?.location || 'Add your location'}
-            </Text>
+              <Text style={[styles.infoCardLabel, { color: theme.text + '99', marginTop: 12 }]}>LOCATION</Text>
+              <Text style={[styles.infoCardValue, { color: theme.text }]} numberOfLines={1}>
+                {profile?.location || 'Add your location'}
+              </Text>
 
-            <Text style={[styles.infoCardLabel, { color: theme.text + '99', marginTop: 12 }]}>CLASSES</Text>
-            <Text style={[styles.infoCardValue, { color: theme.text }]} numberOfLines={1}>
-              {profile?.classes || 'Add your classes'}
-            </Text>
-          </View>
-          <Ionicons name="create-outline" size={24} color={theme.primary} style={styles.editIconDetails} />
-        </TouchableOpacity>
+              <Text style={[styles.infoCardLabel, { color: theme.text + '99', marginTop: 12 }]}>CLASSES</Text>
+              <Text style={[styles.infoCardValue, { color: theme.text }]} numberOfLines={1}>
+                {profile?.classes || 'Add your classes'}
+              </Text>
+            </View>
+            <Ionicons name="create-outline" size={24} color={theme.primary} style={styles.editIconDetails} />
+          </Pressable>
+        </Animated.View>
 
         {/* Gear Shop Button */}
-        <TouchableOpacity
-          style={[styles.shopButton, { backgroundColor: theme.card, borderColor: '#FF5700' }]}
-          onPress={() => navigation.navigate('Shop' as any)}
+        <Animated.View
+          entering={FadeIn.delay(100).duration(400)}
+          style={shopSlideAnimation.animatedStyle}
         >
-          <View style={[styles.shopIconContainer, { backgroundColor: '#FF570020' }]}>
-            <Text style={{ fontSize: 28 }}>🎒</Text>
-          </View>
-          <View style={styles.shopTextContainer}>
-            <Text style={[styles.shopButtonTitle, { color: theme.text }]}>Gear Shop</Text>
-            <Text style={[styles.shopButtonSubtitle, { color: theme.textSecondary }]}>
-              Equip Nora for the trail ahead
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={24} color={theme.primary} />
-        </TouchableOpacity>
+          <Pressable
+            style={[styles.shopButton, { backgroundColor: theme.card, borderColor: '#FF5700' }]}
+            onPressIn={shopSlideAnimation.onPressIn}
+            onPressOut={shopSlideAnimation.onPressOut}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              navigation.navigate('Shop' as any);
+            }}
+          >
+            <View style={[styles.shopIconContainer, { backgroundColor: '#FF570020' }]}>
+              <Image
+                source={require('../../../assets/trail-buddies/backpack for hikewise.png')}
+                style={{ width: 36, height: 36 }}
+                resizeMode="contain"
+              />
+            </View>
+            <View style={styles.shopTextContainer}>
+              <Text style={[styles.shopButtonTitle, { color: theme.text }]}>Gear Shop</Text>
+              <Text style={[styles.shopButtonSubtitle, { color: theme.textSecondary }]}>
+                Equip Nora for the trail ahead
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward-outline" size={24} color={theme.primary} />
+          </Pressable>
+        </Animated.View>
 
         {/* Trail Buddy Section */}
-        <TouchableOpacity
-          style={[styles.partnerSection, { backgroundColor: theme.card }]}
-          onPress={() => {
-            Alert.alert(
-              'Choose Your Trail Buddy',
-              'Select an animal companion to join you on your focus journeys!',
-              [
-                { text: '🦊 Fox', onPress: () => console.log('Fox selected') },
-                { text: '🐻 Bear', onPress: () => console.log('Bear selected') },
-                { text: '🦌 Deer', onPress: () => console.log('Deer selected') },
-                { text: '🦅 Eagle', onPress: () => console.log('Eagle selected') },
-                { text: '🐺 Wolf', onPress: () => console.log('Wolf selected') },
-                { text: 'Cancel', style: 'cancel' }
-              ]
-            );
-          }}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.partnerTitle, { color: theme.text }]}>Choose Your Trail Buddy</Text>
-          <View style={styles.partnerIcon}>
-            <Text style={{ fontSize: 30 }}>🥾</Text>
-          </View>
-        </TouchableOpacity>
+        <Animated.View entering={FadeIn.delay(150).duration(400)}>
+          <Pressable
+            style={[styles.partnerSection, { backgroundColor: theme.card }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              navigation.navigate('TrailBuddySelection' as any);
+            }}
+          >
+            <View style={styles.trailBuddyContent}>
+              <Text style={[styles.partnerTitle, { color: theme.text }]}>
+                {profile?.trail_buddy_name ? `${profile.trail_buddy_name}` : 'Choose Your Trail Buddy'}
+              </Text>
+              {profile?.trail_buddy_type && (
+                <Text style={[styles.trailBuddySubtitle, { color: theme.textSecondary }]}>
+                  Your {profile.trail_buddy_type.charAt(0).toUpperCase() + profile.trail_buddy_type.slice(1)} companion
+                </Text>
+              )}
+            </View>
+            <View style={[styles.partnerIcon, { backgroundColor: isDark ? theme.primary + '20' : '#E3F2FD', overflow: 'hidden' }]}>
+              {profile?.trail_buddy_type && TRAIL_BUDDY_IMAGES[profile.trail_buddy_type] ? (
+                <Image
+                  source={TRAIL_BUDDY_IMAGES[profile.trail_buddy_type]}
+                  style={styles.trailBuddyImage}
+                  resizeMode="contain"
+                />
+              ) : (
+                <Text style={{ fontSize: 30 }}>🥾</Text>
+              )}
+            </View>
+          </Pressable>
+        </Animated.View>
 
         {/* Scene Card */}
-        <View style={[styles.sceneCard, { backgroundColor: theme.card }]}>
+        <Animated.View
+          entering={FadeIn.delay(200).duration(400)}
+          style={[styles.sceneCard, { backgroundColor: theme.card }]}
+        >
           <Image
             source={require('../../../assets/homescreen-image.png')}
             style={styles.sceneImage}
             resizeMode="cover"
           />
-          <TouchableOpacity style={[styles.changeButton, { backgroundColor: '#FFFFFF', position: 'absolute', bottom: 16, left: 16 }]}>
+          <Pressable
+            style={[styles.changeButton, { backgroundColor: isDark ? theme.card : '#FFFFFF', position: 'absolute', bottom: 16, left: 16 }]}
+            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+          >
             <Text style={[styles.changeButtonText, { color: theme.primary }]}>Change</Text>
-          </TouchableOpacity>
-        </View>
+          </Pressable>
+        </Animated.View>
 
         {/* Stats Grid - Row 1 */}
-        <View style={styles.statsGrid}>
-          <View style={[styles.statCard, { backgroundColor: theme.card }]}>
+        <Animated.View
+          entering={FadeIn.delay(250).duration(400)}
+          style={styles.statsGrid}
+        >
+          <View style={[styles.statCard, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}>
             <View style={[styles.statIcon, { backgroundColor: '#FF570020' }]}>
               <FlintIcon size={32} color="#FF5700" />
             </View>
@@ -289,12 +380,12 @@ const ProfileScreen = () => {
             <Text style={[styles.statLabel, { color: theme.primary }]}>Flint</Text>
           </View>
 
-          <View style={[styles.statCard, { backgroundColor: theme.card }]}>
+          <View style={[styles.statCard, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}>
             <View style={[styles.statIcon, { backgroundColor: '#FFD70020' }]}>
               {userBadges.length > 0 ? (
                 <Text style={{ fontSize: 32 }}>{userBadges[0].icon}</Text>
               ) : (
-                <Ionicons name="trophy" size={32} color="#FFD700" />
+                <Ionicons name="trophy-outline" size={32} color="#FFD700" />
               )}
             </View>
             <Text style={[styles.statNumber, { color: theme.text, fontSize: 16 }]} numberOfLines={1}>
@@ -303,41 +394,44 @@ const ProfileScreen = () => {
             <Text style={[styles.statLabel, { color: theme.primary }]}>Peak Reached</Text>
           </View>
 
-          <View style={[styles.statCard, { backgroundColor: theme.card }]}>
+          <View style={[styles.statCard, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}>
             <View style={[styles.statIcon, { backgroundColor: theme.primary + '20' }]}>
-              <Ionicons name="timer" size={32} color={theme.primary} />
+              <Ionicons name="timer-outline" size={32} color={theme.primary} />
             </View>
             <Text style={[styles.statNumber, { color: theme.text }]}>{totalSessions}+</Text>
             <Text style={[styles.statLabel, { color: theme.primary }]}>Sessions</Text>
           </View>
-        </View>
+        </Animated.View>
 
         {/* Stats Grid - Row 2 */}
-        <View style={styles.statsGrid}>
-          <View style={[styles.statCard, { backgroundColor: theme.card }]}>
+        <Animated.View
+          entering={FadeIn.delay(300).duration(400)}
+          style={styles.statsGrid}
+        >
+          <View style={[styles.statCard, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}>
             <View style={[styles.statIcon, { backgroundColor: theme.primary + '20' }]}>
-              <Ionicons name="time" size={32} color={theme.primary} />
+              <Ionicons name="time-outline" size={32} color={theme.primary} />
             </View>
             <Text style={[styles.statNumber, { color: theme.text }]}>{totalHours}H</Text>
             <Text style={[styles.statLabel, { color: theme.primary }]}>{totalHours}H {remainingMinutes}M</Text>
           </View>
 
-          <View style={[styles.statCard, { backgroundColor: theme.card }]}>
+          <View style={[styles.statCard, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}>
             <View style={[styles.statIcon, { backgroundColor: '#4CAF5020' }]}>
-              <Ionicons name="checkmark-circle" size={32} color="#4CAF50" />
+              <Ionicons name="checkmark-circle-outline" size={32} color="#4CAF50" />
             </View>
             <Text style={[styles.statNumber, { color: theme.text }]}>{completedSessions}</Text>
             <Text style={[styles.statLabel, { color: theme.primary }]}>Completed</Text>
           </View>
 
-          <View style={[styles.statCard, { backgroundColor: theme.card }]}>
+          <View style={[styles.statCard, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}>
             <View style={[styles.statIcon, { backgroundColor: '#FF851B20' }]}>
               <Text style={{ fontSize: 32 }}>🔥</Text>
             </View>
             <Text style={[styles.statNumber, { color: theme.text }]}>{currentStreak}</Text>
             <Text style={[styles.statLabel, { color: theme.primary }]}>Day Streak</Text>
           </View>
-        </View>
+        </Animated.View>
       </ScrollView>
 
       {/* Edit Profile Info Modal */}
@@ -352,7 +446,7 @@ const ProfileScreen = () => {
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: theme.text }]}>Edit Profile</Text>
               <TouchableOpacity onPress={() => setShowEditModal(false)}>
-                <Ionicons name="close" size={28} color={theme.text} />
+                <Ionicons name="close-outline" size={28} color={theme.text} />
               </TouchableOpacity>
             </View>
 
@@ -411,7 +505,7 @@ const ProfileScreen = () => {
               disabled={saving}
             >
               {saving ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
+                <ShimmerLoader variant="button" width="100%" height={20} />
               ) : (
                 <Text style={styles.saveButtonText}>Save Changes</Text>
               )}
@@ -433,7 +527,7 @@ const ProfileScreen = () => {
               style={styles.qrCloseButton}
               onPress={() => setShowQRModal(false)}
             >
-              <Ionicons name="close" size={28} color={theme.text} />
+              <Ionicons name="close-outline" size={28} color={theme.text} />
             </TouchableOpacity>
 
             <Text style={[styles.qrModalTitle, { color: theme.text }]}>Share Your Profile</Text>
@@ -573,11 +667,21 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
+  trailBuddyContent: {
+    flex: 1,
+  },
+  trailBuddySubtitle: {
+    fontSize: 14,
+    marginTop: 2,
+  },
+  trailBuddyImage: {
+    width: 46,
+    height: 46,
+  },
   partnerIcon: {
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#E3F2FD',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -604,8 +708,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(76, 175, 80, 0.3)',
+    overflow: 'hidden',
   },
   statIcon: {
     width: 60,

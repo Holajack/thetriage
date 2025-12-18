@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Image, Animated, Modal, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Image, Modal, TextInput, Alert, Pressable } from 'react-native';
 import { ThemedImage } from '../../components/ThemedImage';
 import LottieView from 'lottie-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,6 +9,19 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { getRandomQuote } from '../../data/motivationalQuotes';
 import { useBackgroundMusic } from '../../hooks/useBackgroundMusic';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withSequence,
+  withRepeat,
+  withDelay,
+  Easing
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
+import { AnimationConfig, TimingConfig } from '../../theme/premiumTheme';
+import { useEntranceAnimation, useButtonPressAnimation } from '../../utils/animationUtils';
 
 // Import userAppData functions
 const userAppDataModule = require('../../utils/userAppData');
@@ -25,12 +38,20 @@ export default function HomeScreen() {
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [taskTitle, setTaskTitle] = useState('');
   const [taskPriority, setTaskPriority] = useState('Medium');
-  
-  // Animation refs
-  const scrollY = useRef(new Animated.Value(0)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const colorFillAnim = useRef(new Animated.Value(0)).current;
-  
+
+  // Reanimated shared values for premium animations
+  const pulseScale = useSharedValue(1);
+  const colorFillProgress = useSharedValue(0);
+  const colorFillOpacity = useSharedValue(0);
+
+  // Entrance animations
+  const quoteEntranceStyle = useEntranceAnimation(0);
+  const imageEntranceStyle = useEntranceAnimation(200);
+  const buttonEntranceStyle = useEntranceAnimation(400);
+
+  // Button press animation for Focus button
+  const focusButtonAnimation = useButtonPressAnimation();
+
   // Use our comprehensive data hook
   const { data: userData } = useUserAppData();
 
@@ -46,14 +67,6 @@ export default function HomeScreen() {
       console.warn('🎵 Failed to stop music on home screen:', error);
     });
   }, [stopPlayback]);
-
-
-  const handleScroll = Animated.event(
-    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-    {
-      useNativeDriver: false,
-    }
-  );
 
   // Generate daily changing encouragement text from comprehensive database
   const getDailyEncouragement = () => {
@@ -80,39 +93,35 @@ export default function HomeScreen() {
     const dailyEncouragement = getDailyEncouragement();
     setInspiration(dailyEncouragement);
 
-    // Start pulse animation for main image
-    const startPulseAnimation = () => {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1.02,
-            duration: 2000,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 2000,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-    };
-
-    startPulseAnimation();
+    // Start Reanimated pulse animation for main image
+    pulseScale.value = withRepeat(
+      withSequence(
+        withTiming(1.02, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) })
+      ),
+      -1, // Infinite repeat
+      true
+    );
   }, []);
 
   const handleStartFocusSession = () => {
-    // Start color fill animation with longer duration and better easing
-    Animated.timing(colorFillAnim, {
-      toValue: 1,
-      duration: 1200, // Increased from 800 to 1200ms for fuller screen coverage
-      useNativeDriver: false,
-    }).start(() => {
-      // Navigate after animation completes
+    // Add haptic feedback
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    // Start color fill animation with spring physics
+    colorFillOpacity.value = withTiming(1, { duration: TimingConfig.fast });
+    colorFillProgress.value = withTiming(1, {
+      duration: 1200,
+      easing: Easing.bezier(0.33, 1, 0.68, 1),
+    });
+
+    // Navigate after animation completes
+    setTimeout(() => {
       navigation.navigate('FocusPreparation' as never);
       // Reset animation for next time
-      colorFillAnim.setValue(0);
-    });
+      colorFillProgress.value = 0;
+      colorFillOpacity.value = 0;
+    }, 1200);
   };
 
   const handleQuickActions = (action: string) => {
@@ -138,21 +147,14 @@ export default function HomeScreen() {
   };
 
   const handleNavigation = (destination: string) => {
+    // Add haptic feedback for navigation
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
     switch (destination) {
       case 'settings':
-        // Add sliding transition animation - slide from left
-        const slideAnimation = Animated.timing(scrollY, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        });
-        slideAnimation.start(() => {
-          navigation.navigate('Settings' as never);
-          scrollY.setValue(0); // Reset animation value
-        });
+        navigation.navigate('Settings' as never);
         break;
       case 'nora':
-        // Navigate to NoraScreen (Nora AI assistant)
         navigation.navigate('NoraScreen' as never);
         break;
       case 'leaderboard':
@@ -218,87 +220,77 @@ export default function HomeScreen() {
       <View style={styles.mainContent}>
           {/* Top Content */}
           <View style={styles.topContent}>
-            {/* Inspirational Quote */}
-            <View style={styles.quoteContainer}>
+            {/* Inspirational Quote - Entrance Animation */}
+            <Animated.View style={[styles.quoteContainer, quoteEntranceStyle]}>
               <Text style={[styles.quote, { color: environmentColors.text }]}>
                 "{inspiration?.quote || 'The way to get started is to quit talking and begin doing.'}"
               </Text>
               <Text style={[styles.quoteAuthor, { color: environmentColors.text + '80' }]}>
                 - {inspiration?.author || 'Walt Disney'}
               </Text>
-            </View>
+            </Animated.View>
 
             {/* Central HomeScreen Image */}
-            <View style={styles.centralImageContainer}>
+            <Animated.View style={[styles.centralImageContainer, imageEntranceStyle]}>
               {/* Main image with gentle pulse animation */}
-              <Animated.View style={{
-                transform: [{ scale: pulseAnim }]
-              }}>
-                <TouchableOpacity 
+              <Animated.View style={useAnimatedStyle(() => ({
+                transform: [{ scale: pulseScale.value }]
+              }))}>
+                <Pressable
                   onPress={() => {
+                    // Trigger haptic feedback
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     // Trigger a quick bounce animation on tap
-                    Animated.sequence([
-                      Animated.timing(pulseAnim, {
-                        toValue: 0.96,
-                        duration: 100,
-                        useNativeDriver: true,
-                      }),
-                      Animated.timing(pulseAnim, {
-                        toValue: 1.06,
-                        duration: 200,
-                        useNativeDriver: true,
-                      }),
-                      Animated.timing(pulseAnim, {
-                        toValue: 1,
-                        duration: 100,
-                        useNativeDriver: true,
-                      }),
-                    ]).start();
+                    pulseScale.value = withSequence(
+                      withTiming(0.96, { duration: 100 }),
+                      withSpring(1.06, AnimationConfig.bouncy),
+                      withSpring(1, AnimationConfig.standard)
+                    );
                   }}
-                  activeOpacity={0.9}
                 >
-                  <ThemedImage 
-                    source={require('../../../assets/homescreen-image.png')} 
+                  <ThemedImage
+                    source={require('../../../assets/homescreen-image.png')}
                     style={styles.centralImage}
                     resizeMode="contain"
                     applyFilter={true}
                   />
-                </TouchableOpacity>
+                </Pressable>
               </Animated.View>
-            </View>
+            </Animated.View>
           </View>
 
           {/* Spacer to push focus button down - clean layout v5 */}
           <View style={{ flex: 1 }} />
 
-          {/* Large Focus Button - Positioned at Bottom */}
-          <TouchableOpacity 
-            style={[styles.mainFocusButton, { backgroundColor: environmentColors.primary }]}
-            onPress={handleStartFocusSession}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.focusButtonText}>Focus</Text>
-          </TouchableOpacity>
+          {/* Large Focus Button - Positioned at Bottom with Premium Animation */}
+          <Animated.View style={[buttonEntranceStyle, focusButtonAnimation.animatedStyle]}>
+            <Pressable
+              style={[styles.mainFocusButton, { backgroundColor: environmentColors.primary }]}
+              onPress={handleStartFocusSession}
+              onPressIn={focusButtonAnimation.onPressIn}
+              onPressOut={focusButtonAnimation.onPressOut}
+            >
+              <Text style={styles.focusButtonText}>Focus</Text>
+            </Pressable>
+          </Animated.View>
       </View>
 
       {/* Bottom Navigation Bar - Positioned Up from Edge */}
       <View style={[styles.bottomNavContainer, { borderTopColor: environmentColors.border }]}>
-        <TouchableOpacity
-          style={[styles.navButton, styles.leftNavButton, { backgroundColor: environmentColors.card }]}
+        <NavButton
           onPress={() => handleNavigation('settings')}
-          activeOpacity={0.7}
+          style={[styles.navButton, styles.leftNavButton, { backgroundColor: environmentColors.card }]}
         >
           <Ionicons name="settings-outline" size={26} color={environmentColors.primary} />
-        </TouchableOpacity>
+        </NavButton>
 
-        <TouchableOpacity
+        <NavButton
+          onPress={() => handleNavigation('nora')}
           style={[styles.navButton, styles.centerNavButton, {
             backgroundColor: theme.isDark ? '#2A2A2A' : environmentColors.card,
             borderWidth: theme.isDark ? 2 : 0,
             borderColor: theme.isDark ? environmentColors.primary : 'transparent'
           }]}
-          onPress={() => handleNavigation('nora')}
-          activeOpacity={0.7}
         >
           <Text style={[styles.pawPrint, {
             color: theme.isDark ? '#FFFFFF' : environmentColors.primary,
@@ -306,15 +298,14 @@ export default function HomeScreen() {
             textShadowOffset: { width: 0, height: 1 },
             textShadowRadius: theme.isDark ? 4 : 3
           }]}>🐾</Text>
-        </TouchableOpacity>
+        </NavButton>
 
-        <TouchableOpacity
-          style={[styles.navButton, styles.rightNavButton, { backgroundColor: environmentColors.card }]}
+        <NavButton
           onPress={() => handleNavigation('leaderboard')}
-          activeOpacity={0.7}
+          style={[styles.navButton, styles.rightNavButton, { backgroundColor: environmentColors.card }]}
         >
           <Ionicons name="trophy-outline" size={26} color={environmentColors.primary} />
-        </TouchableOpacity>
+        </NavButton>
       </View>
 
       {/* Task Creation Modal */}
@@ -380,29 +371,43 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      {/* Color Fill Animation Overlay */}
+      {/* Color Fill Animation Overlay - Reanimated */}
       <Animated.View
         style={[
           styles.colorFillOverlay,
           {
             backgroundColor: environmentColors.primary,
-            opacity: colorFillAnim.interpolate({
-              inputRange: [0, 0.3, 1],
-              outputRange: [0, 0.9, 1],
-            }),
-            transform: [
-              {
-                scale: colorFillAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [1, 35], // Further increased scale to ensure full screen coverage
-                }),
-              },
-            ],
           },
+          useAnimatedStyle(() => ({
+            opacity: colorFillOpacity.value,
+            transform: [{ scale: 1 + (colorFillProgress.value * 34) }],
+          })),
         ]}
         pointerEvents="none"
       />
     </SafeAreaView>
+  );
+};
+
+// NavButton Component with Premium Animation
+const NavButton: React.FC<{
+  onPress: () => void;
+  style?: any;
+  children: React.ReactNode;
+}> = ({ onPress, style, children }) => {
+  const animation = useButtonPressAnimation();
+
+  return (
+    <Animated.View style={animation.animatedStyle}>
+      <Pressable
+        style={style}
+        onPress={onPress}
+        onPressIn={animation.onPressIn}
+        onPressOut={animation.onPressOut}
+      >
+        {children}
+      </Pressable>
+    </Animated.View>
   );
 };
 

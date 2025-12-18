@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,6 +7,11 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { OnboardingStackParamList } from '../../navigation/types';
 import { useAuth } from '../../context/AuthContext';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
+import { AnimatedButton } from '../../components/premium/AnimatedButton';
+import { StaggeredItem } from '../../components/premium/StaggeredList';
+import { useEntranceAnimation } from '../../utils/animationUtils';
 
 type FocusMethodNavigationProp = NativeStackNavigationProp<OnboardingStackParamList, 'FocusMethodIntro'>;
 
@@ -77,83 +82,77 @@ export default function FocusMethodIntroScreen() {
   const navigation = useNavigation<FocusMethodNavigationProp>();
   const { updateOnboarding } = useAuth();
   const [selectedMethod, setSelectedMethod] = useState<string>('balanced');
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
+  const headerAnimation = useEntranceAnimation(0);
+  const buttonAnimation = useEntranceAnimation(400);
 
   const handleContinue = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     // Store selected method and pass it through navigation
     navigation.navigate('AccountCreation', { focusMethod: selectedMethod });
   };
 
-  const renderMethodCard = (method: FocusMethod) => {
+  const handleMethodSelect = (methodId: string) => {
+    Haptics.selectionAsync();
+    setSelectedMethod(methodId);
+  };
+
+  const renderMethodCard = (method: FocusMethod, index: number) => {
     const isSelected = selectedMethod === method.id;
-    
+
     return (
-      <TouchableOpacity
-        key={method.id}
-        style={[
-          styles.methodCard,
-          isSelected && styles.selectedMethodCard,
-          { borderColor: isSelected ? method.color : 'rgba(232, 245, 233, 0.2)' }
-        ]}
-        onPress={() => setSelectedMethod(method.id)}
-        activeOpacity={0.8}
-      >
-        <View style={styles.methodHeader}>
-          <View style={[styles.methodIcon, { backgroundColor: method.color + '20' }]}>
-            <Ionicons name={method.icon} size={24} color={method.color} />
-          </View>
-          <View style={styles.methodTitleContainer}>
-            <Text style={styles.methodTitle}>{method.title}</Text>
-            <Text style={styles.methodSubtitle}>{method.subtitle}</Text>
-          </View>
-          {isSelected && (
-            <Ionicons name="checkmark-circle" size={24} color={method.color} />
-          )}
-        </View>
-        
-        <Text style={styles.methodDescription}>{method.description}</Text>
-        
-        <View style={styles.timingContainer}>
-          <View style={styles.timingItem}>
-            <Text style={styles.timingLabel}>Study</Text>
-            <Text style={[styles.timingValue, { color: method.color }]}>
-              {method.studyTime} min
-            </Text>
-          </View>
-          <View style={styles.timingSeparator} />
-          <View style={styles.timingItem}>
-            <Text style={styles.timingLabel}>Break</Text>
-            <Text style={[styles.timingValue, { color: method.color }]}>
-              {method.breakTime} min
-            </Text>
-          </View>
-        </View>
-        
-        <View style={styles.featuresContainer}>
-          {method.features.map((feature, index) => (
-            <View key={index} style={styles.featureItem}>
-              <View style={[styles.featureDot, { backgroundColor: method.color }]} />
-              <Text style={styles.featureText}>{feature}</Text>
+      <StaggeredItem key={method.id} index={index} delay="normal" direction="up">
+        <TouchableOpacity
+          style={[
+            styles.methodCard,
+            isSelected && styles.selectedMethodCard,
+            { borderColor: isSelected ? method.color : 'rgba(232, 245, 233, 0.2)' }
+          ]}
+          onPress={() => handleMethodSelect(method.id)}
+          activeOpacity={0.8}
+        >
+          <View style={styles.methodHeader}>
+            <View style={[styles.methodIcon, { backgroundColor: method.color + '20' }]}>
+              <Ionicons name={method.icon} size={24} color={method.color} />
             </View>
-          ))}
-        </View>
-      </TouchableOpacity>
+            <View style={styles.methodTitleContainer}>
+              <Text style={styles.methodTitle}>{method.title}</Text>
+              <Text style={styles.methodSubtitle}>{method.subtitle}</Text>
+            </View>
+            {isSelected && (
+              <Animated.View entering={FadeIn.duration(300)}>
+                <Ionicons name="checkmark-circle" size={24} color={method.color} />
+              </Animated.View>
+            )}
+          </View>
+
+          <Text style={styles.methodDescription}>{method.description}</Text>
+
+          <View style={styles.timingContainer}>
+            <View style={styles.timingItem}>
+              <Text style={styles.timingLabel}>Study</Text>
+              <Text style={[styles.timingValue, { color: method.color }]}>
+                {method.studyTime} min
+              </Text>
+            </View>
+            <View style={styles.timingSeparator} />
+            <View style={styles.timingItem}>
+              <Text style={styles.timingLabel}>Break</Text>
+              <Text style={[styles.timingValue, { color: method.color }]}>
+                {method.breakTime} min
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.featuresContainer}>
+            {method.features.map((feature, idx) => (
+              <View key={idx} style={styles.featureItem}>
+                <View style={[styles.featureDot, { backgroundColor: method.color }]} />
+                <Text style={styles.featureText}>{feature}</Text>
+              </View>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </StaggeredItem>
     );
   };
 
@@ -164,54 +163,42 @@ export default function FocusMethodIntroScreen() {
       style={styles.container}
     >
       <SafeAreaView style={styles.safeArea}>
-        <Animated.View 
-          style={[
-            styles.content,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }]
-            }
-          ]}
-        >
-          <View style={styles.header}>
+        <View style={styles.content}>
+          <Animated.View style={[styles.header, headerAnimation]}>
             <Text style={styles.headerTitle}>Choose Your Focus Method</Text>
             <Text style={styles.headerSubtitle}>
               Step 1 of 5 • Select the study technique that best fits your learning style and goals
             </Text>
-          </View>
-          
-          <ScrollView 
+          </Animated.View>
+
+          <ScrollView
             style={styles.methodsList}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 20 }}
           >
-            {FOCUS_METHODS.map(renderMethodCard)}
+            {FOCUS_METHODS.map((method, index) => renderMethodCard(method, index))}
           </ScrollView>
-          
-          <View style={styles.bottomContainer}>
-            <TouchableOpacity 
-              style={styles.continueButton}
+
+          <Animated.View style={[styles.bottomContainer, buttonAnimation]}>
+            <AnimatedButton
+              title="Continue"
               onPress={handleContinue}
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={['#4CAF50', '#66BB6A', '#4CAF50']}
-                locations={[0, 0.5, 1]}
-                style={styles.buttonGradient}
-              >
-                <Text style={styles.continueButtonText}>Continue</Text>
-                <Ionicons name="arrow-forward" size={20} color="#FFFFFF" style={{ marginLeft: 8 }} />
-              </LinearGradient>
-            </TouchableOpacity>
-            
+              gradient={true}
+              gradientColors={['#4CAF50', '#66BB6A', '#4CAF50']}
+              size="large"
+              fullWidth={true}
+              icon={<Ionicons name="arrow-forward" size={20} color="#FFFFFF" />}
+              iconPosition="right"
+            />
+
             <View style={styles.progressIndicator}>
               <View style={[styles.progressDot, styles.progressDotActive]} />
               <View style={styles.progressDot} />
               <View style={styles.progressDot} />
               <View style={styles.progressDot} />
             </View>
-          </View>
-        </Animated.View>
+          </Animated.View>
+        </View>
       </SafeAreaView>
     </LinearGradient>
   );
@@ -337,27 +324,7 @@ const styles = StyleSheet.create({
   bottomContainer: {
     paddingTop: 20,
     paddingBottom: 10,
-  },
-  continueButton: {
-    borderRadius: 12,
-    marginBottom: 20,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-  },
-  buttonGradient: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 16,
-    borderRadius: 12,
-  },
-  continueButtonText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
+    gap: 20,
   },
   progressIndicator: {
     flexDirection: 'row',

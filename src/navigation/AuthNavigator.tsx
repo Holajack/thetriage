@@ -13,6 +13,7 @@ export const AuthNavigator = () => {
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
+        gestureEnabled: false, // Disable swipe gestures
       }}
     >
       <Stack.Screen name="Login" component={LoginScreen} />

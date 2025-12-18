@@ -6,6 +6,8 @@ import { useTheme } from '../../context/ThemeContext';
 const { useUserAppData } = require('../../utils/userAppData');
 import OBJBrain3D from '../../components/OBJBrain3D';
 import { generateBrainVisualizationData, Brain3DRegion } from '../../utils/brain3DData';
+import ReAnimated, { FadeIn, FadeInUp } from 'react-native-reanimated';
+import { useFocusAnimationKey } from '../../utils/animationUtils';
 
 interface BrainActivity {
   id: string;
@@ -86,6 +88,10 @@ const BRAIN_ACTIVITIES: BrainActivity[] = [
 const BrainMappingScreen: React.FC = () => {
   const { theme } = useTheme();
   const navigation = useNavigation<any>();
+
+  // Force animations to replay on every screen focus
+  const focusKey = useFocusAnimationKey();
+
   const [modalVisible, setModalVisible] = useState(false);
   const [brain3DData, setBrain3DData] = useState<Brain3DRegion[]>([]);
   const [selectedRegion, setSelectedRegion] = useState<Brain3DRegion | null>(null);
@@ -185,9 +191,16 @@ const BrainMappingScreen: React.FC = () => {
 
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <ReAnimated.View
+      key={`container-${focusKey}`}
+      entering={FadeIn.duration(250)}
+      style={[styles.container, { backgroundColor: theme.background }]}
+    >
       {/* Custom Header */}
-      <View style={[styles.customHeader, { backgroundColor: theme.background }]}>
+      <ReAnimated.View
+        entering={FadeIn.delay(50).duration(200)}
+        style={[styles.customHeader, { backgroundColor: theme.background }]}
+      >
         <TouchableOpacity
           onPress={() => navigation.navigate('Bonuses' as never)}
           style={styles.backButton}
@@ -196,9 +209,10 @@ const BrainMappingScreen: React.FC = () => {
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.text }]}>Brain Activity Mapping</Text>
         <View style={styles.headerSpacer} />
-      </View>
+      </ReAnimated.View>
 
-      <ScrollView
+      <ReAnimated.ScrollView
+        entering={FadeInUp.delay(100).duration(300)}
         style={styles.content}
         showsVerticalScrollIndicator={false}
         scrollEnabled={scrollEnabled}
@@ -231,7 +245,7 @@ const BrainMappingScreen: React.FC = () => {
             showsVerticalScrollIndicator={false}
           />
         </View>
-      </ScrollView>
+      </ReAnimated.ScrollView>
 
       {/* Brain Region Detail Modal */}
       <Modal
@@ -301,7 +315,7 @@ const BrainMappingScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
-    </View>
+    </ReAnimated.View>
   );
 };
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal } from 'react-native';
-import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { QuizResult, STUDY_HABITS_RESULTS, LEARNING_STYLE_RESULTS } from '../data/quizData';
 
@@ -42,20 +42,20 @@ const QuizResults: React.FC<QuizResultsProps> = ({ result, onRetake, onClose }) 
       const icons = {
         time_management: 'clock-outline',
         environment: 'home-outline',
-        information_processing: 'brain',
+        information_processing: 'brain-outline',
         motivation: 'heart-outline',
-        technology: 'laptop',
+        technology: 'laptop-outline',
         learning_strategies: 'lightbulb-outline',
-        self_assessment: 'mirror'
+        self_assessment: 'eye-outline'
       };
       return icons[category as keyof typeof icons] || 'help-circle-outline';
     } else {
       const icons = {
         visual: 'eye-outline',
-        auditory: 'volume-high',
-        kinesthetic: 'hand-outline',
+        auditory: 'volume-high-outline',
+        kinesthetic: 'hand-left-outline',
         reading_writing: 'pencil-outline',
-        social: 'account-group-outline'
+        social: 'people-outline'
       };
       return icons[category as keyof typeof icons] || 'help-circle-outline';
     }
@@ -93,7 +93,7 @@ const QuizResults: React.FC<QuizResultsProps> = ({ result, onRetake, onClose }) 
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-          <Ionicons name="close" size={24} color={theme.text} />
+          <Ionicons name="close-outline" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.text }]}>Quiz Results</Text>
         <View style={styles.placeholder} />
@@ -103,10 +103,10 @@ const QuizResults: React.FC<QuizResultsProps> = ({ result, onRetake, onClose }) 
         {/* Score Card */}
         <View style={[styles.scoreCard, { backgroundColor: theme.card }]}>
           <View style={styles.scoreHeader}>
-            <MaterialCommunityIcons 
-              name={getIconForCategory(result.category, result.quizId)} 
-              size={48} 
-              color={scoreColor} 
+            <Ionicons
+              name={getIconForCategory(result.category, result.quizId) as any}
+              size={48}
+              color={scoreColor}
             />
             <View style={styles.scoreInfo}>
               <Text style={[styles.scoreValue, { color: scoreColor }]}>
@@ -161,7 +161,7 @@ const QuizResults: React.FC<QuizResultsProps> = ({ result, onRetake, onClose }) 
                 <Text style={[styles.recommendationText, { color: theme.text }]}>
                   {recommendation}
                 </Text>
-                <Ionicons name="chevron-forward" size={20} color={theme.text + '66'} />
+                <Ionicons name="chevron-forward-outline" size={20} color={theme.text + '66'} />
               </View>
             </TouchableOpacity>
           ))}
@@ -173,17 +173,17 @@ const QuizResults: React.FC<QuizResultsProps> = ({ result, onRetake, onClose }) 
             style={[styles.actionButton, styles.retakeButton, { borderColor: theme.primary }]}
             onPress={onRetake}
           >
-            <MaterialCommunityIcons name="refresh" size={20} color={theme.primary} />
+            <Ionicons name="refresh-outline" size={20} color={theme.primary} />
             <Text style={[styles.retakeButtonText, { color: theme.primary }]}>
               Retake Quiz
             </Text>
           </TouchableOpacity>
-          
+
           <TouchableOpacity
             style={[styles.actionButton, styles.saveButton, { backgroundColor: theme.primary }]}
             onPress={onClose}
           >
-            <MaterialCommunityIcons name="check" size={20} color="#FFF" />
+            <Ionicons name="checkmark-outline" size={20} color="#FFF" />
             <Text style={styles.saveButtonText}>
               Save Results
             </Text>
@@ -239,7 +239,7 @@ const QuizResults: React.FC<QuizResultsProps> = ({ result, onRetake, onClose }) 
                 onPress={() => setShowDetailModal(false)}
                 style={styles.modalCloseButton}
               >
-                <Ionicons name="close" size={24} color={theme.text} />
+                <Ionicons name="close-outline" size={24} color={theme.text} />
               </TouchableOpacity>
             </View>
             

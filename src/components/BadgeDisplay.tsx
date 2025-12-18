@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { Badge } from '../data/achievements';
 import { useTheme } from '../context/ThemeContext';
 
@@ -48,10 +48,10 @@ const BadgeDisplay: React.FC<BadgeDisplayProps> = ({
           compact ? styles.compactIconContainer : styles.iconContainer,
           { backgroundColor: badge.color }
         ]}>
-          <MaterialCommunityIcons 
-            name={badge.icon as any} 
-            size={compact ? 16 : 24} 
-            color="#FFF" 
+          <Ionicons
+            name={badge.icon as any}
+            size={compact ? 16 : 24}
+            color="#FFF"
           />
           {isHighTier && (
             <View style={styles.tierIndicator}>
@@ -77,7 +77,7 @@ const BadgeDisplay: React.FC<BadgeDisplayProps> = ({
   if (badges.length === 0) {
     return (
       <View style={styles.emptyContainer}>
-        <MaterialCommunityIcons name="trophy-outline" size={48} color={theme.text + '40'} />
+        <Ionicons name="trophy-outline" size={48} color={theme.text + '40'} />
         <Text style={[styles.emptyText, { color: theme.text + '60' }]}>
           No badges earned yet
         </Text>
@@ -107,10 +107,10 @@ const BadgeDisplay: React.FC<BadgeDisplayProps> = ({
               compact ? styles.compactIconContainer : styles.iconContainer,
               { backgroundColor: theme.text + '20' }
             ]}>
-              <MaterialCommunityIcons 
-                name="plus" 
-                size={compact ? 16 : 24} 
-                color={theme.text} 
+              <Ionicons
+                name="add-outline"
+                size={compact ? 16 : 24}
+                color={theme.text}
               />
             </View>
             {!compact && (

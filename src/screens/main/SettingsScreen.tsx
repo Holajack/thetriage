@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, Switch, TouchableOpacity, ScrollView, Alert, Modal, Platform, Image, Linking } from 'react-native';
-import { Ionicons, MaterialIcons, MaterialCommunityIcons, Entypo } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { MainTabParamList } from '../../navigation/types';
@@ -19,6 +19,8 @@ import { useAuth } from '../../context/AuthContext';
 import * as Notifications from 'expo-notifications';
 import { showDNDReminder } from '../../utils/doNotDisturb';
 import AIHelpModal from '../../components/AIHelpModal';
+import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
+import { useFocusAnimationKey } from '../../utils/animationUtils';
 
 // Configure notifications
 Notifications.setNotificationHandler({
@@ -71,6 +73,9 @@ const SettingsScreen = () => {
   const { theme, themeName, themeMode, fontSize, setThemeName, setThemeMode, setFontSize } = useTheme();
   const { updateOnboarding } = useAuth();
   const isDarkMode = theme.isDark;
+
+  // Force animations to replay on every screen focus
+  const focusKey = useFocusAnimationKey();
   const screenBackground = theme.background;
   const cardBackground = isDarkMode ? (theme.surface ?? '#1E1E1E') : (theme.card ?? '#FFFFFF');
   const secondaryCardBackground = isDarkMode ? (theme.surface2 ?? '#232323') : '#F9FBF9';
@@ -1858,20 +1863,26 @@ const SettingsScreen = () => {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: screenBackground }}>
       {/* Settings Title */}
-      <View style={[styles.settingsHeader, { backgroundColor: screenBackground }]}>
+      <Animated.View
+        key={`header-${focusKey}`}
+        entering={FadeIn.duration(250)}
+        style={[styles.settingsHeader, { backgroundColor: screenBackground }]}
+      >
         <TouchableOpacity
           style={styles.closeButton}
           onPress={() => navigation.goBack()}
         >
           <View style={[styles.closeButtonCircle, { backgroundColor: iconPrimary + '30' }]}>
-            <Ionicons name="close" size={24} color={iconPrimary} />
+            <Ionicons name="close-outline" size={24} color={iconPrimary} />
           </View>
         </TouchableOpacity>
         <Text style={[styles.settingsTitle, { color: iconPrimary }]}>Settings</Text>
         <View style={styles.headerSpacer} />
-      </View>
+      </Animated.View>
 
-      <ScrollView
+      <Animated.ScrollView
+        key={`content-${focusKey}`}
+        entering={FadeInUp.delay(100).duration(300)}
         style={{ flex: 1, backgroundColor: screenBackground }}
         contentContainerStyle={{ flexGrow: 1, paddingBottom: 32 }}
       >
@@ -1937,7 +1948,7 @@ const SettingsScreen = () => {
           
           {/* Auto-Play Sound Toggle Row - Fixed styling */}
           <View style={[styles.rowCard, rowCardBaseStyle]}>
-            <MaterialIcons name="music-note" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <Ionicons name="musical-note-outline" size={22} color={iconPrimary} style={styles.rowIcon} />
             <View style={{ flex: 1 }}>
               <Text style={[styles.rowLabel, { color: textColor }]}>Auto-Play Sound</Text>
               <Text style={[styles.rowDescription, { color: secondaryTextColor }]}>Automatically start music when focus session begins</Text>
@@ -1984,7 +1995,7 @@ const SettingsScreen = () => {
 
           {/* Spotify Connection Row */}
           <View style={[styles.rowCard, rowCardBaseStyle, { borderBottomWidth: 0 }]}>
-            <Ionicons name="musical-notes" size={22} color="#1DB954" style={styles.rowIcon} />
+            <Ionicons name="musical-notes-outline" size={22} color="#1DB954" style={styles.rowIcon} />
             <View style={{ flex: 1 }}>
               <Text style={[styles.rowLabel, { color: textColor }]}>Spotify</Text>
               <Text style={[styles.rowDescription, { color: secondaryTextColor }]}>
@@ -2049,7 +2060,7 @@ const SettingsScreen = () => {
                   borderLeftColor: '#FFA726'
                 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
-                    <Ionicons name="information-circle" size={24} color="#F57C00" style={{ marginTop: 2 }} />
+                    <Ionicons name="information-circle-outline" size={24} color="#F57C00" style={{ marginTop: 2 }} />
                     <View style={{ flex: 1 }}>
                       <Text style={{ color: '#856404', fontWeight: 'bold', fontSize: 15, marginBottom: 4 }}>
                         Dark Mode Active
@@ -2132,7 +2143,7 @@ const SettingsScreen = () => {
                       <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13, textAlign: 'center' }}>Button</Text>
                     </TouchableOpacity>
                     {themeName === env && (
-                      <Ionicons name="checkmark-circle" size={22} color={themePalettes[env].primary} style={{ position: 'absolute', top: 8, right: 8 }} />
+                      <Ionicons name="checkmark-circle-outline" size={22} color={themePalettes[env].primary} style={{ position: 'absolute', top: 8, right: 8 }} />
                     )}
                   </TouchableOpacity>
                 ))}
@@ -2158,7 +2169,7 @@ const SettingsScreen = () => {
                  'Tap to configure'}
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={secondaryTextColor} />
+            <Ionicons name="chevron-forward-outline" size={20} color={secondaryTextColor} />
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.rowCard, rowCardBaseStyle]}
@@ -2194,10 +2205,10 @@ const SettingsScreen = () => {
                 })()}
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={secondaryTextColor} />
+            <Ionicons name="chevron-forward-outline" size={20} color={secondaryTextColor} />
           </TouchableOpacity>
           <View style={[styles.rowCard, rowCardBaseStyle, { borderBottomWidth: 0 }]}>
-            <MaterialIcons name="timer" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <Ionicons name="timer-outline" size={22} color={iconPrimary} style={styles.rowIcon} />
             <View style={{ flex: 1 }}>
               <Text style={[styles.rowLabel, rowLabelTextStyle]}>Session End Reminder</Text>
               <Text style={[styles.rowDescription, rowDescriptionTextStyle]}>
@@ -2220,19 +2231,19 @@ const SettingsScreen = () => {
         <Text style={[styles.sectionHeader, { color: iconPrimary }]}>FOCUS & STUDY PREFERENCES</Text>
         <View style={[styles.cardSection, cardSectionStyle]}>
           <TouchableOpacity style={[styles.rowCard, rowCardBaseStyle]} onPress={() => setShowMainGoalModal(true)} activeOpacity={0.7}>
-            <MaterialCommunityIcons name="bullseye-arrow" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <Ionicons name="locate-outline" size={22} color={iconPrimary} style={styles.rowIcon} />
             <Text style={[styles.rowLabel, rowLabelTextStyle]}>Main Goal</Text>
             <View style={styles.rowValueWrap}><Text style={[styles.rowValue, rowValueTextStyle]}>{mainGoal}</Text></View>
-            <Ionicons name="chevron-forward" size={20} color={secondaryTextColor} />
+            <Ionicons name="chevron-forward-outline" size={20} color={secondaryTextColor} />
           </TouchableOpacity>
           <TouchableOpacity style={[styles.rowCard, rowCardBaseStyle]} onPress={() => setShowWorkStyleModal(true)} activeOpacity={0.7}>
-            <MaterialCommunityIcons name="clock-outline" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <Ionicons name="time-outline" size={22} color={iconPrimary} style={styles.rowIcon} />
             <Text style={[styles.rowLabel, rowLabelTextStyle]}>Work Style</Text>
             <View style={styles.rowValueWrap}><Text style={[styles.rowValue, rowValueTextStyle]}>{workStyle}</Text></View>
-            <Ionicons name="chevron-forward" size={20} color={secondaryTextColor} />
+            <Ionicons name="chevron-forward-outline" size={20} color={secondaryTextColor} />
           </TouchableOpacity>
           <View style={[styles.rowCard, rowCardBaseStyle]}>
-            <MaterialIcons name="do-not-disturb" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <Ionicons name="remove-circle-outline" size={22} color={iconPrimary} style={styles.rowIcon} />
             <View style={{ flex: 1 }}>
               <Text style={[styles.rowLabel, rowLabelTextStyle]}>Auto Do Not Disturb</Text>
               <Text style={[styles.rowDescription, rowDescriptionTextStyle]}>
@@ -2250,7 +2261,7 @@ const SettingsScreen = () => {
             />
           </View>
           <View style={[styles.rowCard, rowCardBaseStyle, { borderBottomWidth: 0 }]}>
-            <MaterialCommunityIcons name="target" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <Ionicons name="locate-outline" size={22} color={iconPrimary} style={styles.rowIcon} />
             <View style={{ flex: 1 }}>
               <Text style={[styles.rowLabel, rowLabelTextStyle]}>Weekly Focus Goal</Text>
               <Text style={[styles.rowDescription, rowDescriptionTextStyle, { fontSize: 12, marginTop: 2 }]}>
@@ -2287,37 +2298,37 @@ const SettingsScreen = () => {
                 Update name, username, bio, and photo
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={secondaryTextColor} />
+            <Ionicons name="chevron-forward-outline" size={20} color={secondaryTextColor} />
           </TouchableOpacity>
           <TouchableOpacity style={[styles.rowCard, rowCardBaseStyle]} onPress={handleChangeEmailPassword} activeOpacity={0.7}>
-            <MaterialIcons name="email" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <Ionicons name="mail-outline" size={22} color={iconPrimary} style={styles.rowIcon} />
             <View style={{ flex: 1 }}>
               <Text style={[styles.rowLabel, rowLabelTextStyle]}>Change Email/Password</Text>
               <Text style={[styles.rowDescription, rowDescriptionTextStyle]}>
                 Update your account credentials
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={secondaryTextColor} />
+            <Ionicons name="chevron-forward-outline" size={20} color={secondaryTextColor} />
           </TouchableOpacity>
           <TouchableOpacity style={[styles.rowCard, rowCardBaseStyle]} onPress={() => navigation.navigate('Privacy')} activeOpacity={0.7}>
-            <MaterialIcons name="lock-outline" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <Ionicons name="lock-closed-outline" size={22} color={iconPrimary} style={styles.rowIcon} />
             <View style={{ flex: 1 }}>
               <Text style={[styles.rowLabel, rowLabelTextStyle]}>Privacy Settings</Text>
               <Text style={[styles.rowDescription, rowDescriptionTextStyle]}>
                 Manage who can see your information
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={secondaryTextColor} />
+            <Ionicons name="chevron-forward-outline" size={20} color={secondaryTextColor} />
           </TouchableOpacity>
           <TouchableOpacity style={[styles.rowCard, rowCardBaseStyle]} onPress={handleExportData} activeOpacity={0.7}>
-            <MaterialIcons name="file-download" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <Ionicons name="download-outline" size={22} color={iconPrimary} style={styles.rowIcon} />
             <View style={{ flex: 1 }}>
               <Text style={[styles.rowLabel, rowLabelTextStyle]}>Export Data</Text>
               <Text style={[styles.rowDescription, rowDescriptionTextStyle]}>
                 Download all your personal data
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={secondaryTextColor} />
+            <Ionicons name="chevron-forward-outline" size={20} color={secondaryTextColor} />
           </TouchableOpacity>
           <TouchableOpacity style={[styles.rowCard, rowCardBaseStyle, { borderBottomWidth: 0 }]} onPress={handleDeleteAccount} activeOpacity={0.7}>
             <Ionicons name="trash-outline" size={22} color={isDarkMode ? '#ff6b6b' : '#ff4444'} style={styles.rowIcon} />
@@ -2327,7 +2338,7 @@ const SettingsScreen = () => {
                 Permanently delete your account and data
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={secondaryTextColor} />
+            <Ionicons name="chevron-forward-outline" size={20} color={secondaryTextColor} />
           </TouchableOpacity>
         </View>
 
@@ -2339,7 +2350,7 @@ const SettingsScreen = () => {
             onPress={() => setIsAISectionExpanded(!isAISectionExpanded)}
             activeOpacity={0.7}
           >
-            <MaterialCommunityIcons name="brain" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <Ionicons name="bulb-outline" size={22} color={iconPrimary} style={styles.rowIcon} />
             <View style={{ flex: 1 }}>
               <Text style={[styles.rowLabel, rowLabelTextStyle]}>AI Settings</Text>
               <Text style={[styles.rowDescription, rowDescriptionTextStyle]}>
@@ -2431,8 +2442,8 @@ const SettingsScreen = () => {
                   borderLeftColor: isPro && noraEnabled ? '#66BB6A' : '#E0E0E0'
                 }
               ]}>
-                <MaterialCommunityIcons
-                  name="robot"
+                <Ionicons
+                  name="hardware-chip-outline"
                   size={22}
                   color={isPro && !patrickEnabled ? iconPrimary : '#999'}
                   style={styles.rowIcon}
@@ -2473,8 +2484,8 @@ const SettingsScreen = () => {
                   borderLeftColor: hasAIAccess && patrickEnabled ? '#7B61FF' : '#E0E0E0'
                 }
               ]}>
-                <MaterialCommunityIcons
-                  name="account-voice"
+                <Ionicons
+                  name="chatbubble-ellipses-outline"
                   size={22}
                   color={hasAIAccess && !(isPro && noraEnabled) ? iconPrimary : '#999'}
                   style={styles.rowIcon}
@@ -2515,8 +2526,8 @@ const SettingsScreen = () => {
                   borderLeftColor: hasAIAccess && insightsEnabled ? '#4CAF50' : '#E0E0E0'
                 }
               ]}>
-                <MaterialCommunityIcons
-                  name="lightbulb-on"
+                <Ionicons
+                  name="bulb-outline"
                   size={22}
                   color={hasAIAccess ? iconPrimary : '#999'}
                   style={styles.rowIcon}
@@ -2559,8 +2570,8 @@ const SettingsScreen = () => {
                   borderBottomWidth: 0
                 }
               ]}>
-                <MaterialCommunityIcons
-                  name="account-star"
+                <Ionicons
+                  name="star-outline"
                   size={22}
                   color={isPro ? iconPrimary : '#999'}
                   style={styles.rowIcon}
@@ -2596,7 +2607,7 @@ const SettingsScreen = () => {
         <Text style={[styles.sectionHeader, { color: iconPrimary }]}>ACCESSIBILITY</Text>
         <View style={[styles.cardSection, cardSectionStyle]}>
           <View style={[styles.rowCard, rowCardBaseStyle]}>
-            <MaterialIcons name="record-voice-over" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <Ionicons name="mic-outline" size={22} color={iconPrimary} style={styles.rowIcon} />
             <View style={{ flex: 1 }}>
               <Text style={[styles.rowLabel, rowLabelTextStyle]}>Text-to-Speech</Text>
               <Text style={[styles.rowDescription, rowDescriptionTextStyle]}>
@@ -2614,7 +2625,7 @@ const SettingsScreen = () => {
             />
           </View>
           <View style={[styles.rowCard, rowCardBaseStyle]}>
-            <MaterialIcons name="palette" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <Ionicons name="color-palette-outline" size={22} color={iconPrimary} style={styles.rowIcon} />
             <View style={{ flex: 1 }}>
               <Text style={[styles.rowLabel, rowLabelTextStyle]}>Color Blind Mode</Text>
               <Text style={[styles.rowDescription, rowDescriptionTextStyle]}>
@@ -2632,7 +2643,7 @@ const SettingsScreen = () => {
             />
           </View>
           <View style={[styles.rowCard, rowCardBaseStyle, { borderBottomWidth: 0 }]}>
-            <MaterialIcons name="motion-photos-on" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <Ionicons name="contrast-outline" size={22} color={iconPrimary} style={styles.rowIcon} />
             <View style={{ flex: 1 }}>
               <Text style={[styles.rowLabel, rowLabelTextStyle]}>Reduce Motion</Text>
               <Text style={[styles.rowDescription, rowDescriptionTextStyle]}>
@@ -2657,28 +2668,28 @@ const SettingsScreen = () => {
           <TouchableOpacity style={[styles.rowCard, rowCardBaseStyle]} onPress={handleHelpCenter} activeOpacity={0.7}>
             <Ionicons name="help-circle-outline" size={22} color={iconPrimary} style={styles.rowIcon} />
             <Text style={[styles.rowLabel, rowLabelTextStyle]}>Help Center / FAQ</Text>
-            <Ionicons name="chevron-forward" size={20} color={secondaryTextColor} />
+            <Ionicons name="chevron-forward-outline" size={20} color={secondaryTextColor} />
           </TouchableOpacity>
           <TouchableOpacity style={[styles.rowCard, rowCardBaseStyle]} onPress={handleContactSupport} activeOpacity={0.7}>
-            <MaterialIcons name="support-agent" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <Ionicons name="headset-outline" size={22} color={iconPrimary} style={styles.rowIcon} />
             <Text style={[styles.rowLabel, rowLabelTextStyle]}>Contact Support</Text>
-            <Ionicons name="chevron-forward" size={20} color={secondaryTextColor} />
+            <Ionicons name="chevron-forward-outline" size={20} color={secondaryTextColor} />
           </TouchableOpacity>
           <TouchableOpacity style={[styles.rowCard, rowCardBaseStyle]} onPress={handleAppInfo} activeOpacity={0.7}>
-            <MaterialIcons name="info-outline" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <Ionicons name="information-circle-outline" size={22} color={iconPrimary} style={styles.rowIcon} />
             <Text style={[styles.rowLabel, rowLabelTextStyle]}>App Information</Text>
             <View style={styles.rowValueWrap}><Text style={[styles.rowValue, rowValueTextStyle]}>v1.0.0</Text></View>
-            <Ionicons name="chevron-forward" size={20} color={secondaryTextColor} />
+            <Ionicons name="chevron-forward-outline" size={20} color={secondaryTextColor} />
           </TouchableOpacity>
           <TouchableOpacity style={[styles.rowCard, rowCardBaseStyle]} onPress={handleTermsOfService} activeOpacity={0.7}>
-            <MaterialIcons name="gavel" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <Ionicons name="document-text-outline" size={22} color={iconPrimary} style={styles.rowIcon} />
             <Text style={[styles.rowLabel, rowLabelTextStyle]}>Terms of Service</Text>
-            <Ionicons name="chevron-forward" size={20} color={secondaryTextColor} />
+            <Ionicons name="chevron-forward-outline" size={20} color={secondaryTextColor} />
           </TouchableOpacity>
           <TouchableOpacity style={[styles.rowCard, rowCardBaseStyle, { borderBottomWidth: 0 }]} onPress={handlePrivacyPolicy} activeOpacity={0.7}>
-            <MaterialIcons name="privacy-tip" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <Ionicons name="shield-checkmark-outline" size={22} color={iconPrimary} style={styles.rowIcon} />
             <Text style={[styles.rowLabel, rowLabelTextStyle]}>Privacy Policy</Text>
-            <Ionicons name="chevron-forward" size={20} color={secondaryTextColor} />
+            <Ionicons name="chevron-forward-outline" size={20} color={secondaryTextColor} />
           </TouchableOpacity>
         </View>
 
@@ -2830,7 +2841,7 @@ const SettingsScreen = () => {
                   onPress={() => setShowNotificationPrefsModal(false)}
                   style={styles.modalCloseButton}
                 >
-                  <Ionicons name="close" size={28} color={textColor} />
+                  <Ionicons name="close-outline" size={28} color={textColor} />
                 </TouchableOpacity>
               </View>
 
@@ -3020,13 +3031,13 @@ const SettingsScreen = () => {
         {/* Rating Card */}
         <View style={[styles.ratingCard, { backgroundColor: '#8BB5D8' }]}>
           <View style={styles.ratingContent}>
-            <Ionicons name="person" size={50} color="#4A90E2" />
+            <Ionicons name="person-outline" size={50} color="#4A90E2" />
             <View style={styles.ratingTextContainer}>
               <Text style={styles.ratingTitle}>Does Focus{'\n'}Traveller Help?</Text>
               <Text style={styles.ratingSubtitle}>Give Us 5 Stars!</Text>
               <View style={styles.starsContainer}>
                 {[1, 2, 3, 4, 5].map((star) => (
-                  <Ionicons key={star} name="star" size={32} color="#FFA726" />
+                  <Ionicons key={star} name="star-outline" size={32} color="#FFA726" />
                 ))}
               </View>
             </View>
@@ -3035,7 +3046,7 @@ const SettingsScreen = () => {
 
         {/* App Version */}
         <Text style={[styles.versionText, { color: theme.text + '66' }]}>v1.0.0 (517) (506)</Text>
-      </ScrollView>
+      </Animated.ScrollView>
 
       <AIHelpModal
         visible={showNoraHelp}

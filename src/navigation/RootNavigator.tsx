@@ -171,20 +171,41 @@ export const RootNavigator = () => {
   return (
     <NavigationContainer ref={navigationRef} linking={linking}>
       <Stack.Navigator
-        screenOptions={{ headerShown: false }}
+        screenOptions={{
+          headerShown: false,
+          // Subtle premium transitions - smooth fades
+          animation: 'fade',
+          animationDuration: 280,
+          // DISABLE all swipe gestures - users must use in-app navigation
+          gestureEnabled: false,
+          gestureDirection: 'horizontal',
+          fullScreenGestureEnabled: false,
+        }}
         initialRouteName="Landing" // Always start at Landing after splash
       >
         <Stack.Screen name="Landing" component={LandingPage} />
         <Stack.Screen name="Auth" component={AuthNavigator} />
         <Stack.Screen name="Onboarding" component={OnboardingNavigator} />
         <Stack.Screen name="Main" component={MainNavigator} />
-        <Stack.Screen name="StudySessionScreen" component={StudySessionScreen} />
+        <Stack.Screen
+          name="StudySessionScreen"
+          component={StudySessionScreen}
+          options={{ presentation: 'fullScreenModal' }}
+        />
         <Stack.Screen name="BreakTimerScreen" component={BreakTimerScreen} />
         <Stack.Screen name="SessionReportScreen" component={SessionReportScreen} />
         <Stack.Screen name="SessionHistory" component={SessionHistoryScreen} />
-        <Stack.Screen name="PatrickSpeak" component={PatrickSpeakScreen} />
+        <Stack.Screen
+          name="PatrickSpeak"
+          component={PatrickSpeakScreen}
+          options={{ presentation: 'fullScreenModal' }}
+        />
         <Stack.Screen name="MessageScreen" component={MessageScreen} />
-        <Stack.Screen name="StudyRoomScreen" component={StudyRoomScreen} />
+        <Stack.Screen
+          name="StudyRoomScreen"
+          component={StudyRoomScreen}
+          options={{ presentation: 'fullScreenModal' }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );

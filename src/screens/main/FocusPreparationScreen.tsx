@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput, Alert, Dimensions, Animated, KeyboardAvoidingView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput, Alert, Dimensions, Animated, KeyboardAvoidingView, Pressable } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { ThemedImageBackground } from '../../components/ThemedImage';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,8 +10,173 @@ import { useSupabaseTasks } from '../../utils/supabaseHooks';
 import { getUserSettings } from '../../utils/userSettings';
 import { startFocusSessionWithDND } from '../../utils/doNotDisturb';
 import { LinearGradient } from 'expo-linear-gradient';
+import ReAnimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withDelay,
+  withSequence,
+  withTiming,
+  withRepeat,
+  Easing,
+  interpolate,
+  FadeInDown
+} from 'react-native-reanimated';
+import { Typography, Spacing, BorderRadius, Shadows, AnimationConfig, TimingConfig } from '../../theme/premiumTheme';
+import { useEntranceAnimation, useButtonPressAnimation, usePulseAnimation, triggerHaptic } from '../../utils/animationUtils';
 
 const { width, height } = Dimensions.get('window');
+
+// Animated Task Item Component
+const AnimatedTaskItem = ({ task, isSelected, onPress, index, theme }: any) => {
+  const scale = useSharedValue(1);
+  const selectedScale = useSharedValue(isSelected ? 1 : 0);
+
+  // Update selection animation when isSelected changes
+  React.useEffect(() => {
+    selectedScale.value = withSpring(isSelected ? 1 : 0, {
+      damping: 15,
+      stiffness: 150,
+    });
+  }, [isSelected]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: scale.value * (1 + selectedScale.value * 0.02) } // Subtle scale to 1.02 when selected
+    ]
+  }));
+
+  const handlePressIn = () => {
+    scale.value = withSpring(0.96, AnimationConfig.snappy);
+  };
+
+  const handlePressOut = () => {
+    scale.value = withSpring(1, AnimationConfig.bouncy);
+  };
+
+  const handlePress = () => {
+    triggerHaptic('selection');
+    onPress();
+  };
+
+  return (
+    <ReAnimated.View
+      entering={FadeInDown.delay(index * 60).springify().damping(15).stiffness(150)}
+      style={animatedStyle}
+    >
+      <TouchableOpacity
+        style={[
+          styles.taskOption,
+          isSelected && { backgroundColor: theme.primary + '20' },
+          { borderBottomColor: theme.background }
+        ]}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        onPress={handlePress}
+        activeOpacity={1}
+      >
+        <Text style={[
+          styles.taskOptionText,
+          { color: theme.text }
+        ]}>
+          {task.title}
+        </Text>
+        {isSelected && (
+          <Ionicons name="checkmark-outline" size={20} color={theme.primary} />
+        )}
+      </TouchableOpacity>
+    </ReAnimated.View>
+  );
+};
+
+// Animated Time Option Component
+interface AnimatedTimeOptionProps {
+  option: { label: string; value: number; isWorkStyle: boolean };
+  isSelected: boolean;
+  onPress: () => void;
+  themeColor: string;
+  textColor: string;
+}
+
+const AnimatedTimeOption: React.FC<AnimatedTimeOptionProps> = ({
+  option,
+  isSelected,
+  onPress,
+  themeColor,
+  textColor
+}) => {
+  const scale = useSharedValue(1);
+  const borderWidth = useSharedValue(isSelected ? 2 : 1);
+  const confirmScale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: scale.value * confirmScale.value }
+    ],
+    borderWidth: borderWidth.value,
+    borderColor: themeColor,
+    borderRadius: 20,
+    overflow: 'hidden',
+  }));
+
+  const handlePressIn = () => {
+    scale.value = withSpring(0.92, AnimationConfig.snappy);
+  };
+
+  const handlePressOut = () => {
+    scale.value = withSpring(1, AnimationConfig.bouncy);
+  };
+
+  const handlePress = () => {
+    // Trigger haptic feedback
+    triggerHaptic('selection');
+
+    // Confirmation bounce animation
+    confirmScale.value = withSequence(
+      withSpring(1.15, AnimationConfig.bouncy),
+      withSpring(1, AnimationConfig.standard)
+    );
+
+    // Animate border width on selection
+    if (!isSelected) {
+      borderWidth.value = withSpring(2, AnimationConfig.snappy);
+    }
+
+    onPress();
+  };
+
+  // Reset border width when deselected
+  React.useEffect(() => {
+    if (!isSelected) {
+      borderWidth.value = withSpring(1, AnimationConfig.standard);
+    } else {
+      borderWidth.value = withSpring(2, AnimationConfig.snappy);
+    }
+  }, [isSelected]);
+
+  return (
+    <ReAnimated.View style={animatedStyle}>
+      <TouchableOpacity
+        style={[
+          styles.inlineTimeOption,
+          isSelected && { backgroundColor: themeColor },
+          { borderWidth: 0 } // Border is handled by animated view
+        ]}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        onPress={handlePress}
+        activeOpacity={0.8}
+      >
+        <Text style={[
+          styles.inlineTimeOptionText,
+          { color: isSelected ? '#fff' : textColor }
+        ]}>
+          {option.label}
+        </Text>
+      </TouchableOpacity>
+    </ReAnimated.View>
+  );
+};
 
 export default function FocusPreparationScreen() {
   const navigation = useNavigation();
@@ -88,8 +253,50 @@ export default function FocusPreparationScreen() {
   
   // Color fill animation
   const colorFillAnim = useRef(new Animated.Value(0)).current;
-  
 
+  // Premium animations
+  const headerAnimStyle = useEntranceAnimation(0);
+  const menuAnimStyle = useEntranceAnimation(200);
+  const mode1AnimStyle = useEntranceAnimation(300);
+  const mode2AnimStyle = useEntranceAnimation(400);
+  const timeAnimStyle = useEntranceAnimation(500);
+
+  // Pulse animation for selected time option
+  const selectedTimePulse = usePulseAnimation(showInlineTimeSelector);
+
+  // Go button animation
+  const goButtonScale = useSharedValue(1);
+  const goButtonAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: goButtonScale.value }]
+  }));
+
+  const handleGoButtonPress = () => {
+    triggerHaptic('success');
+    goButtonScale.value = withSequence(
+      withSpring(0.9, AnimationConfig.snappy),
+      withSpring(1.1, AnimationConfig.bouncy),
+      withSpring(1, AnimationConfig.standard)
+    );
+    handleStartFocus();
+  };
+
+  // Mode button press animations
+  const basecampButton = useButtonPressAnimation();
+  const summitButton = useButtonPressAnimation();
+
+  // Border glow animation for mode buttons
+  const basecampBorderGlow = useSharedValue(0);
+  const summitBorderGlow = useSharedValue(0);
+
+  const basecampBorderStyle = useAnimatedStyle(() => ({
+    shadowOpacity: interpolate(basecampBorderGlow.value, [0, 1], [0.1, 0.4]),
+    shadowRadius: interpolate(basecampBorderGlow.value, [0, 1], [4, 12]),
+  }));
+
+  const summitBorderStyle = useAnimatedStyle(() => ({
+    shadowOpacity: interpolate(summitBorderGlow.value, [0, 1], [0.1, 0.4]),
+    shadowRadius: interpolate(summitBorderGlow.value, [0, 1], [4, 12]),
+  }));
 
   // Default work style times (loaded from user settings)
   const defaultWorkStyle = userSettings ? {
@@ -335,13 +542,21 @@ export default function FocusPreparationScreen() {
       useNativeDriver: false,
     }).start(() => {
       // Navigate to actual focus screen with parameters
+      // Determine selection mode:
+      // - Basecamp is ALWAYS manual
+      // - Summit depends on isManualProgression toggle
+      const isManualMode = focusMode === 'basecamp' || isManualProgression;
+
       navigation.navigate('StudySessionScreen' as never, {
         duration: selectedTime,
         task: selectedTask,
         tasks: selectedTasks,
         focusMode: focusMode,
         autoProgress: !isManualProgression,
-        autoStart: true
+        autoStart: true,
+        // Pass explicit selectionMode for StudySessionScreen
+        manualSelection: isManualMode,
+        selectionMode: isManualMode ? 'manual' : 'auto',
       } as never);
       // Reset animation for next time
       colorFillAnim.setValue(0);
@@ -366,53 +581,47 @@ export default function FocusPreparationScreen() {
           />
         </ThemedImageBackground>
         
-        {/* Curved Dotted Path System - Following the exact path in triage-background-image.png */}
-        <View style={styles.curvedPathContainer}>
-          {/* Multiple dotted path segments to create the curve */}
-          <View style={styles.pathSegment1} />
-          <View style={styles.pathSegment2} />
-          <View style={styles.pathSegment3} />
-          <View style={styles.pathSegment4} />
-          <View style={styles.pathSegment5} />
-          
-          {/* Progress fill segments */}
-          <View style={[styles.fillSegment1, { backgroundColor: theme.primary }]} />
-          <View style={[styles.fillSegment2, { backgroundColor: theme.primary }]} />
-          
-          {/* Progress circle */}
-          <View style={[styles.curvedProgressCircle, { backgroundColor: theme.primary }]}>
-            <View style={[styles.circleInner, { backgroundColor: '#fff' }]} />
-          </View>
-        </View>
       </View>
 
       {/* Overlay Content */}
       <SafeAreaView style={styles.overlay}>
         {/* Header */}
-        <View style={styles.header}>
+        <ReAnimated.View style={[styles.header, headerAnimStyle]}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
             style={dynamicStyles.backButton}
           >
-            <Ionicons name="arrow-back" size={24} color={theme.text} />
+            <Ionicons name="arrow-back-outline" size={24} color={theme.text} />
           </TouchableOpacity>
-        </View>
+        </ReAnimated.View>
 
         {/* Work Style Warning */}
         {showWorkStyleWarning && (
           <View style={[dynamicStyles.warningBanner, { backgroundColor: theme.isDark ? 'rgba(33, 33, 33, 0.9)' : theme.primary + '20' }]}>
-            <Ionicons name="information-circle" size={16} color={theme.primary} />
+            <Ionicons name="information-circle-outline" size={16} color={theme.primary} />
             <Text style={[styles.warningText, { color: theme.primary }]}>
               Outside your {defaultWorkStyle.name} work style
             </Text>
           </View>
         )}
 
-        {/* Mode Selection Notification */}
+        {/* Mode Selection Notification - High contrast background for visibility */}
         {showNotification && (
-          <View style={[dynamicStyles.warningBanner, { backgroundColor: theme.isDark ? 'rgba(255, 107, 107, 0.2)' : 'rgba(255, 107, 107, 0.1)' }]}>
-            <Ionicons name="alert-circle" size={16} color="#FF6B6B" />
-            <Text style={[styles.warningText, { color: '#FF6B6B' }]}>
+          <View style={[
+            dynamicStyles.warningBanner,
+            {
+              backgroundColor: theme.isDark ? 'rgba(40, 40, 40, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+              borderWidth: 1,
+              borderColor: '#FF6B6B',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.25,
+              shadowRadius: 4,
+              elevation: 5,
+            }
+          ]}>
+            <Ionicons name="alert-circle-outline" size={16} color="#FF6B6B" />
+            <Text style={[styles.warningText, { color: '#FF6B6B', fontWeight: '600' }]}>
               {showNotification}
             </Text>
           </View>
@@ -422,45 +631,83 @@ export default function FocusPreparationScreen() {
         <View style={styles.spacer} />
 
         {/* Menu Container - Like in IMG_0021.PNG */}
-        <View style={dynamicStyles.menuContainer}>
+        <ReAnimated.View style={[dynamicStyles.menuContainer, menuAnimStyle]}>
           {/* Focus Mode and Task Selection - Fixed height container */}
           <View style={styles.topSectionContainer}>
             {!focusMode ? (
               /* Mode Selection - Basecamp vs Summit */
               <View style={styles.modeSelectionContainer}>
-                <Text style={[styles.taskSelectorLabel, { color: theme.text + '80' }]}>
+                <Text style={[styles.modeHeading, { color: theme.text }]}>
                   What do you like to focus on now?
                 </Text>
-                <Text style={[styles.modeDescription, { color: theme.text + '60' }]}>
+                <Text style={[styles.modeSubtext, { color: theme.textSecondary }]}>
                   Choose your focus approach
                 </Text>
-                
+
                 <View style={styles.modeButtons}>
-                  <TouchableOpacity
-                    style={[styles.modeButton, { backgroundColor: theme.card, borderColor: theme.primary }]}
-                    onPress={() => handleModeSelection('basecamp')}
-                  >
-                    <View style={[styles.modeIconContainer, { backgroundColor: theme.primary + '20' }]}>
-                      <Text style={[styles.tentIcon, { color: theme.primary }]}>⛺</Text>
-                    </View>
-                    <Text style={[styles.modeButtonTitle, { color: theme.text }]}>Basecamp</Text>
-                    <Text style={[styles.modeButtonSubtitle, { color: theme.text + '70' }]}>
-                      One task
-                    </Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity
-                    style={[styles.modeButton, { backgroundColor: theme.card, borderColor: theme.primary }]}
-                    onPress={() => handleModeSelection('summit')}
-                  >
-                    <View style={[styles.modeIconContainer, { backgroundColor: theme.primary + '20' }]}>
-                      <Text style={[styles.mountainIcon, { color: theme.primary }]}>🏔️</Text>
-                    </View>
-                    <Text style={[styles.modeButtonTitle, { color: theme.text }]}>Summit</Text>
-                    <Text style={[styles.modeButtonSubtitle, { color: theme.text + '70' }]}>
-                      Multiple tasks
-                    </Text>
-                  </TouchableOpacity>
+                  <ReAnimated.View style={[mode1AnimStyle, basecampButton.animatedStyle, basecampBorderStyle]}>
+                    <Pressable
+                      style={[styles.modeButton, { backgroundColor: theme.card, borderColor: theme.primary, shadowColor: theme.primary }]}
+                      onPress={() => {
+                        triggerHaptic('selection');
+                        basecampBorderGlow.value = withSequence(
+                          withTiming(1, { duration: 100 }),
+                          withTiming(0, { duration: 300 })
+                        );
+                        handleModeSelection('basecamp');
+                      }}
+                      onPressIn={() => {
+                        basecampButton.onPressIn();
+                        basecampBorderGlow.value = withTiming(1, { duration: 100 });
+                      }}
+                      onPressOut={() => {
+                        basecampButton.onPressOut();
+                        basecampBorderGlow.value = withTiming(0, { duration: 300 });
+                      }}
+                    >
+                      <View style={[styles.modeIconContainer, { backgroundColor: theme.primary + '20' }]}>
+                        <Text style={[styles.tentIcon, { color: theme.primary }]}>⛺</Text>
+                      </View>
+                      <Text style={[styles.modeButtonTitle, { color: theme.text }]}>
+                        Basecamp
+                      </Text>
+                      <Text style={[styles.modeButtonSubtitle, { color: theme.text + '70' }]}>
+                        One task
+                      </Text>
+                    </Pressable>
+                  </ReAnimated.View>
+
+                  <ReAnimated.View style={[mode2AnimStyle, summitButton.animatedStyle, summitBorderStyle]}>
+                    <Pressable
+                      style={[styles.modeButton, { backgroundColor: theme.card, borderColor: theme.primary, shadowColor: theme.primary }]}
+                      onPress={() => {
+                        triggerHaptic('selection');
+                        summitBorderGlow.value = withSequence(
+                          withTiming(1, { duration: 100 }),
+                          withTiming(0, { duration: 300 })
+                        );
+                        handleModeSelection('summit');
+                      }}
+                      onPressIn={() => {
+                        summitButton.onPressIn();
+                        summitBorderGlow.value = withTiming(1, { duration: 100 });
+                      }}
+                      onPressOut={() => {
+                        summitButton.onPressOut();
+                        summitBorderGlow.value = withTiming(0, { duration: 300 });
+                      }}
+                    >
+                      <View style={[styles.modeIconContainer, { backgroundColor: theme.primary + '20' }]}>
+                        <Text style={[styles.mountainIcon, { color: theme.primary }]}>🏔️</Text>
+                      </View>
+                      <Text style={[styles.modeButtonTitle, { color: theme.text }]}>
+                        Summit
+                      </Text>
+                      <Text style={[styles.modeButtonSubtitle, { color: theme.text + '70' }]}>
+                        Multiple tasks
+                      </Text>
+                    </Pressable>
+                  </ReAnimated.View>
                 </View>
               </View>
             ) : (
@@ -470,20 +717,20 @@ export default function FocusPreparationScreen() {
                   style={styles.taskSelectorButton}
                   onPress={() => setShowTaskSelector(true)}
                 >
-                  <Text style={[styles.taskSelectorLabel, { color: theme.text + '80' }]}>
+                  <Text style={[styles.taskSelectorLabel, { color: theme.textSecondary }]}>
                     {focusMode === 'basecamp' ? 'Select your task' : 'Select your tasks'}
                   </Text>
                   <Text style={[styles.taskSelectorText, { color: theme.text }]}>
-                    {selectedTasks.length > 0 
-                      ? focusMode === 'basecamp' 
-                        ? selectedTask?.title 
+                    {selectedTasks.length > 0
+                      ? focusMode === 'basecamp'
+                        ? selectedTask?.title || 'Choose one task'
                         : `${selectedTasks.length} task${selectedTasks.length > 1 ? 's' : ''} selected`
-                      : focusMode === 'basecamp' 
-                        ? 'Choose one task' 
+                      : focusMode === 'basecamp'
+                        ? 'Choose one task'
                         : 'Choose multiple tasks'
                     }
                   </Text>
-                  <Ionicons name="chevron-down" size={20} color={theme.text} />
+                  <Ionicons name="chevron-down-outline" size={20} color={theme.text} />
                 </TouchableOpacity>
                 
                 {/* Mode Toggle Button - Switch between basecamp and summit */}
@@ -515,12 +762,22 @@ export default function FocusPreparationScreen() {
           </View>
 
           {/* Smaller Centered Go Button */}
-          <TouchableOpacity
-            style={[styles.goButton, { backgroundColor: theme.primary }]}
-            onPress={handleStartFocus}
-          >
-            <Text style={styles.goButtonText}>Go</Text>
-          </TouchableOpacity>
+          <ReAnimated.View style={goButtonAnimStyle}>
+            <TouchableOpacity
+              style={[styles.goButton, { backgroundColor: theme.primary }]}
+              onPress={handleGoButtonPress}
+              activeOpacity={0.9}
+            >
+              <LinearGradient
+                colors={[theme.primary, theme.primary + 'DD']}
+                style={styles.goButtonGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <Text style={styles.goButtonText}>Go</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </ReAnimated.View>
 
           {/* Spacer for extra space */}
           <View style={styles.buttonSpacer} />
@@ -529,55 +786,39 @@ export default function FocusPreparationScreen() {
           {showInlineTimeSelector ? (
             /* Full Time Selector - Takes over bottom area like IMG_0133.PNG */
             <View style={styles.fullTimeSelectorContainer}>
-              <ScrollView 
-                horizontal 
+              <ScrollView
+                horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.timeOptionsScroll}
               >
                 {/* Work Styles */}
                 {timeOptions.filter(option => option.isWorkStyle).map((option) => (
-                  <TouchableOpacity
+                  <AnimatedTimeOption
                     key={option.value}
-                    style={[
-                      styles.inlineTimeOption,
-                      selectedTime === option.value && { backgroundColor: theme.primary },
-                      { borderColor: theme.primary }
-                    ]}
+                    option={option}
+                    isSelected={selectedTime === option.value}
                     onPress={() => {
                       handleTimeSelection(option.value, option.isWorkStyle);
                       setShowInlineTimeSelector(false);
                     }}
-                  >
-                    <Text style={[
-                      styles.inlineTimeOptionText,
-                      { color: selectedTime === option.value ? '#fff' : theme.text }
-                    ]}>
-                      {option.label}
-                    </Text>
-                  </TouchableOpacity>
+                    themeColor={theme.primary}
+                    textColor={theme.text}
+                  />
                 ))}
-                
+
                 {/* Custom Times */}
                 {timeOptions.filter(option => !option.isWorkStyle).map((option) => (
-                  <TouchableOpacity
+                  <AnimatedTimeOption
                     key={option.value}
-                    style={[
-                      styles.inlineTimeOption,
-                      selectedTime === option.value && { backgroundColor: theme.primary },
-                      { borderColor: theme.primary }
-                    ]}
+                    option={option}
+                    isSelected={selectedTime === option.value}
                     onPress={() => {
                       handleTimeSelection(option.value, option.isWorkStyle);
                       setShowInlineTimeSelector(false);
                     }}
-                  >
-                    <Text style={[
-                      styles.inlineTimeOptionText,
-                      { color: selectedTime === option.value ? '#fff' : theme.text }
-                    ]}>
-                      {option.label}
-                    </Text>
-                  </TouchableOpacity>
+                    themeColor={theme.primary}
+                    textColor={theme.text}
+                  />
                 ))}
               </ScrollView>
               
@@ -632,7 +873,7 @@ export default function FocusPreparationScreen() {
               </TouchableOpacity>
             </View>
           )}
-        </View>
+        </ReAnimated.View>
       </SafeAreaView>
 
       {/* Time Selector Modal */}
@@ -647,7 +888,7 @@ export default function FocusPreparationScreen() {
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: theme.text }]}>Select Focus Time</Text>
               <TouchableOpacity onPress={() => setShowTimeSelector(false)}>
-                <Ionicons name="close" size={24} color={theme.text} />
+                <Ionicons name="close-outline" size={24} color={theme.text} />
               </TouchableOpacity>
             </View>
             
@@ -671,7 +912,7 @@ export default function FocusPreparationScreen() {
                     {option.label}
                   </Text>
                   {selectedTime === option.value && (
-                    <Ionicons name="checkmark" size={20} color="#fff" />
+                    <Ionicons name="checkmark-outline" size={20} color="#fff" />
                   )}
                 </TouchableOpacity>
               ))}
@@ -695,7 +936,7 @@ export default function FocusPreparationScreen() {
                     {option.label}
                   </Text>
                   {selectedTime === option.value && (
-                    <Ionicons name="checkmark" size={20} color="#fff" />
+                    <Ionicons name="checkmark-outline" size={20} color="#fff" />
                   )}
                 </TouchableOpacity>
               ))}
@@ -716,7 +957,7 @@ export default function FocusPreparationScreen() {
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: theme.text }]}>Select Task</Text>
               <TouchableOpacity onPress={() => setShowTaskSelector(false)}>
-                <Ionicons name="close" size={24} color={theme.text} />
+                <Ionicons name="close-outline" size={24} color={theme.text} />
               </TouchableOpacity>
             </View>
             
@@ -736,39 +977,35 @@ export default function FocusPreparationScreen() {
               </View>
 
               {/* Create New Task Button */}
-              <TouchableOpacity
-                style={[styles.taskOption, { borderBottomColor: theme.background }]}
-                onPress={() => setShowTaskCreator(true)}
+              <ReAnimated.View
+                entering={FadeInDown.delay(0).springify().damping(15).stiffness(150)}
               >
-                <Ionicons name="add-circle-outline" size={24} color={theme.primary} />
-                <Text style={[styles.taskOptionText, { color: theme.primary }]}>
-                  Create New Task
-                </Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.taskOption, { borderBottomColor: theme.background }]}
+                  onPress={() => {
+                    triggerHaptic('selection');
+                    setShowTaskCreator(true);
+                  }}
+                >
+                  <Ionicons name="add-circle-outline" size={24} color={theme.primary} />
+                  <Text style={[styles.taskOptionText, { color: theme.primary }]}>
+                    Create New Task
+                  </Text>
+                </TouchableOpacity>
+              </ReAnimated.View>
 
               {/* Existing Tasks */}
-              {activeTasks.map((task) => {
+              {activeTasks.map((task, index) => {
                 const isSelected = selectedTasks.some(t => t.id === task.id);
                 return (
-                  <TouchableOpacity
+                  <AnimatedTaskItem
                     key={task.id}
-                    style={[
-                      styles.taskOption,
-                      isSelected && { backgroundColor: theme.primary + '20' },
-                      { borderBottomColor: theme.background }
-                    ]}
+                    task={task}
+                    isSelected={isSelected}
                     onPress={() => handleTaskSelection(task)}
-                  >
-                    <Text style={[
-                      styles.taskOptionText,
-                      { color: theme.text }
-                    ]}>
-                      {task.title}
-                    </Text>
-                    {isSelected && (
-                      <Ionicons name="checkmark" size={20} color={theme.primary} />
-                    )}
-                  </TouchableOpacity>
+                    index={index + 1} // +1 to account for "Create New Task" button
+                    theme={theme}
+                  />
                 );
               })}
               
@@ -800,7 +1037,7 @@ export default function FocusPreparationScreen() {
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: theme.text }]}>Create New Task</Text>
               <TouchableOpacity onPress={() => setShowTaskCreator(false)}>
-                <Ionicons name="close" size={24} color={theme.text} />
+                <Ionicons name="close-outline" size={24} color={theme.text} />
               </TouchableOpacity>
             </View>
             
@@ -853,7 +1090,7 @@ export default function FocusPreparationScreen() {
                 </View>
               </View>
               <TouchableOpacity onPress={() => setShowNoraChat(false)}>
-                <Ionicons name="close" size={24} color={theme.text} />
+                <Ionicons name="close-outline" size={24} color={theme.text} />
               </TouchableOpacity>
             </View>
             
@@ -923,7 +1160,7 @@ export default function FocusPreparationScreen() {
                 onPress={handleSendNoraMessage}
                 disabled={!noraChatInput.trim()}
               >
-                <Ionicons name="send" size={18} color="#fff" />
+                <Ionicons name="send-outline" size={18} color="#fff" />
               </TouchableOpacity>
             </View>
           </View>
@@ -963,112 +1200,6 @@ const styles = StyleSheet.create({
   backgroundContainer: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 0,
-  },
-  curvedPathContainer: {
-    position: 'absolute',
-    top: height * 0.15, // Start from the very beginning of the path
-    left: 0,
-    right: 0,
-    bottom: height * 0.25,
-    zIndex: 1,
-  },
-  // Dotted path segments following the curve in triage-background-image.png
-  pathSegment1: {
-    position: 'absolute',
-    top: 0,
-    left: width * 0.1,
-    width: width * 0.2,
-    height: 3,
-    borderTopWidth: 3,
-    borderColor: 'rgba(150, 150, 150, 0.6)',
-    borderStyle: 'dotted',
-    transform: [{ rotate: '15deg' }],
-  },
-  pathSegment2: {
-    position: 'absolute',
-    top: height * 0.08,
-    left: width * 0.25,
-    width: width * 0.3,
-    height: 3,
-    borderTopWidth: 3,
-    borderColor: 'rgba(150, 150, 150, 0.6)',
-    borderStyle: 'dotted',
-    transform: [{ rotate: '25deg' }],
-  },
-  pathSegment3: {
-    position: 'absolute',
-    top: height * 0.18,
-    left: width * 0.45,
-    width: width * 0.25,
-    height: 3,
-    borderTopWidth: 3,
-    borderColor: 'rgba(150, 150, 150, 0.6)',
-    borderStyle: 'dotted',
-    transform: [{ rotate: '10deg' }],
-  },
-  pathSegment4: {
-    position: 'absolute',
-    top: height * 0.25,
-    left: width * 0.6,
-    width: width * 0.2,
-    height: 3,
-    borderTopWidth: 3,
-    borderColor: 'rgba(150, 150, 150, 0.6)',
-    borderStyle: 'dotted',
-    transform: [{ rotate: '-5deg' }],
-  },
-  pathSegment5: {
-    position: 'absolute',
-    top: height * 0.3,
-    left: width * 0.75,
-    width: width * 0.15,
-    height: 3,
-    borderTopWidth: 3,
-    borderColor: 'rgba(150, 150, 150, 0.6)',
-    borderStyle: 'dotted',
-    transform: [{ rotate: '-15deg' }],
-  },
-  // Progress fill segments (showing completed portions)
-  fillSegment1: {
-    position: 'absolute',
-    top: 0,
-    left: width * 0.1,
-    width: width * 0.2,
-    height: 3,
-    borderRadius: 1.5,
-    transform: [{ rotate: '15deg' }],
-    zIndex: 2,
-  },
-  fillSegment2: {
-    position: 'absolute',
-    top: height * 0.08,
-    left: width * 0.25,
-    width: width * 0.15, // Only partial fill
-    height: 3,
-    borderRadius: 1.5,
-    transform: [{ rotate: '25deg' }],
-    zIndex: 2,
-  },
-  curvedProgressCircle: {
-    position: 'absolute',
-    top: height * 0.1,
-    left: width * 0.35,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 6,
-    zIndex: 3,
-  },
-  circleInner: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
   },
   overlay: {
     flex: 1,
@@ -1111,6 +1242,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
+    overflow: 'hidden',
+  },
+  goButtonGradient: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   buttonSpacer: {
     height: 60,
@@ -1236,6 +1375,20 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 12,
+    textAlign: 'center',
+  },
+  // Mode selection text styles
+  modeHeading: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 10,
+    textAlign: 'center',
+    letterSpacing: 0.5,
+  },
+  modeSubtext: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 18,
     textAlign: 'center',
   },
   disabledTab: {

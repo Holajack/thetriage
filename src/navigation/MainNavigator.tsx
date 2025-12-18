@@ -5,10 +5,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 
-// Import screens directly 
+// Import screens directly
 import HomeScreen from '../screens/main/HomeScreen';
 import CommunityScreen from '../screens/main/CommunityScreen';
-import NoraScreen from '../screens/main/NoraScreen';
+import NoraScreen from '../screens/main/NoraScreenNew';
 import BonusesScreen from '../screens/main/BonusesScreen';
 import ResultsScreen from '../screens/main/AnalyticsScreen';
 import LeaderboardScreen from '../screens/main/LeaderboardScreen';
@@ -21,8 +21,9 @@ import SessionHistoryScreen from '../screens/main/SessionHistoryScreen';
 import PDFViewerScreen from '../screens/main/PDFViewerScreen';
 import AIIntegrationScreen from '../screens/main/AIIntegrationScreen';
 import FocusPreparationScreen from '../screens/main/FocusPreparationScreen';
-import { StudySessionScreen } from '../screens/main/StudySessionScreen';
 import QRScannerScreen from '../screens/main/QRScannerScreen';
+import { StudySessionScreen } from '../screens/main/StudySessionScreen';
+import TrailBuddySelectionScreen from '../screens/main/TrailBuddySelectionScreen';
 
 // Hidden screens accessible through Bonuses
 import EBooksScreen from '../screens/main/EBooksScreen';
@@ -188,13 +189,21 @@ export const MainNavigator = () => {
         drawerPosition: 'right',
         headerLeft: () => null, // Remove default left toggle
         headerRight: () => (
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={() => navigation.openDrawer()}
             style={{ marginRight: 16 }}
           >
             <Ionicons name="menu" size={24} color="#1B5E20" />
           </TouchableOpacity>
         ),
+        // Premium drawer animation
+        drawerType: 'slide',
+        overlayColor: 'rgba(0, 0, 0, 0.4)',
+        // DISABLE swipe gestures to open drawer - users must tap the menu button
+        swipeEnabled: false,
+        swipeEdgeWidth: 0,
+        // Smooth drawer animation
+        drawerHideStatusBarOnOpen: false,
       })}
       drawerContent={props => <CustomDrawerContent {...props} />}
     >
@@ -316,15 +325,24 @@ export const MainNavigator = () => {
           title: 'Self-Discovery Quiz'
         }} 
       />
-      <Drawer.Screen 
-        name="BrainMapping" 
-        component={BrainMappingScreen} 
-        options={{ 
+      <Drawer.Screen
+        name="BrainMapping"
+        component={BrainMappingScreen}
+        options={{
           drawerItemStyle: { display: 'none' }, // Hide from drawer
           title: 'Brain Activity Mapping'
-        }} 
+        }}
       />
-      
+      <Drawer.Screen
+        name="TrailBuddySelection"
+        component={TrailBuddySelectionScreen}
+        options={{
+          drawerItemStyle: { display: 'none' }, // Hide from drawer
+          headerShown: false,
+          title: 'Choose Trail Buddy'
+        }}
+      />
+
       {/* Profile sub-screens - hidden from drawer */}
       <Drawer.Screen 
         name="PersonalInformation" 
@@ -376,13 +394,13 @@ export const MainNavigator = () => {
           headerShown: false // Let screen handle its own header
         }} 
       />
-      <Drawer.Screen 
-        name="StudySessionScreen" 
-        component={StudySessionScreen} 
-        options={{ 
+      <Drawer.Screen
+        name="StudySessionScreen"
+        component={StudySessionScreen}
+        options={{
           drawerItemStyle: { display: 'none' }, // Hide from drawer
           headerShown: false // Let screen handle its own header
-        }} 
+        }}
       />
 
       {/* Settings sub-screens - hidden from drawer */}

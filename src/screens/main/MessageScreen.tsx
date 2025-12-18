@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
@@ -7,6 +7,11 @@ import { supabase } from '../../utils/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import * as MessageService from '../../utils/messagingService';
+import Animated, { FadeInUp, FadeInDown, SlideInRight, useAnimatedStyle, withSpring, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
+import { AnimatedButton } from '../../components/premium/AnimatedButton';
+import * as Haptics from 'expo-haptics';
+import { AnimationConfig } from '../../theme/premiumTheme';
+import { ShimmerLoader } from '../../components/premium/ShimmerLoader';
 
 interface Message {
   id: string;
@@ -124,14 +129,20 @@ const MessageScreen = () => {
     }
   };
 
-  const renderMessage = ({ item }: { item: Message }) => {
+  const renderMessage = ({ item, index }: { item: Message; index: number }) => {
     const isMyMessage = item.sender_id === user?.id;
-    
+
+    // Use spring physics for message entrance
+    const AnimationDirection = isMyMessage ? SlideInRight : FadeInUp;
+
     return (
-      <View style={[
-        styles.messageContainer,
-        isMyMessage ? [styles.myMessage, { backgroundColor: theme.primary }] : [styles.theirMessage, { backgroundColor: theme.card }]
-      ]}>
+      <Animated.View
+        entering={AnimationDirection.delay(index * 30).duration(400).stiffness(150)}
+        style={[
+          styles.messageContainer,
+          isMyMessage ? [styles.myMessage, { backgroundColor: theme.primary }] : [styles.theirMessage, { backgroundColor: theme.card }]
+        ]}
+      >
         <Text style={[
           styles.messageText,
           isMyMessage ? styles.myMessageText : [styles.theirMessageText, { color: theme.text }]
@@ -145,7 +156,7 @@ const MessageScreen = () => {
             hour12: true
           })}
         </Text>
-      </View>
+      </Animated.View>
     );
   };
 
@@ -170,7 +181,7 @@ const MessageScreen = () => {
       >
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={theme.primary} />
+            <ShimmerLoader variant="circular" size={48} />
           </View>
         ) : (
           <FlatList
@@ -194,12 +205,21 @@ const MessageScreen = () => {
             multiline
             maxLength={500}
           />
-          <TouchableOpacity 
-            onPress={sendMessage} 
+          <TouchableOpacity
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              sendMessage();
+            }}
             style={[styles.sendButton, { backgroundColor: theme.primary, opacity: inputText.trim() && !sending ? 1 : 0.5 }]}
             disabled={!inputText.trim() || sending}
           >
-            <Ionicons name="send" size={20} color="#fff" />
+            {sending ? (
+              <ShimmerLoader variant="circular" size={20} />
+            ) : (
+              <Animated.View entering={FadeInUp.duration(400)}>
+                <Ionicons name="send" size={20} color="#fff" />
+              </Animated.View>
+            )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

@@ -10,7 +10,7 @@ import {
   Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
@@ -92,7 +92,7 @@ const AIIntegrationScreen = () => {
               onPress={() => setShowNoraModal(false)}
               style={styles.closeButton}
             >
-              <Ionicons name="close" size={24} color={theme.text} />
+              <Ionicons name="close-outline" size={24} color={theme.text} />
             </TouchableOpacity>
           </View>
 
@@ -106,7 +106,7 @@ const AIIntegrationScreen = () => {
           <Text style={[styles.sectionTitle, { fontSize: fontSize * 1.2, color: theme.primary }]}>Features</Text>
           
           <View style={[styles.featureItem, { borderLeftColor: theme.primary }]}>
-            <Ionicons name="chatbubble-ellipses" size={20} color={theme.primary} />
+            <Ionicons name="chatbubble-ellipses-outline" size={20} color={theme.primary} />
             <View style={{ marginLeft: 12, flex: 1 }}>
               <Text style={[styles.featureTitle, { fontSize: fontSize * 1.1, color: theme.text }]}>Intelligent Chat</Text>
               <Text style={[styles.featureDesc, { fontSize: fontSize * 0.9, color: theme.textSecondary }]}>
@@ -116,7 +116,7 @@ const AIIntegrationScreen = () => {
           </View>
 
           <View style={[styles.featureItem, { borderLeftColor: theme.primary }]}>
-            <Ionicons name="document-text" size={20} color={theme.primary} />
+            <Ionicons name="document-text-outline" size={20} color={theme.primary} />
             <View style={{ marginLeft: 12, flex: 1 }}>
               <Text style={[styles.featureTitle, { fontSize: fontSize * 1.1, color: theme.text }]}>PDF Analysis</Text>
               <Text style={[styles.featureDesc, { fontSize: fontSize * 0.9, color: theme.textSecondary }]}>
@@ -126,7 +126,7 @@ const AIIntegrationScreen = () => {
           </View>
 
           <View style={[styles.featureItem, { borderLeftColor: theme.primary }]}>
-            <Ionicons name="bulb" size={20} color={theme.primary} />
+            <Ionicons name="bulb-outline" size={20} color={theme.primary} />
             <View style={{ marginLeft: 12, flex: 1 }}>
               <Text style={[styles.featureTitle, { fontSize: fontSize * 1.1, color: theme.text }]}>Study Strategies</Text>
               <Text style={[styles.featureDesc, { fontSize: fontSize * 0.9, color: theme.textSecondary }]}>
@@ -187,7 +187,7 @@ const AIIntegrationScreen = () => {
               onPress={() => setShowPatrickModal(false)}
               style={styles.closeButton}
             >
-              <Ionicons name="close" size={24} color={theme.text} />
+              <Ionicons name="close-outline" size={24} color={theme.text} />
             </TouchableOpacity>
           </View>
 
@@ -199,7 +199,7 @@ const AIIntegrationScreen = () => {
           <Text style={[styles.sectionTitle, { fontSize: fontSize * 1.2, color: theme.primary }]}>Features</Text>
           
           <View style={[styles.featureItem, { borderLeftColor: theme.primary }]}>
-            <MaterialCommunityIcons name="microphone" size={20} color={theme.primary} />
+            <Ionicons name="mic-outline" size={20} color={theme.primary} />
             <View style={{ marginLeft: 12, flex: 1 }}>
               <Text style={[styles.featureTitle, { fontSize: fontSize * 1.1, color: theme.text }]}>Voice Commands</Text>
               <Text style={[styles.featureDesc, { fontSize: fontSize * 0.9, color: theme.textSecondary }]}>
@@ -209,7 +209,7 @@ const AIIntegrationScreen = () => {
           </View>
 
           <View style={[styles.featureItem, { borderLeftColor: theme.primary }]}>
-            <MaterialCommunityIcons name="volume-high" size={20} color={theme.primary} />
+            <Ionicons name="volume-high-outline" size={20} color={theme.primary} />
             <View style={{ marginLeft: 12, flex: 1 }}>
               <Text style={[styles.featureTitle, { fontSize: fontSize * 1.1, color: theme.text }]}>Audio Feedback</Text>
               <Text style={[styles.featureDesc, { fontSize: fontSize * 0.9, color: theme.textSecondary }]}>
@@ -257,7 +257,7 @@ const AIIntegrationScreen = () => {
               onPress={() => setShowInsightsModal(false)}
               style={styles.closeButton}
             >
-              <Ionicons name="close" size={24} color={theme.text} />
+              <Ionicons name="close-outline" size={24} color={theme.text} />
             </TouchableOpacity>
           </View>
 
@@ -269,7 +269,7 @@ const AIIntegrationScreen = () => {
           <Text style={[styles.sectionTitle, { fontSize: fontSize * 1.2, color: theme.primary }]}>Features</Text>
           
           <View style={[styles.featureItem, { borderLeftColor: theme.primary }]}>
-            <MaterialCommunityIcons name="chart-line" size={20} color={theme.primary} />
+            <Ionicons name="analytics-outline" size={20} color={theme.primary} />
             <View style={{ marginLeft: 12, flex: 1 }}>
               <Text style={[styles.featureTitle, { fontSize: fontSize * 1.1, color: theme.text }]}>Performance Analytics</Text>
               <Text style={[styles.featureDesc, { fontSize: fontSize * 0.9, color: theme.textSecondary }]}>
@@ -279,7 +279,7 @@ const AIIntegrationScreen = () => {
           </View>
 
           <View style={[styles.featureItem, { borderLeftColor: theme.primary }]}>
-            <MaterialCommunityIcons name="lightbulb-on" size={20} color={theme.primary} />
+            <Ionicons name="bulb-outline" size={20} color={theme.primary} />
             <View style={{ marginLeft: 12, flex: 1 }}>
               <Text style={[styles.featureTitle, { fontSize: fontSize * 1.1, color: theme.text }]}>Smart Recommendations</Text>
               <Text style={[styles.featureDesc, { fontSize: fontSize * 0.9, color: theme.textSecondary }]}>
@@ -322,7 +322,7 @@ const AIIntegrationScreen = () => {
         {/* Header */}
         <View style={[styles.header, { backgroundColor: theme.card }]}>
           <TouchableOpacity onPress={() => navigation.navigate('Settings' as never)} style={styles.backButton}>
-            <Ionicons name="chevron-back" size={24} color={theme.primary} />
+            <Ionicons name="chevron-back-outline" size={24} color={theme.primary} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { fontSize: fontSize * 1.3, color: theme.text }]}>AI Integration</Text>
         </View>
@@ -351,7 +351,7 @@ const AIIntegrationScreen = () => {
                 {noraEnabled ? '● Active' : '○ Disabled'}
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
+            <Ionicons name="chevron-forward-outline" size={20} color={theme.textSecondary} />
           </TouchableOpacity>
 
           <TouchableOpacity 
@@ -359,7 +359,7 @@ const AIIntegrationScreen = () => {
             onPress={() => setShowPatrickModal(true)}
             activeOpacity={0.7}
           >
-            <MaterialCommunityIcons name="microphone-outline" size={28} color={theme.primary} />
+            <Ionicons name="mic-outline" size={28} color={theme.primary} />
             <View style={{ flex: 1, marginLeft: 16 }}>
               <Text style={[styles.aiTitle, { fontSize: fontSize * 1.1, color: theme.text }]}>Patrick Speech Assistant</Text>
               <Text style={[styles.aiSubtitle, { fontSize: fontSize * 0.9, color: theme.textSecondary }]}>
@@ -372,7 +372,7 @@ const AIIntegrationScreen = () => {
                 {patrickEnabled ? '● Active' : '○ Disabled'}
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
+            <Ionicons name="chevron-forward-outline" size={20} color={theme.textSecondary} />
           </TouchableOpacity>
 
           <TouchableOpacity 
@@ -380,7 +380,7 @@ const AIIntegrationScreen = () => {
             onPress={() => setShowInsightsModal(true)}
             activeOpacity={0.7}
           >
-            <MaterialCommunityIcons name="brain" size={28} color={theme.primary} />
+            <Ionicons name="bulb-outline" size={28} color={theme.primary} />
             <View style={{ flex: 1, marginLeft: 16 }}>
               <Text style={[styles.aiTitle, { fontSize: fontSize * 1.1, color: theme.text }]}>AI Insights</Text>
               <Text style={[styles.aiSubtitle, { fontSize: fontSize * 0.9, color: theme.textSecondary }]}>
@@ -393,7 +393,7 @@ const AIIntegrationScreen = () => {
                 {insightsEnabled ? '● Active' : '○ Disabled'}
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
+            <Ionicons name="chevron-forward-outline" size={20} color={theme.textSecondary} />
           </TouchableOpacity>
         </View>
 

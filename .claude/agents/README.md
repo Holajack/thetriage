@@ -8,7 +8,7 @@ This directory contains a comprehensive 4-tier agent system for transforming The
 
 To launch the premium enhancement:
 ```
-Use the premium-enhancement-orchestrator agent to transform The Triage into a premium app following Chris Ro's design principles.
+Use the Nora-orchestrator agent to transform The Triage into a premium app following Chris Ro's design principles.
 ```
 
 ---
@@ -17,10 +17,10 @@ Use the premium-enhancement-orchestrator agent to transform The Triage into a pr
 
 ```
                     ┌─────────────────────────────────────┐
-                    │   PREMIUM ENHANCEMENT ORCHESTRATOR  │
+                    │          NORA ORCHESTRATOR          │
                     │              (Tier 4)               │
                     │                                     │
-                    │   premium-enhancement-orchestrator  │
+                    │          Nora-orchestrator          │
                     └─────────────────┬───────────────────┘
                                       │
             ┌─────────────────────────┼─────────────────────────┐
@@ -113,7 +113,7 @@ Located in `directors/`
 
 | Agent | Role |
 |-------|------|
-| `premium-enhancement-orchestrator` | Supreme coordinator, delegates to all tiers |
+| `Nora-orchestrator` | Supreme coordinator, delegates to all tiers |
 
 ---
 
@@ -140,7 +140,7 @@ Located in `directors/`
 
 ### Full Enhancement Run
 ```
-Use the premium-enhancement-orchestrator agent to coordinate the complete premium transformation.
+Use the Nora-orchestrator agent to coordinate the complete premium transformation.
 ```
 
 ### Specific Screen Enhancement
@@ -166,7 +166,7 @@ Use the chief-growth-officer agent to analyze retention mechanics and widget opp
 .claude/agents/
 ├── README.md                           # This file
 ├── premium-design-principles.md        # Design methodology
-├── premium-enhancement-orchestrator.md # Master orchestrator (Tier 4)
+├── Nora-orchestrator.md                # Master orchestrator (Tier 4)
 ├── REQUIRED_RESOURCES.md               # APIs and dependencies
 │
 ├── directors/                          # Tier 3

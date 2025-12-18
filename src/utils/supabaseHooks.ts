@@ -107,6 +107,8 @@ export interface Profile {
   locationVisibility?: string;
   classesVisibility?: string;
   subscription_tier?: 'free' | 'premium' | 'pro';
+  trail_buddy_type?: string;
+  trail_buddy_name?: string;
   created_at: string;
   updated_at: string;
 }

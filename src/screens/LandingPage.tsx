@@ -177,7 +177,7 @@ const LandingPage: React.FC = () => {
               { opacity: titleOpacity },
             ]}
           >
-            <Text style={[styles.title, { color: textColor }]}>HikeWise</Text>
+            <Text style={[styles.title, { color: textColor }]}>Hike Wise</Text>
           </Animated.View>
 
           {/* Tagline Section */}

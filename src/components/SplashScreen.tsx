@@ -149,7 +149,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationComplete 
         </Animated.View>
 
         <Animated.View style={[styles.textContainer, { opacity: titleOpacity }]}>
-          <Text style={styles.title}>HikeWise</Text>
+          <Text style={styles.title}>Hike Wise</Text>
         </Animated.View>
 
         <Animated.View style={[styles.taglineContainer, { opacity: taglineOpacity }]}>
