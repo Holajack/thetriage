@@ -15,6 +15,7 @@ import { AnimatedButton } from '../../components/premium/AnimatedButton';
 import { StaggeredItem } from '../../components/premium/StaggeredList';
 import { useEntranceAnimation } from '../../utils/animationUtils';
 import { ShimmerLoader } from '../../components/premium/ShimmerLoader';
+import { supabase } from '../../utils/supabase';
 
 type ProfileCreationNavigationProp = NativeStackNavigationProp<OnboardingStackParamList, 'ProfileCreation'>;
 type ProfileCreationRouteProp = RouteProp<OnboardingStackParamList, 'ProfileCreation'>;
@@ -115,36 +116,44 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
         return;
       }
 
-      const updateData: any = {
-        id: user.id,
-        focus_method: focusMethod,
-        onboarding_completed: false,
-      };
+      // Save to PROFILES table (bio, university, avatar_url)
+      const profileData: any = {};
 
-      if (profilePicUri) {
-        updateData.avatar_url = profilePicUri;
+      if (profilePicUri) profileData.avatar_url = profilePicUri;
+      if (bio.trim()) profileData.bio = bio.trim();
+      if (university.trim()) profileData.university = university.trim();
+      // Note: location and classes don't exist in profiles schema - skip for now
+
+      if (Object.keys(profileData).length > 0) {
+        profileData.updated_at = new Date().toISOString();
+
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update(profileData)
+          .eq('id', user.id);
+
+        if (profileError) {
+          console.error('❌ Failed to update profile:', profileError);
+          throw profileError;
+        }
+
+        console.log('✅ Profile data saved to profiles table');
       }
 
-      if (bio.trim()) {
-        updateData.bio = bio.trim();
+      // Save to ONBOARDING_PREFERENCES table (focus_method, avatar_url)
+      const onboardingData: any = {};
+      if (focusMethod) onboardingData.focus_method = focusMethod;
+      if (profilePicUri) onboardingData.avatar_url = profilePicUri;
+
+      if (Object.keys(onboardingData).length > 0) {
+        await updateOnboarding(onboardingData);
+        console.log('✅ Onboarding data saved');
       }
 
-      if (university.trim()) {
-        updateData.university = university.trim();
-      }
-
-      if (location.trim()) {
-        updateData.location = location.trim();
-      }
-
-      if (classes.trim()) {
-        updateData.classes = classes.trim();
-      }
-
-      await updateOnboarding(updateData);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setLoading(false);
       navigation.navigate('StudyPreferences', { focusMethod });
+
     } catch (e: any) {
       setLoading(false);
       setError(e.message || 'Failed to update profile.');

@@ -1,4 +1,4 @@
-package com.triagesystem.app
+package com.hikewise.app
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

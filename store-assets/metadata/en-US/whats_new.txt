@@ -1,0 +1,5 @@
+Version 1.7.0:
+- Premium animations and character sprites
+- Enhanced UI with liquid glass effects
+- Improved 3D brain visualizations
+- Bug fixes and performance improvements

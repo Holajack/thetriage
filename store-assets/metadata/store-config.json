@@ -1,0 +1,46 @@
+{
+  "app": {
+    "name": "HikeWise",
+    "bundleId": "com.hikewise.app",
+    "version": "1.7.0"
+  },
+  "ios": {
+    "category": "Education",
+    "secondaryCategory": "Productivity",
+    "ageRating": "4+",
+    "buildNumber": "14",
+    "devices": ["iphone-6.7", "iphone-6.5", "iphone-5.5", "ipad-12.9"],
+    "screenshotResolutions": {
+      "iphone-6.7": { "width": 1290, "height": 2796 },
+      "iphone-6.5": { "width": 1242, "height": 2688 },
+      "iphone-5.5": { "width": 1242, "height": 2208 },
+      "ipad-12.9": { "width": 2048, "height": 2732 }
+    }
+  },
+  "android": {
+    "category": "Education",
+    "contentRating": "Everyone",
+    "versionCode": 19,
+    "devices": ["phone", "tablet"],
+    "screenshotResolutions": {
+      "phone": { "width": 1080, "height": 1920 },
+      "tablet": { "width": 1200, "height": 1920 }
+    },
+    "featureGraphic": {
+      "width": 1024,
+      "height": 500
+    }
+  },
+  "screensToCapture": [
+    { "id": "home", "name": "HomeScreen", "route": "/home", "description": "Main landing with Focus button" },
+    { "id": "study", "name": "StudySessionScreen", "route": "/study", "description": "Timer in progress" },
+    { "id": "nora", "name": "NoraScreen", "route": "/nora", "description": "AI assistant chat" },
+    { "id": "analytics", "name": "AnalyticsScreen", "route": "/analytics", "description": "Progress charts" },
+    { "id": "subscription", "name": "SubscriptionScreen", "route": "/subscription", "description": "Pricing tiers" },
+    { "id": "leaderboard", "name": "LeaderboardScreen", "route": "/leaderboard", "description": "Community rankings" },
+    { "id": "profile", "name": "ProfileScreen", "route": "/profile", "description": "User settings" }
+  ],
+  "privacyPolicyUrl": "https://hikewise.app/privacy",
+  "supportUrl": "https://hikewise.app/support",
+  "marketingUrl": "https://hikewise.app"
+}

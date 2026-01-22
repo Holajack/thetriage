@@ -28,7 +28,7 @@ type AccountCreationRouteProp = RouteProp<OnboardingStackParamList, 'AccountCrea
 
 export default function AccountCreationScreen({ route }: { route: AccountCreationRouteProp }) {
   const navigation = useNavigation<AccountCreationNavigationProp>();
-  const { signUp } = useAuth();
+  const { signUp, updateOnboarding } = useAuth();
   const headerAnimation = useEntranceAnimation(0);
   const progressAnimation = useProgressAnimation(2 / 5); // Step 2 of 5
 
@@ -132,6 +132,20 @@ export default function AccountCreationScreen({ route }: { route: AccountCreatio
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert('Success', 'Account created successfully! Please check your email to verify your account before logging in.');
+
+      // Save focus method immediately after account creation
+      if (route.params?.focusMethod) {
+        try {
+          await updateOnboarding({
+            focus_method: route.params.focusMethod
+          });
+          console.log('✅ Focus method saved after account creation');
+        } catch (error) {
+          console.error('⚠️ Failed to save focus method after signup:', error);
+          // Continue anyway - we'll retry in later screens
+        }
+      }
+
       // Navigate to next step in onboarding flow
       navigation.navigate('ProfileCreation', {
         focusMethod: route.params?.focusMethod,

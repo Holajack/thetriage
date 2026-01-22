@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated, Platform, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -68,17 +68,41 @@ export default function StudyPreferencesScreen() {
 
   const handleContinue = async () => {
     try {
-      await updateOnboarding({
+      const updateData: any = {
         sound_preference: selectedSound,
         environment_preference: selectedEnvironment,
-        focus_method: route.params?.focusMethod || undefined,
-      });
-      
+      };
+
+      // Include focus_method as backup
+      if (route.params?.focusMethod) {
+        updateData.focus_method = route.params.focusMethod;
+      }
+
+      await updateOnboarding(updateData);
+      console.log('✅ Study preferences saved successfully');
+
       navigation.navigate('PrivacySettings', { focusMethod: route.params?.focusMethod });
     } catch (error) {
-      console.error('Failed to save study preferences:', error);
-      // Still navigate to next step
-      navigation.navigate('PrivacySettings', { focusMethod: route.params?.focusMethod });
+      console.error('❌ Failed to save study preferences:', error);
+
+      // Show error with retry option
+      Alert.alert(
+        'Save Warning',
+        'Your preferences may not have been saved. You can update them later in Settings. Continue anyway?',
+        [
+          {
+            text: 'Try Again',
+            onPress: handleContinue,
+            style: 'cancel'
+          },
+          {
+            text: 'Continue',
+            onPress: () => navigation.navigate('PrivacySettings', {
+              focusMethod: route.params?.focusMethod
+            })
+          }
+        ]
+      );
     }
   };
 

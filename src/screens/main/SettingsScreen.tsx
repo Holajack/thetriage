@@ -509,6 +509,58 @@ const SettingsScreen = () => {
     loadUserSettings();
   }, []);
 
+  // Load onboarding preferences when component mounts
+  useEffect(() => {
+    const loadOnboardingPreferences = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) return;
+
+        const { data, error } = await supabase
+          .from('onboarding_preferences')
+          .select('focus_method, sound_preference, environment_preference')
+          .eq('user_id', session.user.id)
+          .single();
+
+        if (error) {
+          console.error('❌ Failed to load onboarding preferences:', error);
+          return;
+        }
+
+        if (data) {
+          // Map database values to UI state
+          if (data.sound_preference) {
+            setSelectedSound(data.sound_preference);
+            console.log('✅ Loaded sound preference:', data.sound_preference);
+          }
+
+          if (data.environment_preference) {
+            setSelectedEnv(data.environment_preference as ThemeName);
+            console.log('✅ Loaded environment preference:', data.environment_preference);
+          }
+
+          if (data.focus_method) {
+            // Map focus_method to work style
+            const methodMap: Record<string, string> = {
+              'balanced': 'Balanced',
+              'sprint': 'Sprint',
+              'deepwork': 'Deep Work'
+            };
+            const workStyleValue = methodMap[data.focus_method] || 'Balanced';
+            setWorkStyle(workStyleValue);
+            console.log('✅ Loaded work style:', workStyleValue);
+          }
+
+          console.log('✅ All onboarding preferences loaded in Settings');
+        }
+      } catch (error) {
+        console.error('❌ Error loading onboarding preferences:', error);
+      }
+    };
+
+    loadOnboardingPreferences();
+  }, []);
+
   // Handle appearance updates
   const handleThemeUpdate = async (selectedThemeMode: ThemeMode) => {
     setShowThemeModal(false);

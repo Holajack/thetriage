@@ -80,15 +80,27 @@ const FOCUS_METHODS: FocusMethod[] = [
 
 export default function FocusMethodIntroScreen() {
   const navigation = useNavigation<FocusMethodNavigationProp>();
-  const { updateOnboarding } = useAuth();
+  const { updateOnboarding, user } = useAuth();
   const [selectedMethod, setSelectedMethod] = useState<string>('balanced');
   const headerAnimation = useEntranceAnimation(0);
   const buttonAnimation = useEntranceAnimation(400);
 
   const handleContinue = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    // Store selected method and pass it through navigation
-    navigation.navigate('AccountCreation', { focusMethod: selectedMethod });
+
+    try {
+      // Save focus method immediately if user exists (won't exist on first onboarding)
+      if (user?.id) {
+        await updateOnboarding({ focus_method: selectedMethod });
+        console.log('✅ Focus method saved:', selectedMethod);
+      }
+
+      navigation.navigate('AccountCreation', { focusMethod: selectedMethod });
+    } catch (error) {
+      console.error('⚠️ Failed to save focus method:', error);
+      // Still navigate - we'll retry later in AccountCreationScreen
+      navigation.navigate('AccountCreation', { focusMethod: selectedMethod });
+    }
   };
 
   const handleMethodSelect = (methodId: string) => {

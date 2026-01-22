@@ -1,15 +1,24 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInUp, FadeIn, Layout } from 'react-native-reanimated';
+import Animated, { FadeInUp, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AnimatedButton } from '../../components/premium/AnimatedButton';
 import { StaggeredItem } from '../../components/premium/StaggeredList';
-import { usePulseAnimation } from '../../utils/animationUtils';
 import { useTheme } from '../../context/ThemeContext';
-import { Typography, Spacing, BorderRadius, Shadows, PremiumColors } from '../../theme/premiumTheme';
+import { Shadows, PremiumColors } from '../../theme/premiumTheme';
+
+// RevenueCat temporarily disabled for demo purposes
+// When ready to enable, uncomment the import below and remove mock functions
+// import {
+//   getAvailablePackages,
+//   purchasePackage,
+//   restorePurchases,
+//   getCurrentTier,
+//   PurchasesPackage,
+// } from '../../services/revenuecat';
 
 const plans = [
   {
@@ -64,13 +73,67 @@ const plans = [
   },
 ];
 
+// Map plan names to RevenueCat product identifiers
+const PLAN_TO_PRODUCT: Record<string, string> = {
+  Premium: 'hikewise_premium_monthly',
+  Pro: 'hikewise_pro_monthly',
+};
+
+// Mock RevenueCat functions for demo mode
+const mockGetCurrentTier = async (): Promise<'free' | 'premium' | 'pro'> => {
+  return 'free';
+};
+
+const mockPurchasePackage = async (planName: string): Promise<{ success: boolean; error?: string }> => {
+  // Simulate a purchase for demo purposes
+  console.log('[Demo Mode] Purchase simulated for:', planName);
+  return { success: true };
+};
+
+const mockRestorePurchases = async (): Promise<{ success: boolean; tier: 'free' | 'premium' | 'pro'; error?: string }> => {
+  console.log('[Demo Mode] Restore purchases simulated');
+  return { success: true, tier: 'free' };
+};
+
 const SubscriptionScreen = () => {
   const { theme } = useTheme();
   const [selectedPlan, setSelectedPlan] = useState<string | null>('Basic');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [currentTier, setCurrentTier] = useState<'free' | 'premium' | 'pro'>('free');
+  const [loadingPackages, setLoadingPackages] = useState(false);
+
+  // Fetch current subscription tier (demo mode - always returns free)
+  useEffect(() => {
+    const loadSubscriptionData = async () => {
+      try {
+        setLoadingPackages(true);
+
+        // Get current tier (mock)
+        const tier = await mockGetCurrentTier();
+        setCurrentTier(tier);
+
+        // Set selected plan based on current tier
+        if (tier === 'pro') setSelectedPlan('Pro');
+        else if (tier === 'premium') setSelectedPlan('Premium');
+        else setSelectedPlan('Basic');
+      } catch (error) {
+        console.error('Error loading subscription data:', error);
+      } finally {
+        setLoadingPackages(false);
+      }
+    };
+
+    loadSubscriptionData();
+  }, []);
 
   const handlePlanSelect = (planName: string) => {
-    if (planName !== 'Basic') {
+    // Don't allow selecting current tier or lower
+    const tierRank = { Basic: 0, Premium: 1, Pro: 2 };
+    const currentRank = tierRank[currentTier === 'free' ? 'Basic' : currentTier === 'premium' ? 'Premium' : 'Pro'];
+    const selectedRank = tierRank[planName as keyof typeof tierRank];
+
+    if (selectedRank > currentRank) {
       Haptics.selectionAsync();
       setSelectedPlan(planName);
     }
@@ -82,11 +145,92 @@ const SubscriptionScreen = () => {
     setIsProcessing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    // TODO: Implement actual purchase flow
-    setTimeout(() => {
+    try {
+      // Demo mode: Show alert that RevenueCat is not configured
+      Alert.alert(
+        'Demo Mode',
+        `RevenueCat is not configured yet. In production, this would upgrade you to ${planName}.`,
+        [
+          {
+            text: 'Simulate Success',
+            onPress: async () => {
+              const result = await mockPurchasePackage(planName);
+
+              if (result.success) {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                Alert.alert(
+                  'Success! (Demo)',
+                  `You're now subscribed to ${planName}. (This is a demo - no actual purchase was made)`,
+                  [{ text: 'OK' }]
+                );
+
+                // Update local state for demo
+                const newTier = planName === 'Pro' ? 'pro' : 'premium';
+                setCurrentTier(newTier);
+                setSelectedPlan(planName);
+              }
+            },
+          },
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('Purchase error:', error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+    } finally {
       setIsProcessing(false);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }, 1500);
+    }
+  };
+
+  const handleRestorePurchases = async () => {
+    setIsRestoring(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    try {
+      const result = await mockRestorePurchases();
+
+      if (result.success && result.tier !== 'free') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert(
+          'Purchases Restored (Demo)',
+          `Your ${result.tier} subscription has been restored. (Demo mode - RevenueCat not configured)`,
+          [{ text: 'OK' }]
+        );
+        setCurrentTier(result.tier);
+        setSelectedPlan(result.tier === 'pro' ? 'Pro' : 'Premium');
+      } else if (result.tier === 'free') {
+        Alert.alert('No Purchases Found (Demo)', 'No previous purchases were found to restore. (Demo mode)');
+      } else {
+        Alert.alert('Restore Failed', result.error || 'Could not restore purchases. Please try again.');
+      }
+    } catch (error) {
+      console.error('Restore error:', error);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+    } finally {
+      setIsRestoring(false);
+    }
+  };
+
+  // Determine if a plan is the current plan
+  const isPlanCurrent = (planName: string): boolean => {
+    if (planName === 'Basic' && currentTier === 'free') return true;
+    if (planName === 'Premium' && currentTier === 'premium') return true;
+    if (planName === 'Pro' && currentTier === 'pro') return true;
+    return false;
+  };
+
+  // Determine CTA text based on current tier
+  const getCtaText = (planName: string): string => {
+    if (isPlanCurrent(planName)) return 'Current Plan';
+    if (planName === 'Basic') return 'Downgrade';
+    return `Upgrade to ${planName}`;
   };
 
   return (
@@ -133,7 +277,6 @@ const SubscriptionScreen = () => {
                   onPress={() => handlePlanSelect(plan.name)}
                 >
                   <Animated.View
-                    layout={Layout.duration(400)}
                     style={[
                       styles.card,
                       { backgroundColor: theme.card, borderColor: theme.border },
@@ -170,23 +313,29 @@ const SubscriptionScreen = () => {
                       ))}
                     </View>
 
-                    {plan.highlight ? (
+                    {isPlanCurrent(plan.name) ? (
                       <View style={[styles.ctaBtn, styles.ctaBtnCurrent, { borderColor: theme.border }]}>
                         <Ionicons name="checkmark-circle" size={20} color={PremiumColors.success.main} />
                         <Text style={[styles.ctaText, styles.ctaTextCurrent, { color: theme.textSecondary }]}>
-                          {plan.cta}
+                          Current Plan
+                        </Text>
+                      </View>
+                    ) : plan.name === 'Basic' ? (
+                      <View style={[styles.ctaBtn, styles.ctaBtnCurrent, { borderColor: theme.border }]}>
+                        <Text style={[styles.ctaText, styles.ctaTextCurrent, { color: theme.textSecondary }]}>
+                          Free Tier
                         </Text>
                       </View>
                     ) : (
                       <AnimatedButton
-                        title={plan.cta}
+                        title={getCtaText(plan.name)}
                         onPress={() => handleUpgrade(plan.name)}
                         variant="primary"
                         size="large"
                         gradient
                         gradientColors={PremiumColors.gradients.primary as [string, string, ...string[]]}
                         loading={isProcessing && isSelected}
-                        disabled={isProcessing}
+                        disabled={isProcessing || loadingPackages}
                         fullWidth
                         icon={<Ionicons name="arrow-forward" size={20} color="#FFF" />}
                         iconPosition="right"
@@ -198,6 +347,29 @@ const SubscriptionScreen = () => {
             );
           })}
         </View>
+
+        {/* Restore Purchases Button */}
+        <Animated.View entering={FadeInUp.delay(800).duration(400)} style={styles.restoreContainer}>
+          <TouchableOpacity
+            style={[styles.restoreButton, { borderColor: theme.border }]}
+            onPress={handleRestorePurchases}
+            disabled={isRestoring}
+          >
+            {isRestoring ? (
+              <Text style={[styles.restoreText, { color: theme.textSecondary }]}>Restoring...</Text>
+            ) : (
+              <>
+                <Ionicons name="refresh" size={16} color={theme.textSecondary} />
+                <Text style={[styles.restoreText, { color: theme.textSecondary }]}>
+                  Restore Purchases
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+          <Text style={[styles.termsText, { color: theme.textSecondary }]}>
+            Subscriptions auto-renew until canceled. Cancel anytime in your device settings.
+          </Text>
+        </Animated.View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -294,6 +466,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderWidth: 1.5,
     borderColor: '#BDBDBD',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
   ctaText: {
     fontWeight: 'bold',
@@ -325,11 +501,31 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     textAlign: 'center',
   },
-  ctaBtnCurrent: {
+  restoreContainer: {
+    marginTop: 24,
+    alignItems: 'center',
+    paddingBottom: 40,
+  },
+  restoreButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  restoreText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  termsText: {
+    fontSize: 12,
+    textAlign: 'center',
+    maxWidth: 300,
+    lineHeight: 18,
   },
 });
 

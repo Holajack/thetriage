@@ -51,6 +51,66 @@ const APP_FEATURES: AppFeature[] = [
   },
 ];
 
+/**
+ * Validates critical onboarding data was saved
+ */
+const validateOnboardingData = async (userId: string, focusMethod?: string): Promise<boolean> => {
+  try {
+    const { supabase } = await import('../../utils/supabase');
+
+    const { data, error } = await supabase
+      .from('onboarding_preferences')
+      .select('focus_method, sound_preference, environment_preference')
+      .eq('user_id', userId)
+      .single();
+
+    if (error) {
+      console.error('❌ Validation error:', error);
+      return false;
+    }
+
+    const hasFocusMethod = data.focus_method || focusMethod;
+    const hasSound = data.sound_preference;
+    const hasEnvironment = data.environment_preference;
+
+    console.log('🔍 Validation:', {
+      focus_method: hasFocusMethod,
+      sound: hasSound,
+      environment: hasEnvironment
+    });
+
+    return !!(hasFocusMethod && hasSound && hasEnvironment);
+  } catch (error) {
+    console.error('❌ Validation failed:', error);
+    return false;
+  }
+};
+
+/**
+ * Recovers missing data with sensible defaults
+ */
+const recoverMissingData = async (userId: string, focusMethod?: string): Promise<void> => {
+  try {
+    const { supabase } = await import('../../utils/supabase');
+
+    const updateData: any = {
+      user_id: userId,
+      focus_method: focusMethod || 'balanced',
+      sound_preference: 'ambient',
+      environment_preference: 'library',
+      updated_at: new Date().toISOString()
+    };
+
+    await supabase
+      .from('onboarding_preferences')
+      .upsert(updateData, { onConflict: 'user_id' });
+
+    console.log('✅ Recovered missing data with defaults');
+  } catch (error) {
+    console.error('❌ Failed to recover data:', error);
+  }
+};
+
 export default function AppSummaryScreen() {
   const navigation = useNavigation<AppSummaryNavigationProp>();
   const route = useRoute<AppSummaryRouteProp>();
@@ -81,8 +141,21 @@ export default function AppSummaryScreen() {
   const handleComplete = async () => {
     try {
       console.log('🎯 Completing onboarding from AppSummary with focus method:', focusMethod);
-      
-      await updateOnboarding({ 
+
+      // NEW: Validate all data was saved
+      if (user?.id) {
+        const isValid = await validateOnboardingData(user.id, focusMethod);
+
+        if (!isValid) {
+          console.warn('⚠️ Validation failed - recovering data');
+          await recoverMissingData(user.id, focusMethod);
+        } else {
+          console.log('✅ All onboarding data validated');
+        }
+      }
+
+      // Now mark as complete
+      await updateOnboarding({
         is_onboarding_complete: true,
         focus_method: focusMethod,
         welcome_completed: true,
@@ -90,11 +163,11 @@ export default function AppSummaryScreen() {
         profile_customized: true,
         completed_at: new Date().toISOString()
       });
-      
+
       // Update local state immediately
       setHasCompletedOnboarding(true);
       console.log('✅ Onboarding completed successfully from AppSummary');
-      
+
       // Show welcome modal first
       setShowWelcomeModal(true);
       
