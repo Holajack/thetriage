@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Alert, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as FriendService from '../utils/friendRequestService';
+import * as FriendService from '../utils/convexFriendRequestService';
 
 interface FriendRequestNotificationProps {
   visible: boolean;

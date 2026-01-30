@@ -2,7 +2,7 @@
  * RevenueCat Integration Service for HikeWise
  *
  * Handles subscription management for iOS and Android in-app purchases.
- * Syncs subscription status with Supabase profiles table.
+ * Syncs subscription status with Convex users table.
  *
  * Setup required:
  * 1. npm install react-native-purchases
@@ -18,7 +18,18 @@ import Purchases, {
   PurchasesOffering,
   LOG_LEVEL,
 } from 'react-native-purchases';
-import { supabase } from '../utils/supabase';
+import { ConvexReactClient } from "convex/react";
+import { api } from "../../convex/_generated/api";
+
+let _convexClient: ConvexReactClient | null = null;
+
+export function setConvexClient(client: ConvexReactClient) {
+  _convexClient = client;
+}
+
+function getClient(): ConvexReactClient | null {
+  return _convexClient;
+}
 
 // RevenueCat API Keys - Replace with your actual keys
 // These should ideally come from environment variables
@@ -41,7 +52,7 @@ export const ENTITLEMENTS = {
   PRO: 'pro',
 };
 
-// Map RevenueCat entitlements to Supabase subscription_tier values
+// Map RevenueCat entitlements to subscription_tier values
 const ENTITLEMENT_TO_TIER: Record<string, 'free' | 'premium' | 'pro'> = {
   [ENTITLEMENTS.PRO]: 'pro',
   [ENTITLEMENTS.PREMIUM]: 'premium',
@@ -71,7 +82,7 @@ export async function initRevenueCat(userId?: string): Promise<void> {
 
     await Purchases.configure({
       apiKey,
-      appUserID: userId, // Use Supabase user ID for cross-platform sync
+      appUserID: userId, // Use Clerk user ID for cross-platform sync
     });
 
     isInitialized = true;
@@ -87,13 +98,13 @@ export async function initRevenueCat(userId?: string): Promise<void> {
 
 /**
  * Handle customer info updates from RevenueCat
- * Syncs subscription status to Supabase
+ * Syncs subscription status to Convex
  */
 async function handleCustomerInfoUpdate(customerInfo: CustomerInfo): Promise<void> {
   console.log('[RevenueCat] Customer info updated');
 
   const tier = getSubscriptionTierFromCustomerInfo(customerInfo);
-  await syncSubscriptionToSupabase(tier);
+  await syncSubscriptionToConvex(tier);
 }
 
 /**
@@ -118,31 +129,25 @@ function getSubscriptionTierFromCustomerInfo(
 }
 
 /**
- * Sync subscription tier to Supabase profiles table
+ * Sync subscription tier to Convex
  */
-async function syncSubscriptionToSupabase(
+async function syncSubscriptionToConvex(
   tier: 'free' | 'premium' | 'pro'
 ): Promise<void> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      console.log('[RevenueCat] No authenticated user, skipping sync');
+    const client = getClient();
+    if (!client) {
+      console.log('[RevenueCat] Convex client not initialized, skipping sync');
       return;
     }
 
-    const { error } = await supabase
-      .from('profiles')
-      .update({ subscription_tier: tier })
-      .eq('id', user.id);
+    await client.mutation(api.users.updateMySubscription, {
+      subscriptionTier: tier,
+    });
 
-    if (error) {
-      console.error('[RevenueCat] Failed to sync tier to Supabase:', error);
-    } else {
-      console.log(`[RevenueCat] Synced subscription tier: ${tier}`);
-    }
+    console.log(`[RevenueCat] Synced subscription tier to Convex: ${tier}`);
   } catch (error) {
-    console.error('[RevenueCat] Error syncing to Supabase:', error);
+    console.error('[RevenueCat] Error syncing to Convex:', error);
   }
 }
 
@@ -190,7 +195,7 @@ export async function purchasePackage(
 
     if (tier !== 'free') {
       console.log('[RevenueCat] Purchase successful, tier:', tier);
-      await syncSubscriptionToSupabase(tier);
+      await syncSubscriptionToConvex(tier);
       return { success: true, customerInfo };
     }
 
@@ -222,7 +227,7 @@ export async function restorePurchases(): Promise<{
     const customerInfo = await Purchases.restorePurchases();
     const tier = getSubscriptionTierFromCustomerInfo(customerInfo);
 
-    await syncSubscriptionToSupabase(tier);
+    await syncSubscriptionToConvex(tier);
 
     console.log('[RevenueCat] Restored tier:', tier);
     return { success: true, tier };
@@ -304,7 +309,7 @@ export async function identifyUser(userId: string): Promise<void> {
     const customerInfo = await getCustomerInfo();
     if (customerInfo) {
       const tier = getSubscriptionTierFromCustomerInfo(customerInfo);
-      await syncSubscriptionToSupabase(tier);
+      await syncSubscriptionToConvex(tier);
     }
   } catch (error) {
     console.error('[RevenueCat] Failed to identify user:', error);

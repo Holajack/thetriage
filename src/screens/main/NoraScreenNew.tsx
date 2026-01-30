@@ -30,7 +30,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { supabase } from '../../utils/supabase';
+import { sendNoraChatMessage, transcribeAudio } from '../../utils/convexAIChatService';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import * as Haptics from 'expo-haptics';
@@ -522,16 +522,9 @@ const NoraScreenNew: React.FC = () => {
       // Get all message IDs from this session
       const messageIds = sessionToDelete.messages.map((m: any) => m.id);
 
-      // Delete from database
-      const { error } = await supabase
-        .from('nora_chat')
-        .delete()
-        .in('id', messageIds);
-
-      if (error) {
-        console.error('Failed to delete chat session:', error);
-        return;
-      }
+      // TODO: Delete chat session from Convex
+      // Chat history storage will be implemented in a future phase
+      console.log('Chat deletion will be implemented when chat history is migrated to Convex');
 
       // Update local state
       setChatSessions(prev => prev.filter(s => s.id !== sessionId));
@@ -731,30 +724,10 @@ const NoraScreenNew: React.FC = () => {
 
   const loadChatHistory = async () => {
     if (!user) return;
-    try {
-      const { data } = await supabase
-        .from('nora_chat')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('timestamp', { ascending: true })
-        .limit(100);
 
-      if (data && data.length > 0) {
-        const sessions = groupByDay(data);
-        setChatSessions(sessions);
-
-        const recentMessages = data.slice(-20).map((msg) => ({
-          id: msg.id,
-          content: msg.content,
-          sender: msg.sender,
-          timestamp: msg.timestamp,
-        }));
-        setMessages(recentMessages);
-        setShowWelcome(false);
-      }
-    } catch (error) {
-      console.error('Failed to load chat history:', error);
-    }
+    // TODO: Load chat history from Convex
+    // Will be implemented when chat history tables are added to Convex schema
+    console.log('Chat history loading from Convex will be implemented in a future update');
   };
 
   const groupByDay = (data: any[]): ChatSession[] => {
@@ -780,23 +753,10 @@ const NoraScreenNew: React.FC = () => {
 
   const loadPdfs = async () => {
     if (!user) return;
-    try {
-      const { data } = await supabase.storage.from('e-books').list(`${user.id}/`, { limit: 50 });
 
-      if (data) {
-        const pdfs = data
-          .filter((f) => f.name.endsWith('.pdf'))
-          .map((f) => ({
-            id: f.name,
-            name: f.name.replace('.pdf', ''),
-            title: f.name.replace('.pdf', ''),
-            file_path: `${user.id}/${f.name}`,
-          }));
-        setUploadedPdfs(pdfs);
-      }
-    } catch (error) {
-      console.error('Failed to load PDFs:', error);
-    }
+    // TODO: Load PDFs from Convex file storage
+    // PDF storage will be migrated to Convex in a future phase
+    setUploadedPdfs([]);
   };
 
   // Voice recording with Whisper
@@ -1028,52 +988,28 @@ const NoraScreenNew: React.FC = () => {
         setIsLoading(true);
       }
 
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        console.error('No session for transcription');
-        setIsLoading(false);
-        return;
-      }
-
-      const formData = new FormData();
+      // Read audio file as base64 for Convex action
       const fileExtension = audioUri.split('.').pop() || 'm4a';
       const mimeType = fileExtension === 'wav' ? 'audio/wav' : 'audio/m4a';
+      const audioBase64 = await FileSystem.readAsStringAsync(audioUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
 
-      formData.append('file', {
-        uri: audioUri,
-        type: mimeType,
-        name: `recording.${fileExtension}`,
-      } as any);
-      formData.append('model', 'whisper-1');
+      const result = await transcribeAudio({
+        audioBase64,
+        mimeType,
+        fileName: `recording.${fileExtension}`,
+        model: 'whisper-1',
+      });
 
-      const response = await fetch(
-        'https://ucculvnodabrfwbkzsnx.supabase.co/functions/v1/whisper-transcribe',
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: formData,
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.text) {
-          setInput(data.text);
-          // Only auto-send if requested (when user presses send button)
-          if (autoSend) {
-            handleSend(data.text);
-          }
-        } else {
-          console.error('No text in transcription response');
-          setIsLoading(false);
+      if (result.text) {
+        setInput(result.text);
+        // Only auto-send if requested (when user presses send button)
+        if (autoSend) {
+          handleSend(result.text);
         }
       } else {
-        const errorText = await response.text();
-        console.error('Transcription failed:', response.status, errorText);
+        console.error('Transcription failed:', result.error);
         setIsLoading(false);
       }
     } catch (error) {
@@ -1107,12 +1043,7 @@ const NoraScreenNew: React.FC = () => {
     };
     setMessages((prev) => [...prev, userMessage]);
 
-    await supabase.from('nora_chat').insert({
-      content: messageText,
-      sender: 'user',
-      user_id: user.id,
-      timestamp: new Date().toISOString(),
-    });
+    // Note: User message is saved server-side by the Convex action
 
     const searchingMessage: Message = {
       id: 'searching',
@@ -1133,32 +1064,12 @@ const NoraScreenNew: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error('No session');
-
-      const response = await fetch(
-        'https://ucculvnodabrfwbkzsnx.supabase.co/functions/v1/nora-chat-auth-fix',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`,
-            apikey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '',
-          },
-          body: JSON.stringify({
-            message: messageText,
-            userId: user.id,
-            thinkingMode: deepThink ? 'deep' : 'fast',
-            pdfContext: selectedPdf ? { title: selectedPdf.title, file_path: selectedPdf.file_path } : null,
-          }),
-        }
-      );
-
-      if (!response.ok) throw new Error('Server error');
-
-      const data = await response.json();
+      // Call Nora via Convex action
+      const data = await sendNoraChatMessage({
+        message: messageText,
+        thinkingMode: deepThink ? 'deep' : 'fast',
+        pdfContext: selectedPdf ? { title: selectedPdf.title, file_path: selectedPdf.file_path } : null,
+      });
 
       setMessages((prev) => {
         const filtered = prev.filter((m) => m.id !== 'searching');
@@ -1174,12 +1085,7 @@ const NoraScreenNew: React.FC = () => {
         return [...filtered, noraMessage];
       });
 
-      await supabase.from('nora_chat').insert({
-        content: data.response,
-        sender: 'nora',
-        user_id: user.id,
-        timestamp: new Date().toISOString(),
-      });
+      // Note: Nora's response is saved server-side by the Convex action
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {

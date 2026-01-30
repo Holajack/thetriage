@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn, FadeOut, useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { supabase } from '../../utils/supabase';
+import { useSignIn } from '@clerk/clerk-expo';
 import { useTheme } from '../../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
+import { CommonActions } from '@react-navigation/native';
 import type { AuthStackParamList } from '../../navigation/types';
 import { AnimatedButton } from '../../components/premium/AnimatedButton';
 import { useEntranceAnimation, useSuccessAnimation, useProgressAnimation, triggerHaptic } from '../../utils/animationUtils';
@@ -18,7 +19,12 @@ export default function ResetPasswordScreen() {
   const { theme } = useTheme();
   const navigation = useNavigation<any>();
   const route = useRoute<ResetPasswordRouteProp>();
+  const { signIn, setActive, isLoaded } = useSignIn();
 
+  // Get email from route params (passed from ForgotPasswordScreen)
+  const email = (route.params as any)?.email || '';
+
+  const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -30,6 +36,7 @@ export default function ResetPasswordScreen() {
   // Entrance animations
   const headerAnimation = useEntranceAnimation(0);
   const iconAnimation = useEntranceAnimation(100);
+  const codeAnimation = useEntranceAnimation(150);
   const passwordAnimation = useEntranceAnimation(200);
   const confirmPasswordAnimation = useEntranceAnimation(300);
   const buttonAnimation = useEntranceAnimation(400);
@@ -57,18 +64,6 @@ export default function ResetPasswordScreen() {
     passwordStrength.value = withSpring(strength, AnimationConfig.gentle);
   }, [password]);
 
-  // Check for valid session on mount
-  useEffect(() => {
-    checkSession();
-  }, []);
-
-  const checkSession = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      setError('Invalid or expired reset link. Please request a new password reset.');
-    }
-  };
-
   const validatePassword = (pwd: string): string | null => {
     if (pwd.length < 8) {
       return 'Password must be at least 8 characters long';
@@ -85,9 +80,21 @@ export default function ResetPasswordScreen() {
     return null;
   };
 
-  const handleResetPassword = async () => {
+  const handleResetPassword = useCallback(async () => {
+    if (!isLoaded || !signIn) {
+      setError('Authentication is not ready. Please try again.');
+      return;
+    }
+
     setError('');
     triggerHaptic('buttonPress');
+
+    // Validate code is provided
+    if (!code || code.length < 6) {
+      setError('Please enter the 6-digit verification code from your email');
+      triggerHaptic('error');
+      return;
+    }
 
     // Validate passwords match
     if (password !== confirmPassword) {
@@ -107,45 +114,58 @@ export default function ResetPasswordScreen() {
     setLoading(true);
 
     try {
-      // Update the user's password
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: password
+      // Attempt to reset the password with Clerk using the verification code
+      const result = await signIn.attemptFirstFactor({
+        strategy: 'reset_password_email_code',
+        code,
+        password,
       });
 
-      if (updateError) {
-        setError(updateError.message);
-        setLoading(false);
-        triggerHaptic('error');
-        return;
-      }
-
-      // Success!
-      setSuccess(true);
-      setLoading(false);
-      triggerHaptic('success');
-      celebrate();
-
-      // Show success message and navigate to login
-      Alert.alert(
-        'Success!',
-        'Your password has been reset successfully. Please log in with your new password.',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              // Sign out to clear the session and go to login
-              supabase.auth.signOut();
-              navigation.navigate('Login');
-            }
+      if (result.status === 'complete') {
+        // Password reset successful, set the session active
+        try {
+          await setActive({ session: result.createdSessionId });
+          console.log('🔑 [ResetPassword] Session activated successfully');
+        } catch (setActiveErr: any) {
+          const errMsg = setActiveErr?.message || String(setActiveErr);
+          if (errMsg.includes('CustomEvent') || errMsg.includes('hasFocus') || errMsg.includes('document') || errMsg.includes('dispatchEvent') || errMsg.includes('window')) {
+            console.log('🔑 [ResetPassword] RN compatibility error (session likely active):', errMsg);
+          } else {
+            console.log('🔑 [ResetPassword] setActive error:', errMsg);
           }
-        ]
-      );
+        }
+
+        setSuccess(true);
+        triggerHaptic('success');
+        celebrate();
+
+        // Show success message and navigate to Main
+        Alert.alert(
+          'Success!',
+          'Your password has been reset successfully. You are now logged in.',
+          [
+            {
+              text: 'Continue',
+              onPress: () => {
+                console.log('🔑 [ResetPassword] Navigating to Main');
+                navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'Main' as any }] }));
+              }
+            }
+          ]
+        );
+      } else {
+        // Handle other statuses
+        setError('Password reset incomplete. Please try again.');
+        triggerHaptic('error');
+      }
     } catch (err: any) {
-      setError(err.message || 'An error occurred. Please try again.');
-      setLoading(false);
+      const errorMessage = err?.errors?.[0]?.message || err?.message || 'An error occurred. Please try again.';
+      setError(errorMessage);
       triggerHaptic('error');
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [isLoaded, signIn, setActive, code, password, confirmPassword, celebrate]);
 
   // Dynamic colors based on theme
   const gradientColors = theme.isDark 
@@ -157,7 +177,7 @@ export default function ResetPasswordScreen() {
   const inputBorderColor = theme.isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(232, 245, 233, 0.3)';
   const inputBackground = theme.isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.1)';
 
-  const isFormValid = password.length >= 8 && confirmPassword.length >= 8 && !error && !success;
+  const isFormValid = code.length >= 6 && password.length >= 8 && confirmPassword.length >= 8 && !error && !success;
 
   // Helper to darken/lighten colors for gradient
   const adjustColor = (color: string, amount: number): string => {
@@ -197,8 +217,30 @@ export default function ResetPasswordScreen() {
           <Animated.View style={iconAnimation}>
             <Text style={[styles.title, { color: textColor }]}>Reset Password</Text>
             <Text style={[styles.subtitle, { color: secondaryTextColor }]}>
-              Please enter your new password
+              Enter the verification code from your email{email ? ` (${email})` : ''} and your new password
             </Text>
+          </Animated.View>
+
+          {/* Verification Code Input */}
+          <Animated.View style={[codeAnimation, styles.inputContainer]}>
+            <Text style={[styles.label, { color: textColor }]}>Verification Code</Text>
+            <TextInput
+              style={[styles.input, {
+                backgroundColor: inputBackground,
+                borderColor: inputBorderColor,
+                color: textColor,
+                textAlign: 'center',
+                fontSize: 24,
+                letterSpacing: 8,
+              }]}
+              placeholder="000000"
+              placeholderTextColor={secondaryTextColor}
+              value={code}
+              onChangeText={setCode}
+              keyboardType="number-pad"
+              maxLength={6}
+              editable={!success}
+            />
           </Animated.View>
 
           {/* New Password Input */}

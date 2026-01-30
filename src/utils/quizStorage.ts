@@ -1,5 +1,4 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase } from './supabase';
 import { QuizResult } from '../data/quizData';
 
 interface StoredQuizResult extends QuizResult {
@@ -118,59 +117,15 @@ export const getQuizCompletionStatus = async (userId: string, quizId: string): P
   }
 };
 
-// Database functions (for syncing with Supabase)
+// Database functions (for syncing with backend)
 export const saveQuizResultToDatabase = async (result: QuizResult, userId: string): Promise<void> => {
-  try {
-    const { error } = await supabase
-      .from('quiz_results')
-      .insert({
-        user_id: userId,
-        quiz_id: result.quizId,
-        score: result.score,
-        category: result.category,
-        description: result.description,
-        recommendations: result.recommendations,
-        completed_at: result.completedAt.toISOString(),
-        created_at: new Date().toISOString()
-      });
-
-    if (error) throw error;
-    console.log('Quiz result saved to database');
-  } catch (error) {
-    console.error('Error saving quiz result to database:', error);
-    // Don't throw error - local storage is primary, database is backup
-  }
+  // TODO: Implement Convex-based quiz result storage if needed
+  console.log('Quiz result saved locally (database sync not yet implemented for Convex)');
 };
 
 export const syncQuizResultsWithDatabase = async (userId: string): Promise<void> => {
-  try {
-    // Get local results
-    const localResults = await getLocalQuizResults(userId);
-    
-    // Get database results
-    const { data: dbResults, error } = await supabase
-      .from('quiz_results')
-      .select('*')
-      .eq('user_id', userId)
-      .order('completed_at', { ascending: false });
-
-    if (error) throw error;
-
-    // Find results that exist locally but not in database
-    const dbResultIds = new Set(dbResults?.map(r => `${r.quiz_id}_${r.completed_at}`) || []);
-    const unsyncedResults = localResults.filter(local => 
-      !dbResultIds.has(`${local.quizId}_${local.completedAt.toISOString()}`)
-    );
-
-    // Upload unsynced results
-    for (const result of unsyncedResults) {
-      await saveQuizResultToDatabase(result, userId);
-    }
-
-    console.log(`Synced ${unsyncedResults.length} quiz results with database`);
-  } catch (error) {
-    console.error('Error syncing quiz results with database:', error);
-  }
+  // TODO: Implement Convex-based quiz result sync if needed
+  console.log('Quiz result sync not yet implemented for Convex');
 };
 
 export const getQuizHistory = async (userId: string, quizType?: string): Promise<StoredQuizResult[]> => {

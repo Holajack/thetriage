@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, KeyboardAvoidingView, Platform, Animated, Alert, Modal, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { supabase } from '../../utils/supabase';
+import { sendNoraChatMessage } from '../../utils/convexAIChatService';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import * as DocumentPicker from 'expo-document-picker';
@@ -272,33 +272,10 @@ const NoraScreen = () => {
 
   const fetchChatHistory = async () => {
     if (!user) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from('nora_chat')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('timestamp', { ascending: true });
-        
-      if (error) throw error;
-      
-      const messages = data || [];
-      setChat(messages);
-      
-      // Group messages into chat sessions (by day or conversation breaks)
-      const grouped = groupMessagesBySessions(messages);
-      setChatHistory(grouped);
-      
-      // If there are existing messages, skip landing screen
-      if (messages.length > 0) {
-        setShowLandingScreen(false);
-      }
-      
-    } catch (error) {
-      console.error('Failed to load Nora chat history:', error);
-    } finally {
-      setIsFirstLoad(false);
-    }
+
+    // TODO: Load chat history from Convex
+    // Will be implemented when chat history tables are added to Convex schema
+    setIsFirstLoad(false);
   };
 
   const groupMessagesBySessions = (messages: NoraMessage[]) => {
@@ -328,74 +305,17 @@ const NoraScreen = () => {
   const fetchUploadedPdfs = async () => {
     if (!user) return;
 
-    try {
-      // Fetch from storage
-      const { data: storageData, error: storageError } = await supabase.storage
-        .from('e-books')
-        .list(`${user.id}/`, { limit: 100, sortBy: { column: 'created_at', order: 'desc' } });
-
-      if (storageError) {
-        console.warn('Storage fetch error:', storageError);
-      }
-
-      // Fetch metadata from database with error handling
-      let dbData = [];
-      try {
-        const { data, error: dbError } = await supabase
-          .from('user_ebooks')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('upload_date', { ascending: false });
-
-        if (dbError) {
-          console.warn('Database fetch error:', dbError);
-        } else {
-          dbData = data || [];
-        }
-      } catch (dbError) {
-        console.warn('Database table access error:', dbError);
-      }
-
-      // Combine storage and database data (matching EBooksScreen approach)
-      const combinedData = (storageData || [])
-        .filter((f) => f.metadata?.mimetype === 'application/pdf' || f.name.endsWith('.pdf'))
-        .map((f) => {
-          const dbRecord = dbData.find(record => record.file_path.endsWith(f.name));
-          return {
-            id: dbRecord?.id || f.id || f.name,
-            name: dbRecord?.title || f.name.replace('.pdf', ''),
-            title: dbRecord?.title || f.name.replace('.pdf', ''),
-            file_size: f.metadata?.size || dbRecord?.file_size || 0,
-            upload_date: dbRecord?.upload_date || f.created_at,
-            file_path: dbRecord?.file_path || `${user.id}/${f.name}`,
-            storage_path: f.name
-          };
-        });
-
-      setUploadedPdfs(combinedData);
-    } catch (error) {
-      console.error('Failed to load PDFs:', error);
-      setUploadedPdfs([]);
-    }
+    // TODO: Load PDFs from Convex file storage
+    // PDF storage will be migrated to Convex in a future phase
+    setUploadedPdfs([]);
   };
 
   const saveMessage = async (content: string, sender: 'user' | 'nora') => {
     if (!user) return;
-    
-    try {
-      const { error } = await supabase
-        .from('nora_chat')
-        .insert([{
-          content,
-          sender,
-          user_id: user.id,
-          timestamp: new Date().toISOString(),
-        }]);
-        
-      if (error) throw error;
-    } catch (error) {
-      console.error('Failed to save Nora message:', error);
-    }
+
+    // TODO: Save messages to Convex
+    // Chat history will be implemented when chat tables are added to Convex schema
+    console.log('Nora message (not saved):', content.substring(0, 50));
   };
 
   const transitionToChatMode = () => {
@@ -566,62 +486,30 @@ const NoraScreen = () => {
     }
 
     try {
-      // Get session for authentication
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        console.error('NoraScreen: No active session found');
-        throw new Error('No active session');
-      }
-      
-      if (!session.access_token) {
-        console.error('NoraScreen: Session exists but no access token');
-        throw new Error('No access token in session');
-      }
-      
-      console.log('NoraScreen: Session valid, access_token present:', !!session.access_token);
-
       // Prepare conversation context (last 10 messages for context)
       const conversationHistory = chat.slice(-10).map(msg => ({
         role: msg.sender === 'user' ? 'user' : 'assistant',
         content: msg.content
       }));
 
-      // Send message to enhanced Nora assistant edge function
-      console.log('NoraScreen: Making API call to nora-chat-auth-fix with userId:', user.id);
-      console.log(`NoraScreen: Using ${detectedMode === 'deep' ? '🔍 Deep Think' : '⚡ Quick Question'} mode`);
+      // Send message to Nora via Convex action
+      console.log('NoraScreen: Making Convex action call');
+      console.log(`NoraScreen: Using ${detectedMode === 'deep' ? 'Deep Think' : 'Quick Question'} mode`);
       console.log('NoraScreen: Including', conversationHistory.length, 'messages for context');
-      const response = await fetch('https://ucculvnodabrfwbkzsnx.supabase.co/functions/v1/nora-chat-auth-fix', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-          'apikey': process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVjY3Vsdm5vZGFicmZ3Ymt6c254Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDIyNDQxODksImV4cCI6MjA1NzgyMDE4OX0._tWjZyUAafkMNi5fAOmrgJZu3yuzz_G--S0Wi0qVF1A',
+      const data = await sendNoraChatMessage({
+        message: enhancedMessage,
+        thinkingMode: detectedMode as 'fast' | 'deep',
+        conversationHistory,
+        userSettings: {
+          focus_method: userData?.onboarding?.focus_method,
+          weekly_focus_goal: userData?.onboarding?.weekly_focus_goal,
+          onboarding: userData?.onboarding
         },
-        body: JSON.stringify({
-          message: enhancedMessage, // Use enhanced message with context if vague
-          userId: user.id,
-          thinkingMode: detectedMode, // Use automatically detected mode
-          conversationHistory: conversationHistory, // Add conversation context
-          userSettings: {
-            focus_method: userData?.onboarding?.focus_method,
-            weekly_focus_goal: userData?.onboarding?.weekly_focus_goal,
-            onboarding: userData?.onboarding
-          },
-          pdfContext: selectedPdf ? {
-            title: selectedPdf.title,
-            file_path: selectedPdf.file_path
-          } : null
-        }),
+        pdfContext: selectedPdf ? {
+          title: selectedPdf.title,
+          file_path: selectedPdf.file_path
+        } : null,
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Nora Assistant Error:', response.status, errorText);
-        throw new Error(`Server error: ${response.status}`);
-      }
-
-      const data = await response.json();
 
       // Handle function results (navigation, actions, etc.)
       if (data.function_result) {
@@ -780,105 +668,28 @@ const NoraScreen = () => {
       // Show uploading indicator
       setIsLoading(true);
 
-      // Upload to Supabase storage
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
+      // TODO: Upload to Convex file storage
+      // PDF upload will be migrated to Convex in a future phase
+      if (!user) {
         Alert.alert('Error', 'You must be logged in to upload files.');
         setIsLoading(false);
         return;
       }
 
-      const userId = session.user.id;
+      const userId = user.id;
       const timestamp = Date.now();
       const fileName = `${timestamp}_${file.name}`;
       const filePath = `${userId}/${fileName}`;
 
       console.log('Starting PDF upload using EBooksScreen method...');
 
-      try {
-        // Method 1: Direct FormData upload (React Native compatible)
-        const formData = new FormData();
-        formData.append('file', {
-          uri: file.uri,
-          type: 'application/pdf',
-          name: fileName,
-        } as any);
-
-        // Upload using Supabase storage with FormData
-        const { error: uploadError } = await supabase.storage
-          .from('e-books')
-          .upload(filePath, formData);
-
-        if (uploadError) {
-          console.log('FormData upload failed, trying alternative method...');
-
-          // Method 2: Base64 string upload
-          const base64Data = await FileSystem.readAsStringAsync(file.uri, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
-
-          // Upload base64 string directly
-          const { error: base64UploadError } = await supabase.storage
-            .from('e-books')
-            .upload(filePath, base64Data, {
-              contentType: 'application/pdf',
-              upsert: false
-            });
-
-          if (base64UploadError) {
-            console.log('Base64 upload failed, trying file URI method...');
-
-            // Method 3: Direct file URI (React Native specific)
-            const { error: uriUploadError } = await supabase.storage
-              .from('e-books')
-              .upload(filePath, {
-                uri: file.uri,
-                type: 'application/pdf',
-                name: fileName,
-              } as any);
-
-            if (uriUploadError) {
-              throw new Error(`All upload methods failed. Last error: ${uriUploadError.message}`);
-            }
-          }
-        }
-
-        console.log('Upload successful, saving metadata...');
-
-        // Save metadata to database
-        try {
-          const { error: dbError } = await supabase
-            .from('user_ebooks')
-            .insert({
-              user_id: userId,
-              title: file.name.replace('.pdf', ''),
-              file_path: filePath,
-              file_size: file.size,
-              upload_date: new Date().toISOString()
-            });
-
-          if (dbError) {
-            console.warn('Database save error:', dbError);
-            Alert.alert(
-              'File Uploaded',
-              'Your PDF was uploaded successfully, but there was an issue saving the metadata.'
-            );
-          } else {
-            Alert.alert('Success', 'Your PDF has been uploaded successfully! You can now select it.');
-          }
-        } catch (metadataError) {
-          console.error('Metadata save failed:', metadataError);
-          Alert.alert('File Uploaded', 'Your PDF was uploaded successfully.');
-        }
-
-        // Refresh PDF list
-        await fetchUploadedPdfs();
-        setShowPdfModal(true);
-
-      } catch (uploadError) {
-        console.error('All upload methods failed:', uploadError);
-        throw new Error('Unable to upload the PDF. Please check your internet connection and try again.');
-      }
+      // TODO: Implement PDF upload via Convex file storage
+      // For now, show a message that PDF upload is being enhanced
+      Alert.alert(
+        'PDF Upload Coming Soon',
+        'PDF upload functionality is being enhanced. This feature will be available in the next update!',
+        [{ text: 'OK' }]
+      );
 
     } catch (error: any) {
       console.error('Upload error:', error);

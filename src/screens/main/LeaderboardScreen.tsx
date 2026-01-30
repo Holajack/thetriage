@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useSupabaseLeaderboardWithFriends, Leaderboard, useSupabaseTasks, useSupabaseProfile } from '../../utils/supabaseHooks';
+import { useConvexLeaderboardWithFriends, Leaderboard, useConvexTasks, useConvexProfile } from '../../hooks/useConvex';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
 import Animated, { FadeInUp, FadeIn, useAnimatedStyle, withSpring, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
@@ -45,24 +45,24 @@ const LeaderboardScreen = () => {
   const { data: userData, refreshData } = useUserAppData();
 
   const {
-    data: supabaseLeaderboard,
+    data: convexLeaderboard,
     loading: leaderboardLoading,
     error: leaderboardError,
     refetch: refetchLeaderboard
-  } = useSupabaseLeaderboardWithFriends();
+  } = useConvexLeaderboardWithFriends();
 
   // Extract current user stats and leaderboard data
   const currentUserStats = userData?.leaderboard || userData?.stats;
   const currentLeaderboard = tab === 'Friends'
-    ? (leaderboardData.friendsLeaderboard || supabaseLeaderboard?.friendsLeaderboard || [])
-    : (leaderboardData.globalLeaderboard || supabaseLeaderboard?.globalLeaderboard || []);
+    ? (leaderboardData.friendsLeaderboard || convexLeaderboard?.friendsLeaderboard || [])
+    : (leaderboardData.globalLeaderboard || convexLeaderboard?.globalLeaderboard || []);
 
   // General loading and error states
   const loading = leaderboardLoading;
   const error = leaderboardError ? String(leaderboardError) : null;
 
   // Community Activity changes based on selected tab
-  // Friends tab = friends' activity from Supabase
+  // Friends tab = friends' activity
   // Global tab = everyone's activity
   const currentActivity = React.useMemo(() => {
     return (currentLeaderboard || []).map((entry: Leaderboard, index: number) => ({
@@ -83,10 +83,10 @@ const LeaderboardScreen = () => {
       // Use demo data from your comprehensive system
       const demoData = getLeaderboardData(userData);
       setLeaderboardData(demoData);
-    } else if (supabaseLeaderboard) {
-      setLeaderboardData(supabaseLeaderboard);
+    } else if (convexLeaderboard) {
+      setLeaderboardData(convexLeaderboard);
     }
-  }, [supabaseLeaderboard, leaderboardError, userData]);
+  }, [convexLeaderboard, leaderboardError, userData]);
 
   // Calculate tasks completed this week
   const getTasksCompletedThisWeek = () => {

@@ -1,5 +1,19 @@
-import { supabase } from './supabase';
-import { sendFriendRequest, respondToFriendRequest } from './friendRequestService';
+import { ConvexReactClient } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import { sendFriendRequest, respondToFriendRequest } from './convexFriendRequestService';
+
+let _convexClient: ConvexReactClient | null = null;
+
+export function setConvexClient(client: ConvexReactClient) {
+  _convexClient = client;
+}
+
+function getClient(): ConvexReactClient {
+  if (!_convexClient) {
+    throw new Error("Convex client not initialized. Call setConvexClient first.");
+  }
+  return _convexClient;
+}
 
 export interface QRScanNotification {
   requestId: string;
@@ -79,23 +93,24 @@ export async function waitForQRAcceptance(
           return;
         }
 
-        // Check the friend request status
-        const { data, error } = await supabase
-          .from('friend_requests')
-          .select('status')
-          .eq('id', requestId)
-          .single();
+        // Check the friend request status via Convex
+        const client = getClient();
+        const result = await client.query(api.friends.getRequestStatus, {
+          requestId: requestId as any,
+        });
 
-        if (error) {
-          console.error('Error checking request status:', error);
+        if (!result) {
+          console.error('Request not found');
+          clearInterval(checkInterval);
+          resolve({ accepted: false, error: 'Request not found' });
           return;
         }
 
-        if (data?.status === 'accepted') {
+        if (result.status === 'accepted') {
           console.log('✅ QR request accepted immediately!');
           clearInterval(checkInterval);
           resolve({ accepted: true });
-        } else if (data?.status === 'declined') {
+        } else if (result.status === 'declined') {
           console.log('❌ QR request declined');
           clearInterval(checkInterval);
           resolve({ accepted: false, error: 'Request declined' });
@@ -157,65 +172,57 @@ export function subscribeToPendingQRRequests(
   onNewRequest: (notification: QRScanNotification) => void
 ): { unsubscribe: () => void } {
   let pollInterval: NodeJS.Timeout;
-  let lastCheckTime = new Date().toISOString();
+  let lastCheckTime = Date.now();
 
   const checkForNewRequests = async () => {
     try {
-      const { data, error } = await supabase
-        .from('friend_requests')
-        .select(`
-          id,
-          sender_id,
-          created_at,
-          status
-        `)
-        .eq('recipient_id', userId)
-        .eq('status', 'pending')
-        .gte('created_at', lastCheckTime)
-        .order('created_at', { ascending: false });
+      const client = getClient();
 
-      if (error) {
-        console.error('Error checking for QR requests:', error);
+      // Get all pending incoming requests
+      const requests = await client.query(api.friends.listRequests, {
+        type: "incoming",
+      });
+
+      if (!requests || requests.length === 0) {
         return;
       }
 
-      // All recent pending requests are treated as potential QR scans
-      const qrRequests = data || [];
+      // Filter for new requests since last check
+      const newRequests = requests.filter(req => {
+        const creationTime = req._creationTime || 0;
+        return creationTime > lastCheckTime;
+      });
 
-      if (qrRequests.length > 0) {
-        // Fetch sender profiles
-        const senderIds = qrRequests.map(req => req.sender_id);
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, username, full_name, avatar_url, university, major')
-          .in('id', senderIds);
+      if (newRequests.length > 0) {
+        // Fetch sender profiles for new requests
+        for (const request of newRequests) {
+          try {
+            const senderProfile = await client.query(api.users.getByClerkId, {
+              clerkId: request.senderId,
+            });
 
-        if (profiles) {
-          const profileMap = new Map(profiles.map(p => [p.id, p]));
-
-          // Notify for each new request
-          qrRequests.forEach(request => {
-            const profile = profileMap.get(request.sender_id);
-            if (profile) {
-              console.log('📬 New QR scan request from:', profile.username);
+            if (senderProfile) {
+              console.log('📬 New QR scan request from:', senderProfile.username);
               onNewRequest({
-                requestId: request.id,
-                scannerId: request.sender_id,
+                requestId: request._id,
+                scannerId: request.senderId,
                 scannerProfile: {
-                  username: profile.username || 'user',
-                  full_name: profile.full_name || 'User',
-                  avatar_url: profile.avatar_url,
-                  university: profile.university,
-                  major: profile.major,
+                  username: senderProfile.username || 'user',
+                  full_name: senderProfile.fullName || 'User',
+                  avatar_url: senderProfile.avatarUrl,
+                  university: senderProfile.university,
+                  major: senderProfile.major,
                 },
-                timestamp: request.created_at,
+                timestamp: new Date(request._creationTime || Date.now()).toISOString(),
               });
             }
-          });
+          } catch (error) {
+            console.error('Error fetching sender profile:', error);
+          }
         }
 
-        // Update last check time
-        lastCheckTime = new Date().toISOString();
+        // Update last check time to now
+        lastCheckTime = Date.now();
       }
     } catch (error) {
       console.error('Error in QR request subscription:', error);

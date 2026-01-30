@@ -1,101 +1,10 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '../utils/supabase';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createInitialUserData, ensureUserDataCompleteness } from '../utils/createUserData';
 import * as Network from 'expo-network';
 import { scheduleWeeklyGoalChecks } from '../utils/weeklyGoalNotifications';
-
-// Simple timeout wrapper
-const withTimeout = (promise: Promise<any>, timeoutMs: number = 6000): Promise<any> => {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Request timeout')), timeoutMs)
-    ),
-  ]);
-};
-
-// Enhanced timeout wrapper with retry capability
-const withTimeoutAndRetry = (
-  promiseFactory: () => Promise<any>,
-  timeoutMs: number = 6000,
-  retries: number = 2
-): Promise<any> => {
-  return new Promise(async (resolve, reject) => {
-    for (let attempt = 1; attempt <= retries + 1; attempt++) {
-      try {
-        console.log(`🔄 Network attempt ${attempt}/${retries + 1}`);
-        
-        const result = await Promise.race([
-          promiseFactory(),
-          new Promise((_, timeoutReject) =>
-            setTimeout(() => timeoutReject(new Error(`Request timeout after ${timeoutMs}ms`)), timeoutMs)
-          ),
-        ]);
-        
-        console.log(`✅ Network request succeeded on attempt ${attempt}`);
-        resolve(result);
-        return;
-        
-      } catch (error: any) {
-        console.log(`❌ Attempt ${attempt} failed:`, error.message);
-        
-        if (attempt === retries + 1) {
-          reject(new Error(`Network failed after ${retries + 1} attempts: ${error.message}`));
-          return;
-        }
-        
-        const delay = 1000 * Math.pow(2, attempt - 1);
-        console.log(`⏳ Waiting ${delay}ms before retry...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-  });
-};
-
-// In src/context/AuthContext.tsx - Update the timeout values
-const NETWORK_TIMEOUT = 15000; // Increase from 8000ms to 15000ms
-const MAX_RETRIES = 5; // Increase from 3 to 5 retries
-const RETRY_DELAYS = [1000, 2000, 3000, 5000, 8000]; // Progressive backoff
-
-// Enhanced network connectivity test
-const testNetworkConnectivity = async (): Promise<boolean> => {
-  console.log('🌐 Testing network connectivity...');
-  
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      console.log(`🔄 Network attempt ${attempt}/${MAX_RETRIES}`);
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), NETWORK_TIMEOUT);
-      
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('count')
-        .limit(1)
-        .abortSignal(controller.signal);
-        
-      clearTimeout(timeoutId);
-      
-      if (!error) {
-        console.log('✅ Network connectivity confirmed');
-        return true;
-      }
-      
-    } catch (error) {
-      console.log(`❌ Attempt ${attempt} failed:`, error.message);
-      
-      if (attempt < MAX_RETRIES) {
-        const delay = RETRY_DELAYS[attempt - 1];
-        console.log(`⏳ Waiting ${delay}ms before retry...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-  }
-  
-  console.log('❌ Network connectivity test failed after all attempts');
-  return false;
-};
+import { useAuth as useClerkAuth } from '@clerk/clerk-expo';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -121,20 +30,101 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Stable empty args object to prevent useQuery re-subscriptions
+const EMPTY_ARGS = {} as Record<string, never>;
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState<any>(null);
-  const [onboarding, setOnboarding] = useState<any>(null);
-  const [leaderboard, setLeaderboard] = useState<any>(null);
-  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
+  // Clerk auth state
+  const { isSignedIn, isLoaded: clerkLoaded, signOut: clerkSignOut } = useClerkAuth();
+
+  // Convex queries (reactive, auto-updating) — skip when not signed in
+  const queryArgs = isSignedIn ? EMPTY_ARGS : ("skip" as const);
+  const convexUser = useQuery(api.users.me, queryArgs);
+  const convexOnboarding = useQuery(api.onboarding.get, queryArgs);
+  const convexLeaderboard = useQuery(api.leaderboard.getMyStats, queryArgs);
+
+  // Convex mutations
+  const updateOnboardingMutation = useMutation(api.onboarding.update);
+  const initializeUserMutation = useMutation(api.initUser.initializeCurrentUser);
+
+  // Local state
   const [justLoggedIn, setJustLoggedIn] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(true);
   const [hasSeenLanding, setHasSeenLandingState] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
-  const [isOfflineMode, setIsOfflineMode] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
 
-  // Landing page state management
-  const setHasSeenLanding = async (seen: boolean) => {
+  // Derived authentication state
+  const isAuthenticated = isSignedIn ?? false;
+
+  // Map Convex user to match legacy interface (memoized to prevent cascading re-renders)
+  const user = useMemo(() => convexUser ? {
+    id: convexUser._id,
+    email: convexUser.email,
+    username: convexUser.username,
+    full_name: convexUser.fullName,
+    first_name: convexUser.firstName,
+    last_name: convexUser.lastName,
+    avatar_url: convexUser.avatarUrl,
+    bio: convexUser.bio,
+    university: convexUser.university,
+    major: convexUser.major,
+    location: convexUser.location,
+    classes: convexUser.classes,
+    website: convexUser.website,
+    time_zone: convexUser.timeZone,
+    status: convexUser.status,
+    sound_preference: convexUser.soundPreference,
+    weekly_focus_goal: convexUser.weeklyFocusGoal,
+    focus_duration: convexUser.focusDuration,
+    break_duration: convexUser.breakDuration,
+    subscription_tier: convexUser.subscriptionTier,
+    trail_buddy_type: convexUser.trailBuddyType,
+    trail_buddy_name: convexUser.trailBuddyName,
+    flint_currency: convexUser.flintCurrency,
+    first_session_bonus_claimed: convexUser.firstSessionBonusClaimed,
+  } : null, [convexUser]);
+
+  // Map Convex onboarding to match legacy interface (memoized)
+  const onboarding = useMemo(() => convexOnboarding ? {
+    id: convexOnboarding._id,
+    user_id: convexOnboarding.userId,
+    is_onboarding_complete: convexOnboarding.isOnboardingComplete,
+    weekly_focus_goal: convexOnboarding.weeklyFocusGoal,
+    welcome_completed: convexOnboarding.welcomeCompleted,
+    goals_set: convexOnboarding.goalsSet,
+    first_session_completed: convexOnboarding.firstSessionCompleted,
+    profile_customized: convexOnboarding.profileCustomized,
+    bio: convexOnboarding.bio,
+    allow_direct_messages: convexOnboarding.allowDirectMessages,
+    avatar_url: convexOnboarding.avatarUrl,
+    focus_method: convexOnboarding.focusMethod,
+    education_level: convexOnboarding.educationLevel,
+    university: convexOnboarding.university,
+    major: convexOnboarding.major,
+    location: convexOnboarding.location,
+    timezone: convexOnboarding.timezone,
+    completed_at: convexOnboarding.completedAt,
+  } : null, [convexOnboarding]);
+
+  // Map Convex leaderboard to match legacy interface (memoized)
+  const leaderboard = useMemo(() => convexLeaderboard ? {
+    id: convexLeaderboard._id,
+    user_id: convexLeaderboard.userId,
+    total_focus_time: convexLeaderboard.totalFocusTime,
+    weekly_focus_time: convexLeaderboard.weeklyFocusTime,
+    monthly_focus_time: convexLeaderboard.monthlyFocusTime,
+    level: convexLeaderboard.level,
+    points: convexLeaderboard.points,
+    current_streak: convexLeaderboard.currentStreak,
+    longest_streak: convexLeaderboard.longestStreak,
+    sessions_completed: convexLeaderboard.sessionsCompleted,
+    total_sessions: convexLeaderboard.totalSessions,
+    achievements_earned: convexLeaderboard.achievementsEarned,
+  } : null, [convexLeaderboard]);
+
+  // Landing page state management (stable reference)
+  const setHasSeenLanding = useCallback(async (seen: boolean) => {
     try {
       await AsyncStorage.setItem('hasSeenLanding', JSON.stringify(seen));
       setHasSeenLandingState(seen);
@@ -142,34 +132,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Failed to update hasSeenLanding in AsyncStorage:', error);
       setHasSeenLandingState(seen);
     }
-  };
+  }, []);
 
-  // Check if user's last login was within 24 hours
-  const isRecentLogin = async (): Promise<boolean> => {
+  // Check if user's last login was within 24 hours (stable reference)
+  const isRecentLogin = useCallback(async (): Promise<boolean> => {
     try {
       const lastLoginTime = await AsyncStorage.getItem('lastLoginTime');
       if (!lastLoginTime) return false;
-      
+
       const lastLogin = new Date(lastLoginTime);
       const now = new Date();
       const timeDiff = now.getTime() - lastLogin.getTime();
       const hoursDiff = timeDiff / (1000 * 60 * 60);
-      
+
       return hoursDiff < 24;
     } catch (error) {
       console.error('Failed to check recent login:', error);
       return false;
     }
-  };
+  }, []);
 
-  // Set last login time
-  const setLastLoginTime = async () => {
+  // Set last login time (stable reference)
+  const setLastLoginTime = useCallback(async () => {
     try {
       await AsyncStorage.setItem('lastLoginTime', new Date().toISOString());
     } catch (error) {
       console.error('Failed to set last login time:', error);
     }
-  };
+  }, []);
 
   const loadHasSeenLanding = async () => {
     try {
@@ -182,600 +172,209 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Enhanced session check with timeout and fallback data
-  const checkSession = async (showLogs = false) => {
+  // Sign in function - now a no-op since auth screens use Clerk directly
+  const signIn = async (email: string, password: string): Promise<{ error?: string }> => {
+    console.warn('AuthContext.signIn is deprecated - auth screens should use Clerk directly');
+    return { error: 'Please use Clerk authentication directly' };
+  };
+
+  // Sign up function - now a no-op since auth screens use Clerk directly
+  const signUp = async (email: string, password: string, userData: any): Promise<{ error?: string }> => {
+    console.warn('AuthContext.signUp is deprecated - auth screens should use Clerk directly');
+    return { error: 'Please use Clerk authentication directly' };
+  };
+
+  // Sign out (stable reference)
+  const signOut = useCallback(async () => {
     try {
-      if (showLogs) console.log('🔐 AuthContext: Starting session check...');
-      
-      // First check network status
-      const networkAvailable = await testNetworkConnectivity();
-      if (!networkAvailable) {
-        console.log('⚠️ No network connectivity - working in offline mode');
-        setIsOffline(true);
-        
-        // Try to load cached session data
-        try {
-          const cachedUser = await AsyncStorage.getItem('cachedUser');
-          const cachedOnboarding = await AsyncStorage.getItem('cachedOnboarding');
-          
-          if (cachedUser) {
-            console.log('📦 Using cached user data for offline mode');
-            setUser(JSON.parse(cachedUser));
-            setOnboarding(cachedOnboarding ? JSON.parse(cachedOnboarding) : null);
-            setIsAuthenticated(true);
-            setHasCompletedOnboarding(cachedOnboarding ? JSON.parse(cachedOnboarding)?.is_onboarding_complete || false : false);
-            return;
-          }
-        } catch (cacheError) {
-          console.log('⚠️ Could not load cached data:', cacheError);
-        }
-        
-        // No cached data, stay signed out
-        setIsAuthenticated(false);
-        setUser(null);
-        setOnboarding(null);
-        setLeaderboard(null);
-        setHasCompletedOnboarding(false);
-        setJustLoggedIn(false);
-        return;
-      }
-      
-      setIsOffline(false);
-      
-      const { data: { session }, error: sessionError } = await withTimeout(
-        supabase.auth.getSession(),
-        8000
-      );
+      await clerkSignOut();
+      setJustLoggedIn(false);
+      console.log('User signed out successfully');
+    } catch (error) {
+      console.error('Sign out error:', error);
+    }
+  }, [clerkSignOut]);
 
-      if (sessionError) {
-        console.error('AuthContext: Session error:', sessionError);
-        
-        // Handle specific refresh token errors
-        if (sessionError.message?.includes('refresh_token_not_found') || 
-            sessionError.message?.includes('Invalid Refresh Token') ||
-            sessionError.message?.includes('Refresh Token Not Found')) {
-          console.log('AuthContext: Invalid refresh token, clearing session...');
-          try {
-            await supabase.auth.signOut();
-          } catch (signOutError) {
-            console.log('AuthContext: Sign out failed, continuing with cleanup');
-          }
-          setUser(null);
-          setOnboarding(null);
-          setLeaderboard(null);
-          setIsAuthenticated(false);
-          setHasCompletedOnboarding(false);
-          return;
-        }
-        
-        throw sessionError;
-      }
+  // Update onboarding using Convex mutation
+  const updateOnboarding = async (data: any) => {
+    try {
+      console.log('Updating onboarding with data:', data);
 
-      if (!session?.user) {
-        if (showLogs) console.log('AuthContext: No session found');
-        setUser(null);
-        setOnboarding(null);
-        setLeaderboard(null);
-        setIsAuthenticated(false);
-        setHasCompletedOnboarding(false);
-        setJustLoggedIn(false);
-        return;
+      // Map snake_case to camelCase for Convex
+      const convexData: any = {};
+
+      if (data.is_onboarding_complete !== undefined) {
+        convexData.isOnboardingComplete = data.is_onboarding_complete;
+      }
+      if (data.weekly_focus_goal !== undefined) {
+        convexData.weeklyFocusGoal = data.weekly_focus_goal;
+      }
+      if (data.welcome_completed !== undefined) {
+        convexData.welcomeCompleted = data.welcome_completed;
+      }
+      if (data.goals_set !== undefined) {
+        convexData.goalsSet = data.goals_set;
+      }
+      if (data.first_session_completed !== undefined) {
+        convexData.firstSessionCompleted = data.first_session_completed;
+      }
+      if (data.profile_customized !== undefined) {
+        convexData.profileCustomized = data.profile_customized;
+      }
+      if (data.bio !== undefined) {
+        convexData.bio = data.bio;
+      }
+      if (data.allow_direct_messages !== undefined) {
+        convexData.allowDirectMessages = data.allow_direct_messages;
+      }
+      if (data.avatar_url !== undefined) {
+        convexData.avatarUrl = data.avatar_url;
+      }
+      if (data.focus_method !== undefined) {
+        convexData.focusMethod = data.focus_method;
+      }
+      if (data.education_level !== undefined) {
+        convexData.educationLevel = data.education_level;
+      }
+      if (data.university !== undefined) {
+        convexData.university = data.university;
+      }
+      if (data.major !== undefined) {
+        convexData.major = data.major;
+      }
+      if (data.location !== undefined) {
+        convexData.location = data.location;
+      }
+      if (data.timezone !== undefined) {
+        convexData.timezone = data.timezone;
+      }
+      if (data.completed_at !== undefined) {
+        convexData.completedAt = data.completed_at;
       }
 
-      if (showLogs) console.log('AuthContext: Session found, fetching user data...');
+      await updateOnboardingMutation(convexData);
 
-      const userData = await fetchUserDataWithFallback(session.user, showLogs);
-      
-      // Only set authenticated if we have real data, not fallback
-      if (userData.usingFallback) {
-        console.log('⚠️ Using fallback data - keeping user signed out');
-        setIsAuthenticated(false);
-        setUser(null);
-        setOnboarding(null);
-        setLeaderboard(null);
-        setHasCompletedOnboarding(false);
-        setJustLoggedIn(false);
-        return;
-      }
-      
-      setIsAuthenticated(true);
-      setUser(userData.profile);
-      setOnboarding(userData.onboarding);
-      setLeaderboard(userData.leaderboard);
-      setHasCompletedOnboarding(userData.onboarding?.is_onboarding_complete || false);
-
-      // Cache user data for offline mode
-      try {
-        await AsyncStorage.setItem('cachedUser', JSON.stringify(userData.profile));
-        await AsyncStorage.setItem('cachedOnboarding', JSON.stringify(userData.onboarding));
-        console.log('💾 User data cached for offline use');
-      } catch (cacheError) {
-        console.log('⚠️ Failed to cache user data:', cacheError);
+      // Update local state if completion status changed
+      if (data.is_onboarding_complete !== undefined) {
+        setHasCompletedOnboarding(data.is_onboarding_complete);
+        console.log('Onboarding completion status updated:', data.is_onboarding_complete);
       }
 
-      // Initialize weekly goal notifications
-      try {
-        if (userData.profile?.id) {
-          await scheduleWeeklyGoalChecks(userData.profile.id);
-          console.log('📅 Weekly goal notifications initialized');
-        }
-      } catch (notifError) {
-        console.log('⚠️ Failed to initialize weekly goal notifications:', notifError);
-      }
-
-      if (showLogs) {
-        console.log('✅ AuthContext: User authenticated successfully');
-        console.log('👤 User:', userData.profile?.full_name || userData.profile?.email);
-        console.log('🎯 Onboarding complete:', userData.onboarding?.is_onboarding_complete);
-      }
-
-    } catch (error: any) {
-      console.error("AuthContext: Session check failed:", error.message);
-      
-      if (error.message.includes('timeout') || error.message.includes('Network request failed')) {
-        console.log('AuthContext: Network error during session check - signing out user');
-        setIsAuthenticated(false);
-        setUser(null);
-        setOnboarding(null);
-        setLeaderboard(null);
-        setHasCompletedOnboarding(false);
-        setJustLoggedIn(false);
-      } else {
-        setIsAuthenticated(false);
-        setUser(null);
-        setOnboarding(null);
-        setLeaderboard(null);
-        setHasCompletedOnboarding(false);
-        setJustLoggedIn(false);
-      }
+      console.log('Onboarding data updated successfully');
+    } catch (error) {
+      console.error('Update onboarding error:', error);
+      throw error;
     }
   };
 
-  // Enhanced user data fetch with fallback
-  const fetchUserDataWithFallback = async (sessionUser: any, showLogs = false) => {
-    const fallbackData = {
-      profile: {
-        id: sessionUser.id,
-        email: sessionUser.email,
-        full_name: sessionUser.user_metadata?.full_name || 'User',
-        username: sessionUser.user_metadata?.username || sessionUser.email?.split('@')[0],
-      },
-      onboarding: {
-        id: `fallback-${sessionUser.id}`,
-        user_id: sessionUser.id,
-        is_onboarding_complete: false,
-        weekly_focus_goal: 5,
-      },
-      leaderboard: {
-        id: `fallback-${sessionUser.id}`,
-        user_id: sessionUser.id,
-        total_focus_time: 0,
-        level: 1,
-        points: 0,
-        current_streak: 0,
+  // Refresh user data - Convex queries are reactive, so this is mostly a no-op (stable reference)
+  const refreshUserData = useCallback(async () => {
+    console.log('User data auto-refreshes with Convex reactivity');
+    // Convex queries automatically update when data changes
+    // This function exists for backward compatibility
+  }, []);
+
+  // Clear justLoggedIn flag (stable reference to prevent infinite re-renders)
+  const clearJustLoggedIn = useCallback(() => {
+    setJustLoggedIn(false);
+  }, []);
+
+  // Check network connectivity
+  const checkNetworkConnectivity = async () => {
+    try {
+      const networkState = await Network.getNetworkStateAsync();
+      setIsOffline(!networkState.isConnected);
+    } catch (error) {
+      console.error('Failed to check network connectivity:', error);
+      setIsOffline(false);
+    }
+  };
+
+  // Guard to prevent calling initializeUserMutation multiple times
+  const hasInitializedUser = useRef(false);
+  const hasScheduledGoals = useRef(false);
+
+  // Initialize user data when authenticated
+  useEffect(() => {
+    const initializeUser = async () => {
+      if (!isSignedIn || !clerkLoaded) {
+        // Reset flags on sign out so re-login works
+        hasInitializedUser.current = false;
+        hasScheduledGoals.current = false;
+        return;
+      }
+      if (!convexUser) {
+        // User is signed in to Clerk but not in Convex yet
+        // Try to initialize them (only once)
+        if (!hasInitializedUser.current) {
+          hasInitializedUser.current = true;
+          try {
+            console.log('Initializing user data in Convex...');
+            await initializeUserMutation();
+            console.log('User data initialized successfully');
+          } catch (error) {
+            console.error('Failed to initialize user data:', error);
+            hasInitializedUser.current = false; // Allow retry on error
+          }
+        }
+      } else {
+        // User exists, schedule weekly goal notifications (only once)
+        if (!hasScheduledGoals.current) {
+          hasScheduledGoals.current = true;
+          try {
+            await scheduleWeeklyGoalChecks(convexUser._id);
+            console.log('Weekly goal notifications initialized');
+          } catch (error) {
+            console.error('Failed to initialize weekly goal notifications:', error);
+          }
+        }
       }
     };
 
-    let usingFallback = false;
+    initializeUser();
+  }, [isSignedIn, clerkLoaded, convexUser]);
 
-    try {
-      if (showLogs) console.log('📊 Fetching profile data...');
-      
-      let profile;
-      try {
-        const { data: profileData, error: profileError } = await withTimeout(
-          supabase.from('profiles').select('*').eq('id', sessionUser.id).single().then(res => res),
-          4000
-        );
-
-        if (profileError && profileError.code !== 'PGRST116') {
-          throw profileError;
-        }
-        
-        profile = profileData || fallbackData.profile;
-        if (showLogs) console.log('✅ Profile data loaded');
-      } catch (profileError: any) {
-        console.log('⚠️ Profile fetch failed, using fallback:', profileError.message);
-        profile = fallbackData.profile;
-        usingFallback = true;
-      }
-
-      let onboarding;
-      try {
-        if (showLogs) console.log('🎯 Fetching onboarding data...');
-        
-        const { data: onboardingData, error: onboardingError } = await withTimeout(
-          supabase.from('onboarding_preferences').select('*').eq('user_id', sessionUser.id).single().then(res => res),
-          4000
-        );
-
-        if (onboardingError && onboardingError.code !== 'PGRST116') {
-          throw onboardingError;
-        }
-
-        onboarding = onboardingData || fallbackData.onboarding;
-        if (showLogs) console.log('✅ Onboarding data loaded');
-      } catch (onboardingError: any) {
-        console.log('⚠️ Onboarding fetch failed, using fallback:', onboardingError.message);
-        onboarding = fallbackData.onboarding;
-        usingFallback = true;
-      }
-
-      let leaderboard;
-      try {
-        if (showLogs) console.log('🏆 Fetching leaderboard data...');
-        
-        const { data: leaderboardData, error: leaderboardError } = await withTimeout(
-          supabase.from('leaderboard_stats').select('*').eq('user_id', sessionUser.id).single().then(res => res),
-          4000
-        );
-
-        if (leaderboardError && leaderboardError.code !== 'PGRST116') {
-          throw leaderboardError;
-        }
-
-        leaderboard = leaderboardData || fallbackData.leaderboard;
-        if (showLogs) console.log('✅ Leaderboard data loaded');
-      } catch (leaderboardError: any) {
-        console.log('⚠️ Leaderboard fetch failed, using fallback:', leaderboardError.message);
-        leaderboard = fallbackData.leaderboard;
-        usingFallback = true;
-      }
-
-      return { profile, onboarding, leaderboard, usingFallback };
-
-    } catch (error: any) {
-      console.log('❌ Critical error in data fetch, using complete fallback:', error.message);
-      return { ...fallbackData, usingFallback: true };
-    }
-  };
-
-  // Sign in function (simplified, keeping essential parts)
-  const signIn = async (email: string, password: string): Promise<{ error?: string }> => {
-    try {
-      console.log('🔐 Starting sign in process...');
-      
-      const networkAvailable = await testNetworkConnectivity();
-      if (!networkAvailable) {
-        return { 
-          error: 'No internet connection. Please check your network and try again.' 
-        };
-      }
-      
-      const authResult = await withTimeoutAndRetry(
-        () => supabase.auth.signInWithPassword({ email, password }),
-        10000,
-        3
-      );
-      
-      const { data: authData, error: authError } = authResult;
-
-      if (authError) {
-        console.error('❌ Authentication failed:', authError.message);
-        
-        // Provide more user-friendly error messages
-        if (authError.message.includes('Network request failed')) {
-          return { error: 'Network connection failed. Please check your internet connection and try again.' };
-        } else if (authError.message.includes('Invalid login credentials')) {
-          return { error: 'Invalid email or password. Please check your credentials and try again.' };
-        } else if (authError.message.includes('Email not confirmed')) {
-          return { error: 'Please verify your email address before signing in.' };
-        } else if (authError.message.includes('Too many requests')) {
-          return { error: 'Too many login attempts. Please wait a moment and try again.' };
-        }
-        
-        return { error: `Authentication failed: ${authError.message}` };
-      }
-
-      if (!authData.user) {
-        return { error: 'Authentication failed - no user data returned. Please try again.' };
-      }
-
-      setJustLoggedIn(true);
-      
-      // Set the login timestamp
-      await setLastLoginTime();
-      
-      try {
-        // Check for incomplete user data and ensure completeness
-        await ensureUserDataCompleteness(authData.user.id);
-        
-        const userData = await fetchUserDataWithFallback(authData.user, true);
-        
-        setIsAuthenticated(true);
-        setUser(userData.profile);
-        setOnboarding(userData.onboarding);
-        setLeaderboard(userData.leaderboard);
-        setHasCompletedOnboarding(userData.onboarding?.is_onboarding_complete || false);
-        
-        return {};
-        
-      } catch (dataError: any) {
-        setIsAuthenticated(true);
-        setUser({
-          id: authData.user.id,
-          email: authData.user.email,
-          full_name: authData.user.user_metadata?.full_name || authData.user.email?.split('@')[0] || 'User',
-          username: authData.user.user_metadata?.username || authData.user.email?.split('@')[0],
-        });
-        setOnboarding({ 
-          user_id: authData.user.id, 
-          is_onboarding_complete: false,
-          weekly_focus_goal: 5 
-        });
-        setLeaderboard({ 
-          user_id: authData.user.id, 
-          total_focus_time: 0, 
-          level: 1, 
-          points: 0,
-          current_streak: 0 
-        });
-        setHasCompletedOnboarding(false);
-        
-        return {};
-      }
-
-    } catch (error: any) {
-      console.error('❌ Sign in failed completely:', error.message);
-      return { error: 'Login failed. Please try again.' };
-    }
-  };
-
-  // Enhanced sign up function with better iOS error handling
-  const signUp = async (email: string, password: string, userData: any): Promise<{ error?: string }> => {
-    try {
-      console.log('📝 Starting sign up process...');
-      
-      const networkAvailable = await testNetworkConnectivity();
-      if (!networkAvailable) {
-        return { 
-          error: 'No internet connection. Please check your network and try again.' 
-        };
-      }
-      
-      // Step 1: Create the auth account
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            username: userData.username,
-            full_name: userData.full_name
-          }
-        }
-      });
-
-      if (authError) {
-        console.error('❌ Sign up failed:', authError.message);
-        
-        if (authError.message.includes('Network request failed')) {
-          return { error: 'Network connection failed. Please check your internet connection and try again.' };
-        } else if (authError.message.includes('User already registered')) {
-          return { error: 'An account with this email already exists. Please try signing in instead.' };
-        } else if (authError.message.includes('Invalid email')) {
-          return { error: 'Please enter a valid email address.' };
-        } else if (authError.message.includes('Password should be at least')) {
-          return { error: 'Password must be at least 6 characters long.' };
-        }
-        
-        return { error: authError.message };
-      }
-
-      if (!authData.user) {
-        return { error: 'Account creation failed - no user data returned. Please try again.' };
-      }
-
-      console.log('✅ Auth account created, setting up database records...');
-      
-      // Step 2: Create database records (with enhanced error handling)
-      try {
-        const dbResult = await createInitialUserData(authData.user.id, {
-          fullName: userData.full_name,
-          username: userData.username,
-          email: email,
-          avatarUrl: null
-        });
-        
-        if (!dbResult?.success) {
-          console.error('❌ Database setup failed:', dbResult?.error || 'Unknown error');
-          
-          // Check if at least profile was created
-          if (dbResult?.results?.created?.includes('profile')) {
-            console.log('✅ Profile exists, user can login normally');
-          } else {
-            console.log('❌ No profile created - this will cause login issues');
-            return { 
-              error: 'Account was created but setup is incomplete. Please contact support or try signing in.' 
-            };
-          }
-        } else {
-          console.log('✅ Database records created successfully');
-        }
-      } catch (dbError: any) {
-        console.error('❌ Database setup error:', dbError.message);
-        
-        // Try to ensure at least a basic profile exists
-        try {
-          console.log('🔧 Attempting to create minimal profile...');
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .insert({
-              id: authData.user.id,
-              email: email,
-              full_name: userData.full_name,
-              username: userData.username,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            });
-          
-          if (profileError && !profileError.message.includes('already exists')) {
-            console.error('❌ Minimal profile creation failed:', profileError);
-            return { 
-              error: 'Account was created but profile setup failed. Please try signing in or contact support.' 
-            };
-          } else {
-            console.log('✅ Minimal profile created successfully');
-          }
-        } catch (minimalProfileError) {
-          console.error('❌ Could not create minimal profile:', minimalProfileError);
-          return { 
-            error: 'Account was created but profile setup failed. Please try signing in or contact support.' 
-          };
-        }
-      }
-
-      console.log('🎉 Account creation process completed');
-      return {};
-
-    } catch (error: any) {
-      console.error('❌ Sign up error:', error.message);
-      return { error: 'Account creation failed. Please try again.' };
-    }
-  };
-
-  // Sign out
-  const signOut = async () => {
-    try {
-      await withTimeout(supabase.auth.signOut(), 5000);
-      setIsAuthenticated(false);
-      setUser(null);
-      setOnboarding(null);
-      setLeaderboard(null);
-      setHasCompletedOnboarding(false);
-      setJustLoggedIn(false);
-    } catch (error) {
-      console.error('❌ Sign out error:', error);
-      setIsAuthenticated(false);
-      setUser(null);
-      setOnboarding(null);
-      setLeaderboard(null);
-      setHasCompletedOnboarding(false);
-      setJustLoggedIn(false);
-    }
-  };
-
-  // Update onboarding
-  const updateOnboarding = async (data: any) => {
-    try {
-      if (!user?.id) {
-        console.error('❌ Cannot update onboarding: no user ID available');
-        return;
-      }
-
-      // Ensure user_id is included in the data
-      const updateData = {
-        user_id: user.id,
-        ...data,
-        updated_at: new Date().toISOString()
-      };
-
-      console.log('🔄 Updating onboarding with data:', updateData);
-      
-      const { error } = await withTimeout(
-        Promise.resolve(supabase.from('onboarding_preferences').upsert(updateData, { 
-          onConflict: 'user_id' 
-        }).select()),
-        8000
-      );
-      
-      if (error) throw error;
-      
-      setOnboarding((prev: any) => ({ ...prev, ...updateData }));
-      
-      // Update hasCompletedOnboarding if the update includes completion status
-      if (data.is_onboarding_complete !== undefined) {
-        setHasCompletedOnboarding(data.is_onboarding_complete);
-        console.log('✅ Onboarding completion status updated:', data.is_onboarding_complete);
-      }
-      
-      console.log('✅ Onboarding data updated successfully');
-    } catch (error) {
-      console.error('❌ Update onboarding error:', error);
-      throw error; // Re-throw so calling code can handle the error
-    }
-  };
-
-  // Refresh user data
-  const refreshUserData = async () => {
-    try {
-      if (!user) return;
-      
-      console.log('🔄 Refreshing user data...');
-      const userData = await fetchUserDataWithFallback(user, true);
-      
-      setUser(userData.profile);
-      setOnboarding(userData.onboarding);
-      setLeaderboard(userData.leaderboard);
-      setHasCompletedOnboarding(userData.onboarding?.is_onboarding_complete || false);
-      
-      console.log('✅ User data refreshed');
-    } catch (error) {
-      console.error('❌ Refresh user data error:', error);
-    }
-  };
+  // Update hasCompletedOnboarding when onboarding data changes
+  // Guard with value comparison to prevent unnecessary state updates
+  useEffect(() => {
+    const newValue = convexOnboarding?.isOnboardingComplete || false;
+    setHasCompletedOnboarding(prev => {
+      if (prev === newValue) return prev; // No change, skip update
+      return newValue;
+    });
+  }, [convexOnboarding?.isOnboardingComplete]);
 
   // Initial load
   useEffect(() => {
     const initialize = async () => {
       await loadHasSeenLanding();
-      await checkSession();
+      await checkNetworkConnectivity();
       setIsInitializing(false);
     };
 
     initialize();
-
-    // Listen for auth state changes to handle refresh token errors
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('🔄 Auth state change:', event);
-      
-      if (event === 'TOKEN_REFRESHED') {
-        console.log('✅ Token refreshed successfully');
-      } else if (event === 'SIGNED_OUT') {
-        console.log('👋 User signed out');
-        setUser(null);
-        setOnboarding(null);
-        setLeaderboard(null);
-        setIsAuthenticated(false);
-        setHasCompletedOnboarding(false);
-      } else if (event === 'SIGNED_IN' && session) {
-        console.log('👋 User signed in');
-        await checkSession(true);
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
   }, []);
 
-  // Clear justLoggedIn state after initial load
-  useEffect(() => {
-    if (isInitializing) return;
-    
-    const timer = setTimeout(() => {
-      setJustLoggedIn(false);
-    }, 3000);
-
-    return () => clearTimeout(timer);
-  }, [isInitializing]);
-
-  // Clear justLoggedIn flag after navigation
+  // Clear justLoggedIn flag after timeout
   useEffect(() => {
     if (justLoggedIn) {
       const timer = setTimeout(() => {
         setJustLoggedIn(false);
-      }, 2000);
-    
+      }, 3000);
+
       return () => clearTimeout(timer);
     }
   }, [justLoggedIn]);
 
-  // Function to clear the justLoggedIn flag
-  const clearJustLoggedIn = () => {
-    setJustLoggedIn(false);
-  };
+  // Check network connectivity periodically
+  useEffect(() => {
+    const interval = setInterval(checkNetworkConnectivity, 30000); // Check every 30 seconds
+    return () => clearInterval(interval);
+  }, []);
 
-  const value = {
+  const isInitialLoading = isInitializing || !clerkLoaded;
+
+  const value = useMemo(() => ({
     isAuthenticated,
     user,
     onboarding,
@@ -783,7 +382,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     hasCompletedOnboarding,
     setHasCompletedOnboarding,
     justLoggedIn,
-    isInitialLoading: isInitializing,
+    isInitialLoading,
     hasSeenLanding,
     setHasSeenLanding,
     clearJustLoggedIn,
@@ -795,7 +394,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isRecentLogin,
     setLastLoginTime,
     isOffline,
-  };
+  }), [
+    isAuthenticated,
+    user,
+    onboarding,
+    leaderboard,
+    hasCompletedOnboarding,
+    justLoggedIn,
+    isInitialLoading,
+    hasSeenLanding,
+    clearJustLoggedIn,
+    signOut,
+    isRecentLogin,
+    setLastLoginTime,
+    isOffline,
+    setHasSeenLanding,
+    refreshUserData,
+    // signIn, signUp, updateOnboarding are inline but rarely change
+  ]);
 
   return (
     <AuthContext.Provider value={value}>

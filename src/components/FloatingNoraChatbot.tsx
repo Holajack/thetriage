@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { supabase } from '../utils/supabase';
+import { sendNoraChatMessage } from '../utils/convexAIChatService';
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 interface FloatingNoraChatbotProps {
@@ -157,37 +157,14 @@ export default function FloatingNoraChatbot({
     setIsLoading(true);
 
     try {
-      // Get session for authentication
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        throw new Error('No active session');
-      }
-
-      // Call the Nora edge function
-      const response = await fetch('https://ucculvnodabrfwbkzsnx.supabase.co/functions/v1/nora-chat-auth-fix', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-          'apikey': process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVjY3Vsdm5vZGFicmZ3Ymt6c254Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDIyNDQxODksImV4cCI6MjA1NzgyMDE4OX0._tWjZyUAafkMNi5fAOmrgJZu3yuzz_G--S0Wi0qVF1A',
+      // Call Nora via Convex action
+      const data = await sendNoraChatMessage({
+        message,
+        screenContext: {
+          currentScreen,
+          contextData
         },
-        body: JSON.stringify({
-          message,
-          userId: user.id,
-          userSettings: {},
-          screenContext: {
-            currentScreen,
-            contextData
-          }
-        }),
       });
-
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
-      }
-
-      const data = await response.json();
 
       if (data.response) {
         const noraMessage: ChatMessage = {

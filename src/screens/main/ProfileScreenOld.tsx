@@ -6,10 +6,9 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { MainTabParamList } from '../../navigation/types';
 import * as ImagePicker from 'expo-image-picker';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import { useSupabaseProfile, Profile } from '../../utils/supabaseHooks';
+import { useConvexProfile, Profile } from '../../hooks/useConvex';
 import { useTheme } from '../../context/ThemeContext';
 const { useUserAppData } = require('../../utils/userAppData');
-import { supabase } from '../../utils/supabase';
 import BadgeDisplay from '../../components/BadgeDisplay';
 import { getUserBadges, getUserLevel } from '../../utils/achievementManager';
 import { Badge } from '../../data/achievements';
@@ -26,7 +25,7 @@ const ProfileScreen = () => {
   const [userLevel, setUserLevel] = useState(1);
   const [showBadgeModal, setShowBadgeModal] = useState(false);
   const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
-  const { profile, updateProfile, uploadProfileImage, updateStatus, loading: profileLoading, error: profileError } = useSupabaseProfile();
+  const { profile, updateProfile, uploadProfileImage, updateStatus, loading: profileLoading, error: profileError } = useConvexProfile();
   // Use the comprehensive data hook
   const { data: userData, isLoading: userDataLoading, error: userDataError, refreshData } = useUserAppData();
   const { theme } = useTheme();

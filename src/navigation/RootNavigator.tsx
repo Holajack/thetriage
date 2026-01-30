@@ -1,7 +1,9 @@
+// RESTORED: Original RootNavigator after fixing OBJLoader URL error
 import React, { useState, useEffect, useRef } from 'react';
 import { Platform, Linking } from 'react-native';
 import { NavigationContainer, NavigationContainerRef, CommonActions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useAuth as useClerkAuth } from '@clerk/clerk-expo';
 import { useAuth } from '../context/AuthContext';
 // import { FloatingNoraProvider } from '../context/FloatingNoraContext'; // Disabled - using modal instead
 import { MainNavigator } from './MainNavigator';
@@ -17,14 +19,36 @@ import { PatrickSpeakScreen } from '../screens/main/PatrickScreen';
 import LandingPage from '../screens/LandingPage';
 import { SplashScreen } from '../components/SplashScreen';
 import SessionHistoryScreen from '../screens/main/SessionHistoryScreen';
-import { supabase } from '../utils/supabase';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export const RootNavigator = () => {
-  const { isAuthenticated, isInitialLoading, hasCompletedOnboarding, justLoggedIn, clearJustLoggedIn } = useAuth();
+  // Use Clerk for authentication state
+  const { isLoaded: isClerkLoaded, isSignedIn: clerkSignedIn } = useClerkAuth();
+
+  // Use legacy AuthContext for onboarding state and fallback auth (will be migrated to Convex in Phase 4)
+  const { hasCompletedOnboarding, justLoggedIn, clearJustLoggedIn, user } = useAuth();
+
+  // Fall back to legacy auth if Clerk isn't providing sign-in state
+  const isSignedIn = clerkSignedIn ?? (user !== null);
+
   const [showSplash, setShowSplash] = useState(true);
+  // Track if we've ever completed the initial load - prevents splash from showing again after sign out
+  const hasEverLoaded = useRef(false);
   const navigationRef = useRef<NavigationContainerRef<RootStackParamList>>(null);
+
+  // Track when Clerk has loaded at least once
+  useEffect(() => {
+    if (isClerkLoaded && !hasEverLoaded.current) {
+      hasEverLoaded.current = true;
+      console.log('RootNavigator: Initial Clerk load complete, will not show splash again');
+    }
+  }, [isClerkLoaded]);
+
+  // Only show initial loading on first app launch, not during sign out
+  const isInitialLoading = !isClerkLoaded && !hasEverLoaded.current;
+  // Use Clerk's isSignedIn for authentication check
+  const isAuthenticated = isSignedIn ?? false;
 
   const handleSplashComplete = () => {
     setShowSplash(false);
@@ -57,7 +81,7 @@ export const RootNavigator = () => {
       isInitialLoading,
       showSplash
     });
-    
+
     // ONLY handle navigation for users who just logged in - NOT existing authenticated users
     if (isAuthenticated && justLoggedIn) {
       // User just logged in - route them appropriately
@@ -78,18 +102,19 @@ export const RootNavigator = () => {
           })
         );
       }
-      
+
       // Reset the login flag after navigation
       clearJustLoggedIn();
     }
-    
+
     // REMOVED: The automatic navigation for existing authenticated users
     // This was preventing users from seeing the Landing page on app restart
-    
-    // Handle logout - only if user was on an authenticated screen
-    else if (!isAuthenticated && currentRoute && 
-        (['Main', 'Onboarding'].includes(currentRoute.name as string))) {
-      console.log("RootNavigator: User logged out, returning to Landing page with sign-in/get started options");
+
+    // Handle logout - navigate to Landing when user is not authenticated
+    // This triggers when Clerk sign out completes and isSignedIn becomes false
+    else if (!isAuthenticated && currentRoute &&
+        (['Main', 'Onboarding', 'StudySessionScreen', 'BreakTimerScreen', 'SessionReportScreen', 'PatrickSpeak', 'MessageScreen', 'StudyRoomScreen'].includes(currentRoute.name as string))) {
+      console.log("RootNavigator: User signed out, resetting to Landing page");
       navigationRef.current.dispatch(
         CommonActions.reset({
           index: 0,
@@ -99,35 +124,13 @@ export const RootNavigator = () => {
     }
   }, [isAuthenticated, hasCompletedOnboarding, justLoggedIn, isInitialLoading, showSplash, clearJustLoggedIn]);
 
-  // Handle deep linking for password reset
-  useEffect(() => {
-    // Listen for Supabase auth state changes (for password reset flow)
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        console.log('RootNavigator: Password recovery event detected');
-        // Navigate to reset password screen
-        if (navigationRef.current) {
-          navigationRef.current.dispatch(
-            CommonActions.navigate({
-              name: 'Auth',
-              params: {
-                screen: 'ResetPassword',
-              },
-            })
-          );
-        }
-      }
-    });
-
-    // Cleanup subscription
-    return () => {
-      authListener.subscription.unsubscribe();
-    };
-  }, []);
+  // Note: Clerk handles password reset via email code verification
+  // The ResetPassword screen is navigated to from ForgotPassword screen after initiating reset
 
   // Deep linking configuration
+  // Note: Clerk handles auth deep links internally
   const linking = {
-    prefixes: ['hikewise://', 'https://ucculvnodabrfwbkzsnx.supabase.co'],
+    prefixes: ['hikewise://'],
     config: {
       screens: {
         Auth: {
@@ -168,8 +171,9 @@ export const RootNavigator = () => {
     return <SplashScreen onAnimationComplete={handleSplashComplete} />;
   }
 
+  // Note: linking config defined but not used - can re-enable after verifying deep links work
   return (
-    <NavigationContainer ref={navigationRef} linking={linking}>
+    <NavigationContainer ref={navigationRef}>
       <Stack.Navigator
         screenOptions={{
           headerShown: false,

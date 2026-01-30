@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 
-// Import screens directly
+// Main screens
 import HomeScreen from '../screens/main/HomeScreen';
 import CommunityScreen from '../screens/main/CommunityScreen';
 import NoraScreen from '../screens/main/NoraScreenNew';
@@ -18,28 +18,29 @@ import SettingsScreen from '../screens/main/SettingsScreen';
 import SubscriptionScreen from '../screens/main/SubscriptionScreen';
 import ProTrekkerScreen from '../screens/main/ProTrekkerScreen';
 import SessionHistoryScreen from '../screens/main/SessionHistoryScreen';
-import PDFViewerScreen from '../screens/main/PDFViewerScreen';
-import AIIntegrationScreen from '../screens/main/AIIntegrationScreen';
 import FocusPreparationScreen from '../screens/main/FocusPreparationScreen';
-import QRScannerScreen from '../screens/main/QRScannerScreen';
 import { StudySessionScreen } from '../screens/main/StudySessionScreen';
 import TrailBuddySelectionScreen from '../screens/main/TrailBuddySelectionScreen';
-
-// Hidden screens accessible through Bonuses
-import EBooksScreen from '../screens/main/EBooksScreen';
 import AchievementsScreen from '../screens/bonuses/AchievementsScreen';
 import SelfDiscoveryQuizScreen from '../screens/main/SelfDiscoveryQuizScreen';
+// NOTE: BrainMappingScreen uses React.lazy() to defer Three.js loading (fixes URL error)
 import BrainMappingScreen from '../screens/main/BrainMappingScreen';
 
 // Profile sub-screens
-import { 
+import {
   ProfileCustomizationScreen,
   PersonalInformationScreen,
   EducationScreen,
   LocationAndTimeScreen,
   PrivacyScreen,
-  PreferencesScreen 
+  PreferencesScreen
 } from '../screens/main/profile/ProfileScreens';
+
+// Additional screens
+import PDFViewerScreen from '../screens/main/PDFViewerScreen';
+import AIIntegrationScreen from '../screens/main/AIIntegrationScreen';
+import QRScannerScreen from '../screens/main/QRScannerScreen';
+import EBooksScreen from '../screens/main/EBooksScreen';
 
 const Drawer = createDrawerNavigator();
 
@@ -293,9 +294,9 @@ export const MainNavigator = () => {
           title: 'Become Pro Trekker'
         }}
       />
-      <Drawer.Screen 
-        name="PDFViewer" 
-        component={PDFViewerScreen} 
+      <Drawer.Screen
+        name="PDFViewer"
+        component={PDFViewerScreen}
         options={({ route }) => ({
           title: route.params?.title || 'PDF Viewer',
           drawerItemStyle: { display: 'none' } // Hide from drawer
@@ -303,27 +304,27 @@ export const MainNavigator = () => {
       />
       
       {/* Hidden screens - accessible through Bonuses but not in drawer */}
-      <Drawer.Screen 
-        name="EBooks" 
-        component={EBooksScreen} 
-        options={{ 
+      <Drawer.Screen
+        name="EBooks"
+        component={EBooksScreen}
+        options={{
           drawerItemStyle: { display: 'none' } // Hide from drawer
-        }} 
+        }}
       />
-      <Drawer.Screen 
-        name="Achievements" 
-        component={AchievementsScreen} 
-        options={{ 
+      <Drawer.Screen
+        name="Achievements"
+        component={AchievementsScreen}
+        options={{
           drawerItemStyle: { display: 'none' } // Hide from drawer
-        }} 
+        }}
       />
-      <Drawer.Screen 
-        name="SelfDiscoveryQuiz" 
-        component={SelfDiscoveryQuizScreen} 
-        options={{ 
+      <Drawer.Screen
+        name="SelfDiscoveryQuiz"
+        component={SelfDiscoveryQuizScreen}
+        options={{
           drawerItemStyle: { display: 'none' }, // Hide from drawer
           title: 'Self-Discovery Quiz'
-        }} 
+        }}
       />
       <Drawer.Screen
         name="BrainMapping"
@@ -344,55 +345,55 @@ export const MainNavigator = () => {
       />
 
       {/* Profile sub-screens - hidden from drawer */}
-      <Drawer.Screen 
-        name="PersonalInformation" 
-        component={PersonalInformationScreen} 
-        options={{ 
+      <Drawer.Screen
+        name="PersonalInformation"
+        component={PersonalInformationScreen}
+        options={{
           drawerItemStyle: { display: 'none' }, // Hide from drawer
           title: 'Personal Information'
-        }} 
+        }}
       />
-      <Drawer.Screen 
-        name="Education" 
-        component={EducationScreen} 
-        options={{ 
+      <Drawer.Screen
+        name="Education"
+        component={EducationScreen}
+        options={{
           drawerItemStyle: { display: 'none' }, // Hide from drawer
           title: 'Education'
-        }} 
+        }}
       />
-      <Drawer.Screen 
-        name="LocationAndTime" 
-        component={LocationAndTimeScreen} 
-        options={{ 
+      <Drawer.Screen
+        name="LocationAndTime"
+        component={LocationAndTimeScreen}
+        options={{
           drawerItemStyle: { display: 'none' }, // Hide from drawer
           title: 'Location and Time'
-        }} 
+        }}
       />
-      <Drawer.Screen 
-        name="Privacy" 
-        component={PrivacyScreen} 
-        options={{ 
+      <Drawer.Screen
+        name="Privacy"
+        component={PrivacyScreen}
+        options={{
           drawerItemStyle: { display: 'none' }, // Hide from drawer
           title: 'Privacy'
-        }} 
+        }}
       />
-      <Drawer.Screen 
-        name="Preferences" 
-        component={PreferencesScreen} 
-        options={{ 
+      <Drawer.Screen
+        name="Preferences"
+        component={PreferencesScreen}
+        options={{
           drawerItemStyle: { display: 'none' }, // Hide from drawer
           title: 'Preferences'
-        }} 
+        }}
       />
-      
+
       {/* Focus and Session screens - hidden from drawer */}
-      <Drawer.Screen 
-        name="FocusPreparation" 
-        component={FocusPreparationScreen} 
-        options={{ 
+      <Drawer.Screen
+        name="FocusPreparation"
+        component={FocusPreparationScreen}
+        options={{
           drawerItemStyle: { display: 'none' }, // Hide from drawer
           headerShown: false // Let screen handle its own header
-        }} 
+        }}
       />
       <Drawer.Screen
         name="StudySessionScreen"
@@ -404,13 +405,13 @@ export const MainNavigator = () => {
       />
 
       {/* Settings sub-screens - hidden from drawer */}
-      <Drawer.Screen 
-        name="AIIntegration" 
-        component={AIIntegrationScreen} 
-        options={{ 
+      <Drawer.Screen
+        name="AIIntegration"
+        component={AIIntegrationScreen}
+        options={{
           drawerItemStyle: { display: 'none' }, // Hide from drawer
           title: 'AI Integration'
-        }} 
+        }}
       />
     </Drawer.Navigator>
   );

@@ -149,28 +149,7 @@ export default function AppTutorialScreen() {
       );
     } catch (error) {
       console.error('AppTutorialScreen: Error completing onboarding:', error);
-      
-      // Try a fallback approach - directly update the database
-      try {
-        console.log('🔄 Attempting fallback onboarding completion...');
-        const { supabase } = await import('../../utils/supabase');
-        
-        if (user?.id) {
-          await supabase
-            .from('onboarding_preferences')
-            .upsert({
-              user_id: user.id,
-              is_onboarding_complete: true,
-              focus_method: focusMethod,
-              updated_at: new Date().toISOString()
-            }, { onConflict: 'user_id' });
-          
-          console.log('✅ Fallback onboarding completion successful');
-        }
-      } catch (fallbackError) {
-        console.error('❌ Fallback onboarding completion also failed:', fallbackError);
-      }
-      
+
       // Still navigate to main app since user has gone through all the steps
       setHasCompletedOnboarding(true);
       navigation.dispatch(

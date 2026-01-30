@@ -6,8 +6,9 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
-import { useSupabaseTasks } from '../../utils/supabaseHooks';
-import { getUserSettings } from '../../utils/userSettings';
+import { useConvexTasks } from '../../hooks/useConvex';
+import { getUserSettings, updateUserSettings } from '../../utils/userSettings';
+import { useAuth } from '../../context/AuthContext';
 import { startFocusSessionWithDND } from '../../utils/doNotDisturb';
 import { LinearGradient } from 'expo-linear-gradient';
 import ReAnimated, {
@@ -96,6 +97,7 @@ interface AnimatedTimeOptionProps {
   onPress: () => void;
   themeColor: string;
   textColor: string;
+  isCompact?: boolean;
 }
 
 const AnimatedTimeOption: React.FC<AnimatedTimeOptionProps> = ({
@@ -103,7 +105,8 @@ const AnimatedTimeOption: React.FC<AnimatedTimeOptionProps> = ({
   isSelected,
   onPress,
   themeColor,
-  textColor
+  textColor,
+  isCompact = false
 }) => {
   const scale = useSharedValue(1);
   const borderWidth = useSharedValue(isSelected ? 2 : 1);
@@ -117,6 +120,13 @@ const AnimatedTimeOption: React.FC<AnimatedTimeOptionProps> = ({
     borderColor: themeColor,
     borderRadius: 20,
     overflow: 'hidden',
+  }));
+
+  // Compact style for break time options
+  const compactStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: isCompact ? 0.85 : 1 }
+    ]
   }));
 
   const handlePressIn = () => {
@@ -155,7 +165,7 @@ const AnimatedTimeOption: React.FC<AnimatedTimeOptionProps> = ({
   }, [isSelected]);
 
   return (
-    <ReAnimated.View style={animatedStyle}>
+    <ReAnimated.View style={[animatedStyle, compactStyle]}>
       <TouchableOpacity
         style={[
           styles.inlineTimeOption,
@@ -181,7 +191,8 @@ const AnimatedTimeOption: React.FC<AnimatedTimeOptionProps> = ({
 export default function FocusPreparationScreen() {
   const navigation = useNavigation();
   const { theme } = useTheme();
-  const { tasks, addTask } = useSupabaseTasks();
+  const { tasks, addTask, refetch: refetchTasks } = useConvexTasks();
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
   
   // Dynamic styles that depend on theme
@@ -230,13 +241,12 @@ export default function FocusPreparationScreen() {
 
   // State management
   const [selectedTime, setSelectedTime] = useState(25); // Default to 25 minutes
+  const [selectedBreakTime, setSelectedBreakTime] = useState(15); // Default to 15 minutes
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [isManualProgression, setIsManualProgression] = useState(true);
   const [showTimeSelector, setShowTimeSelector] = useState(false);
   const [showInlineTimeSelector, setShowInlineTimeSelector] = useState(false);
-  const [showTaskCreator, setShowTaskCreator] = useState(false);
   const [showTaskSelector, setShowTaskSelector] = useState(false);
-  const [newTaskTitle, setNewTaskTitle] = useState('');
   const [showWorkStyleWarning, setShowWorkStyleWarning] = useState(false);
   const [userSettings, setUserSettings] = useState<any>(null);
   
@@ -245,7 +255,12 @@ export default function FocusPreparationScreen() {
   const [selectedTasks, setSelectedTasks] = useState<any[]>([]);
   const [showModeSelector, setShowModeSelector] = useState(false);
   const [showNotification, setShowNotification] = useState('');
-  
+
+  // Quick task creation states (now used in task selector modal)
+  const [showQuickTask, setShowQuickTask] = useState(false);
+  const [quickTaskTitle, setQuickTaskTitle] = useState('');
+  const [quickTaskSubject, setQuickTaskSubject] = useState('');
+
   // Nora chat modal states
   const [showNoraChat, setShowNoraChat] = useState(false);
   const [noraChatInput, setNoraChatInput] = useState('');
@@ -338,8 +353,13 @@ export default function FocusPreparationScreen() {
         } else if (settings?.focus_duration) {
           defaultTime = settings.focus_duration;
         }
-        
+
         setSelectedTime(defaultTime);
+
+        // Load break preference
+        if (settings?.preferred_break_length) {
+          setSelectedBreakTime(settings.preferred_break_length);
+        }
       } catch (error) {
         console.warn('Failed to load user settings, using defaults:', error);
         // Use default settings
@@ -377,10 +397,34 @@ export default function FocusPreparationScreen() {
 
   const timeOptions = getTimeOptions();
 
+  // Break time options (5-30 minutes in 5-minute increments)
+  const breakTimeOptions = [
+    { label: '5 min', value: 5 },
+    { label: '10 min', value: 10 },
+    { label: '15 min', value: 15 },
+    { label: '20 min', value: 20 },
+    { label: '25 min', value: 25 },
+    { label: '30 min', value: 30 },
+  ];
+
   const handleTimeSelection = (time: number, isWorkStyle: boolean) => {
     setSelectedTime(time);
     setShowTimeSelector(false);
-    
+
+    // Auto-select break time based on work style
+    if (isWorkStyle) {
+      if (time === 60) {
+        // Deep Work → 5 minute break
+        setSelectedBreakTime(5);
+      } else if (time === 45) {
+        // Balanced → 15 minute break
+        setSelectedBreakTime(15);
+      } else if (time === 25) {
+        // Sprint → 5 minute break
+        setSelectedBreakTime(5);
+      }
+    }
+
     // Show warning if not using default work style
     if (!isWorkStyle && time !== defaultWorkStyle.focusTime) {
       setShowWorkStyleWarning(true);
@@ -388,32 +432,19 @@ export default function FocusPreparationScreen() {
     }
   };
 
-  const handleTaskCreation = async () => {
-    if (!newTaskTitle.trim()) {
-      Alert.alert('Error', 'Please enter a task title');
-      return;
-    }
+  const handleBreakTimeSelection = async (time: number) => {
+    setSelectedBreakTime(time);
 
-    try {
-      await addTask(newTaskTitle, '', 'Medium');
-      const newTask = { id: 'temp', title: newTaskTitle, description: '' };
-      
-      // Handle task selection based on focus mode
-      if (focusMode === 'basecamp') {
-        setSelectedTask(newTask);
-        setSelectedTasks([newTask]);
-      } else if (focusMode === 'summit') {
-        setSelectedTasks(prev => [...prev, newTask]);
-        if (selectedTasks.length === 0) {
-          setSelectedTask(newTask); // Set first task as primary
-        }
+    // Save break preference to database
+    if (user?.id) {
+      try {
+        await updateUserSettings(user.id, {
+          preferred_break_length: time
+        });
+        console.log('✅ Break preference saved:', time);
+      } catch (error) {
+        console.error('❌ Failed to save break preference:', error);
       }
-      
-      setNewTaskTitle('');
-      setShowTaskCreator(false);
-      setShowTaskSelector(false);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to create task');
     }
   };
 
@@ -460,10 +491,56 @@ export default function FocusPreparationScreen() {
       setTimeout(() => setShowNotification(''), 3000);
       return;
     }
-    
+
     // Only allow toggle in Summit mode
     if (focusMode === 'summit') {
       setIsManualProgression(!isManualProgression);
+    }
+  };
+
+  const handleQuickTaskCreate = async () => {
+    if (!quickTaskTitle.trim()) {
+      Alert.alert('Task Required', 'Please enter a task title');
+      return;
+    }
+
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+      // Call addTask with correct positional parameters: (title, description, priority, subject)
+      const newTask = await addTask(
+        quickTaskTitle.trim(),
+        '',
+        'Medium',
+        quickTaskSubject.trim() || 'General'
+      );
+
+      console.log('✅ Quick task created:', newTask);
+
+      if (newTask) {
+        // Auto-select based on mode
+        if (focusMode === 'basecamp') {
+          setSelectedTask(newTask);
+          setSelectedTasks([newTask]);
+        } else if (focusMode === 'summit') {
+          setSelectedTasks(prev => [...prev, newTask]);
+          if (selectedTasks.length === 0) {
+            setSelectedTask(newTask);
+          }
+        }
+
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setShowNotification('Task created and selected!');
+        setTimeout(() => setShowNotification(''), 2000);
+      }
+
+      // Reset form
+      setQuickTaskTitle('');
+      setQuickTaskSubject('');
+      setShowQuickTask(false);
+    } catch (error) {
+      console.error('❌ Failed to create task:', error);
+      Alert.alert('Error', 'Failed to create task. Please try again.');
     }
   };
 
@@ -549,6 +626,7 @@ export default function FocusPreparationScreen() {
 
       navigation.navigate('StudySessionScreen' as never, {
         duration: selectedTime,
+        breakDuration: selectedBreakTime,
         task: selectedTask,
         tasks: selectedTasks,
         focusMode: focusMode,
@@ -786,44 +864,70 @@ export default function FocusPreparationScreen() {
           {showInlineTimeSelector ? (
             /* Full Time Selector - Takes over bottom area like IMG_0133.PNG */
             <View style={styles.fullTimeSelectorContainer}>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.timeOptionsScroll}
-              >
-                {/* Work Styles */}
-                {timeOptions.filter(option => option.isWorkStyle).map((option) => (
-                  <AnimatedTimeOption
-                    key={option.value}
-                    option={option}
-                    isSelected={selectedTime === option.value}
-                    onPress={() => {
-                      handleTimeSelection(option.value, option.isWorkStyle);
-                      setShowInlineTimeSelector(false);
-                    }}
-                    themeColor={theme.primary}
-                    textColor={theme.text}
-                  />
-                ))}
+              {/* Focus Time Row */}
+              <View style={styles.timeSelectorRow}>
+                <Text style={[styles.timeSelectorLabel, { color: theme.text }]}>Focus Time</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.timeOptionsScroll}
+                >
+                  {/* Work Styles */}
+                  {timeOptions.filter(option => option.isWorkStyle).map((option) => (
+                    <AnimatedTimeOption
+                      key={`focus-${option.value}`}
+                      option={option}
+                      isSelected={selectedTime === option.value}
+                      onPress={() => {
+                        handleTimeSelection(option.value, option.isWorkStyle);
+                      }}
+                      themeColor={theme.primary}
+                      textColor={theme.text}
+                    />
+                  ))}
 
-                {/* Custom Times */}
-                {timeOptions.filter(option => !option.isWorkStyle).map((option) => (
-                  <AnimatedTimeOption
-                    key={option.value}
-                    option={option}
-                    isSelected={selectedTime === option.value}
-                    onPress={() => {
-                      handleTimeSelection(option.value, option.isWorkStyle);
-                      setShowInlineTimeSelector(false);
-                    }}
-                    themeColor={theme.primary}
-                    textColor={theme.text}
-                  />
-                ))}
-              </ScrollView>
-              
+                  {/* Custom Times */}
+                  {timeOptions.filter(option => !option.isWorkStyle).map((option) => (
+                    <AnimatedTimeOption
+                      key={`focus-${option.value}`}
+                      option={option}
+                      isSelected={selectedTime === option.value}
+                      onPress={() => {
+                        handleTimeSelection(option.value, option.isWorkStyle);
+                      }}
+                      themeColor={theme.primary}
+                      textColor={theme.text}
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* Break Time Row - Always Visible */}
+              <View style={styles.timeSelectorRow}>
+                <Text style={[styles.timeSelectorLabelSmall, { color: theme.text }]}>
+                  Break Time
+                </Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.timeOptionsScroll}
+                >
+                  {breakTimeOptions.map((option) => (
+                    <AnimatedTimeOption
+                      key={`break-${option.value}`}
+                      option={option}
+                      isSelected={selectedBreakTime === option.value}
+                      onPress={() => handleBreakTimeSelection(option.value)}
+                      themeColor={theme.accent || theme.primary}
+                      textColor={theme.text}
+                      isCompact={true}
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+
               {/* Close/Done button for time selector */}
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.closeSelectorButton}
                 onPress={() => setShowInlineTimeSelector(false)}
               >
@@ -952,22 +1056,29 @@ export default function FocusPreparationScreen() {
         animationType="slide"
         onRequestClose={() => setShowTaskSelector(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.taskSelectorModal, { backgroundColor: theme.card }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.text }]}>Select Task</Text>
-              <TouchableOpacity onPress={() => setShowTaskSelector(false)}>
-                <Ionicons name="close-outline" size={24} color={theme.text} />
-              </TouchableOpacity>
-            </View>
-            
-            <ScrollView style={styles.taskList}>
+        <KeyboardAvoidingView
+          behavior="padding"
+          style={{ flex: 1 }}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.taskSelectorModal, { backgroundColor: theme.card }]}>
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>Select Task</Text>
+                <TouchableOpacity onPress={() => setShowTaskSelector(false)}>
+                  <Ionicons name="close-outline" size={24} color={theme.text} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView
+                style={styles.taskList}
+                keyboardShouldPersistTaps="handled"
+              >
               {/* Mode Info */}
               <View style={[styles.modeInfoBanner, { backgroundColor: theme.primary + '10' }]}>
-                <Ionicons 
-                  name={focusMode === 'basecamp' ? 'target-outline' : 'layers-outline'} 
-                  size={16} 
-                  color={theme.primary} 
+                <Ionicons
+                  name={focusMode === 'basecamp' ? 'flag-outline' : 'layers-outline'}
+                  size={16}
+                  color={theme.primary}
                 />
                 <Text style={[styles.modeInfoText, { color: theme.primary }]}>
                   {focusMode === 'basecamp' 
@@ -976,7 +1087,7 @@ export default function FocusPreparationScreen() {
                 </Text>
               </View>
 
-              {/* Create New Task Button */}
+              {/* Create New Task Section */}
               <ReAnimated.View
                 entering={FadeInDown.delay(0).springify().damping(15).stiffness(150)}
               >
@@ -984,14 +1095,62 @@ export default function FocusPreparationScreen() {
                   style={[styles.taskOption, { borderBottomColor: theme.background }]}
                   onPress={() => {
                     triggerHaptic('selection');
-                    setShowTaskCreator(true);
+                    setShowQuickTask(!showQuickTask);
                   }}
                 >
+                  <Ionicons
+                    name={showQuickTask ? "chevron-down" : "chevron-forward"}
+                    size={20}
+                    color={theme.text}
+                  />
                   <Ionicons name="add-circle-outline" size={24} color={theme.primary} />
                   <Text style={[styles.taskOptionText, { color: theme.primary }]}>
                     Create New Task
                   </Text>
                 </TouchableOpacity>
+
+                {showQuickTask && (
+                  <View style={[styles.quickTaskForm, { paddingHorizontal: 16, paddingVertical: 12 }]}>
+                    <TextInput
+                      placeholder="Task title..."
+                      value={quickTaskTitle}
+                      onChangeText={setQuickTaskTitle}
+                      style={[
+                        styles.quickTaskInput,
+                        {
+                          color: theme.text,
+                          backgroundColor: theme.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                          borderColor: theme.border
+                        }
+                      ]}
+                      placeholderTextColor={theme.textSecondary}
+                      returnKeyType="next"
+                      autoFocus
+                    />
+                    <TextInput
+                      placeholder="Subject (optional)"
+                      value={quickTaskSubject}
+                      onChangeText={setQuickTaskSubject}
+                      style={[
+                        styles.quickTaskInput,
+                        {
+                          color: theme.text,
+                          backgroundColor: theme.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                          borderColor: theme.border
+                        }
+                      ]}
+                      placeholderTextColor={theme.textSecondary}
+                      returnKeyType="done"
+                      onSubmitEditing={handleQuickTaskCreate}
+                    />
+                    <TouchableOpacity
+                      style={[styles.quickTaskButton, { backgroundColor: theme.primary }]}
+                      onPress={handleQuickTaskCreate}
+                    >
+                      <Text style={styles.quickTaskButtonText}>Create & Select</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </ReAnimated.View>
 
               {/* Existing Tasks */}
@@ -1020,53 +1179,10 @@ export default function FocusPreparationScreen() {
                   </Text>
                 </TouchableOpacity>
               )}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Task Creator Modal */}
-      <Modal
-        visible={showTaskCreator}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowTaskCreator(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.taskCreatorModal, { backgroundColor: theme.card }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.text }]}>Create New Task</Text>
-              <TouchableOpacity onPress={() => setShowTaskCreator(false)}>
-                <Ionicons name="close-outline" size={24} color={theme.text} />
-              </TouchableOpacity>
-            </View>
-            
-            <TextInput
-              style={[styles.taskInput, { color: theme.text, borderColor: theme.primary }]}
-              placeholder="Enter task title..."
-              placeholderTextColor={theme.text + '80'}
-              value={newTaskTitle}
-              onChangeText={setNewTaskTitle}
-              autoFocus
-            />
-
-            <View style={styles.taskCreatorButtons}>
-              <TouchableOpacity
-                style={[styles.cancelButton, { borderColor: theme.text + '40' }]}
-                onPress={() => setShowTaskCreator(false)}
-              >
-                <Text style={[styles.cancelButtonText, { color: theme.text }]}>Cancel</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.createButton, { backgroundColor: theme.primary }]}
-                onPress={handleTaskCreation}
-              >
-                <Text style={styles.createButtonText}>Create</Text>
-              </TouchableOpacity>
+              </ScrollView>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Nora Chat Modal */}
@@ -1256,6 +1372,22 @@ const styles = StyleSheet.create({
   },
   fullTimeSelectorContainer: {
     paddingVertical: 20,
+    gap: 12,
+  },
+  timeSelectorRow: {
+    gap: 8,
+  },
+  timeSelectorLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 20,
+    marginBottom: 4,
+  },
+  timeSelectorLabelSmall: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginLeft: 20,
+    marginBottom: 4,
   },
   timeOptionsScroll: {
     paddingHorizontal: 20,
@@ -1298,6 +1430,44 @@ const styles = StyleSheet.create({
     paddingVertical: 16, // Reduced from 24
     paddingHorizontal: 20,
     alignItems: 'center',
+  },
+  quickTaskSection: {
+    width: '100%',
+    marginBottom: 16,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  quickTaskToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    gap: 8,
+  },
+  quickTaskToggleText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  quickTaskForm: {
+    padding: 12,
+    paddingTop: 0,
+    gap: 12,
+  },
+  quickTaskInput: {
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 15,
+  },
+  quickTaskButton: {
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  quickTaskButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 15,
   },
   modeDescription: {
     fontSize: 14,
@@ -1475,11 +1645,6 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 20,
     paddingBottom: 20,
   },
-  taskCreatorModal: {
-    margin: 20,
-    borderRadius: 20,
-    padding: 20,
-  },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1530,39 +1695,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     flex: 1,
     marginLeft: 12,
-  },
-  taskInput: {
-    borderWidth: 2,
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    marginVertical: 20,
-  },
-  taskCreatorButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  cancelButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
-  },
-  createButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  createButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
   },
   colorFillOverlay: {
     position: 'absolute',

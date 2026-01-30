@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import * as MessageService from '../utils/messagingService';
+import * as MessageService from '../utils/convexMessagingService';
 import { useAuth } from '../context/AuthContext';
 
 interface MessageNotificationProps {

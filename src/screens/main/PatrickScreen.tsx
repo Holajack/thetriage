@@ -5,7 +5,7 @@ import { useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import SessionReportScreen from './SessionReportScreen';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import { supabase } from '../../utils/supabase';
+import { sendPatrickChatMessage } from '../../utils/convexAIChatService';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import * as Haptics from 'expo-haptics';
@@ -75,21 +75,14 @@ const PatrickScreen = () => {
 
   const fetchUserProfile = async () => {
     if (!user) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
 
-      if (error) throw error;
-      setUserProfile(data);
-    } catch (error) {
-      console.error('Error fetching profile:', error);
-    } finally {
-      setLoading(false);
-    }
+    // Profile data is available through Convex hooks
+    // Using basic user info from auth context
+    setUserProfile({
+      username: user.username || 'Student',
+      full_name: user.fullName || 'Student',
+    });
+    setLoading(false);
   };
 
   if (loading) {
@@ -132,18 +125,10 @@ const PatrickHomeScreen = ({ nickname }: { nickname: string }) => {
 
   const fetchChatHistory = async () => {
     if (!user) return;
-    try {
-      const { data, error } = await supabase
-        .from('patrick_chat')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('timestamp', { ascending: false })
-        .limit(10);
-      if (error) throw error;
-      setChatHistory(data || []);
-    } catch (error) {
-      console.error('Error fetching chat history:', error);
-    }
+
+    // TODO: Load chat history from Convex
+    // Will be implemented when chat history tables are added to Convex schema
+    setChatHistory([]);
   };
 
   const getGreeting = () => {
@@ -320,30 +305,18 @@ export const PatrickSpeakScreen = ({ route }: { route: PatrickSpeakRouteProp }) 
 
   const fetchChatHistory = async () => {
     if (!user) return;
-    try {
-      const { data, error } = await supabase
-        .from('patrick_chat')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('timestamp', { ascending: true });
-      if (error) throw error;
-      setChat(data || []);
-    } catch (err) {
-      setError('Failed to load chat history.');
-    }
+
+    // TODO: Load chat history from Convex
+    // Will be implemented when chat history tables are added to Convex schema
+    setChat([]);
   };
 
   const saveMessage = async (content: string, sender: 'user' | 'patrick') => {
     if (!user) return;
-    const { error } = await supabase.from('patrick_chat').insert([
-      {
-        content,
-        sender,
-        user_id: user.id,
-        timestamp: new Date().toISOString(),
-      },
-    ]);
-    if (error) console.error('Failed to save message:', error);
+
+    // TODO: Save messages to Convex
+    // Chat history will be implemented when chat tables are added to Convex schema
+    console.log('Patrick message (not saved):', content.substring(0, 50));
   };
 
   const handleSend = async (messageText?: string) => {
@@ -380,41 +353,18 @@ export const PatrickSpeakScreen = ({ route }: { route: PatrickSpeakRouteProp }) 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        throw new Error('No active session');
-      }
-
-      // Send enhanced message with PDF context to Patrick
-      const response = await fetch('https://ucculvnodabrfwbkzsnx.supabase.co/functions/v1/patrick-chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-          'apikey': process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '',
+      // Send enhanced message with PDF context to Patrick via Convex
+      const data = await sendPatrickChatMessage({
+        message: enhancedMessage,
+        pdfContext: activePDF,
+        userSettings: {
+          focus_method: userData?.onboarding?.focus_method || userData?.settings?.focus_method,
+          weekly_focus_goal: userData?.onboarding?.weekly_focus_goal || userData?.settings?.weekly_goal,
+          environment_theme: userData?.settings?.environment_theme,
+          notifications: userData?.settings?.notifications,
+          onboarding: userData?.onboarding
         },
-        body: JSON.stringify({
-          message: enhancedMessage, // Send enhanced message with PDF context
-          userId: user.id,
-          pdfContext: activePDF, // Include PDF context
-          userSettings: {
-            focus_method: userData?.onboarding?.focus_method || userData?.settings?.focus_method,
-            weekly_focus_goal: userData?.onboarding?.weekly_focus_goal || userData?.settings?.weekly_goal,
-            environment_theme: userData?.settings?.environment_theme,
-            notifications: userData?.settings?.notifications,
-            onboarding: userData?.onboarding
-          }
-        }),
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Edge Function Error:', response.status, errorText);
-        throw new Error(`Server error: ${response.status}`);
-      }
-
-      const data = await response.json();
       setStreaming(false);
 
       if (data.response) {

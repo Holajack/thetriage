@@ -1,21 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { supabase } from '../../utils/supabase';
+import { useSignIn } from '@clerk/clerk-expo';
 import { AnimatedButton } from '../../components/premium/AnimatedButton';
 import { useEntranceAnimation, useSuccessAnimation, triggerHaptic } from '../../utils/animationUtils';
 import { Spacing } from '../../theme/premiumTheme';
 
 const ForgotPasswordScreen = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
+  const { signIn, isLoaded } = useSignIn();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [successfulCreation, setSuccessfulCreation] = useState(false);
 
   // Entrance animations
   const headerAnimation = useEntranceAnimation(0);
@@ -23,26 +25,41 @@ const ForgotPasswordScreen = () => {
   const buttonAnimation = useEntranceAnimation(400);
   const { animatedStyle: successStyle, celebrate } = useSuccessAnimation();
 
-  const handleReset = async () => {
+  const handleReset = useCallback(async () => {
+    if (!isLoaded || !signIn) {
+      setError('Authentication is not ready. Please try again.');
+      return;
+    }
+
     setLoading(true);
     setMessage('');
     setError('');
     triggerHaptic('buttonPress');
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: 'hikewise://reset-password',
-    });
-    setLoading(false);
+    try {
+      // Start the password reset flow with Clerk
+      await signIn.create({
+        strategy: 'reset_password_email_code',
+        identifier: email,
+      });
 
-    if (error) {
-      setError(error.message);
-      triggerHaptic('error');
-    } else {
-      setMessage('Password reset email sent! Check your inbox and click the link to reset your password.');
+      setSuccessfulCreation(true);
+      setMessage('Password reset code sent! Check your inbox for the verification code.');
       triggerHaptic('success');
       celebrate();
+
+      // Navigate to ResetPassword screen where they'll enter the code
+      setTimeout(() => {
+        navigation.navigate('ResetPassword', { email });
+      }, 2000);
+    } catch (err: any) {
+      const errorMessage = err?.errors?.[0]?.message || err?.message || 'Failed to send reset email. Please try again.';
+      setError(errorMessage);
+      triggerHaptic('error');
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [isLoaded, signIn, email, navigation, celebrate]);
 
   return (
     <LinearGradient

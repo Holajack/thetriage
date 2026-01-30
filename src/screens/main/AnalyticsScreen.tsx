@@ -96,18 +96,19 @@ const AnalyticsScreen = () => {
   const focusKey = useFocusAnimationKey();
 
   // Calculate real stats from user data
-  const allSessions = userData?.sessions || [];
+  const { leaderboard } = useAuth();
+  const allSessions = userData?.sessions ?? [];
   // Only count completed sessions for analytics
   const sessions = allSessions.filter((s: any) => s.status === 'completed' || !s.status);
-  const totalSessions = sessions.length || 103;
-  const totalMinutes = userData?.leaderboard?.total_focus_time || 2214; // 36.9 hours
+  const totalSessions = leaderboard?.total_sessions ?? sessions.length ?? 0;
+  const totalMinutes = leaderboard?.total_focus_time ?? 0;
   const totalHours = Math.floor(totalMinutes / 60);
   const remainingMinutes = totalMinutes % 60;
 
   // Count session types: Deep Work, Balanced, Sprint (only completed sessions)
-  const deepWorkCount = sessions.filter((s: any) => s.session_type === 'deep_work' || s.session_type === 'individual').length || 45;
-  const balancedCount = sessions.filter((s: any) => s.session_type === 'balanced').length || 38;
-  const sprintCount = sessions.filter((s: any) => s.session_type === 'sprint').length || 20;
+  const deepWorkCount = sessions.filter((s: any) => s.session_type === 'deep_work' || s.session_type === 'individual').length ?? 0;
+  const balancedCount = sessions.filter((s: any) => s.session_type === 'balanced').length ?? 0;
+  const sprintCount = sessions.filter((s: any) => s.session_type === 'sprint').length ?? 0;
 
   // Helper function to get session duration in minutes
   const getSessionDuration = (session: any): number => {
@@ -573,15 +574,23 @@ const AnalyticsScreen = () => {
             <View style={styles.insightItem}>
               <Ionicons name="bulb" size={20} color={theme.primary} style={{ marginRight: 12 }} />
               <Text style={[styles.insightText, { color: theme.text }]}>
-                You're doing great! Keep up the consistent study sessions.
+                {totalSessions > 0
+                  ? `You've completed ${totalSessions} sessions totaling ${totalHours}h ${remainingMinutes}m of focus time.`
+                  : 'Start your first study session to see insights here!'}
               </Text>
             </View>
-            <View style={styles.insightItem}>
-              <Ionicons name="trending-up" size={20} color={theme.primary} style={{ marginRight: 12 }} />
-              <Text style={[styles.insightText, { color: theme.text }]}>
-                Your focus time has increased by 15% this week!
-              </Text>
-            </View>
+            {deepWorkCount > 0 && (
+              <View style={styles.insightItem}>
+                <Ionicons name="trending-up" size={20} color={theme.primary} style={{ marginRight: 12 }} />
+                <Text style={[styles.insightText, { color: theme.text }]}>
+                  {deepWorkCount > balancedCount && deepWorkCount > sprintCount
+                    ? `Deep Work is your most used method with ${deepWorkCount} sessions. Great for intensive study!`
+                    : balancedCount > sprintCount
+                    ? `Balanced Focus is your go-to with ${balancedCount} sessions. A well-rounded approach!`
+                    : `Sprint Focus leads with ${sprintCount} sessions. Quick and efficient!`}
+                </Text>
+              </View>
+            )}
           </StaggeredList>
         </Animated.View>
       </ScrollView>

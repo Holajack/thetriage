@@ -5,7 +5,6 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
-import { supabase } from '../../utils/supabase';
 const { useUserAppData } = require('../../utils/userAppData');
 import { useBackgroundMusic } from '../../hooks/useBackgroundMusic';
 import { useTheme } from '../../context/ThemeContext';
@@ -136,24 +135,10 @@ export const SessionReportScreen = () => {
       
       setNewAchievements(achievements);
       
-      // Save achievements to database
+      // TODO: Save achievements to Convex
+      // Achievement saving will use Convex mutations in a future update
       if (achievements.length > 0) {
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.user) {
-            const achievementInserts = achievements.map(achievement => ({
-              user_id: session.user.id,
-              achievement_type: achievement.id,
-              title: achievement.title,
-              description: achievement.description,
-              earned_at: new Date().toISOString()
-            }));
-            
-            await supabase.from('achievements').insert(achievementInserts);
-          }
-        } catch (error) {
-          console.error('Error saving achievements:', error);
-        }
+        console.log('Achievements earned (not saved yet):', achievements.map(a => a.title));
       }
     };
     

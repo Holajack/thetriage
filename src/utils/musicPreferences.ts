@@ -1,4 +1,16 @@
-import { supabase } from './supabase';
+import { ConvexReactClient } from "convex/react";
+import { api } from "../../convex/_generated/api";
+
+let _convexClient: ConvexReactClient | null = null;
+
+export function setConvexClient(client: ConvexReactClient) {
+  _convexClient = client;
+}
+
+function getClient(): ConvexReactClient {
+  if (!_convexClient) throw new Error("Convex client not initialized");
+  return _convexClient;
+}
 
 export interface MusicPreferences {
   sound_preference: string;
@@ -9,90 +21,65 @@ export interface MusicPreferences {
 // Centralized music preference management
 export const getMusicPreferences = async (userId: string): Promise<MusicPreferences> => {
   try {
-    // Priority order: onboarding_preferences > profiles > user_settings (for sound_enabled only)
-    const [settingsResult, onboardingResult, profileResult] = await Promise.all([
-      supabase.from('user_settings').select('sound_enabled').eq('user_id', userId).single(),
-      supabase.from('onboarding_preferences').select('sound_preference, auto_play_sound').eq('user_id', userId).single(),
-      supabase.from('profiles').select('soundpreference').eq('id', userId).single()
+    const client = getClient();
+
+    // Fetch data from Convex (parallel queries)
+    const [settings, onboarding, user] = await Promise.all([
+      client.query(api.settings.get, {}),
+      client.query(api.onboarding.get, {}),
+      client.query(api.users.me, {}),
     ]);
 
-    const settings = settingsResult.data;
-    const onboarding = onboardingResult.data;
-    const profile = profileResult.data;
+    // Priority order: onboarding > user profile > default
+    const soundPreference = onboarding?.focusMethod || user?.soundPreference || 'Lo-Fi';
+    const autoPlaySound = settings?.autoPlaySound || settings?.soundEnabled || false;
+    const musicVolume = settings?.musicVolume || 0.7;
 
     return {
-      sound_preference: onboarding?.sound_preference || 
-                       profile?.soundpreference || 
-                       'Lo-Fi',
-      auto_play_sound: onboarding?.auto_play_sound || settings?.sound_enabled || false,
-      music_volume: 0.7 // Default volume since it's not stored in database
+      sound_preference: soundPreference,
+      auto_play_sound: autoPlaySound,
+      music_volume: musicVolume,
     };
   } catch (error) {
     console.error('Error getting music preferences:', error);
     return {
       sound_preference: 'Lo-Fi',
       auto_play_sound: false,
-      music_volume: 0.7
+      music_volume: 0.7,
     };
   }
 };
 
 export const saveMusicPreferences = async (userId: string, preferences: Partial<MusicPreferences>): Promise<void> => {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) {
-      throw new Error('No authenticated user');
-    }
+    const client = getClient();
 
-    // Update user_settings table (only sound_enabled field exists)
-    if (preferences.auto_play_sound !== undefined) {
-      const { error: settingsError } = await supabase
-        .from('user_settings')
-        .upsert({
-          user_id: userId,
-          sound_enabled: preferences.auto_play_sound,
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'user_id'  // Handle unique constraint properly
-        });
-
-      if (settingsError) {
-        console.error('Error updating user_settings:', settingsError);
-      }
-    }
-
-    // Update onboarding_preferences table for sound preference and auto_play_sound
-    if (preferences.sound_preference || preferences.auto_play_sound !== undefined) {
-      const updateData: any = {
-        user_id: userId,
-        updated_at: new Date().toISOString()
-      };
-
-      if (preferences.sound_preference) {
-        updateData.sound_preference = preferences.sound_preference;
-      }
+    // Update settings if auto_play_sound or music_volume changed
+    if (preferences.auto_play_sound !== undefined || preferences.music_volume !== undefined) {
+      const settingsUpdate: any = {};
       if (preferences.auto_play_sound !== undefined) {
-        updateData.auto_play_sound = preferences.auto_play_sound;
+        settingsUpdate.autoPlaySound = preferences.auto_play_sound;
+        settingsUpdate.soundEnabled = preferences.auto_play_sound;
+      }
+      if (preferences.music_volume !== undefined) {
+        settingsUpdate.musicVolume = preferences.music_volume;
       }
 
-      await supabase
-        .from('onboarding_preferences')
-        .upsert(updateData, {
-          onConflict: 'user_id'  // Handle unique constraint properly
-        });
+      await client.mutation(api.settings.update, settingsUpdate);
     }
 
-    // Update profiles table (note: different field name for legacy support)
+    // Update onboarding preferences if sound_preference changed
     if (preferences.sound_preference) {
-      await supabase
-        .from('profiles')
-        .upsert({
-          id: userId,
-          soundpreference: preferences.sound_preference,
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'id'  // Handle unique constraint properly
-        });
+      await client.mutation(api.onboarding.update, {
+        focusMethod: preferences.sound_preference,
+      });
+    }
+
+    // Update user profile if sound_preference changed
+    if (preferences.sound_preference) {
+      await client.mutation(api.users.updateProfile, {
+        soundPreference: preferences.sound_preference,
+      });
     }
 
     console.log('✅ Music preferences saved successfully:', preferences);
@@ -104,9 +91,9 @@ export const saveMusicPreferences = async (userId: string, preferences: Partial<
 
 // Helper function to get just the sound preference string
 export const getSoundPreference = (userData: any): string => {
-  return userData?.onboarding?.sound_preference || 
-         userData?.profile?.soundpreference || 
-         userData?.profile?.sound_preference || 
+  return userData?.onboarding?.sound_preference ||
+         userData?.profile?.soundpreference ||
+         userData?.profile?.sound_preference ||
          'Lo-Fi';
 };
 
@@ -116,9 +103,9 @@ export const getAutoPlaySetting = (userData: any): boolean => {
   // default to true for better user experience
   const hasExplicitAutoPlay = userData?.onboarding?.auto_play_sound !== undefined;
   const hasSoundPreference = userData?.onboarding?.sound_preference || userData?.profile?.soundpreference;
-  
-  return userData?.onboarding?.auto_play_sound || 
-         userData?.settings?.sound_enabled || 
+
+  return userData?.onboarding?.auto_play_sound ||
+         userData?.settings?.sound_enabled ||
          (!hasExplicitAutoPlay && hasSoundPreference && hasSoundPreference !== 'Silence') ||
          false;
 };

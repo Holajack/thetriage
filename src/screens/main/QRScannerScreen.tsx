@@ -7,8 +7,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
 import { UnifiedHeader } from '../../components/UnifiedHeader';
-import { supabase } from '../../utils/supabase';
 import { sendQRFriendRequest, waitForQRAcceptance } from '../../utils/qrAcceptanceService';
+import { getUserProfile } from '../../utils/convexFriendRequestService';
 import { ShimmerLoader } from '../../components/premium/ShimmerLoader';
 
 interface ScannedUser {
@@ -134,34 +134,29 @@ const QRScannerScreen = () => {
   const fetchUserProfile = async (userId: string) => {
     setLoading(true);
     try {
-      // Query only the essential fields that definitely exist
-      const { data: profileData, error } = await supabase
-        .from('profiles')
-        .select('id, username, full_name, avatar_url, university, location, major, classes')
-        .eq('id', userId)
-        .single();
+      // Fetch profile using Convex service
+      const result = await getUserProfile(userId);
 
-      if (error) {
-        console.error('Error fetching user profile:', error);
-        throw error;
-      }
-
-      if (profileData) {
-        console.log('✅ User profile fetched:', profileData.username);
-        setScannedUser({
-          userId: profileData.id,
-          username: profileData.username || 'user',
-          fullName: profileData.full_name || 'User',
-          avatarUrl: profileData.avatar_url,
-          university: profileData.university,
-          bio: profileData.major ? `${profileData.major}` : undefined,
-        });
-        setShowPreview(true);
-      } else {
+      if (!result.success || !result.profile) {
         console.log('❌ User not found:', userId);
         Alert.alert('User Not Found', 'This user does not exist.');
         setScanned(false);
+        setLoading(false);
+        return;
       }
+
+      const profileData = result.profile;
+      console.log('✅ User profile fetched:', profileData.username);
+
+      setScannedUser({
+        userId: profileData.id || profileData.user_id,
+        username: profileData.username || 'user',
+        fullName: profileData.full_name || 'User',
+        avatarUrl: profileData.avatar_url,
+        university: profileData.university,
+        bio: profileData.major ? `${profileData.major}` : undefined,
+      });
+      setShowPreview(true);
     } catch (error) {
       console.error('Error fetching user profile:', error);
       Alert.alert('Error', 'Failed to load user profile. Please try again.');

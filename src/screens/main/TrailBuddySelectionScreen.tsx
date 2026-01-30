@@ -25,7 +25,7 @@ import Animated, {
   useDerivedValue,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { useSupabaseProfile } from '../../utils/supabaseHooks';
+import { useConvexProfile } from '../../hooks/useConvex';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const BUDDY_SIZE = 280;
@@ -257,7 +257,7 @@ const BuddyItem = ({
 const TrailBuddySelectionScreen = () => {
   const navigation = useNavigation();
   const { theme, isDark } = useTheme();
-  const { profile, updateProfile } = useSupabaseProfile();
+  const { profile, updateProfile } = useConvexProfile();
 
   // Find initial index based on saved buddy type
   const getInitialIndex = () => {

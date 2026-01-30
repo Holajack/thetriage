@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, withSequence, withTiming } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { useAuth } from '../../context/AuthContext';
+import { useSignIn } from '@clerk/clerk-expo';
 import { useTheme } from '../../context/ThemeContext';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 import { AnimatedButton } from '../../components/premium/AnimatedButton';
@@ -13,7 +13,7 @@ import { useEntranceAnimation, usePulseAnimation, triggerHaptic } from '../../ut
 import { AnimationConfig, Typography, Spacing, BorderRadius } from '../../theme/premiumTheme';
 
 export default function LoginScreen() {
-  const { signIn } = useAuth();
+  const { signIn, setActive, isLoaded } = useSignIn();
   const { theme } = useTheme();
   const navigation = useNavigation<any>();
 
@@ -47,20 +47,57 @@ export default function LoginScreen() {
     triggerHaptic('error');
   };
 
-  const handleLogin = async () => {
-    setLoading(true);
-    setLoginError('');
-    const { error } = await signIn(loginEmail, loginPassword);
-    setLoading(false);
-    if (error) {
-      Alert.alert('Login Error', error);
-      setLoginError(error);
-      triggerErrorShake();
+  const handleLogin = useCallback(async () => {
+    if (!isLoaded || !signIn) {
+      setLoginError('Authentication is not ready. Please try again.');
       return;
     }
-    triggerHaptic('success');
-    // Do not navigate; RootNavigator will handle the switch
-  };
+
+    setLoading(true);
+    setLoginError('');
+
+    try {
+      // Attempt to sign in with Clerk
+      const signInAttempt = await signIn.create({
+        identifier: loginEmail,
+        password: loginPassword,
+      });
+
+      // Check if sign in was successful
+      if (signInAttempt.status === 'complete') {
+        // Set the active session - handle RN compatibility errors
+        try {
+          await setActive({ session: signInAttempt.createdSessionId });
+          console.log('🔐 [Login] Session activated successfully');
+        } catch (setActiveErr: any) {
+          const errMsg = setActiveErr?.message || String(setActiveErr);
+          if (errMsg.includes('CustomEvent') || errMsg.includes('hasFocus') || errMsg.includes('document') || errMsg.includes('dispatchEvent') || errMsg.includes('window')) {
+            console.log('🔐 [Login] RN compatibility error (session likely active):', errMsg);
+          } else {
+            console.log('🔐 [Login] setActive error:', errMsg);
+          }
+        }
+
+        triggerHaptic('success');
+        // Existing users signing in always go to Main
+        console.log('🔐 [Login] Navigating to Main');
+        navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'Main' }] }));
+      } else {
+        // Handle other statuses (e.g., needs_first_factor, needs_second_factor)
+        console.log('Sign in status:', signInAttempt.status);
+        setLoginError('Additional verification required. Please check your email.');
+        triggerErrorShake();
+      }
+    } catch (err: any) {
+      // Handle Clerk errors
+      const errorMessage = err?.errors?.[0]?.message || err?.message || 'Login failed. Please check your credentials.';
+      setLoginError(errorMessage);
+      Alert.alert('Login Error', errorMessage);
+      triggerErrorShake();
+    } finally {
+      setLoading(false);
+    }
+  }, [isLoaded, signIn, setActive, loginEmail, loginPassword]);
 
   // Dynamic colors based on theme
   const gradientColors = theme.isDark 

@@ -1,7 +1,8 @@
 import { Alert, Linking, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
-import { getUserSettings } from './userSettings';
-import { supabase } from './supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ConvexReactClient } from "convex/react";
+import { api } from "../../convex/_generated/api";
 
 /**
  * Do Not Disturb Utility
@@ -14,6 +15,16 @@ import { supabase } from './supabase';
  * 3. Providing quick access to system settings
  */
 
+let _convexClient: ConvexReactClient | null = null;
+
+export function setConvexClient(client: ConvexReactClient) {
+  _convexClient = client;
+}
+
+function getClient(): ConvexReactClient | null {
+  return _convexClient;
+}
+
 // Track current DND state
 let isDNDActive = false;
 let originalNotificationHandler: any = null;
@@ -23,11 +34,11 @@ let originalNotificationHandler: any = null;
  */
 export const isAutoDNDEnabled = async (): Promise<boolean> => {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) return false;
+    const client = getClient();
+    if (!client) return false;
 
-    const settings = await getUserSettings(session.user.id);
-    return settings?.auto_dnd_focus || false;
+    const settings = await client.query(api.settings.get, {});
+    return settings?.autoDndFocus || false;
   } catch (error) {
     console.error('Error checking auto DND setting:', error);
     return false;
@@ -136,11 +147,9 @@ const openSystemSettings = async () => {
  */
 const disableDNDReminder = async () => {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) {
-      // Store preference in AsyncStorage or user settings
-      console.log('User opted out of DND reminders');
-    }
+    // Store preference in AsyncStorage
+    await AsyncStorage.setItem('@dnd_reminder_disabled', 'true');
+    console.log('User opted out of DND reminders');
   } catch (error) {
     console.error('Error saving DND reminder preference:', error);
   }
@@ -158,9 +167,13 @@ export const startFocusSessionWithDND = async (showReminder: boolean = true) => 
 
     // Show reminder to enable system DND (first time only)
     if (showReminder) {
-      setTimeout(() => {
-        showDNDReminder();
-      }, 1000); // Show after 1 second to not interrupt session start
+      // Check if user opted out
+      const disabled = await AsyncStorage.getItem('@dnd_reminder_disabled');
+      if (!disabled) {
+        setTimeout(() => {
+          showDNDReminder();
+        }, 1000); // Show after 1 second to not interrupt session start
+      }
     }
   }
 };

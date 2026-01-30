@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
-import { supabase } from './supabase';
 import { Achievement, Badge, UserAchievements, ACHIEVEMENTS, checkForNewAchievements } from '../data/achievements';
 
 const USER_ACHIEVEMENTS_KEY = 'user_achievements';
@@ -99,8 +98,8 @@ export const saveUserAchievements = async (userId: string, userAchievements: Use
       JSON.stringify(userAchievements)
     );
 
-    // Also save to database for backup
-    await saveAchievementsToDatabase(userId, userAchievements);
+    // Note: Achievement data is primarily stored in AsyncStorage
+    // DB-side achievement tracking is handled separately via Convex achievements.award mutation
   } catch (error) {
     console.error('Error saving user achievements:', error);
   }
@@ -271,57 +270,18 @@ export const getTopBadgesForDisplay = async (userId: string, limit: number = 3):
   }
 };
 
-// Database sync functions
+// Database sync functions (deprecated - achievement data stored in AsyncStorage)
+// DB-side achievement tracking is handled separately via Convex achievements.award mutation
 export const saveAchievementsToDatabase = async (userId: string, userAchievements: UserAchievements): Promise<void> => {
-  try {
-    const { error } = await supabase
-      .from('user_achievements')
-      .upsert({
-        user_id: userId,
-        achievements: JSON.stringify(userAchievements.achievements),
-        badges: JSON.stringify(userAchievements.badges),
-        total_points: userAchievements.totalPoints,
-        level: userAchievements.level,
-        last_updated: userAchievements.lastUpdated.toISOString(),
-        updated_at: new Date().toISOString()
-      });
-
-    if (error) throw error;
-    console.log('Achievements saved to database');
-  } catch (error) {
-    console.error('Error saving achievements to database:', error);
-  }
+  // No-op: Achievement data is primarily stored in AsyncStorage
+  // The Convex achievements.award mutation handles DB-side achievement tracking separately
+  console.log('[achievementManager] saveAchievementsToDatabase is deprecated (AsyncStorage only)');
 };
 
 export const syncAchievementsWithDatabase = async (userId: string): Promise<void> => {
-  try {
-    const { data, error } = await supabase
-      .from('user_achievements')
-      .select('*')
-      .eq('user_id', userId)
-      .single();
-
-    if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows returned
-
-    if (data) {
-      const userAchievements: UserAchievements = {
-        achievements: JSON.parse(data.achievements),
-        badges: JSON.parse(data.badges),
-        totalPoints: data.total_points,
-        level: data.level,
-        lastUpdated: new Date(data.last_updated)
-      };
-
-      await AsyncStorage.setItem(
-        `${USER_ACHIEVEMENTS_KEY}_${userId}`,
-        JSON.stringify(userAchievements)
-      );
-
-      console.log('Achievements synced from database');
-    }
-  } catch (error) {
-    console.error('Error syncing achievements from database:', error);
-  }
+  // No-op: Achievement data is primarily stored in AsyncStorage
+  // The Convex achievements.award mutation handles DB-side achievement tracking separately
+  console.log('[achievementManager] syncAchievementsWithDatabase is deprecated (AsyncStorage only)');
 };
 
 // Utility functions for specific achievements

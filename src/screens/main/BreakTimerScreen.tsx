@@ -93,12 +93,13 @@ export const BreakTimerScreen = () => {
     completedTasksData?: any[];
     duration?: number;
     autoProgress?: boolean;
+    breakDuration?: number;
   } | undefined;
 
   const sessionData = params?.sessionData;
 
-  // Calculate break duration based on completed session
-  const breakDurationMinutes = getBreakDuration(
+  // Use custom break duration if provided, otherwise calculate based on focus method
+  const breakDurationMinutes = params?.breakDuration || getBreakDuration(
     userData?.onboarding?.focus_method,
     sessionData?.duration || sessionData?.plannedDuration
   );

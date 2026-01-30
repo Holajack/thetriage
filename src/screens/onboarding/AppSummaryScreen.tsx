@@ -8,6 +8,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { OnboardingStackParamList, RootStackParamList } from '../../navigation/types';
+import NoraSpeechBubble from '../../components/onboarding/NoraSpeechBubble';
 
 type AppSummaryNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type AppSummaryRouteProp = RouteProp<OnboardingStackParamList, 'AppTutorial'>;
@@ -51,66 +52,6 @@ const APP_FEATURES: AppFeature[] = [
   },
 ];
 
-/**
- * Validates critical onboarding data was saved
- */
-const validateOnboardingData = async (userId: string, focusMethod?: string): Promise<boolean> => {
-  try {
-    const { supabase } = await import('../../utils/supabase');
-
-    const { data, error } = await supabase
-      .from('onboarding_preferences')
-      .select('focus_method, sound_preference, environment_preference')
-      .eq('user_id', userId)
-      .single();
-
-    if (error) {
-      console.error('❌ Validation error:', error);
-      return false;
-    }
-
-    const hasFocusMethod = data.focus_method || focusMethod;
-    const hasSound = data.sound_preference;
-    const hasEnvironment = data.environment_preference;
-
-    console.log('🔍 Validation:', {
-      focus_method: hasFocusMethod,
-      sound: hasSound,
-      environment: hasEnvironment
-    });
-
-    return !!(hasFocusMethod && hasSound && hasEnvironment);
-  } catch (error) {
-    console.error('❌ Validation failed:', error);
-    return false;
-  }
-};
-
-/**
- * Recovers missing data with sensible defaults
- */
-const recoverMissingData = async (userId: string, focusMethod?: string): Promise<void> => {
-  try {
-    const { supabase } = await import('../../utils/supabase');
-
-    const updateData: any = {
-      user_id: userId,
-      focus_method: focusMethod || 'balanced',
-      sound_preference: 'ambient',
-      environment_preference: 'library',
-      updated_at: new Date().toISOString()
-    };
-
-    await supabase
-      .from('onboarding_preferences')
-      .upsert(updateData, { onConflict: 'user_id' });
-
-    console.log('✅ Recovered missing data with defaults');
-  } catch (error) {
-    console.error('❌ Failed to recover data:', error);
-  }
-};
-
 export default function AppSummaryScreen() {
   const navigation = useNavigation<AppSummaryNavigationProp>();
   const route = useRoute<AppSummaryRouteProp>();
@@ -142,19 +83,7 @@ export default function AppSummaryScreen() {
     try {
       console.log('🎯 Completing onboarding from AppSummary with focus method:', focusMethod);
 
-      // NEW: Validate all data was saved
-      if (user?.id) {
-        const isValid = await validateOnboardingData(user.id, focusMethod);
-
-        if (!isValid) {
-          console.warn('⚠️ Validation failed - recovering data');
-          await recoverMissingData(user.id, focusMethod);
-        } else {
-          console.log('✅ All onboarding data validated');
-        }
-      }
-
-      // Now mark as complete
+      // Mark onboarding as complete
       await updateOnboarding({
         is_onboarding_complete: true,
         focus_method: focusMethod,
@@ -170,7 +99,7 @@ export default function AppSummaryScreen() {
 
       // Show welcome modal first
       setShowWelcomeModal(true);
-      
+
       // Start confetti animation
       Animated.loop(
         Animated.sequence([
@@ -186,31 +115,10 @@ export default function AppSummaryScreen() {
           }),
         ])
       ).start();
-      
+
     } catch (error) {
       console.error('AppSummaryScreen: Error completing onboarding:', error);
-      
-      // Try a fallback approach - directly update the database
-      try {
-        console.log('🔄 Attempting fallback onboarding completion from AppSummary...');
-        const { supabase } = await import('../../utils/supabase');
-        
-        if (user?.id) {
-          await supabase
-            .from('onboarding_preferences')
-            .upsert({
-              user_id: user.id,
-              is_onboarding_complete: true,
-              focus_method: focusMethod,
-              updated_at: new Date().toISOString()
-            }, { onConflict: 'user_id' });
-          
-          console.log('✅ Fallback onboarding completion successful from AppSummary');
-        }
-      } catch (fallbackError) {
-        console.error('❌ Fallback onboarding completion also failed:', fallbackError);
-      }
-      
+
       // Still update local state and show welcome modal
       setHasCompletedOnboarding(true);
       setShowWelcomeModal(true);
@@ -256,12 +164,14 @@ export default function AppSummaryScreen() {
             <View style={styles.headerTextContainer}>
               <Text style={[styles.headerTitle, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>You're All Set!</Text>
               <Text style={[styles.headerSubtitle, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>
-                Step 6 of 6 • Ready to transform your study experience
+                Step 5 of 5 • Ready to transform your study experience
               </Text>
             </View>
             <View style={{ width: 24 }} />
           </View>
-          
+
+          <NoraSpeechBubble message="You're all set! Here's what's waiting for you." />
+
           <ScrollView 
             style={styles.scrollView}
             showsVerticalScrollIndicator={false}
@@ -326,7 +236,6 @@ export default function AppSummaryScreen() {
             </TouchableOpacity>
             
             <View style={styles.progressIndicator}>
-              <View style={[styles.progressDot, styles.progressDotCompleted]} />
               <View style={[styles.progressDot, styles.progressDotCompleted]} />
               <View style={[styles.progressDot, styles.progressDotCompleted]} />
               <View style={[styles.progressDot, styles.progressDotCompleted]} />

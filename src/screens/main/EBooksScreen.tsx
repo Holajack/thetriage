@@ -14,7 +14,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
-import { supabase } from '../../utils/supabase';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import { WebView } from 'react-native-webview';
@@ -46,58 +45,9 @@ const EBooksScreen: React.FC = () => {
 
   /* ----------  Fetch existing files  ---------- */
   const fetchBooks = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    const userId = session?.user.id;
-    if (!userId) return;
-
-    try {
-      // Fetch from storage
-      const { data: storageData, error: storageError } = await supabase.storage
-        .from(BUCKET)
-        .list(`${userId}/`, { limit: 100, sortBy: { column: 'created_at', order: 'desc' } });
-
-      if (storageError) {
-        console.warn('Storage fetch error:', storageError);
-      }
-
-      // Fetch metadata from database with error handling
-      let dbData = [];
-      try {
-        const { data, error: dbError } = await supabase
-          .from('user_ebooks')
-          .select('*')
-          .eq('user_id', userId)
-          .order('upload_date', { ascending: false });
-
-        if (dbError) {
-          console.warn('Database fetch error:', dbError);
-        } else {
-          dbData = data || [];
-        }
-      } catch (dbError) {
-        console.warn('Database table access error:', dbError);
-      }
-
-      // Combine storage and database data
-      const combinedData = (storageData || [])
-        .filter((f) => f.metadata?.mimetype === 'application/pdf' || f.name.endsWith('.pdf'))
-        .map((f) => {
-          const dbRecord = dbData.find(record => record.file_path.endsWith(f.name));
-          return {
-            id: f.id || f.name,
-            name: dbRecord?.title || f.name.replace('.pdf', ''),
-            file_size: f.metadata?.size || dbRecord?.file_size || 0,
-            upload_date: dbRecord?.upload_date || f.created_at,
-            file_path: `${userId}/${f.name}`,
-            storage_path: f.name
-          };
-        });
-
-      setBooks(combinedData);
-    } catch (error) {
-      console.error('Error fetching books:', error);
-      setBooks([]);
-    }
+    // TODO: Load PDFs from Convex file storage
+    // PDF storage will be migrated to Convex in a future phase
+    setBooks([]);
   };
 
   useEffect(() => {
@@ -140,101 +90,16 @@ const EBooksScreen: React.FC = () => {
 
       setLoading(true);
 
-      const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
-      if (sessionErr || !session?.user) {
-        throw new Error('You must be logged in to upload files.');
-      }
-
-      const userId = session.user.id;
-      const timestamp = Date.now();
-      const fileName = `${timestamp}_${file.name}`;
-      const filePath = `${userId}/${fileName}`;
-
-      console.log('Starting direct file upload...');
-      
-      try {
-        // Method 1: Direct FormData upload (React Native compatible)
-        const formData = new FormData();
-        formData.append('file', {
-          uri: file.uri,
-          type: 'application/pdf',
-          name: fileName,
-        } as any);
-
-        // Upload using Supabase storage with FormData
-        const { error: uploadError } = await supabase.storage
-          .from(BUCKET)
-          .upload(filePath, formData);
-
-        if (uploadError) {
-          console.log('FormData upload failed, trying alternative method...');
-          
-          // Method 2: Base64 string upload
-          const base64Data = await FileSystem.readAsStringAsync(file.uri, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
-
-          // Upload base64 string directly
-          const { error: base64UploadError } = await supabase.storage
-            .from(BUCKET)
-            .upload(filePath, base64Data, {
-              contentType: 'application/pdf',
-              upsert: false
-            });
-
-          if (base64UploadError) {
-            console.log('Base64 upload failed, trying file URI method...');
-            
-            // Method 3: Direct file URI (React Native specific)
-            const { error: uriUploadError } = await supabase.storage
-              .from(BUCKET)
-              .upload(filePath, {
-                uri: file.uri,
-                type: 'application/pdf',
-                name: fileName,
-              } as any);
-
-            if (uriUploadError) {
-              throw new Error(`All upload methods failed. Last error: ${uriUploadError.message}`);
-            }
-          }
-        }
-
-        console.log('Upload successful, saving metadata...');
-
-        // Save metadata to database
-        try {
-          const { error: dbError } = await supabase
-            .from('user_ebooks')
-            .insert({
-              user_id: userId,
-              title: file.name.replace('.pdf', ''),
-              file_path: filePath,
-              file_size: file.size,
-              upload_date: new Date().toISOString()
-            });
-
-          if (dbError) {
-            console.warn('Database save error:', dbError);
-            Alert.alert(
-              'File Uploaded', 
-              'Your file was uploaded successfully, but there was an issue saving the metadata.'
-            );
-          } else {
-            Alert.alert('Success', 'Your e-book has been uploaded successfully!');
-          }
-        } catch (metadataError) {
-          console.error('Metadata save failed:', metadataError);
-          Alert.alert('File Uploaded', 'Your file was uploaded successfully.');
-        }
-
-        await fetchBooks();
-        setShowDisclaimer(false);
-
-      } catch (uploadError) {
-        console.error('All upload methods failed:', uploadError);
-        throw new Error('Unable to upload the file. Please check your internet connection and try again.');
-      }
+      // TODO: Upload to Convex file storage
+      // PDF upload will be migrated to Convex in a future phase
+      setLoading(false);
+      Alert.alert(
+        'PDF Upload Coming Soon',
+        'PDF upload functionality is being enhanced. This feature will be available in the next update!',
+        [{ text: 'OK' }]
+      );
+      setShowDisclaimer(false);
+      return;
 
     } catch (error: any) {
       console.error('Upload error:', error);
@@ -269,27 +134,9 @@ const EBooksScreen: React.FC = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              const { data: { session } } = await supabase.auth.getSession();
-              if (!session?.user) return;
-
-              // Delete from storage
-              const { error: storageError } = await supabase.storage
-                .from(BUCKET)
-                .remove([book.file_path]);
-
-              if (storageError) {
-                console.warn('Storage delete error:', storageError);
-              }
-
-              // Delete from database
-              const { error: dbError } = await supabase
-                .from('user_ebooks')
-                .delete()
-                .eq('file_path', book.file_path);
-
-              if (dbError) {
-                console.warn('Database delete error:', dbError);
-              }
+              // TODO: Delete from Convex file storage
+              // PDF storage will be migrated to Convex in a future phase
+              Alert.alert('Feature Coming Soon', 'PDF deletion will be available in the next update.');
 
               await fetchBooks();
               
@@ -305,32 +152,9 @@ const EBooksScreen: React.FC = () => {
 
   /* ----------  View PDF Function  ---------- */
   const viewPDF = async (book: UploadedBook) => {
-    try {
-      setLoading(true);
-      
-      // Get signed URL for the PDF
-      const { data, error } = await supabase.storage
-        .from(BUCKET)
-        .createSignedUrl(book.file_path, 3600); // 1 hour expiry
-
-      if (error) {
-        throw new Error('Failed to get PDF URL');
-      }
-
-      if (data?.signedUrl) {
-        // Navigate to PDF viewer screen
-        navigation.navigate('PDFViewer', { 
-          url: data.signedUrl, 
-          title: book.name,
-          bookData: book 
-        });
-      }
-    } catch (error) {
-      console.error('Error viewing PDF:', error);
-      Alert.alert('Error', 'Could not open PDF. Please try again.');
-    } finally {
-      setLoading(false);
-    }
+    // TODO: View PDF from Convex file storage
+    // PDF storage will be migrated to Convex in a future phase
+    Alert.alert('Feature Coming Soon', 'PDF viewing will be available in the next update!');
   };
 
   /* ----------  Send to Nora Function  ---------- */
@@ -345,31 +169,12 @@ const EBooksScreen: React.FC = () => {
             text: 'Send',
             onPress: async () => {
               try {
-                setLoading(true);
-                
-                // Get signed URL for Nora
-                const { data, error } = await supabase.storage
-                  .from(BUCKET)
-                  .createSignedUrl(book.file_path, 7200); // 2 hours for Nora processing
-
-                if (error) {
-                  throw new Error('Failed to get PDF URL for Nora');
-                }
-
-                // Navigate to NoraScreen with the PDF context
-                navigation.navigate('NoraScreen' as never, {
-                  initialMessage: `I've uploaded a textbook: "${book.name}". Can you help me study from it?`,
-                  pdfContext: {
-                    title: book.name,
-                    url: data.signedUrl,
-                    fileSize: book.file_size
-                  }
-                } as never);
-                
+                // TODO: Send PDF to Nora from Convex file storage
+                // PDF storage will be migrated to Convex in a future phase
+                Alert.alert('Feature Coming Soon', 'Sending PDFs to Nora will be available in the next update!');
+                setLoading(false);
               } catch (error) {
-                console.error('Error sending to Nora:', error);
-                Alert.alert('Error', 'Could not send PDF to Nora. Please try again.');
-              } finally {
+                console.error('Error:', error);
                 setLoading(false);
               }
             }

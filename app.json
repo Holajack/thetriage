@@ -23,30 +23,12 @@
         "NSCameraUsageDescription": "This app uses camera for document scanning",
         "NSMicrophoneUsageDescription": "This app uses microphone for voice features"
       },
-      "associatedDomains": [
-        "applinks:ucculvnodabrfwbkzsnx.supabase.co"
-      ]
+      "associatedDomains": []
     },
     "android": {
       "package": "com.hikewise.app",
       "versionCode": 19,
-      "intentFilters": [
-        {
-          "action": "VIEW",
-          "autoVerify": true,
-          "data": [
-            {
-              "scheme": "https",
-              "host": "ucculvnodabrfwbkzsnx.supabase.co",
-              "pathPrefix": "/auth/v1"
-            }
-          ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
-        }
-      ]
+      "intentFilters": []
     },
     "extra": {
       "eas": {
@@ -61,7 +43,8 @@
         {
           "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera for QR code scanning and document capture."
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "owner": "hollaj"
   }

@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Platform, K
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { useSupabaseProfile } from '../../../utils/supabaseHooks';
+import { useConvexProfile } from '../../../hooks/useConvex';
 import * as Localization from 'expo-localization';
 import Slider from '@react-native-community/slider';
 import DropDownPicker from 'react-native-dropdown-picker';
@@ -22,7 +22,7 @@ const PRIVACY_OPTIONS = [
 export const ProfileCustomizationScreen = () => {
   const navigation = useNavigation();
   const { theme } = useTheme();
-  const { profile, updateProfile, uploadProfileImage } = useSupabaseProfile();
+  const { profile, updateProfile, uploadProfileImage } = useConvexProfile();
   const { signOut, refreshUserData } = useAuth();
   const { refetch } = useUserAppData();
   const [formData, setFormData] = useState({
@@ -442,7 +442,7 @@ export const ProfileCustomizationScreen = () => {
 };
 
 export const PersonalInformationScreen = () => {
-  const { profile, updateProfile } = useSupabaseProfile();
+  const { profile, updateProfile } = useConvexProfile();
   const { theme } = useTheme();
   const navigation = useNavigation();
   const [isEditing, setIsEditing] = useState(false);
@@ -600,7 +600,7 @@ export const PersonalInformationScreen = () => {
 };
 
 export const EducationScreen = () => {
-  const { profile, updateProfile } = useSupabaseProfile();
+  const { profile, updateProfile } = useConvexProfile();
   const { theme } = useTheme();
   const navigation = useNavigation();
   const [isEditing, setIsEditing] = useState(false);
@@ -778,7 +778,7 @@ const TIME_ZONES = [
 ];
 
 export const LocationAndTimeScreen = () => {
-  const { profile, updateProfile } = useSupabaseProfile();
+  const { profile, updateProfile } = useConvexProfile();
   const { theme } = useTheme();
   const navigation = useNavigation();
   const [isEditing, setIsEditing] = useState(false);
@@ -927,7 +927,7 @@ export const LocationAndTimeScreen = () => {
 };
 
 export const PrivacyScreen = () => {
-  const { profile, updateProfile } = useSupabaseProfile();
+  const { profile, updateProfile } = useConvexProfile();
   const { theme } = useTheme();
   const navigation = useNavigation();
   const [isEditing, setIsEditing] = useState(false);

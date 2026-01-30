@@ -89,17 +89,16 @@ export default function FocusMethodIntroScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      // Save focus method immediately if user exists (won't exist on first onboarding)
-      if (user?.id) {
-        await updateOnboarding({ focus_method: selectedMethod });
-        console.log('✅ Focus method saved:', selectedMethod);
-      }
+      // Save focus method to onboarding preferences
+      // updateOnboarding has its own session fallback if AuthContext user isn't ready
+      await updateOnboarding({ focus_method: selectedMethod });
+      console.log('✅ Focus method saved:', selectedMethod);
 
-      navigation.navigate('AccountCreation', { focusMethod: selectedMethod });
+      navigation.navigate('AppTutorial', { focusMethod: selectedMethod });
     } catch (error) {
       console.error('⚠️ Failed to save focus method:', error);
-      // Still navigate - we'll retry later in AccountCreationScreen
-      navigation.navigate('AccountCreation', { focusMethod: selectedMethod });
+      // Still navigate - AppTutorial will recover missing data
+      navigation.navigate('AppTutorial', { focusMethod: selectedMethod });
     }
   };
 
@@ -177,9 +176,15 @@ export default function FocusMethodIntroScreen() {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.content}>
           <Animated.View style={[styles.header, headerAnimation]}>
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+            >
+              <Ionicons name="arrow-back" size={24} color="#E8F5E9" />
+            </TouchableOpacity>
             <Text style={styles.headerTitle}>Choose Your Focus Method</Text>
             <Text style={styles.headerSubtitle}>
-              Step 1 of 5 • Select the study technique that best fits your learning style and goals
+              Step 4 of 5 • Select the study technique that best fits your learning style and goals
             </Text>
           </Animated.View>
 
@@ -204,9 +209,10 @@ export default function FocusMethodIntroScreen() {
             />
 
             <View style={styles.progressIndicator}>
+              <View style={[styles.progressDot, styles.progressDotCompleted]} />
+              <View style={[styles.progressDot, styles.progressDotCompleted]} />
+              <View style={[styles.progressDot, styles.progressDotCompleted]} />
               <View style={[styles.progressDot, styles.progressDotActive]} />
-              <View style={styles.progressDot} />
-              <View style={styles.progressDot} />
               <View style={styles.progressDot} />
             </View>
           </Animated.View>
@@ -230,6 +236,10 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: 30,
+  },
+  backButton: {
+    padding: 8,
+    marginBottom: 8,
   },
   headerTitle: {
     fontSize: 28,
@@ -351,5 +361,8 @@ const styles = StyleSheet.create({
   },
   progressDotActive: {
     backgroundColor: '#4CAF50',
+  },
+  progressDotCompleted: {
+    backgroundColor: 'rgba(76, 175, 80, 0.6)',
   },
 });

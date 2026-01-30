@@ -3,8 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, Act
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useSupabaseAchievements } from '../../utils/supabaseHooks';
-import { supabase } from '../../utils/supabase';
+import { useConvexAchievements } from '../../hooks/useConvex';
 import { useTheme } from '../../context/ThemeContext';
 import Animated, { FadeInUp, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -31,7 +30,7 @@ interface Achievement {
 
 const AchievementsScreen = () => {
   const navigation = useNavigation();
-  const { achievements: earnedAchievements, loading, error } = useSupabaseAchievements();
+  const { achievements: earnedAchievements, loading, error } = useConvexAchievements();
   const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
   const [userStats, setUserStats] = useState({
     totalFocusTime: 0,
@@ -257,48 +256,20 @@ const AchievementsScreen = () => {
   }, []);
 
   const fetchUserStats = async () => {
-    const user = supabase.auth.user();
-    if (!user) return;
-
     try {
-      // Fetch focus sessions stats
-      const { data: sessions } = await supabase
-        .from('focus_sessions')
-        .select('duration')
-        .eq('user_id', user.id)
-        .eq('completed', true);
+      // TODO: Fetch user stats from Convex
+      // Stats are available via useConvexLeaderboard and useConvexFocusSessionHistory hooks
+      // This function can be refactored to use those hooks instead
 
-      const totalFocusTime = sessions?.reduce((sum, s) => sum + (s.duration || 0), 0) || 0;
-      
-      // Fetch leaderboard stats
-      const { data: leaderboardStats } = await supabase
-        .from('leaderboard_stats')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
-
-      // Fetch tasks count
-      const { count: tasksCount } = await supabase
-        .from('tasks')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('status', 'completed');
-
-      // Fetch friends count
-      const { count: friendsCount } = await supabase
-        .from('friends')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('status', 'accepted');
-
+      // For now, use placeholder values until stats are fully migrated to Convex
       setUserStats({
-        totalFocusTime: Math.floor(totalFocusTime / 60), // Convert to hours
-        totalSessions: sessions?.length || 0,
-        currentStreak: leaderboardStats?.current_streak || 0,
-        longestStreak: leaderboardStats?.longest_streak || 0,
-        tasksCompleted: tasksCount || 0,
-        level: leaderboardStats?.level || 1,
-        friendsCount: friendsCount || 0,
+        totalFocusTime: 0,
+        totalSessions: 0,
+        currentStreak: 0,
+        longestStreak: 0,
+        tasksCompleted: 0,
+        level: 1,
+        friendsCount: 0,
       });
     } catch (err) {
       console.error('Error fetching user stats:', err);

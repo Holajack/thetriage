@@ -6,6 +6,7 @@ import { useNavigation, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { OnboardingStackParamList } from '../../navigation/types';
 import { useAuth } from '../../context/AuthContext';
+import { useUser } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../context/ThemeContext';
@@ -15,15 +16,18 @@ import { AnimatedButton } from '../../components/premium/AnimatedButton';
 import { StaggeredItem } from '../../components/premium/StaggeredList';
 import { useEntranceAnimation } from '../../utils/animationUtils';
 import { ShimmerLoader } from '../../components/premium/ShimmerLoader';
-import { supabase } from '../../utils/supabase';
+import { useConvexProfile } from '../../hooks/useConvex';
+import NoraSpeechBubble from '../../components/onboarding/NoraSpeechBubble';
 
 type ProfileCreationNavigationProp = NativeStackNavigationProp<OnboardingStackParamList, 'ProfileCreation'>;
 type ProfileCreationRouteProp = RouteProp<OnboardingStackParamList, 'ProfileCreation'>;
 
 export default function ProfileCreationScreen({ route }: { route: ProfileCreationRouteProp }) {
-  const { updateOnboarding, updateProfile, user } = useAuth();
+  const { updateOnboarding } = useAuth();
+  const { user: clerkUser } = useUser();
+  const { updateProfile } = useConvexProfile();
   const navigation = useNavigation<ProfileCreationNavigationProp>();
-  const { focusMethod, email } = route.params || {};
+  const { email } = route.params || {};
   const { theme } = useTheme();
   const headerAnimation = useEntranceAnimation(0);
 
@@ -108,57 +112,52 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
     setLoading(true);
 
     try {
-      if (!user || !user.id) {
-        setError('User session not found. Please try again.');
-        setLoading(false);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        Alert.alert('Error', 'User session not found. Please go back and try creating your account again.');
-        return;
-      }
-
-      // Save to PROFILES table (bio, university, avatar_url)
+      // Build profile data from form inputs
       const profileData: any = {};
 
-      if (profilePicUri) profileData.avatar_url = profilePicUri;
+      if (profilePicUri) profileData.avatarUrl = profilePicUri;
       if (bio.trim()) profileData.bio = bio.trim();
       if (university.trim()) profileData.university = university.trim();
-      // Note: location and classes don't exist in profiles schema - skip for now
+      if (location.trim()) profileData.location = location.trim();
+      if (classes.trim()) profileData.classes = classes.trim();
 
+      // Update profile via Convex if there's data to save
       if (Object.keys(profileData).length > 0) {
-        profileData.updated_at = new Date().toISOString();
-
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update(profileData)
-          .eq('id', user.id);
-
-        if (profileError) {
+        try {
+          await updateProfile(profileData);
+          console.log('✅ Profile data saved via Convex');
+        } catch (profileError) {
           console.error('❌ Failed to update profile:', profileError);
-          throw profileError;
+          console.log('📸 [ProfileCreation] Profile update failed, continuing anyway');
         }
-
-        console.log('✅ Profile data saved to profiles table');
       }
 
-      // Save to ONBOARDING_PREFERENCES table (focus_method, avatar_url)
-      const onboardingData: any = {};
-      if (focusMethod) onboardingData.focus_method = focusMethod;
-      if (profilePicUri) onboardingData.avatar_url = profilePicUri;
-
-      if (Object.keys(onboardingData).length > 0) {
-        await updateOnboarding(onboardingData);
-        console.log('✅ Onboarding data saved');
+      // Save avatar to onboarding preferences
+      if (profilePicUri) {
+        try {
+          await updateOnboarding({ avatar_url: profilePicUri });
+          console.log('✅ Onboarding avatar saved');
+        } catch (onboardErr) {
+          console.log('📸 [ProfileCreation] Onboarding update failed (non-critical):', onboardErr);
+        }
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setLoading(false);
-      navigation.navigate('StudyPreferences', { focusMethod });
+      navigation.navigate('TrailBuddyOnboarding');
 
     } catch (e: any) {
       setLoading(false);
-      setError(e.message || 'Failed to update profile.');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Profile Update Error', e.message || 'An unexpected error occurred.');
+      // Non-blocking: allow user to continue even if save fails
+      console.error('📸 [ProfileCreation] Error:', e.message);
+      Alert.alert(
+        'Profile Save Issue',
+        'Your profile info could not be saved right now. You can update it later in Settings. Continue anyway?',
+        [
+          { text: 'Try Again', onPress: () => handleContinue(), style: 'cancel' },
+          { text: 'Continue', onPress: () => navigation.navigate('TrailBuddyOnboarding') },
+        ]
+      );
     }
   };
 
@@ -176,13 +175,15 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
               style={styles.backButton}
             >
               <Ionicons name="arrow-back" size={24} color={theme.isDark ? theme.text : '#E8F5E9'} />
-              <Text style={[styles.backButtonText, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>Account Creation</Text>
+              <Text style={[styles.backButtonText, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>Back</Text>
             </TouchableOpacity>
-            <Text style={[styles.headerTitle, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>Add Your Profile Photo</Text>
+            <Text style={[styles.headerTitle, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>Personalize Your Profile</Text>
             <Text style={[styles.headerSubtitle, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>
-              Step 3 of 6 • Optional: Add a photo and bio to personalize your profile.
+              Step 2 of 5 • Optional: Add a photo and bio to personalize your profile.
             </Text>
           </Animated.View>
+
+          <NoraSpeechBubble message="Tell us a bit about yourself! You can always update this later." />
 
           <View style={styles.formContainer}>
             <StaggeredItem index={0} delay="normal">
@@ -211,11 +212,12 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
                   onChangeText={setBio}
                   multiline
                   numberOfLines={3}
-                  maxLength={150}
+                  maxLength={180}
                   textAlignVertical="top"
+                  scrollEnabled={true}
                 />
                 <Text style={[styles.bioHint, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>
-                  {bio.length}/150 characters
+                  {bio.length}/180 characters
                 </Text>
               </View>
             </StaggeredItem>
@@ -277,10 +279,9 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
             iconPosition="right"
           />
           <View style={styles.progressIndicator}>
-            <View style={styles.progressDot} />
-            <View style={styles.progressDot} />
+            <View style={[styles.progressDot, styles.progressDotCompleted]} />
+            <View style={[styles.progressDot, styles.progressDotCompleted]} />
             <View style={[styles.progressDot, styles.progressDotActive]} />
-            <View style={styles.progressDot} />
             <View style={styles.progressDot} />
             <View style={styles.progressDot} />
           </View>
@@ -377,7 +378,8 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   bioInput: {
-    height: 80,
+    minHeight: 80,
+    maxHeight: 100,
     paddingTop: 15,
   },
   bioHint: {
@@ -428,5 +430,8 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
+  },
+  progressDotCompleted: {
+    backgroundColor: 'rgba(76, 175, 80, 0.6)',
   },
 });

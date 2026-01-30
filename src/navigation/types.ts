@@ -9,9 +9,12 @@ export type AuthStackParamList = {
 };
 
 export type OnboardingStackParamList = {
+  AccountCreation: undefined;
+  EmailVerification: { email: string; password?: string; username?: string; fullName?: string };
+  ProfileCreation: { email?: string; username?: string; fullName?: string } | undefined;
+  TrailBuddyOnboarding: undefined;
+  FocusSoundSetup: undefined;
   FocusMethodIntro: undefined;
-  AccountCreation: { focusMethod?: string } | undefined;
-  ProfileCreation: { focusMethod?: string; email?: string } | undefined;
   StudyPreferences: { focusMethod?: string } | undefined;
   PrivacySettings: { focusMethod?: string } | undefined;
   AppTutorial: { focusMethod?: string } | undefined;

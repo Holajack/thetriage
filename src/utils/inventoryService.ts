@@ -1,23 +1,35 @@
-import { supabase } from './supabase';
+import { ConvexReactClient } from "convex/react";
+import { api } from "../../convex/_generated/api";
+
+let _convexClient: ConvexReactClient | null = null;
+
+export function setConvexClient(client: ConvexReactClient) {
+  _convexClient = client;
+}
+
+function getClient(): ConvexReactClient {
+  if (!_convexClient) throw new Error("Convex client not initialized");
+  return _convexClient;
+}
 
 export interface InventoryItem {
   id: string;
-  user_id: string;
-  item_id: string;
-  item_name: string;
-  item_category: 'gear' | 'shelter' | 'trail';
-  item_icon: string;
-  purchased_at: string;
+  userId: string;
+  itemId: string;
+  itemName: string;
+  itemCategory: 'gear' | 'shelter' | 'trail';
+  itemIcon: string;
+  purchasedAt: string;
 }
 
 export interface EquippedItem {
   id: string;
-  user_id: string;
-  item_category: 'gear' | 'shelter' | 'trail';
-  item_id: string;
-  item_name: string;
-  item_icon: string;
-  equipped_at: string;
+  userId: string;
+  itemCategory: 'gear' | 'shelter' | 'trail';
+  itemId: string;
+  itemName: string;
+  itemIcon: string;
+  equippedAt: string;
 }
 
 /**
@@ -30,31 +42,19 @@ export async function addToInventory(
   itemIcon: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) {
-      return { success: false, error: 'Not authenticated' };
-    }
-
-    const { error } = await supabase
-      .from('user_inventory')
-      .insert({
-        user_id: session.user.id,
-        item_id: itemId,
-        item_name: itemName,
-        item_category: itemCategory,
-        item_icon: itemIcon,
-      });
-
-    if (error) {
-      // Check if already owned
-      if (error.code === '23505') {
-        return { success: false, error: 'You already own this item!' };
-      }
-      return { success: false, error: error.message };
-    }
-
+    const client = getClient();
+    await client.mutation(api.inventory.purchaseItem, {
+      itemId,
+      itemName,
+      itemCategory,
+      itemIcon,
+      cost: 0, // For free items, set cost to 0
+    });
     return { success: true };
   } catch (error: any) {
+    if (error.message?.includes('already owned')) {
+      return { success: false, error: 'You already own this item!' };
+    }
     return { success: false, error: error.message };
   }
 }
@@ -69,28 +69,13 @@ export async function equipItem(
   itemIcon: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) {
-      return { success: false, error: 'Not authenticated' };
-    }
-
-    // Upsert (update if exists, insert if not) for the category
-    const { error } = await supabase
-      .from('equipped_items')
-      .upsert({
-        user_id: session.user.id,
-        item_category: itemCategory,
-        item_id: itemId,
-        item_name: itemName,
-        item_icon: itemIcon,
-      }, {
-        onConflict: 'user_id,item_category'
-      });
-
-    if (error) {
-      return { success: false, error: error.message };
-    }
-
+    const client = getClient();
+    await client.mutation(api.inventory.equipItem, {
+      itemId,
+      itemName,
+      itemCategory,
+      itemIcon,
+    });
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -106,22 +91,21 @@ export async function getUserInventory(): Promise<{
   error?: string;
 }> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) {
-      return { success: false, error: 'Not authenticated' };
-    }
+    const client = getClient();
+    const items = await client.query(api.inventory.listItems, {});
 
-    const { data, error } = await supabase
-      .from('user_inventory')
-      .select('*')
-      .eq('user_id', session.user.id)
-      .order('purchased_at', { ascending: false });
+    // Convert Convex format to expected format
+    const data: InventoryItem[] = (items || []).map((item: any) => ({
+      id: item._id,
+      userId: item.userId,
+      itemId: item.itemId,
+      itemName: item.itemName,
+      itemCategory: item.itemCategory,
+      itemIcon: item.itemIcon,
+      purchasedAt: item.purchasedAt || new Date().toISOString(),
+    }));
 
-    if (error) {
-      return { success: false, error: error.message };
-    }
-
-    return { success: true, data: data || [] };
+    return { success: true, data };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -136,21 +120,21 @@ export async function getEquippedItems(): Promise<{
   error?: string;
 }> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) {
-      return { success: false, error: 'Not authenticated' };
-    }
+    const client = getClient();
+    const items = await client.query(api.inventory.getEquipped, {});
 
-    const { data, error } = await supabase
-      .from('equipped_items')
-      .select('*')
-      .eq('user_id', session.user.id);
+    // Convert Convex format to expected format
+    const data: EquippedItem[] = (items || []).map((item: any) => ({
+      id: item._id,
+      userId: item.userId,
+      itemCategory: item.itemCategory,
+      itemId: item.itemId,
+      itemName: item.itemName,
+      itemIcon: item.itemIcon,
+      equippedAt: item.equippedAt || new Date().toISOString(),
+    }));
 
-    if (error) {
-      return { success: false, error: error.message };
-    }
-
-    return { success: true, data: data || [] };
+    return { success: true, data };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -161,17 +145,9 @@ export async function getEquippedItems(): Promise<{
  */
 export async function ownsItem(itemId: string): Promise<boolean> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) return false;
-
-    const { data } = await supabase
-      .from('user_inventory')
-      .select('id')
-      .eq('user_id', session.user.id)
-      .eq('item_id', itemId)
-      .single();
-
-    return !!data;
+    const client = getClient();
+    const items = await client.query(api.inventory.listItems, {});
+    return (items || []).some((item: any) => item.itemId === itemId);
   } catch (error) {
     return false;
   }
@@ -182,17 +158,9 @@ export async function ownsItem(itemId: string): Promise<boolean> {
  */
 export async function isItemEquipped(itemId: string): Promise<boolean> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) return false;
-
-    const { data } = await supabase
-      .from('equipped_items')
-      .select('id')
-      .eq('user_id', session.user.id)
-      .eq('item_id', itemId)
-      .single();
-
-    return !!data;
+    const client = getClient();
+    const items = await client.query(api.inventory.getEquipped, {});
+    return (items || []).some((item: any) => item.itemId === itemId);
   } catch (error) {
     return false;
   }
@@ -205,21 +173,10 @@ export async function unequipItem(
   itemCategory: 'gear' | 'shelter' | 'trail'
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) {
-      return { success: false, error: 'Not authenticated' };
-    }
-
-    const { error } = await supabase
-      .from('equipped_items')
-      .delete()
-      .eq('user_id', session.user.id)
-      .eq('item_category', itemCategory);
-
-    if (error) {
-      return { success: false, error: error.message };
-    }
-
+    const client = getClient();
+    await client.mutation(api.inventory.unequipItem, {
+      itemCategory,
+    });
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };

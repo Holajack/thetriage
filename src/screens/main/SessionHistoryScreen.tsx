@@ -5,7 +5,6 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { supabase } from '../../utils/supabase';
 import { BottomTabBar } from '../../components/BottomTabBar';
 import { UnifiedHeader } from '../../components/UnifiedHeader';
 import Animated, { FadeIn, FadeInUp, FadeInDown } from 'react-native-reanimated';
@@ -101,32 +100,9 @@ const SessionHistoryScreen = () => {
         dateFilter = monthAgo.toISOString();
       }
 
-      // Build query with correct column names
-      let query = supabase
-        .from('focus_sessions')
-        .select(`
-          id,
-          user_id,
-          start_time,
-          end_time,
-          duration_seconds,
-          session_type,
-          status,
-          created_at,
-          updated_at
-        `)
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (dateFilter) {
-        query = query.gte('created_at', dateFilter);
-      }
-
-      const { data: sessionsData, error: sessionsError } = await query;
-
-      if (sessionsError) {
-        throw new Error(`Failed to fetch sessions: ${sessionsError.message}`);
-      }
+      // TODO: Fetch sessions from Convex using api.focusSessions.list
+      // For now, return empty array until Convex integration is complete
+      const sessionsData: any[] = [];
 
       // Transform the data to match the expected interface
       const transformedSessions: SessionHistoryItem[] = (sessionsData || [])

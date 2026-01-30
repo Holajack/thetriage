@@ -10,8 +10,7 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
-import { supabase } from '../../utils/supabase';
-import { useSupabaseFocusSession, Task } from '../../utils/supabaseHooks';
+import { useConvexFocusSession, Task } from '../../hooks/useConvex';
 import { useBackgroundMusic } from '../../hooks/useBackgroundMusic';
 import { getSoundPreference, getAutoPlaySetting } from '../../utils/musicPreferences';
 import { endFocusSessionWithDND } from '../../utils/doNotDisturb';
@@ -30,7 +29,7 @@ import ReAnimated, {
 import { Typography, AnimationConfig, TimingConfig } from '../../theme/premiumTheme';
 import { useSuccessAnimation, triggerHaptic } from '../../utils/animationUtils';
 import { ParallaxForestBackground } from '../../components/ParallaxForestBackground';
-import { useSupabaseProfile } from '../../utils/supabaseHooks';
+import { useConvexProfile } from '../../hooks/useConvex';
 const { useUserAppData } = require('../../utils/userAppData');
 
 
@@ -80,7 +79,7 @@ export const StudySessionScreen = () => {
   const { theme } = useTheme();
   const environmentColors = theme;
   const { data: userData } = useUserAppData();
-  const { profile } = useSupabaseProfile();
+  const { profile } = useConvexProfile();
   const {
     startPlaylist,
     stopPlayback,
@@ -110,6 +109,7 @@ export const StudySessionScreen = () => {
     focusMode?: 'basecamp' | 'summit';
     tasks?: any[];
     duration?: number;
+    breakDuration?: number;
     task?: any;
     autoProgress?: boolean;
     currentTaskIndex?: number;
@@ -262,7 +262,7 @@ export const StudySessionScreen = () => {
     }
   }, [timer]);
 
-  // Enhanced task selection logic using real Supabase data
+  // Enhanced task selection logic using Convex data
   const currentTask = useMemo(() => {
     console.log('🎯 currentTask calculation triggered');
     console.log('   selectionMode:', selectionMode);
@@ -443,7 +443,7 @@ export const StudySessionScreen = () => {
     endSession,
     pauseSession,
     resumeSession,
-  } = useSupabaseFocusSession();
+  } = useConvexFocusSession();
 
   // Extract subjects from tasks
   useEffect(() => {
@@ -841,10 +841,10 @@ export const StudySessionScreen = () => {
 
   const handleSessionReportSubmit = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
+      // User is already authenticated via Clerk/Convex
+      if (user) {
         const reportData = {
-          user_id: session.user.id,
+          user_id: user.id,
           session_id: completedSessionData?.id || null,
           focus_rating: focusRating,
           productivity_rating: productivityRating,
@@ -857,20 +857,10 @@ export const StudySessionScreen = () => {
           created_at: new Date().toISOString()
         };
 
-        // Try to insert with error handling
-        try {
-          const { error } = await supabase
-            .from('session_reports')
-            .insert([reportData]);
-
-          if (error) {
-            console.error('Error saving session report:', error);
-          } else {
-            console.log('✅ Session report saved successfully');
-          }
-        } catch (reportError) {
-          console.error('Session report table may not exist:', reportError);
-        }
+        // TODO: Save session report to Convex
+        // Session reports will be migrated to Convex in a future phase
+        console.log('Session report:', reportData);
+        console.log('Session reports will be saved to Convex in a future update');
       }
     } catch (error) {
       console.error('Error in session report submit:', error);
@@ -912,7 +902,8 @@ export const StudySessionScreen = () => {
           nextTaskIndex: nextTaskIndex,
           completedTasksData: updatedCompletedTasks,
           duration: params.duration,
-          autoProgress: params.autoProgress
+          autoProgress: params.autoProgress,
+          breakDuration: params.breakDuration
         });
       } else {
         // All tasks complete - go to final session report
@@ -932,7 +923,10 @@ export const StudySessionScreen = () => {
       }
     } else {
       // Basecamp mode or single task - normal flow
-      navigation.navigate('BreakTimerScreen', { sessionData: currentTaskSessionData });
+      navigation.navigate('BreakTimerScreen', {
+        sessionData: currentTaskSessionData,
+        breakDuration: params?.breakDuration
+      });
     }
   };
 

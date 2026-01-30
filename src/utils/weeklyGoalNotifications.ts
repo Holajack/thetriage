@@ -1,5 +1,6 @@
 import * as Notifications from 'expo-notifications';
-import { supabase } from './supabase';
+import { ConvexReactClient } from "convex/react";
+import { api } from "../../convex/_generated/api";
 
 /**
  * Weekly Goal Notification System
@@ -7,6 +8,17 @@ import { supabase } from './supabase';
  * Tracks user's weekly focus progress and sends notifications when they're
  * behind on their weekly goal, especially near the end of the week.
  */
+
+let _convexClient: ConvexReactClient | null = null;
+
+export function setConvexClient(client: ConvexReactClient) {
+  _convexClient = client;
+}
+
+function getClient(): ConvexReactClient {
+  if (!_convexClient) throw new Error("Convex client not initialized");
+  return _convexClient;
+}
 
 interface WeeklyProgress {
   totalMinutes: number;
@@ -41,38 +53,30 @@ const getWeekBounds = (): { startOfWeek: Date; endOfWeek: Date } => {
  */
 export const getWeeklyProgress = async (userId: string): Promise<WeeklyProgress | null> => {
   try {
-    // Get user's weekly goal from onboarding_preferences table
-    const { data: onboarding, error: onboardingError } = await supabase
-      .from('onboarding_preferences')
-      .select('weekly_focus_goal')
-      .eq('user_id', userId)
-      .single();
+    const client = getClient();
 
-    if (onboardingError || !onboarding) {
-      // If no onboarding data, use default of 10 hours
-      console.log('No onboarding data found, using default weekly goal');
-    }
+    // Get user's weekly goal from onboarding preferences
+    const onboarding = await client.query(api.onboarding.get, {});
+    const goalHours = onboarding?.weeklyFocusGoal || 10;
 
-    const goalHours = onboarding?.weekly_focus_goal || 10;
     const { startOfWeek, endOfWeek } = getWeekBounds();
 
-    // Fetch all completed sessions for this week
-    const { data: sessions, error: sessionsError } = await supabase
-      .from('focus_sessions')
-      .select('duration_seconds, start_time')
-      .eq('user_id', userId)
-      .eq('status', 'completed')
-      .gte('start_time', startOfWeek.toISOString())
-      .lte('start_time', endOfWeek.toISOString());
+    // Fetch all focus sessions
+    const allSessions = await client.query(api.focusSessions.list, {});
 
-    if (sessionsError) {
-      console.error('Error fetching sessions:', sessionsError);
-      return null;
-    }
+    // Filter sessions for this week and completed status
+    const sessions = (allSessions || []).filter((session: any) => {
+      const sessionDate = new Date(session.startTime);
+      return (
+        session.status === 'completed' &&
+        sessionDate >= startOfWeek &&
+        sessionDate <= endOfWeek
+      );
+    });
 
     // Calculate total minutes from duration_seconds
-    const totalMinutes = (sessions || []).reduce((sum, session) => {
-      const minutes = Math.floor((session.duration_seconds || 0) / 60);
+    const totalMinutes = sessions.reduce((sum: number, session: any) => {
+      const minutes = Math.floor((session.durationSeconds || 0) / 60);
       return sum + minutes;
     }, 0);
 
@@ -144,8 +148,10 @@ export const checkAndSendWeeklyGoalReminder = async (userId: string): Promise<vo
         data: { type: 'weekly_goal_reminder' },
       },
       trigger: {
-        seconds: 2, // Send immediately
-      },
+        type: 'timeInterval',
+        seconds: 2,
+        repeats: false,
+      } as any,
     });
 
     console.log(`📬 Weekly goal reminder sent: ${progress.percentComplete}% complete, ${hoursNeeded}h remaining`);

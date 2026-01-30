@@ -18,7 +18,10 @@ import { GLView } from 'expo-gl';
 import { Renderer } from 'expo-three';
 import * as THREE from 'three';
 import { Asset } from 'expo-asset';
-import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader';
+// NOTE: OBJLoader is dynamically imported inside onContextCreate to avoid
+// the "Invalid URL:" error that occurs when Three.js loaders are imported
+// at module load time in React Native. The dynamic import ensures the URL
+// polyfill is fully active before the loader is loaded.
 import { Brain3DRegion } from '../utils/brain3DData';
 
 const { width } = Dimensions.get('window');
@@ -115,6 +118,8 @@ const OBJBrain3D: React.FC<OBJBrain3DProps> = ({
         ? regions.reduce((sum, region) => sum + Math.max(0, region.activity), 0) / regions.length
         : 0.5;
 
+      // Dynamic import to avoid URL error at module load time
+      const { OBJLoader } = await import('three/examples/jsm/loaders/OBJLoader');
       const loader = new OBJLoader();
 
       loader.load(

@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-import { supabase } from '../../utils/supabase';
 import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
 import { useCounterAnimation, useProgressAnimation } from '../../utils/animationUtils';
 import { ShimmerLoader, SkeletonCard } from '../../components/premium/ShimmerLoader';
@@ -33,16 +32,10 @@ const ResultsScreen = () => {
         return;
       }
 
-      // Fetch actual results from your database
-      const { data, error } = await supabase
-        .from('quiz_results') // or whatever table stores results
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      
-      setResults(data || []);
+      // TODO: Fetch actual results from Convex
+      // Quiz results will be migrated to Convex in a future phase
+      // For now, use demo data
+      setResults([]);
     } catch (error) {
       console.error('Error fetching results:', error);
       // Fallback to demo data on error

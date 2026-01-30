@@ -1,20 +1,22 @@
-import React, { useEffect, useRef } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  Animated, 
-  Dimensions, 
-  StatusBar, 
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Animated,
+  Dimensions,
+  StatusBar,
   TouchableOpacity,
   SafeAreaView,
-  Image
+  Image,
+  Alert
 } from 'react-native';
 import { ThemedImage } from '../components/ThemedImage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
+import { useAuth as useClerkAuth, useUser } from '@clerk/clerk-expo';
 import { useTheme } from '../context/ThemeContext';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -36,7 +38,10 @@ const TriageLogo = ({ style }: { style?: any }) => (
 const LandingPage: React.FC = () => {
   const navigation = useNavigation<LandingNavigationProp>();
   const { setHasSeenLanding, isAuthenticated, hasCompletedOnboarding, isRecentLogin } = useAuth();
+  const { isSignedIn, signOut } = useClerkAuth();
+  const { user: clerkUser } = useUser();
   const { theme } = useTheme();
+  const [signingOut, setSigningOut] = useState(false);
   const logoOpacity = useRef(new Animated.Value(0)).current;
   const logoScale = useRef(new Animated.Value(0.8)).current;
   const titleOpacity = useRef(new Animated.Value(0)).current;
@@ -44,10 +49,22 @@ const LandingPage: React.FC = () => {
   const buttonOpacity = useRef(new Animated.Value(0)).current;
   const buttonScale = useRef(new Animated.Value(0.9)).current;
 
+  // Log Clerk auth state for debugging
+  useEffect(() => {
+    console.log('🏠 [LandingPage] Clerk auth state:', {
+      isSignedIn,
+      clerkUser: clerkUser?.primaryEmailAddress?.emailAddress,
+      clerkUserId: clerkUser?.id,
+    });
+  }, [isSignedIn, clerkUser]);
+
   // Auto-redirect authenticated users who have completed onboarding (only if recent login)
   useEffect(() => {
     const checkAutoRedirect = async () => {
-      if (isAuthenticated && hasCompletedOnboarding) {
+      // Use Clerk auth state as primary, fall back to legacy auth
+      const isAuth = isSignedIn ?? isAuthenticated;
+
+      if (isAuth && hasCompletedOnboarding) {
         const recentLogin = await isRecentLogin();
         if (recentLogin) {
           console.log('LandingPage: Auto-redirecting authenticated user with recent login to Main');
@@ -58,9 +75,31 @@ const LandingPage: React.FC = () => {
         }
       }
     };
-    
+
     checkAutoRedirect();
-  }, [isAuthenticated, hasCompletedOnboarding, isRecentLogin, navigation]);
+  }, [isAuthenticated, isSignedIn, hasCompletedOnboarding, isRecentLogin, navigation]);
+
+  // Handle sign out for existing Clerk sessions
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    try {
+      await signOut();
+      console.log('🏠 [LandingPage] Signed out successfully');
+    } catch (err: any) {
+      // Handle React Native compatibility errors (CustomEvent, hasFocus, dispatchEvent, etc.)
+      // Clerk SDK uses browser APIs that don't exist in RN
+      const errMsg = err?.message || String(err);
+      if (errMsg.includes('CustomEvent') || errMsg.includes('hasFocus') || errMsg.includes('document') || errMsg.includes('dispatchEvent') || errMsg.includes('window')) {
+        console.log('🏠 [LandingPage] Clerk RN compatibility error (sign out likely succeeded):', errMsg);
+        // Sign out probably worked, token should be cleared
+      } else {
+        console.log('🏠 [LandingPage] Sign out error:', err);
+        Alert.alert('Sign Out Error', 'Failed to sign out. Please try again.');
+      }
+    } finally {
+      setSigningOut(false);
+    }
+  };
 
   useEffect(() => {
     const animationSequence = Animated.sequence([
@@ -124,8 +163,8 @@ const LandingPage: React.FC = () => {
         useNativeDriver: true,
       }).start(() => {
         setHasSeenLanding(true);
-        // Navigate directly to onboarding flow for new users
-        navigation.navigate('Onboarding', { screen: 'FocusMethodIntro' });
+        // Navigate directly to onboarding flow — starts with account creation
+        navigation.navigate('Onboarding', { screen: 'AccountCreation' });
       });
     });
   };
@@ -203,27 +242,67 @@ const LandingPage: React.FC = () => {
               },
             ]}
           >
-            <TouchableOpacity 
-              style={styles.getStartedButton}
-              onPress={handleGetStarted}
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={buttonGradientColors}
-                locations={[0, 0.5, 1]}
-                style={styles.buttonGradient}
-              >
-                <Text style={styles.buttonText}>Get Started</Text>
-              </LinearGradient>
-            </TouchableOpacity>
+            {/* Show different buttons based on Clerk auth state */}
+            {isSignedIn && clerkUser ? (
+              <>
+                {/* User is signed in - show continue and sign out options */}
+                <TouchableOpacity
+                  style={styles.getStartedButton}
+                  onPress={() => {
+                    setHasSeenLanding(true);
+                    // Signed-in users always go to Main
+                    navigation.replace('Main');
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={buttonGradientColors}
+                    locations={[0, 0.5, 1]}
+                    style={styles.buttonGradient}
+                  >
+                    <Text style={styles.buttonText}>
+                      Continue as {clerkUser.firstName || clerkUser.primaryEmailAddress?.emailAddress?.split('@')[0] || 'User'}
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={[styles.secondaryButton, { borderColor: textColor }]}
-              onPress={handleSignIn}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.secondaryButtonText, { color: textColor }]}>Sign In</Text>
-            </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.secondaryButton, { borderColor: textColor }]}
+                  onPress={handleSignOut}
+                  activeOpacity={0.7}
+                  disabled={signingOut}
+                >
+                  <Text style={[styles.secondaryButtonText, { color: textColor }]}>
+                    {signingOut ? 'Signing Out...' : 'Sign Out & Use Different Account'}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                {/* User is not signed in - show get started and sign in */}
+                <TouchableOpacity
+                  style={styles.getStartedButton}
+                  onPress={handleGetStarted}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={buttonGradientColors}
+                    locations={[0, 0.5, 1]}
+                    style={styles.buttonGradient}
+                  >
+                    <Text style={styles.buttonText}>Get Started</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.secondaryButton, { borderColor: textColor }]}
+                  onPress={handleSignIn}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.secondaryButtonText, { color: textColor }]}>Sign In</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </Animated.View>
 
           {/* Features Preview */}

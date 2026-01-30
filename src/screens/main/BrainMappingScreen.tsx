@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, ScrollView, Animated } from 'react-native';
+import React, { useState, useEffect, Suspense } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, ScrollView, Animated, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
 const { useUserAppData } = require('../../utils/userAppData');
-import OBJBrain3D from '../../components/OBJBrain3D';
+// Lazy load OBJBrain3D to avoid Three.js URL errors at module load time
+const OBJBrain3D = React.lazy(() => import('../../components/OBJBrain3D'));
 import { generateBrainVisualizationData, Brain3DRegion } from '../../utils/brain3DData';
 import ReAnimated, { FadeIn, FadeInUp } from 'react-native-reanimated';
 import { useFocusAnimationKey } from '../../utils/animationUtils';
@@ -224,13 +225,20 @@ const BrainMappingScreen: React.FC = () => {
         </View>
 
         <View style={styles.brain3DContainer}>
-          <OBJBrain3D
-            regions={brain3DData}
-            onRegionPress={handle3DRegionPress}
-            autoRotate={true}
-            onInteractionStart={() => setScrollEnabled(false)}
-            onInteractionEnd={() => setScrollEnabled(true)}
-          />
+          <Suspense fallback={
+            <View style={styles.brain3DFallback}>
+              <ActivityIndicator size="large" color="#1B5E20" />
+              <Text style={styles.brain3DFallbackText}>Loading 3D Brain Model...</Text>
+            </View>
+          }>
+            <OBJBrain3D
+              regions={brain3DData}
+              onRegionPress={handle3DRegionPress}
+              autoRotate={true}
+              onInteractionStart={() => setScrollEnabled(false)}
+              onInteractionEnd={() => setScrollEnabled(true)}
+            />
+          </Suspense>
         </View>
 
         <View style={styles.activitiesSection}>
@@ -586,6 +594,20 @@ const styles = StyleSheet.create({
   brain3DContainer: {
     marginBottom: 24,
     alignItems: 'center',
+  },
+  brain3DFallback: {
+    width: 300,
+    height: 300,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#0f172a',
+    borderRadius: 16,
+  },
+  brain3DFallbackText: {
+    marginTop: 16,
+    fontSize: 14,
+    color: '#1B5E20',
+    fontWeight: '500',
   },
 });
 

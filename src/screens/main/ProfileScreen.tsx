@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { UnifiedHeader } from '../../components/UnifiedHeader';
 import { FlintIcon } from '../../components/FlintIcon';
 import * as ImagePicker from 'expo-image-picker';
-import { useSupabaseProfile } from '../../utils/supabaseHooks';
+import { useConvexProfile } from '../../hooks/useConvex';
 import { getUserBadges } from '../../utils/achievementManager';
 import { Badge } from '../../data/achievements';
 import QRCode from 'react-native-qrcode-svg';
@@ -48,7 +48,7 @@ const ProfileScreen = () => {
   const { user } = useAuth();
   const { data: userData, refetch } = useUserAppData();
   const { theme, isDark } = useTheme();
-  const { profile, updateProfile, uploadProfileImage, refetch: refetchProfile } = useSupabaseProfile();
+  const { profile, updateProfile, uploadProfileImage, refetch: refetchProfile } = useConvexProfile();
 
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -101,17 +101,17 @@ const ProfileScreen = () => {
     }
   }, [profile]);
 
-  // Calculate real stats from userData
-  const sessions = userData?.sessions || [];
-  const totalSessions = sessions.length || 103;
-  const totalMinutes = userData?.leaderboard?.total_focus_time || 2214;
+  // Calculate real stats from auth context leaderboard (Convex reactive data)
+  const { leaderboard } = useAuth();
+  const sessions = userData?.sessions ?? [];
+  const totalSessions = leaderboard?.total_sessions ?? sessions.length ?? 0;
+  const totalMinutes = leaderboard?.total_focus_time ?? 0;
   const totalHours = Math.floor(totalMinutes / 60);
   const remainingMinutes = totalMinutes % 60;
-  const currentStreak = userData?.leaderboard?.current_streak || 21;
+  const currentStreak = leaderboard?.current_streak ?? 0;
 
   // Count session types
-  const deepWorkCount = sessions.filter((s: any) => s.session_type === 'deep_work' || s.session_type === 'individual').length || 45;
-  const completedSessions = sessions.filter((s: any) => s.completed === true || s.status === 'completed').length || 21;
+  const completedSessions = leaderboard?.sessions_completed ?? sessions.filter((s: any) => s.completed === true || s.status === 'completed').length ?? 0;
 
   // Get Flint currency from profile
   const flintCurrency = profile?.flint_currency || 0;
@@ -398,7 +398,7 @@ const ProfileScreen = () => {
             <View style={[styles.statIcon, { backgroundColor: theme.primary + '20' }]}>
               <Ionicons name="timer-outline" size={32} color={theme.primary} />
             </View>
-            <Text style={[styles.statNumber, { color: theme.text }]}>{totalSessions}+</Text>
+            <Text style={[styles.statNumber, { color: theme.text }]}>{totalSessions}</Text>
             <Text style={[styles.statLabel, { color: theme.primary }]}>Sessions</Text>
           </View>
         </Animated.View>

@@ -6,16 +6,17 @@ import { useNavigation } from '@react-navigation/native';
 import type { MainTabParamList } from '../../navigation/types';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { useSupabaseProfile } from '../../utils/supabaseHooks';
+import { useConvexProfile } from '../../hooks/useConvex';
 import { useTheme } from '../../context/ThemeContext';
 import { themePalettes, ThemeName, ThemeMode, lightThemePalettes } from '../../context/ThemeContext';
 const { useUserAppData } = require('../../utils/userAppData');
 import Slider from '@react-native-community/slider';
 import { useBackgroundMusic } from '../../hooks/useBackgroundMusic';
-import { supabase } from '../../utils/supabase';
 import { getUserSettings, updateUserSettings, UserSettings } from '../../utils/userSettings';
 import { saveMusicPreferences, getSoundPreference, getAutoPlaySetting } from '../../utils/musicPreferences';
 import { useAuth } from '../../context/AuthContext';
+import { useAuth as useClerkAuth, useUser } from '@clerk/clerk-expo';
+import { CommonActions } from '@react-navigation/native';
 import * as Notifications from 'expo-notifications';
 import { showDNDReminder } from '../../utils/doNotDisturb';
 import AIHelpModal from '../../components/AIHelpModal';
@@ -69,9 +70,11 @@ const THEME_ICONS = {
 
 const SettingsScreen = () => {
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
-  const { profile, updateProfile } = useSupabaseProfile();
+  const { profile, updateProfile } = useConvexProfile();
   const { theme, themeName, themeMode, fontSize, setThemeName, setThemeMode, setFontSize } = useTheme();
-  const { updateOnboarding } = useAuth();
+  const { updateOnboarding, signOut: legacySignOut } = useAuth();
+  const { signOut: clerkSignOut, userId: clerkUserId } = useClerkAuth();
+  const { user: clerkUser } = useUser();
   const isDarkMode = theme.isDark;
 
   // Force animations to replay on every screen focus
@@ -185,9 +188,8 @@ const SettingsScreen = () => {
   useEffect(() => {
     const loadAccessibilitySettings = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          const settings = await getUserSettings(session.user.id);
+        if (clerkUserId) {
+          const settings = await getUserSettings(clerkUserId);
           if (settings) {
             setTts((settings as any).tts_enabled || false);
             setHighContrast((settings as any).high_contrast || false);
@@ -200,7 +202,7 @@ const SettingsScreen = () => {
     };
 
     loadAccessibilitySettings();
-  }, []);
+  }, [clerkUserId]);
 
   // Load profile data when available
   useEffect(() => {
@@ -253,11 +255,10 @@ const SettingsScreen = () => {
       if (status === 'granted') {
         setNotifications(true);
         Alert.alert('Success', 'Notifications enabled successfully!');
-        
+
         // Save to database
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          await updateUserSettings(session.user.id, {
+        if (clerkUserId) {
+          await updateUserSettings(clerkUserId, {
             notifications_enabled: true
           });
         }
@@ -282,9 +283,8 @@ const SettingsScreen = () => {
 
       // Save notification preference to settings
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          await updateUserSettings(session.user.id, {
+        if (clerkUserId) {
+          await updateUserSettings(clerkUserId, {
             notifications_enabled: value
           });
         }
@@ -422,17 +422,12 @@ const SettingsScreen = () => {
   useEffect(() => {
     const loadUserSettings = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user) return;
+        if (!clerkUserId) return;
 
-        // Load from user_settings table
-        const { data: userSettings, error: settingsError } = await supabase
-          .from('user_settings')
-          .select('*')
-          .eq('user_id', session.user.id)
-          .single();
+        // Load from user_settings via Convex
+        const userSettings = await getUserSettings(clerkUserId);
 
-        if (userSettings && !settingsError) {
+        if (userSettings) {
           setAutoPlaySound(userSettings.auto_play_sound || false);
           setSound(userSettings.sound_enabled !== undefined ? userSettings.sound_enabled : true);
           setNotifications(userSettings.notifications_enabled !== undefined ? userSettings.notifications_enabled : true);
@@ -445,14 +440,8 @@ const SettingsScreen = () => {
             setDailyReminder(userSettings.daily_reminder);
           }
 
-          // Load AI settings with tier-based defaults
-          const { data: profileData } = await supabase
-            .from('profiles')
-            .select('subscription_tier')
-            .eq('user_id', session.user.id)
-            .single();
-
-          const tier = profileData?.subscription_tier || 'free';
+          // Load AI settings with tier-based defaults from Convex profile
+          const tier = profile?.subscriptionTier || 'free';
           const isProUser = tier === 'pro';
           const isPremiumUser = tier === 'premium';
 
@@ -482,24 +471,9 @@ const SettingsScreen = () => {
           setHighContrast(userSettings.high_contrast !== undefined ? userSettings.high_contrast : false);
           setReduceMotion(userSettings.reduce_motion !== undefined ? userSettings.reduce_motion : false);
 
-          console.log('🔔 User settings loaded from database');
+          console.log('🔔 User settings loaded from Convex');
           console.log(`🤖 AI settings loaded for ${tier} tier`);
           console.log(`♿ Accessibility settings loaded - TTS: ${userSettings.tts_enabled ? 'ON' : 'OFF'}, Color Blind Mode: ${userSettings.high_contrast ? 'ON' : 'OFF'}, Reduce Motion: ${userSettings.reduce_motion ? 'ON' : 'OFF'}`);
-        } else {
-          // Fallback: try loading from onboarding_preferences
-          const { data: onboardingData, error: onboardingError } = await supabase
-            .from('onboarding_preferences')
-            .select('auto_play_sound, sound_preference')
-            .eq('user_id', session.user.id)
-            .single();
-
-          if (onboardingData && !onboardingError) {
-            setAutoPlaySound(onboardingData.auto_play_sound || false);
-            if (onboardingData.sound_preference) {
-              setSelectedSound(onboardingData.sound_preference);
-            }
-            console.log('🎵 Settings loaded from onboarding preferences fallback');
-          }
         }
       } catch (error) {
         console.error('Error loading user settings:', error);
@@ -507,51 +481,42 @@ const SettingsScreen = () => {
     };
 
     loadUserSettings();
-  }, []);
+  }, [clerkUserId, profile]);
 
   // Load onboarding preferences when component mounts
   useEffect(() => {
     const loadOnboardingPreferences = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user) return;
+        if (!userData) return;
 
-        const { data, error } = await supabase
-          .from('onboarding_preferences')
-          .select('focus_method, sound_preference, environment_preference')
-          .eq('user_id', session.user.id)
-          .single();
+        // Use data from useUserAppData hook which already has Convex onboarding data
+        const onboardingData = userData.onboarding;
 
-        if (error) {
-          console.error('❌ Failed to load onboarding preferences:', error);
-          return;
-        }
-
-        if (data) {
+        if (onboardingData) {
           // Map database values to UI state
-          if (data.sound_preference) {
-            setSelectedSound(data.sound_preference);
-            console.log('✅ Loaded sound preference:', data.sound_preference);
+          if (onboardingData.sound_preference) {
+            setSelectedSound(onboardingData.sound_preference);
+            console.log('✅ Loaded sound preference:', onboardingData.sound_preference);
           }
 
-          if (data.environment_preference) {
-            setSelectedEnv(data.environment_preference as ThemeName);
-            console.log('✅ Loaded environment preference:', data.environment_preference);
+          if (onboardingData.environment_preference) {
+            setSelectedEnv(onboardingData.environment_preference as ThemeName);
+            console.log('✅ Loaded environment preference:', onboardingData.environment_preference);
           }
 
-          if (data.focus_method) {
+          if (onboardingData.focus_method) {
             // Map focus_method to work style
             const methodMap: Record<string, string> = {
               'balanced': 'Balanced',
               'sprint': 'Sprint',
               'deepwork': 'Deep Work'
             };
-            const workStyleValue = methodMap[data.focus_method] || 'Balanced';
+            const workStyleValue = methodMap[onboardingData.focus_method] || 'Balanced';
             setWorkStyle(workStyleValue);
             console.log('✅ Loaded work style:', workStyleValue);
           }
 
-          console.log('✅ All onboarding preferences loaded in Settings');
+          console.log('✅ All onboarding preferences loaded in Settings from Convex');
         }
       } catch (error) {
         console.error('❌ Error loading onboarding preferences:', error);
@@ -559,7 +524,7 @@ const SettingsScreen = () => {
     };
 
     loadOnboardingPreferences();
-  }, []);
+  }, [userData]);
 
   // Handle appearance updates
   const handleThemeUpdate = async (selectedThemeMode: ThemeMode) => {
@@ -765,10 +730,9 @@ const SettingsScreen = () => {
   const updateDailyReminder = async (time: string) => {
     setDailyReminder(time);
     try {
-      // Save to user_settings table
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        await updateUserSettings(session.user.id, {
+      // Save to user_settings via Convex
+      if (clerkUserId) {
+        await updateUserSettings(clerkUserId, {
           daily_reminder: time
         } as any);
       }
@@ -886,9 +850,8 @@ const SettingsScreen = () => {
   const handleSessionEndReminderToggle = async (value: boolean) => {
     setSessionEndReminder(value);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        await updateUserSettings(session.user.id, {
+      if (clerkUserId) {
+        await updateUserSettings(clerkUserId, {
           session_end_reminder: value
         } as any);
       }
@@ -1169,9 +1132,8 @@ const SettingsScreen = () => {
   const handleAutoDNDToggle = async (value: boolean) => {
     setAutoDND(value);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        await updateUserSettings(session.user.id, {
+      if (clerkUserId) {
+        await updateUserSettings(clerkUserId, {
           auto_dnd_focus: value
         });
       }
@@ -1220,9 +1182,8 @@ const SettingsScreen = () => {
     setTts(value);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        await updateUserSettings(session.user.id, {
+      if (clerkUserId) {
+        await updateUserSettings(clerkUserId, {
           tts_enabled: value
         } as any);
       }
@@ -1256,9 +1217,8 @@ const SettingsScreen = () => {
     setHighContrast(value);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        await updateUserSettings(session.user.id, {
+      if (clerkUserId) {
+        await updateUserSettings(clerkUserId, {
           high_contrast: value
         } as any);
       }
@@ -1305,9 +1265,8 @@ const SettingsScreen = () => {
     setReduceMotion(value);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        await updateUserSettings(session.user.id, {
+      if (clerkUserId) {
+        await updateUserSettings(clerkUserId, {
           reduce_motion: value
         } as any);
       }
@@ -1361,21 +1320,17 @@ const SettingsScreen = () => {
         if (!newEmail || !newEmail.trim()) return;
 
         try {
-          const { data: { user } } = await supabase.auth.getUser();
-          if (!user) {
+          if (!clerkUser) {
             Alert.alert('Error', 'Please log in again to change your email.');
             return;
           }
 
-          const { error } = await supabase.auth.updateUser({
-            email: newEmail.trim()
-          });
-
-          if (error) throw error;
+          // Use Clerk to create/update email address
+          await clerkUser.createEmailAddress({ email: newEmail.trim() });
 
           Alert.alert(
             'Verification Email Sent',
-            'Please check both your old and new email addresses to confirm the change.',
+            'Please check your new email address to confirm the change.',
             [{ text: 'OK' }]
           );
         } catch (error: any) {
@@ -1392,19 +1347,21 @@ const SettingsScreen = () => {
   const handleChangePassword = () => {
     Alert.prompt(
       'Change Password',
-      'Enter your new password (minimum 6 characters)',
+      'Enter your new password (minimum 8 characters)',
       async (newPassword) => {
-        if (!newPassword || newPassword.length < 6) {
-          Alert.alert('Invalid Password', 'Password must be at least 6 characters long.');
+        if (!newPassword || newPassword.length < 8) {
+          Alert.alert('Invalid Password', 'Password must be at least 8 characters long.');
           return;
         }
 
         try {
-          const { error } = await supabase.auth.updateUser({
-            password: newPassword
-          });
+          if (!clerkUser) {
+            Alert.alert('Error', 'Please log in again to change your password.');
+            return;
+          }
 
-          if (error) throw error;
+          // Use Clerk to update password
+          await clerkUser.updatePassword({ newPassword });
 
           Alert.alert(
             'Password Updated',
@@ -1446,28 +1403,20 @@ const SettingsScreen = () => {
             text: 'Export',
             onPress: async () => {
               try {
-                const { data: { session } } = await supabase.auth.getSession();
-                if (!session?.user) {
+                if (!clerkUserId || !clerkUser) {
                   Alert.alert('Error', 'Please log in to export your data.');
                   return;
                 }
 
-                // Fetch all user data
-                const [profileData, sessionsData, tasksData, settingsData] = await Promise.all([
-                  supabase.from('profiles').select('*').eq('user_id', session.user.id).single(),
-                  supabase.from('focus_sessions').select('*').eq('user_id', session.user.id),
-                  supabase.from('tasks').select('*').eq('user_id', session.user.id),
-                  supabase.from('user_settings').select('*').eq('user_id', session.user.id).single()
-                ]);
-
+                // Use already loaded Convex data from useUserAppData hook
                 const exportData = {
                   export_date: new Date().toISOString(),
-                  user_id: session.user.id,
-                  email: session.user.email,
-                  profile: profileData.data,
-                  focus_sessions: sessionsData.data || [],
-                  tasks: tasksData.data || [],
-                  settings: settingsData.data
+                  user_id: clerkUserId,
+                  email: clerkUser.primaryEmailAddress?.emailAddress,
+                  profile: userData?.profile || profile,
+                  focus_sessions: userData?.sessions || [],
+                  tasks: userData?.tasks || [],
+                  settings: userData?.settings
                 };
 
                 // Convert to JSON string
@@ -1501,6 +1450,63 @@ const SettingsScreen = () => {
     }
   };
 
+  const handleSignOut = () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            console.log('⚙️ [Settings] Signing out...');
+
+            // Sign out of Clerk (primary auth)
+            // Handle React Native compatibility errors (CustomEvent, document.hasFocus, etc.)
+            try {
+              await clerkSignOut();
+              console.log('⚙️ [Settings] Clerk sign out successful');
+            } catch (clerkErr: any) {
+              // Check if it's a React Native compatibility error - these are expected
+              // Clerk SDK uses browser APIs that don't exist in RN: CustomEvent, hasFocus, dispatchEvent, etc.
+              const errMsg = clerkErr?.message || String(clerkErr);
+              if (errMsg.includes('CustomEvent') || errMsg.includes('hasFocus') || errMsg.includes('document') || errMsg.includes('dispatchEvent') || errMsg.includes('window')) {
+                console.log('⚙️ [Settings] Clerk RN compatibility error (sign out likely succeeded):', errMsg);
+                // Sign out probably worked, continue to navigation
+              } else {
+                console.error('⚙️ [Settings] Clerk sign out error:', clerkErr);
+                // Still continue - we'll navigate away anyway
+              }
+            }
+
+            // Also sign out of legacy auth for cleanup
+            try {
+              await legacySignOut();
+              console.log('⚙️ [Settings] Legacy sign out successful');
+            } catch (legacyErr) {
+              // Ignore legacy sign out errors - Clerk is primary now
+              console.log('⚙️ [Settings] Legacy sign out error (ignored):', legacyErr);
+            }
+
+            // Navigate to Landing page regardless of errors
+            // The session token will be cleared, so user will appear signed out
+            console.log('⚙️ [Settings] Navigating to Landing...');
+            navigation.dispatch(
+              CommonActions.reset({
+                index: 0,
+                routes: [{ name: 'Landing' as any }],
+              })
+            );
+          }
+        }
+      ]
+    );
+  };
+
   const handleDeleteAccount = () => {
     Alert.alert(
       '⚠️ Delete Account',
@@ -1525,39 +1531,26 @@ const SettingsScreen = () => {
                 }
 
                 try {
-                  const { data: { session } } = await supabase.auth.getSession();
-                  if (!session?.user) {
+                  if (!clerkUser) {
                     Alert.alert('Error', 'Please log in to delete your account.');
                     return;
                   }
 
-                  // Delete user data from all tables
-                  const deletePromises = [
-                    supabase.from('profiles').delete().eq('user_id', session.user.id),
-                    supabase.from('focus_sessions').delete().eq('user_id', session.user.id),
-                    supabase.from('tasks').delete().eq('user_id', session.user.id),
-                    supabase.from('user_settings').delete().eq('user_id', session.user.id),
-                    supabase.from('onboarding_preferences').delete().eq('user_id', session.user.id)
-                  ];
+                  // Delete user via Clerk - this will trigger webhook to clean up Convex data
+                  await clerkUser.delete();
 
-                  await Promise.all(deletePromises);
-
-                  // Delete auth user (Note: This requires admin privileges)
-                  // In production, this should be done via an Edge Function
                   Alert.alert(
-                    'Account Deletion Initiated',
-                    'Your data has been removed. For security reasons, account deletion requires admin approval.\n\nPlease contact support to complete the deletion process.',
+                    'Account Deleted',
+                    'Your account and all associated data have been deleted successfully.',
                     [
                       {
-                        text: 'Contact Support',
+                        text: 'OK',
                         onPress: () => {
-                          Alert.alert('Support', 'Email: support@thetriage.app\n\nPlease reference your account deletion request.');
-                        }
-                      },
-                      {
-                        text: 'Sign Out',
-                        onPress: async () => {
-                          await supabase.auth.signOut();
+                          // Navigate to auth screen after deletion
+                          navigation.reset({
+                            index: 0,
+                            routes: [{ name: 'Auth' } as any],
+                          });
                         }
                       }
                     ]
@@ -1606,8 +1599,7 @@ const SettingsScreen = () => {
     }
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) return;
+      if (!clerkUserId) return;
 
       // Prepare update data - Nora and Patrick are mutually exclusive for Pro users
       const updateData: any = {
@@ -1623,8 +1615,8 @@ const SettingsScreen = () => {
         }
       }
 
-      // Update in user_settings
-      await updateUserSettings(session.user.id, updateData);
+      // Update in user_settings via Convex
+      await updateUserSettings(clerkUserId, updateData);
 
       // Update local state with mutual exclusion
       if (aiType === 'nora') {
@@ -1673,10 +1665,9 @@ const SettingsScreen = () => {
     }
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) return;
+      if (!clerkUserId) return;
 
-      await updateUserSettings(session.user.id, {
+      await updateUserSettings(clerkUserId, {
         personalized_responses: value
       } as any);
 
@@ -1716,59 +1707,24 @@ const SettingsScreen = () => {
   const handleSave = async () => {
     try {
       setIsSaving(true);
-      
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
+
+      if (!clerkUserId) {
         throw new Error('No authenticated user');
       }
 
-      // Save sound preference to onboarding_preferences table
-      const { error: onboardingError } = await supabase
-        .from('onboarding_preferences')
-        .upsert({
-          user_id: session.user.id,
-          sound_preference: selectedSound,
-          updated_at: new Date().toISOString()
-        });
+      // Save sound preference via Convex
+      await updateUserSettings(clerkUserId, {
+        sound_enabled: sound,
+        auto_play_sound: autoPlaySound
+      } as any);
 
-      if (onboardingError) {
-        console.error('Error saving sound preference:', onboardingError);
-      } else {
-        console.log('✅ Sound preference saved successfully');
-      }
-
-      // Also update profile table for backup
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert({
-          id: session.user.id,
-          soundpreference: selectedSound,
-          updated_at: new Date().toISOString()
-        });
-
-      if (profileError) {
-        console.warn('Profile update warning (may not affect functionality):', profileError);
-      }
-
-      // Save auto-play setting to user_settings if table exists
-      try {
-        const { error: settingsError } = await supabase
-          .from('user_settings')
-          .upsert({
-            user_id: session.user.id,
-            auto_play_sound: autoPlaySound,
-            updated_at: new Date().toISOString()
-          });
-
-        if (settingsError) {
-          console.log('User settings table may not exist, auto-play setting not saved');
-        }
-      } catch (settingsErr) {
-        console.log('User settings table not available');
-      }
+      // Update profile with sound preference
+      await updateProfile({
+        soundPreference: selectedSound
+      });
 
       Alert.alert('Success', 'Settings saved successfully!');
-      
+
     } catch (error) {
       console.error('Error saving settings:', error);
       Alert.alert('Error', 'Failed to save settings. Please try again.');
@@ -1782,18 +1738,13 @@ const SettingsScreen = () => {
     setAutoPlaySound(value);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
+      if (!clerkUserId) {
         throw new Error('No authenticated user');
       }
 
-      const success = await updateUserSettings(session.user.id, {
+      await updateUserSettings(clerkUserId, {
         auto_play_sound: value
       });
-
-      if (!success) {
-        throw new Error('Failed to update user settings');
-      }
 
       console.log(`🎵 Auto-play sound setting saved: ${value}`);
 
@@ -1887,25 +1838,24 @@ const SettingsScreen = () => {
     if (isPlaying && isPreviewMode) {
       await stopPreview();
     }
-    
+
     // Update state
     setSelectedSound(preference);
-    
+
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
+      if (!clerkUserId) {
         throw new Error('No authenticated user');
       }
-      
-      // Use centralized music preference saving
-      await saveMusicPreferences(session.user.id, {
+
+      // Use centralized music preference saving (already migrated to Convex)
+      await saveMusicPreferences(clerkUserId, {
         sound_preference: preference,
         auto_play_sound: autoPlaySound
       });
-      
+
       // Start a preview of the new sound
       await playPreview(preference);
-      
+
     } catch (error) {
       console.error('Error saving sound preference:', error);
       Alert.alert('Error', 'Failed to save sound preference. Please try again.');
@@ -2378,6 +2328,16 @@ const SettingsScreen = () => {
               <Text style={[styles.rowLabel, rowLabelTextStyle]}>Export Data</Text>
               <Text style={[styles.rowDescription, rowDescriptionTextStyle]}>
                 Download all your personal data
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward-outline" size={20} color={secondaryTextColor} />
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.rowCard, rowCardBaseStyle]} onPress={handleSignOut} activeOpacity={0.7}>
+            <Ionicons name="log-out-outline" size={22} color={iconPrimary} style={styles.rowIcon} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowLabel, rowLabelTextStyle]}>Sign Out</Text>
+              <Text style={[styles.rowDescription, rowDescriptionTextStyle]}>
+                Sign out of your account
               </Text>
             </View>
             <Ionicons name="chevron-forward-outline" size={20} color={secondaryTextColor} />

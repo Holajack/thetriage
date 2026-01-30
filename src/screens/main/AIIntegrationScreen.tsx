@@ -14,7 +14,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
-import { supabase } from '../../utils/supabase';
 
 const AIIntegrationScreen = () => {
   const { theme, fontSize } = useTheme();
@@ -34,16 +33,8 @@ const AIIntegrationScreen = () => {
 
   const handleAIToggle = async (aiType: string, value: boolean) => {
     try {
-      // Save AI preference to database
-      const { error } = await supabase
-        .from('user_settings')
-        .upsert({
-          user_id: user?.id,
-          [`${aiType}_enabled`]: value,
-          updated_at: new Date().toISOString()
-        });
-
-      if (error) throw error;
+      // TODO: Save AI preference to Convex using api.settings.update
+      // For now, just update local state
 
       // Update local state
       if (aiType === 'nora') setNoraEnabled(value);
@@ -59,15 +50,8 @@ const AIIntegrationScreen = () => {
 
   const handlePersonalizationToggle = async (settingType: string, value: boolean) => {
     try {
-      const { error } = await supabase
-        .from('user_settings')
-        .upsert({
-          user_id: user?.id,
-          [settingType]: value,
-          updated_at: new Date().toISOString()
-        });
-
-      if (error) throw error;
+      // TODO: Save personalization settings to Convex using api.settings.update
+      // For now, just update local state
 
       if (settingType === 'personalized_responses') setPersonalizedResponses(value);
       if (settingType === 'contextual_suggestions') setContextualSuggestions(value);

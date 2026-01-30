@@ -10,7 +10,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { MainTabParamList } from '../../navigation/types';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-import { useSupabaseProfile } from '../../utils/supabaseHooks';
+import { useConvexProfile } from '../../hooks/useConvex';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { UnifiedHeader } from '../../components/UnifiedHeader';
 import { FlintIcon } from '../../components/FlintIcon';
@@ -89,7 +89,7 @@ const ShopScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<MainTabParamList>>();
   const { theme } = useTheme();
   const { user } = useAuth();
-  const { profile, updateProfile } = useSupabaseProfile();
+  const { profile, updateProfile } = useConvexProfile();
   const [selectedCategory, setSelectedCategory] = useState<ShopCategory>('gear');
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [equippedItems, setEquippedItems] = useState<EquippedItem[]>([]);

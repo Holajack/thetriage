@@ -1,6 +1,16 @@
-// Create this new file for user settings management
+import { ConvexReactClient } from "convex/react";
+import { api } from "../../convex/_generated/api";
 
-import { supabase } from './supabase';
+let _convexClient: ConvexReactClient | null = null;
+
+export function setConvexClient(client: ConvexReactClient) {
+  _convexClient = client;
+}
+
+function getClient(): ConvexReactClient {
+  if (!_convexClient) throw new Error("Convex client not initialized");
+  return _convexClient;
+}
 
 export interface UserSettings {
   auto_play_sound?: boolean;
@@ -19,9 +29,9 @@ export interface UserSettings {
   timezone?: string;
   language?: string;
   vibration_enabled?: boolean;
-  workStyle?: string; // Add work style field
-  focus_duration?: number; // Add focus duration
-  break_duration?: number; // Add break duration
+  workStyle?: string;
+  focus_duration?: number;
+  break_duration?: number;
 }
 
 /**
@@ -29,30 +39,28 @@ export interface UserSettings {
  */
 export async function getUserSettings(userId?: string): Promise<UserSettings | null> {
   try {
-    let currentUserId = userId;
-    
-    // If no userId provided, get it from current session
-    if (!currentUserId) {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
-        console.warn('No authenticated user found');
-        return null;
-      }
-      currentUserId = session.user.id;
-    }
+    const client = getClient();
+    const settings = await client.query(api.settings.get, {});
 
-    const { data, error } = await supabase
-      .from('user_settings')
-      .select('*')
-      .eq('user_id', currentUserId)
-      .single();
-
-    if (error && error.code !== 'PGRST116') {
-      console.error('Error fetching user settings:', error);
+    if (!settings) {
+      console.warn('No settings found for current user');
       return null;
     }
 
-    return data;
+    // Convert Convex camelCase to snake_case for backward compatibility
+    return {
+      auto_play_sound: settings.autoPlaySound,
+      sound_enabled: settings.soundEnabled,
+      music_volume: settings.musicVolume,
+      theme: settings.theme as 'light' | 'dark' | 'auto',
+      notifications_enabled: settings.notificationsEnabled,
+      auto_start_breaks: settings.autoStartBreaks,
+      auto_start_focus: settings.autoStartFocus,
+      auto_dnd_focus: settings.autoDndFocus,
+      daily_goal_minutes: settings.dailyGoalMinutes,
+      preferred_session_length: settings.preferredSessionLength,
+      preferred_break_length: settings.breakLength,
+    };
   } catch (error) {
     console.error('Error in getUserSettings:', error);
     return null;
@@ -64,43 +72,24 @@ export async function getUserSettings(userId?: string): Promise<UserSettings | n
  */
 export async function updateUserSettings(userId: string, settings: UserSettings): Promise<boolean> {
   try {
-    // First check if settings exist for this user
-    const { data: existingSettings } = await supabase
-      .from('user_settings')
-      .select('id')
-      .eq('user_id', userId)
-      .single();
+    const client = getClient();
 
-    if (existingSettings) {
-      // Update existing settings
-      const { error } = await supabase
-        .from('user_settings')
-        .update({
-          ...settings,
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', userId);
+    // Convert snake_case to camelCase for Convex
+    const convexSettings: any = {};
 
-      if (error) {
-        console.error('Error updating existing user settings:', error);
-        return false;
-      }
-    } else {
-      // Insert new settings
-      const { error } = await supabase
-        .from('user_settings')
-        .insert({
-          user_id: userId,
-          ...settings,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
+    if (settings.auto_play_sound !== undefined) convexSettings.autoPlaySound = settings.auto_play_sound;
+    if (settings.sound_enabled !== undefined) convexSettings.soundEnabled = settings.sound_enabled;
+    if (settings.music_volume !== undefined) convexSettings.musicVolume = settings.music_volume;
+    if (settings.theme !== undefined) convexSettings.theme = settings.theme;
+    if (settings.notifications_enabled !== undefined) convexSettings.notificationsEnabled = settings.notifications_enabled;
+    if (settings.auto_start_breaks !== undefined) convexSettings.autoStartBreaks = settings.auto_start_breaks;
+    if (settings.auto_start_focus !== undefined) convexSettings.autoStartFocus = settings.auto_start_focus;
+    if (settings.auto_dnd_focus !== undefined) convexSettings.autoDndFocus = settings.auto_dnd_focus;
+    if (settings.daily_goal_minutes !== undefined) convexSettings.dailyGoalMinutes = settings.daily_goal_minutes;
+    if (settings.preferred_session_length !== undefined) convexSettings.preferredSessionLength = settings.preferred_session_length;
+    if (settings.preferred_break_length !== undefined) convexSettings.breakLength = settings.preferred_break_length;
 
-      if (error) {
-        console.error('Error creating new user settings:', error);
-        return false;
-      }
-    }
+    await client.mutation(api.settings.update, convexSettings);
 
     console.log('✅ User settings updated successfully');
     return true;

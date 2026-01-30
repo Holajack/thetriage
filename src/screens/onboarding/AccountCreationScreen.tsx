@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,24 +13,24 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, RouteProp } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { OnboardingStackParamList } from '../../navigation/types';
-import { useAuth } from '../../context/AuthContext';
+import { useSignUp } from '@clerk/clerk-expo';
 import Animated, { FadeIn, FadeInRight, withSequence, withSpring, useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { AnimatedButton } from '../../components/premium/AnimatedButton';
 import { StaggeredItem } from '../../components/premium/StaggeredList';
 import { useEntranceAnimation, useProgressAnimation } from '../../utils/animationUtils';
+import { createInitialUserData } from '../../utils/createUserData';
 
 type AccountCreationNavigationProp = NativeStackNavigationProp<OnboardingStackParamList, 'AccountCreation'>;
-type AccountCreationRouteProp = RouteProp<OnboardingStackParamList, 'AccountCreation'>;
 
-export default function AccountCreationScreen({ route }: { route: AccountCreationRouteProp }) {
+export default function AccountCreationScreen() {
   const navigation = useNavigation<AccountCreationNavigationProp>();
-  const { signUp, updateOnboarding } = useAuth();
+  const { signUp, setActive, isLoaded } = useSignUp();
   const headerAnimation = useEntranceAnimation(0);
-  const progressAnimation = useProgressAnimation(2 / 5); // Step 2 of 5
+  const progressAnimation = useProgressAnimation(1 / 5); // Step 1 of 5
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -89,7 +89,12 @@ export default function AccountCreationScreen({ route }: { route: AccountCreatio
     setValidationStates(prev => ({ ...prev, confirmPassword: text === password && text.length > 0 }));
   }
 
-  const handleSignUp = async () => {
+  const handleSignUp = useCallback(async () => {
+    if (!isLoaded || !signUp) {
+      setError('Authentication is not ready. Please try again.');
+      return;
+    }
+
     setError('');
     if (!fullName.trim()) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -119,40 +124,64 @@ export default function AccountCreationScreen({ route }: { route: AccountCreatio
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setIsLoading(true);
-    const { error: signUpError } = await signUp(email, password, {
-      username: username,
-      full_name: fullName
-    });
-    setIsLoading(false);
 
-    if (signUpError) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setError(signUpError);
-      Alert.alert('Sign Up Failed', signUpError);
-    } else {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert('Success', 'Account created successfully! Please check your email to verify your account before logging in.');
+    try {
+      console.log('📝 [AccountCreation] Creating signup...');
 
-      // Save focus method immediately after account creation
-      if (route.params?.focusMethod) {
-        try {
-          await updateOnboarding({
-            focus_method: route.params.focusMethod
-          });
-          console.log('✅ Focus method saved after account creation');
-        } catch (error) {
-          console.error('⚠️ Failed to save focus method after signup:', error);
-          // Continue anyway - we'll retry in later screens
-        }
-      }
+      // Split full name into first and last name for Clerk
+      const nameParts = fullName.trim().split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
 
-      // Navigate to next step in onboarding flow
-      navigation.navigate('ProfileCreation', {
-        focusMethod: route.params?.focusMethod,
-        email: email
+      console.log('📝 [AccountCreation] Signup params:', {
+        emailAddress: email,
+        username: username,
+        firstName,
+        lastName,
       });
+
+      // Create the signup with Clerk - username must be top-level field if required
+      const createResult = await signUp.create({
+        emailAddress: email,
+        password: password,
+        username: username, // Pass username as top-level field, not in metadata
+        firstName: firstName,
+        lastName: lastName,
+        unsafeMetadata: {
+          full_name: fullName, // Keep original full name for reference
+        },
+      });
+      console.log('📝 [AccountCreation] Signup created, status:', createResult.status);
+      console.log('📝 [AccountCreation] Missing fields:', createResult.missingFields);
+      console.log('📝 [AccountCreation] Unverified fields:', createResult.unverifiedFields);
+      console.log('📝 [AccountCreation] SignUp ID:', signUp.id);
+
+      // Prepare email verification
+      console.log('📝 [AccountCreation] Preparing email verification...');
+      const prepareResult = await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
+      console.log('📝 [AccountCreation] Verification prepared, status:', prepareResult.status);
+      console.log('📝 [AccountCreation] SignUp after prepare:', signUp.status);
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      console.log('📝 [AccountCreation] Navigating to EmailVerification...');
+      // Navigate to email verification screen
+      navigation.navigate('EmailVerification', {
+        email: email,
+        password: password,
+        username: username,
+        fullName: fullName,
+      });
+    } catch (err: any) {
+      // Handle Clerk errors
+      const errorMessage = err?.errors?.[0]?.message || err?.message || 'Sign up failed. Please try again.';
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setError(errorMessage);
+      Alert.alert('Sign Up Failed', errorMessage);
+    } finally {
+      setIsLoading(false);
     }
-  };
+  }, [isLoaded, signUp, email, password, confirmPassword, fullName, username, navigation]);
 
   return (
     <LinearGradient
@@ -175,11 +204,11 @@ export default function AccountCreationScreen({ route }: { route: AccountCreatio
               style={styles.backButton}
             >
               <Ionicons name="arrow-back" size={24} color="#E8F5E9" />
-              <Text style={styles.backButtonText}>Focus Method</Text>
+              <Text style={styles.backButtonText}>Back</Text>
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Create Your Account</Text>
             <Text style={styles.headerSubtitle}>
-              Step 2 of 5 • Let's get your account set up.
+              Step 1 of 5 • Let's get your account set up.
             </Text>
           </Animated.View>
 
@@ -318,8 +347,8 @@ export default function AccountCreationScreen({ route }: { route: AccountCreatio
             iconPosition="right"
           />
           <View style={styles.progressIndicator}>
-            <View style={styles.progressDot} />
             <View style={[styles.progressDot, styles.progressDotActive]} />
+            <View style={styles.progressDot} />
             <View style={styles.progressDot} />
             <View style={styles.progressDot} />
             <View style={styles.progressDot} />
