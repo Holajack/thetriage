@@ -509,9 +509,12 @@ export const useBackgroundMusic = () => {
   const stopPlayback = useCallback(async () => {
     console.log('🎵 ========== STOP PLAYBACK CALLED - FORCE STOPPING EVERYTHING ==========');
 
-    // CRITICAL: Set flags IMMEDIATELY to prevent any auto-advance or new playback
+    // CRITICAL: Set flag IMMEDIATELY to prevent any auto-advance during stop
+    // NOTE: We do NOT set allowAutoAdvanceRef.current = false here because:
+    // 1. The component manages auto-advance via enableAutoAdvance()/disableAutoAdvance()
+    // 2. startPlaylist() calls stopPlayback() but should retain auto-advance state
+    // 3. Component cleanup already calls disableAutoAdvance() before stopPlayback()
     isStoppingRef.current = true;
-    allowAutoAdvanceRef.current = false; // Also disable auto-advance here
 
     const activeSound = primarySound.current;
     primarySound.current = null;

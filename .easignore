@@ -2,6 +2,8 @@
 assets/examples/**
 assets/errors/**
 assets/Claude iOS Onboarding/**
+assets/trail-buddies/example-input-images/**
+assets/Background_animations/**
 
 # Exclude backup images
 assets/*-backup*.png
@@ -48,11 +50,15 @@ android/.gradle/**
 android/build/**
 *.log
 
-# Exclude scripts
+# Exclude scripts and development tools
 scripts/**
 ci_scripts/**
+execution/**
+directives/**
+.tmp/**
 *.sh
 *.exp
+*.py
 
 # Keep these - they are used in the app:
 # - assets/nora-walking-cute.png
