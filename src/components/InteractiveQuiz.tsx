@@ -1,66 +1,200 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
-import { QuizQuestion, QuizResult, STUDY_HABITS_QUESTIONS, LEARNING_STYLE_QUESTIONS, MOTIVATION_PROFILE_QUESTIONS, FOCUS_TYPE_QUESTIONS, STUDY_HABITS_RESULTS, LEARNING_STYLE_RESULTS, MOTIVATION_PROFILE_RESULTS, FOCUS_TYPE_RESULTS } from '../data/quizData';
+import { QuizQuestion as LegacyQuizQuestion, QuizResult, STUDY_HABITS_QUESTIONS, LEARNING_STYLE_QUESTIONS, MOTIVATION_PROFILE_QUESTIONS, FOCUS_TYPE_QUESTIONS, STUDY_HABITS_RESULTS, LEARNING_STYLE_RESULTS, MOTIVATION_PROFILE_RESULTS, FOCUS_TYPE_RESULTS } from '../data/quizData';
 import { saveQuizResultLocally, saveQuizResultToDatabase } from '../utils/quizStorage';
 import { recordQuizCompletion } from '../utils/achievementManager';
 import { useAuth } from '../context/AuthContext';
+import { useMutation, useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import { Id } from '../../convex/_generated/dataModel';
+
+// Convex question type
+interface ConvexQuizQuestion {
+  _id: Id<'quizQuestions'>;
+  questionId: string;
+  questionText: string;
+  questionFormat: string;
+  options: Array<{
+    value: number;
+    label: string;
+    scoringWeight?: number;
+  }>;
+  weight: number;
+  difficulty: number;
+  subDimensionId: Id<'quizSubDimensions'>;
+  categoryId: Id<'quizCategories'>;
+  isReversed?: boolean;
+}
 
 interface InteractiveQuizProps {
-  quizType: 'study_habits' | 'learning_style' | 'motivation_profile' | 'focus_type';
+  quizType: string;
+  categorySlug?: string;
+  categoryId?: Id<'quizCategories'>;
   onComplete: (result: QuizResult) => void;
   onClose: () => void;
 }
 
-const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({ quizType, onComplete, onClose }) => {
+const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({ quizType, categorySlug, categoryId, onComplete, onClose }) => {
   const { theme } = useTheme();
   const { user } = useAuth();
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<{ [key: string]: number }>({});
-  const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]);
+  const [quizQuestions, setQuizQuestions] = useState<(LegacyQuizQuestion | ConvexQuizQuestion)[]>([]);
   const [startTime, setStartTime] = useState<Date>(new Date());
+  const [questionStartTime, setQuestionStartTime] = useState<Date>(new Date());
   const [showExitModal, setShowExitModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [sessionId, setSessionId] = useState<Id<'quizSessions'> | null>(null);
+  const [useConvex, setUseConvex] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
 
-  // Initialize quiz with random 15 questions
+  // Convex mutations
+  const startSessionMutation = useMutation(api.quizSessions.startSession);
+  const submitAnswerMutation = useMutation(api.quizSessions.submitAnswer);
+  const completeSessionMutation = useMutation(api.quizSessions.completeSession);
+  const abandonSessionMutation = useMutation(api.quizSessions.abandonSession);
+
+  // Query for random questions from Convex
+  const convexQuestions = useQuery(
+    api.quizQuestions.getRandomQuestionsForSession,
+    categorySlug
+      ? {
+          categorySlug,
+          educationLevel: 'college', // Default, could be user preference
+          questionsCount: 15,
+          sessionType: 'full',
+        }
+      : 'skip'
+  );
+
+  // Initialize quiz
   useEffect(() => {
-    let allQuestions: QuizQuestion[] = [];
-    switch (quizType) {
-      case 'study_habits':
-        allQuestions = STUDY_HABITS_QUESTIONS;
-        break;
-      case 'learning_style':
-        allQuestions = LEARNING_STYLE_QUESTIONS;
-        break;
-      case 'motivation_profile':
-        allQuestions = MOTIVATION_PROFILE_QUESTIONS;
-        break;
-      case 'focus_type':
-        allQuestions = FOCUS_TYPE_QUESTIONS;
-        break;
-    }
-    const shuffled = [...allQuestions].sort(() => 0.5 - Math.random());
-    const selected = shuffled.slice(0, 15);
-    setQuizQuestions(selected);
-    setStartTime(new Date());
-  }, [quizType]);
+    const initializeQuiz = async () => {
+      setIsInitializing(true);
+      setStartTime(new Date());
+      setQuestionStartTime(new Date());
+
+      // Check if we can use Convex
+      if (categorySlug && convexQuestions && convexQuestions.length > 0) {
+        setUseConvex(true);
+        setQuizQuestions(convexQuestions);
+
+        // Start Convex session
+        try {
+          const session = await startSessionMutation({
+            categorySlug,
+            sessionType: 'full',
+            educationLevel: 'college',
+            questionsCount: convexQuestions.length,
+            questionIds: convexQuestions.map((q) => q._id),
+          });
+          setSessionId(session.sessionId);
+        } catch (error) {
+          console.error('Error starting Convex session:', error);
+          // Fall back to legacy mode
+          setUseConvex(false);
+          initializeLegacyQuiz();
+        }
+      } else if (!categorySlug) {
+        // Use legacy mode
+        setUseConvex(false);
+        initializeLegacyQuiz();
+      }
+      // If categorySlug exists but convexQuestions is still loading, wait
+      if (categorySlug && convexQuestions === undefined) {
+        return; // Still loading
+      }
+      setIsInitializing(false);
+    };
+
+    const initializeLegacyQuiz = () => {
+      let allQuestions: LegacyQuizQuestion[] = [];
+      switch (quizType) {
+        case 'study_habits':
+          allQuestions = STUDY_HABITS_QUESTIONS;
+          break;
+        case 'learning_style':
+          allQuestions = LEARNING_STYLE_QUESTIONS;
+          break;
+        case 'motivation_profile':
+        case 'motivation':
+          allQuestions = MOTIVATION_PROFILE_QUESTIONS;
+          break;
+        case 'focus_type':
+        case 'focus_attention':
+          allQuestions = FOCUS_TYPE_QUESTIONS;
+          break;
+        default:
+          allQuestions = STUDY_HABITS_QUESTIONS;
+      }
+      const shuffled = [...allQuestions].sort(() => 0.5 - Math.random());
+      const selected = shuffled.slice(0, 15);
+      setQuizQuestions(selected);
+    };
+
+    initializeQuiz();
+  }, [quizType, categorySlug, convexQuestions]);
 
   const currentQuestion = quizQuestions[currentQuestionIndex];
-  const progress = ((currentQuestionIndex + 1) / quizQuestions.length) * 100;
+  const progress = quizQuestions.length > 0 ? ((currentQuestionIndex + 1) / quizQuestions.length) * 100 : 0;
 
-  const handleAnswer = (optionIndex: number) => {
+  // Get question ID (works for both legacy and Convex questions)
+  const getQuestionId = (question: LegacyQuizQuestion | ConvexQuizQuestion): string => {
+    if ('_id' in question) {
+      return question._id;
+    }
+    return question.id;
+  };
+
+  // Get question text
+  const getQuestionText = (question: LegacyQuizQuestion | ConvexQuizQuestion): string => {
+    if ('questionText' in question) {
+      return question.questionText;
+    }
+    return question.question;
+  };
+
+  // Get options for the question
+  const getOptions = (question: LegacyQuizQuestion | ConvexQuizQuestion): string[] => {
+    if ('questionFormat' in question && question.options) {
+      return question.options.map((opt) => opt.label);
+    }
+    return (question as LegacyQuizQuestion).options;
+  };
+
+  const handleAnswer = async (optionIndex: number) => {
     if (!currentQuestion) return;
-    
-    setAnswers(prev => ({
+
+    const questionId = getQuestionId(currentQuestion);
+    const responseTimeMs = Date.now() - questionStartTime.getTime();
+
+    setAnswers((prev) => ({
       ...prev,
-      [currentQuestion.id]: optionIndex
+      [questionId]: optionIndex,
     }));
+
+    // Submit to Convex if using Convex mode
+    if (useConvex && sessionId && '_id' in currentQuestion) {
+      try {
+        await submitAnswerMutation({
+          sessionId,
+          questionId: currentQuestion._id,
+          selectedValue: optionIndex,
+          responseTimeMs,
+        });
+      } catch (error) {
+        console.error('Error submitting answer to Convex:', error);
+        // Continue anyway - don't block the user
+      }
+    }
 
     // Auto-advance after selection
     setTimeout(() => {
       if (currentQuestionIndex < quizQuestions.length - 1) {
-        setCurrentQuestionIndex(prev => prev + 1);
+        setCurrentQuestionIndex((prev) => prev + 1);
+        setQuestionStartTime(new Date());
       } else {
         completeQuiz();
       }
@@ -75,25 +209,50 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({ quizType, onComplete,
 
   const completeQuiz = async () => {
     if (isSaving) return;
-    
+
     setIsSaving(true);
     try {
-      const result = calculateResults();
-      
-      // Save quiz result locally and to database
-      if (user?.id) {
-        await saveQuizResultLocally(result, user.id);
-        await saveQuizResultToDatabase(result, user.id);
-        
-        // Record achievement progress
-        const newBadges = await recordQuizCompletion(user.id);
-        
-        // Log achievement notifications (they're handled by the achievement manager)
-        if (newBadges.length > 0) {
-          console.log(`🏆 New badges earned:`, newBadges.map(b => b.name));
+      let result: QuizResult;
+
+      if (useConvex && sessionId) {
+        // Complete Convex session and get results
+        const convexResult = await completeSessionMutation({ sessionId });
+
+        // Transform Convex result to QuizResult format
+        result = {
+          quizId: categorySlug || quizType,
+          score: Math.round(convexResult.result.overallScore),
+          category: convexResult.result.dominantTrait,
+          description: convexResult.result.traitProfile.profileDescription,
+          recommendations: convexResult.result.areasForGrowth.flatMap((area) => area.recommendations),
+          completedAt: new Date(convexResult.result.completedAt),
+          // Extended data from Convex
+          convexResultId: convexResult.result._id,
+          subDimensionScores: convexResult.result.subDimensionScores,
+          strengths: convexResult.result.strengths,
+          areasForGrowth: convexResult.result.areasForGrowth,
+          traitProfile: convexResult.result.traitProfile,
+          percentileRank: convexResult.result.percentileRank,
+        };
+      } else {
+        // Legacy mode
+        result = calculateResults();
+
+        // Save quiz result locally and to database
+        if (user?.id) {
+          await saveQuizResultLocally(result, user.id);
+          await saveQuizResultToDatabase(result, user.id);
+
+          // Record achievement progress
+          const newBadges = await recordQuizCompletion(user.id);
+
+          // Log achievement notifications (they're handled by the achievement manager)
+          if (newBadges.length > 0) {
+            console.log(`🏆 New badges earned:`, newBadges.map((b) => b.name));
+          }
         }
       }
-      
+
       onComplete(result);
     } catch (error) {
       console.error('Error completing quiz:', error);
@@ -316,16 +475,24 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({ quizType, onComplete,
     }
   };
 
-  const confirmExit = () => {
+  const confirmExit = async () => {
+    // Abandon Convex session if active
+    if (useConvex && sessionId) {
+      try {
+        await abandonSessionMutation({ sessionId });
+      } catch (error) {
+        console.error('Error abandoning session:', error);
+      }
+    }
     setShowExitModal(false);
     onClose();
   };
 
-  if (quizQuestions.length === 0) {
+  if (isInitializing || quizQuestions.length === 0) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={[styles.loadingContainer, { backgroundColor: theme.background }]}>
         <Ionicons name="hourglass-outline" size={40} color={theme.primary} />
-        <Text style={styles.loadingText}>Preparing your quiz...</Text>
+        <Text style={[styles.loadingText, { color: theme.text }]}>Preparing your quiz...</Text>
       </View>
     );
   }
@@ -364,43 +531,48 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({ quizType, onComplete,
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={[styles.questionCard, { backgroundColor: theme.card }]}>
           <Text style={[styles.questionText, { color: theme.text }]}>
-            {currentQuestion.question}
+            {getQuestionText(currentQuestion)}
           </Text>
         </View>
 
         {/* Answer Options */}
         <View style={styles.optionsContainer}>
-          {currentQuestion.options.map((option, index) => {
-            const isSelected = answers[currentQuestion.id] === index;
+          {getOptions(currentQuestion).map((option, index) => {
+            const questionId = getQuestionId(currentQuestion);
+            const isSelected = answers[questionId] === index;
             return (
               <TouchableOpacity
                 key={index}
                 style={[
                   styles.optionButton,
-                  { 
+                  {
                     backgroundColor: isSelected ? theme.primary + '20' : theme.card,
-                    borderColor: isSelected ? theme.primary : 'transparent'
-                  }
+                    borderColor: isSelected ? theme.primary : 'transparent',
+                  },
                 ]}
                 onPress={() => handleAnswer(index)}
                 activeOpacity={0.7}
               >
                 <View style={styles.optionContent}>
-                  <View style={[
-                    styles.optionIndicator,
-                    { 
-                      backgroundColor: isSelected ? theme.primary : 'transparent',
-                      borderColor: isSelected ? theme.primary : '#DDD'
-                    }
-                  ]}>
+                  <View
+                    style={[
+                      styles.optionIndicator,
+                      {
+                        backgroundColor: isSelected ? theme.primary : 'transparent',
+                        borderColor: isSelected ? theme.primary : '#DDD',
+                      },
+                    ]}
+                  >
                     {isSelected && (
                       <Ionicons name="checkmark-outline" size={16} color="#FFF" />
                     )}
                   </View>
-                  <Text style={[
-                    styles.optionText,
-                    { color: isSelected ? theme.primary : theme.text }
-                  ]}>
+                  <Text
+                    style={[
+                      styles.optionText,
+                      { color: isSelected ? theme.primary : theme.text },
+                    ]}
+                  >
                     {option}
                   </Text>
                 </View>
@@ -429,7 +601,7 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({ quizType, onComplete,
 
         <View style={styles.navSpacer} />
 
-        {currentQuestionIndex === quizQuestions.length - 1 && answers[currentQuestion.id] !== undefined && (
+        {currentQuestionIndex === quizQuestions.length - 1 && answers[getQuestionId(currentQuestion)] !== undefined && (
           <TouchableOpacity
             style={[
               styles.completeButton, 

@@ -20,6 +20,7 @@ import {
   runOnJS,
   SharedValue,
   Easing,
+  cancelAnimation,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { AnimationConfig, TimingConfig, StaggerDelay, HapticPatterns } from '../theme/premiumTheme';
@@ -85,7 +86,12 @@ export const useEntranceAnimation = (delay: number = 0) => {
       translateY.value = withDelay(delay, withSpring(0, AnimationConfig.gentle));
     }, 50);
 
-    return () => clearTimeout(timeoutId);
+    return () => {
+      clearTimeout(timeoutId);
+      // Cancel any running animations on cleanup
+      cancelAnimation(opacity);
+      cancelAnimation(translateY);
+    };
   }, [delay]);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -140,7 +146,15 @@ export const usePulseAnimation = (enabled: boolean = true) => {
         -1, // Infinite
         true
       );
+    } else {
+      // Reset to default scale when disabled
+      scale.value = withTiming(1, { duration: 200 });
     }
+
+    // Cleanup: cancel animation on unmount or when enabled changes
+    return () => {
+      cancelAnimation(scale);
+    };
   }, [enabled]);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -162,6 +176,11 @@ export const useShimmerAnimation = () => {
       -1,
       false
     );
+
+    // Cleanup: cancel animation on unmount
+    return () => {
+      cancelAnimation(shimmerPosition);
+    };
   }, []);
 
   const shimmerStyle = useAnimatedStyle(() => ({

@@ -69,11 +69,66 @@ export const end = mutation({
       (endTime.getTime() - startTime.getTime()) / 1000
     );
 
+    // Calculate flint reward (1 flint per minute)
+    const durationMinutes = Math.floor(durationSeconds / 60);
+    const flintEarned = durationMinutes;
+
+    // Update the session
     await ctx.db.patch(args.sessionId, {
       endTime: endTime.toISOString(),
       durationSeconds,
       status: "completed",
     });
+
+    // Award flint to user
+    if (flintEarned > 0) {
+      const user = await ctx.db.get(session.userId);
+      if (user) {
+        await ctx.db.patch(session.userId, {
+          flintCurrency: (user.flintCurrency ?? 0) + flintEarned,
+        });
+      }
+    }
+
+    // Update leaderboard stats
+    const existingStats = await ctx.db
+      .query("leaderboardStats")
+      .withIndex("by_userId", (q) => q.eq("userId", session.userId))
+      .unique();
+
+    if (existingStats) {
+      // Update existing stats
+      await ctx.db.patch(existingStats._id, {
+        totalFocusTime: (existingStats.totalFocusTime ?? 0) + durationMinutes,
+        weeklyFocusTime: (existingStats.weeklyFocusTime ?? 0) + durationMinutes,
+        monthlyFocusTime: (existingStats.monthlyFocusTime ?? 0) + durationMinutes,
+        sessionsCompleted: (existingStats.sessionsCompleted ?? 0) + 1,
+        totalSessions: (existingStats.totalSessions ?? 0) + 1,
+        currentStreak: (existingStats.currentStreak ?? 0) + 1,
+        longestStreak: Math.max(
+          existingStats.longestStreak ?? 0,
+          (existingStats.currentStreak ?? 0) + 1
+        ),
+        points: (existingStats.points ?? 0) + durationMinutes,
+      });
+    } else {
+      // Create new stats record
+      await ctx.db.insert("leaderboardStats", {
+        userId: session.userId,
+        totalFocusTime: durationMinutes,
+        weeklyFocusTime: durationMinutes,
+        monthlyFocusTime: durationMinutes,
+        sessionsCompleted: 1,
+        totalSessions: 1,
+        currentStreak: 1,
+        longestStreak: 1,
+        points: durationMinutes,
+        level: 1,
+        achievementsEarned: 0,
+      });
+    }
+
+    return { durationSeconds, flintEarned, durationMinutes };
   },
 });
 

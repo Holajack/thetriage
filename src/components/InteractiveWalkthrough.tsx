@@ -87,7 +87,7 @@ const WALKTHROUGH_STEPS: WalkthroughStep[] = [
   {
     id: 'complete',
     title: 'You\'re Ready to Go!',
-    description: 'You now know the basics of The Triage System. Start with a focus session and explore at your own pace. Happy studying!',
+    description: 'You now know the basics of HikeWise. Start with a focus session and explore at your own pace. Happy studying!',
     position: 'center',
     action: 'observe',
   },

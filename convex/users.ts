@@ -178,3 +178,42 @@ export const deleteUser = mutation({
     }
   },
 });
+
+// --- User Search ---
+
+export const searchUsers = query({
+  args: { query: v.string() },
+  handler: async (ctx, args) => {
+    const currentUser = await getCurrentUserOrNull(ctx);
+    const searchTerm = args.query.toLowerCase().trim();
+
+    if (searchTerm.length < 2) {
+      return [];
+    }
+
+    // Get all users and filter by username or fullName
+    const allUsers = await ctx.db.query("users").collect();
+
+    const results = allUsers.filter((user) => {
+      // Don't include current user in search results
+      if (currentUser && user._id === currentUser._id) return false;
+
+      const username = (user.username ?? "").toLowerCase();
+      const fullName = (user.fullName ?? "").toLowerCase();
+
+      return (
+        username.includes(searchTerm) || fullName.includes(searchTerm)
+      );
+    });
+
+    // Limit to 20 results and return safe user data (no sensitive fields)
+    return results.slice(0, 20).map((user) => ({
+      _id: user._id,
+      username: user.username,
+      fullName: user.fullName,
+      avatarUrl: user.avatarUrl,
+      university: user.university,
+      status: user.status,
+    }));
+  },
+});

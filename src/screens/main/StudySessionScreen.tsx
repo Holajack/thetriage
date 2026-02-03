@@ -24,7 +24,8 @@ import ReAnimated, {
   withRepeat,
   Easing,
   interpolate,
-  runOnJS
+  runOnJS,
+  cancelAnimation
 } from 'react-native-reanimated';
 import { Typography, AnimationConfig, TimingConfig } from '../../theme/premiumTheme';
 import { useSuccessAnimation, triggerHaptic } from '../../utils/animationUtils';
@@ -1018,70 +1019,64 @@ export const StudySessionScreen = () => {
     };
   }, [stopSessionMusic, enableAutoAdvance, disableAutoAdvance]);
   
-  // Bottom sheet animation refs
-  const bottomSheetTranslateY = useRef(new Animated.Value(400)).current;
-  const bottomSheetOpacity = useRef(new Animated.Value(0)).current;
-  
+  // Bottom sheet animation using Reanimated for better performance
+  const bottomSheetTranslateY = useSharedValue(400);
+  const bottomSheetOpacity = useSharedValue(0);
+
+  // Animated styles for bottom sheet
+  const bottomSheetAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: bottomSheetTranslateY.value }],
+  }));
+
+  const backdropAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: bottomSheetOpacity.value,
+  }));
+
   // Bottom sheet animation functions
   const openMusicModal = () => {
     console.log('🎵 Opening music modal...');
-    console.log('🔄 Starting animation...');
-    console.log('📏 Initial translateY:', bottomSheetTranslateY);
     setShowMusicControls(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    Animated.parallel([
-      Animated.timing(bottomSheetOpacity, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: false,
-      }),
-      Animated.spring(bottomSheetTranslateY, {
-        toValue: 0,
-        damping: 20,
-        stiffness: 90,
-        useNativeDriver: false,
-      }),
-    ]).start(() => {
-      console.log('🎵 Music modal animation complete');
-      console.log('✅ Animation finished successfully');
+    bottomSheetOpacity.value = withTiming(1, { duration: 250 });
+    bottomSheetTranslateY.value = withSpring(0, {
+      damping: 25,
+      stiffness: 120,
+      mass: 0.8,
     });
   };
-  
+
   const closeMusicModal = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    Animated.parallel([
-      Animated.timing(bottomSheetOpacity, {
-        toValue: 0,
-        duration: 250,
-        useNativeDriver: false,
-      }),
-      Animated.timing(bottomSheetTranslateY, {
-        toValue: 400,
-        duration: 250,
-        useNativeDriver: false,
-      }),
-    ]).start(() => {
-      setShowMusicControls(false);
+    bottomSheetOpacity.value = withTiming(0, { duration: 200 });
+    bottomSheetTranslateY.value = withTiming(400, { duration: 250 }, () => {
+      runOnJS(setShowMusicControls)(false);
     });
   };
-  
+
   // Pan gesture for swipe-to-dismiss
   const panGesture = Gesture.Pan()
     .onChange((event) => {
       if (event.translationY > 0) {
-        bottomSheetTranslateY.setValue(event.translationY);
+        bottomSheetTranslateY.value = event.translationY;
+        // Fade backdrop as user drags down
+        bottomSheetOpacity.value = interpolate(
+          event.translationY,
+          [0, 400],
+          [1, 0.3]
+        );
       }
     })
     .onEnd((event) => {
       if (event.translationY > 100 || event.velocityY > 500) {
-        closeMusicModal();
+        runOnJS(closeMusicModal)();
       } else {
-        Animated.spring(bottomSheetTranslateY, {
-          toValue: 0,
-          damping: 20,
-          stiffness: 90,
-          useNativeDriver: false,
-        }).start();
+        // Snap back to open position
+        bottomSheetTranslateY.value = withSpring(0, {
+          damping: 25,
+          stiffness: 120,
+          velocity: event.velocityY,
+        });
+        bottomSheetOpacity.value = withSpring(1);
       }
     });
 
@@ -1375,17 +1370,17 @@ export const StudySessionScreen = () => {
             animationType="none"
             onRequestClose={closeMusicModal}
           >
-            <Animated.View 
+            <ReAnimated.View
               style={[
                 {
                   flex: 1,
                   backgroundColor: 'rgba(0, 0, 0, 0.4)',
                   justifyContent: 'flex-end',
                 },
-                { opacity: bottomSheetOpacity }
+                backdropAnimatedStyle
               ]}
             >
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={{
                   position: 'absolute',
                   top: 0,
@@ -1396,17 +1391,17 @@ export const StudySessionScreen = () => {
                 activeOpacity={1}
                 onPress={closeMusicModal}
               />
-              <Animated.View
+              <ReAnimated.View
                 style={[
                   modalStyles.musicBottomSheet,
-                  { 
+                  {
                     backgroundColor: environmentColors.card,
                     height: '58%',
                     width: '100%',
                     position: 'absolute',
                     bottom: 0,
-                    transform: [{ translateY: bottomSheetTranslateY }]
-                  }
+                  },
+                  bottomSheetAnimatedStyle
                 ]}
               >
                 <View style={{ flex: 1 }}>
@@ -1633,8 +1628,8 @@ export const StudySessionScreen = () => {
                         </TouchableOpacity>
                       </View>
                 </View>
-              </Animated.View>
-            </Animated.View>
+              </ReAnimated.View>
+            </ReAnimated.View>
           </Modal>
 
           {/* Task Information Overlay */}

@@ -105,7 +105,7 @@ export async function updateUserSettings(userId: string, settings: UserSettings)
 export async function createInitialUserSettings(userId: string): Promise<boolean> {
   try {
     const defaultSettings: UserSettings = {
-      auto_play_sound: false,
+      auto_play_sound: true,
       sound_enabled: true,
       music_volume: 0.5,
       theme: 'auto',

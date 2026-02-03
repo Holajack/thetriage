@@ -97,10 +97,17 @@ export const acceptRequest = mutation({
       respondedAt: new Date().toISOString(),
     });
 
-    // Create friendship (bidirectional)
+    // Create bidirectional friendship entries
+    // Entry 1: sender -> recipient
     await ctx.db.insert("friends", {
       userId: request.senderId,
       friendId: request.recipientId,
+    });
+
+    // Entry 2: recipient -> sender (bidirectional)
+    await ctx.db.insert("friends", {
+      userId: request.recipientId,
+      friendId: request.senderId,
     });
   },
 });

@@ -24,10 +24,10 @@ type LandingNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Land
 
 const { width, height } = Dimensions.get('window');
 
-const TriageLogo = ({ style }: { style?: any }) => (
+const HikeWiseLogo = ({ style }: { style?: any }) => (
   <View style={[styles.logoContainer, style]}>
-    <ThemedImage 
-      source={require('../assets/transparent-triage.png')} 
+    <ThemedImage
+      source={require('../assets/transparent-triage.png')}
       style={styles.logoImage}
       resizeMode="contain"
       applyFilter={true}
@@ -206,7 +206,7 @@ const LandingPage: React.FC = () => {
               },
             ]}
           >
-            <TriageLogo />
+            <HikeWiseLogo />
           </Animated.View>
 
           {/* Title Section */}

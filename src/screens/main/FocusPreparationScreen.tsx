@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput, Alert, Dimensions, Animated, KeyboardAvoidingView, Pressable } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { ThemedImageBackground } from '../../components/ThemedImage';
+import { ParallaxForestBackground } from '../../components/ParallaxForestBackground';
+import { AmbientMistBackground } from '../../components/AmbientMistBackground';
+import { FloatingParticles } from '../../components/FloatingParticles';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -21,7 +24,9 @@ import ReAnimated, {
   withRepeat,
   Easing,
   interpolate,
-  FadeInDown
+  FadeInDown,
+  LinearTransition,
+  cancelAnimation
 } from 'react-native-reanimated';
 import { Typography, Spacing, BorderRadius, Shadows, AnimationConfig, TimingConfig } from '../../theme/premiumTheme';
 import { useEntranceAnimation, useButtonPressAnimation, usePulseAnimation, triggerHaptic } from '../../utils/animationUtils';
@@ -29,7 +34,7 @@ import { useEntranceAnimation, useButtonPressAnimation, usePulseAnimation, trigg
 const { width, height } = Dimensions.get('window');
 
 // Animated Task Item Component
-const AnimatedTaskItem = ({ task, isSelected, onPress, index, theme }: any) => {
+const AnimatedTaskItem = ({ task, isSelected, onPress, index, theme, isNew }: any) => {
   const scale = useSharedValue(1);
   const selectedScale = useSharedValue(isSelected ? 1 : 0);
 
@@ -40,6 +45,14 @@ const AnimatedTaskItem = ({ task, isSelected, onPress, index, theme }: any) => {
       stiffness: 150,
     });
   }, [isSelected]);
+
+  // Cleanup animations on unmount
+  React.useEffect(() => {
+    return () => {
+      cancelAnimation(scale);
+      cancelAnimation(selectedScale);
+    };
+  }, []);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
@@ -62,7 +75,10 @@ const AnimatedTaskItem = ({ task, isSelected, onPress, index, theme }: any) => {
 
   return (
     <ReAnimated.View
-      entering={FadeInDown.delay(index * 60).springify().damping(15).stiffness(150)}
+      // Only apply entrance animation to newly added tasks
+      entering={isNew ? FadeInDown.delay(100).springify().damping(15).stiffness(150) : undefined}
+      // Use layout animation for smooth reordering of existing tasks
+      layout={LinearTransition.springify().damping(15).stiffness(150)}
       style={animatedStyle}
     >
       <TouchableOpacity
@@ -194,7 +210,10 @@ export default function FocusPreparationScreen() {
   const { tasks, addTask, refetch: refetchTasks } = useConvexTasks();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
-  
+
+  // Track rendered task IDs to prevent re-animation of existing tasks
+  const renderedTaskIds = useRef<Set<string>>(new Set());
+
   // Dynamic styles that depend on theme
   const dynamicStyles = {
     backButton: {
@@ -645,20 +664,24 @@ export default function FocusPreparationScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Background Image */}
+      {/* Layered Animated Background */}
       <View style={styles.backgroundContainer}>
-        <ThemedImageBackground
-          source={require('../../../assets/triage-background-image.png')}
+        {/* Layer 0: Parallax forest scene */}
+        <ParallaxForestBackground
+          isActive={true}
+          showTrailBuddy={false}
+          showPath={false}
+          treeScrollDuration={20000}
+        />
+        {/* Layer 1: Aurora mist blobs */}
+        <AmbientMistBackground isDark={theme.isDark} />
+        {/* Layer 2: Floating particles */}
+        <FloatingParticles isDark={theme.isDark} />
+        {/* Layer 3: Readability gradient */}
+        <LinearGradient
+          colors={theme.isDark ? ['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.55)'] : ['rgba(255,255,255,0.15)', 'rgba(255,255,255,0.35)']}
           style={StyleSheet.absoluteFillObject}
-          resizeMode="cover"
-          applyFilter={true}
-        >
-          <LinearGradient
-            colors={theme.isDark ? ['rgba(0,0,0,0.4)', 'rgba(0,0,0,0.6)'] : ['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.4)']}
-            style={StyleSheet.absoluteFillObject}
-          />
-        </ThemedImageBackground>
-        
+        />
       </View>
 
       {/* Overlay Content */}
@@ -1156,6 +1179,11 @@ export default function FocusPreparationScreen() {
               {/* Existing Tasks */}
               {activeTasks.map((task, index) => {
                 const isSelected = selectedTasks.some(t => t.id === task.id);
+                // Track if this task has been rendered before
+                const isNewTask = !renderedTaskIds.current.has(task.id);
+                if (isNewTask) {
+                  renderedTaskIds.current.add(task.id);
+                }
                 return (
                   <AnimatedTaskItem
                     key={task.id}
@@ -1164,6 +1192,7 @@ export default function FocusPreparationScreen() {
                     onPress={() => handleTaskSelection(task)}
                     index={index + 1} // +1 to account for "Create New Task" button
                     theme={theme}
+                    isNew={isNewTask}
                   />
                 );
               })}

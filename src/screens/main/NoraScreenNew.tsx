@@ -56,6 +56,12 @@ import { Audio } from 'expo-av';
 import { NoraSideNav, NavItem, ChatSession } from '../../components/NoraSideNav';
 import { useFocusAnimationKey } from '../../utils/animationUtils';
 import { NoraThinkingAnimation } from '../../components/NoraThinkingAnimation';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
+import { Id } from '../../../convex/_generated/dataModel';
+import { useNoraSessions, useNoraSessionMessages } from '../../hooks/useNoraSessions';
+import NoraOnboarding from '../../components/NoraOnboarding';
+import * as FileSystem from 'expo-file-system';
 
 const { width, height } = Dimensions.get('window');
 
@@ -473,7 +479,7 @@ const NoraScreenNew: React.FC = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [showWelcome, setShowWelcome] = useState(true);
-  const [deepThink, setDeepThink] = useState(false);
+  const [thinkingMode, setThinkingMode] = useState<'quick' | 'deep' | 'research'>('quick');
   const [showPdfPicker, setShowPdfPicker] = useState(false);
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [uploadedPdfs, setUploadedPdfs] = useState<any[]>([]);
@@ -481,6 +487,16 @@ const NoraScreenNew: React.FC = () => {
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [voiceAmplitude, setVoiceAmplitude] = useState(0);
   const [activeNavItem, setActiveNavItem] = useState<string>('chat');
+
+  // Session management
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // Hooks
+  const { sessions: noraSessions, groupedSessions, createSession, deleteSession: deleteNoraSess, requestTitleGeneration } = useNoraSessions();
+
+  // Onboarding status
+  const onboardingStatus = useQuery(api.noraOnboarding.getStatus);
 
   // Navigation items for side nav (New Chat is handled by the green button, not in nav items)
   const navItems: NavItem[] = [
@@ -500,13 +516,14 @@ const NoraScreenNew: React.FC = () => {
         navigation.navigate('FocusPreparation' as never);
         break;
       case 'progress':
-        navigation.navigate('Results' as never);
+        navigation.navigate('Main' as never, { screen: 'Results' });
         break;
     }
   };
 
   // Handle selecting a chat session from the side nav
   const handleSelectSession = (session: ChatSession) => {
+    setCurrentSessionId(session.id);
     setMessages(session.messages);
     setShowWelcome(false);
   };
@@ -515,24 +532,13 @@ const NoraScreenNew: React.FC = () => {
   const handleDeleteSession = async (sessionId: string) => {
     if (!user) return;
     try {
-      // sessionId is the date string - delete all messages from that day
-      const sessionToDelete = chatSessions.find(s => s.id === sessionId);
-      if (!sessionToDelete) return;
+      await deleteNoraSess(sessionId);
 
-      // Get all message IDs from this session
-      const messageIds = sessionToDelete.messages.map((m: any) => m.id);
-
-      // TODO: Delete chat session from Convex
-      // Chat history storage will be implemented in a future phase
-      console.log('Chat deletion will be implemented when chat history is migrated to Convex');
-
-      // Update local state
-      setChatSessions(prev => prev.filter(s => s.id !== sessionId));
-
-      // If we deleted the current session, clear messages
-      if (messages.some(m => messageIds.includes(m.id))) {
+      // If we deleted the current session, reset to welcome
+      if (sessionId === currentSessionId) {
         setMessages([]);
         setShowWelcome(true);
+        setCurrentSessionId(null);
       }
     } catch (error) {
       console.error('Failed to delete chat session:', error);
@@ -558,13 +564,14 @@ const NoraScreenNew: React.FC = () => {
   const cancelButtonOpacity = useSharedValue(0);
   const cancelButtonScale = useSharedValue(0.8);
   const plusButtonRotation = useSharedValue(0);
-  const deepThinkGlow = useSharedValue(0);
 
   useEffect(() => {
     navigation.setOptions({ headerShown: false });
     logoScale.value = withSpring(1, { damping: 15 });
     loadChatHistory();
     loadPdfs();
+    // Check onboarding status
+    // Will be handled reactively via onboardingStatus query
 
     // Reset audio system on mount to clear any orphaned recordings
     const resetAudio = async () => {
@@ -587,6 +594,13 @@ const NoraScreenNew: React.FC = () => {
       }, 100);
     }
   }, [messages]);
+
+  // Enforce onboarding
+  useEffect(() => {
+    if (onboardingStatus !== undefined && !onboardingStatus?.hasAcceptedPolicies) {
+      setShowOnboarding(true);
+    }
+  }, [onboardingStatus]);
 
   // Cleanup recording on unmount
   useEffect(() => {
@@ -661,22 +675,6 @@ const NoraScreenNew: React.FC = () => {
     }
   }, [input]);
 
-  // Deep think glow animation
-  useEffect(() => {
-    if (deepThink) {
-      deepThinkGlow.value = withRepeat(
-        withSequence(
-          withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
-          withTiming(0.4, { duration: 1200, easing: Easing.inOut(Easing.ease) })
-        ),
-        -1,
-        false
-      );
-    } else {
-      deepThinkGlow.value = withTiming(0, { duration: 200 });
-    }
-  }, [deepThink]);
-
   // Circular reveal animation style
   const revealAnimatedStyle = useAnimatedStyle(() => {
     const scale = interpolate(revealProgress.value, [0, 1], [0, 1]);
@@ -717,17 +715,8 @@ const NoraScreenNew: React.FC = () => {
     transform: [{ scale: interpolate(sendButtonGlow.value, [0, 1], [1, 1.4]) }],
   }));
 
-  const deepThinkGlowStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(deepThinkGlow.value, [0, 1], [0, 0.6]),
-    transform: [{ scale: interpolate(deepThinkGlow.value, [0, 1], [0.8, 1.3]) }],
-  }));
-
   const loadChatHistory = async () => {
-    if (!user) return;
-
-    // TODO: Load chat history from Convex
-    // Will be implemented when chat history tables are added to Convex schema
-    console.log('Chat history loading from Convex will be implemented in a future update');
+    // Chat history is now managed by Convex via useNoraSessions hook
   };
 
   const groupByDay = (data: any[]): ChatSession[] => {
@@ -1029,7 +1018,18 @@ const NoraScreenNew: React.FC = () => {
 
   const handleSend = async (text?: string) => {
     const messageText = text || input.trim();
-    if (!messageText || !user || isLoading) return;
+    console.log('[Nora] handleSend called:', { messageText: messageText?.slice(0, 30), user: !!user, isLoading, onboardingStatus });
+    if (!messageText || !user || isLoading) {
+      console.log('[Nora] handleSend blocked:', { noText: !messageText, noUser: !user, isLoading });
+      return;
+    }
+
+    // Block if onboarding not complete
+    if (!onboardingStatus?.hasAcceptedPolicies) {
+      console.log('[Nora] handleSend blocked: onboarding not complete');
+      setShowOnboarding(true);
+      return;
+    }
 
     setInput('');
     setShowWelcome(false);
@@ -1043,7 +1043,11 @@ const NoraScreenNew: React.FC = () => {
     };
     setMessages((prev) => [...prev, userMessage]);
 
-    // Note: User message is saved server-side by the Convex action
+    const thinkingSteps: Record<string, string[]> = {
+      quick: ['Understanding your question...', 'Finding relevant information...', 'Preparing response...'],
+      deep: ['Analyzing your question deeply...', 'Researching comprehensive sources...', 'Cross-referencing information...', 'Building detailed response...'],
+      research: ['Searching the web...', 'Reading sources...', 'Cross-referencing data...', 'Synthesizing findings...', 'Preparing cited response...'],
+    };
 
     const searchingMessage: Message = {
       id: 'searching',
@@ -1051,25 +1055,27 @@ const NoraScreenNew: React.FC = () => {
       sender: 'nora',
       timestamp: new Date().toISOString(),
       isSearching: true,
-      searchSteps: deepThink
-        ? [
-            'Analyzing your question deeply...',
-            'Researching comprehensive sources...',
-            'Cross-referencing information...',
-            'Building detailed response...',
-          ]
-        : ['Understanding your question...', 'Finding relevant information...', 'Preparing response...'],
+      searchSteps: thinkingSteps[thinkingMode] || thinkingSteps.quick,
     };
     setMessages((prev) => [...prev, searchingMessage]);
     setIsLoading(true);
 
     try {
-      // Call Nora via Convex action
+      console.log('[Nora] Sending message to Convex...', { thinkingMode, sessionId: currentSessionId });
       const data = await sendNoraChatMessage({
         message: messageText,
-        thinkingMode: deepThink ? 'deep' : 'fast',
+        thinkingMode,
+        sessionId: currentSessionId || undefined,
         pdfContext: selectedPdf ? { title: selectedPdf.title, file_path: selectedPdf.file_path } : null,
       });
+      console.log('[Nora] Response received:', { success: data.success, error: data.error, hasResponse: !!data.response, sessionId: data.sessionId });
+
+      // Store the session ID returned from the backend
+      if (data.sessionId && !currentSessionId) {
+        setCurrentSessionId(data.sessionId);
+        // Request title generation for new sessions after first exchange
+        requestTitleGeneration(data.sessionId);
+      }
 
       setMessages((prev) => {
         const filtered = prev.filter((m) => m.id !== 'searching');
@@ -1084,8 +1090,6 @@ const NoraScreenNew: React.FC = () => {
         };
         return [...filtered, noraMessage];
       });
-
-      // Note: Nora's response is saved server-side by the Convex action
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
@@ -1114,6 +1118,7 @@ const NoraScreenNew: React.FC = () => {
     setShowWelcome(true);
     setInput('');
     setSelectedPdf(null);
+    setCurrentSessionId(null);
   };
 
   const handleGoHome = () => {
@@ -1152,7 +1157,12 @@ const NoraScreenNew: React.FC = () => {
           activeItemId={activeNavItem}
           onItemSelect={handleNavItemSelect}
           onNewChat={handleNewChat}
-          chatSessions={chatSessions}
+          chatSessions={noraSessions.map(s => ({
+            id: s._id,
+            date: new Date(s.lastMessageAt).toLocaleDateString(),
+            preview: s.title,
+            messages: [],
+          }))}
           onSelectSession={handleSelectSession}
           onDeleteSession={handleDeleteSession}
         />
@@ -1187,7 +1197,12 @@ const NoraScreenNew: React.FC = () => {
           {showWelcome ? (
             <View style={styles.welcomeContainer}>
               <Animated.View style={[styles.welcomeLogo, logoAnimatedStyle]}>
-                <Text style={styles.welcomeEmoji}>✳️</Text>
+                <LinearGradient
+                  colors={['#7B61FF', '#9D4EDD']}
+                  style={{ width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <Ionicons name="sparkles" size={28} color="#FFFFFF" />
+                </LinearGradient>
               </Animated.View>
 
               <Animated.Text
@@ -1212,7 +1227,7 @@ const NoraScreenNew: React.FC = () => {
           ) : (
             <View style={styles.messagesContainer}>
               {messages.map((message) => (
-                <MessageBubble key={message.id} message={message} theme={theme} isDeepThink={deepThink} isDark={theme.isDark ?? false} />
+                <MessageBubble key={message.id} message={message} theme={theme} isDeepThink={thinkingMode !== 'quick'} isDark={theme.isDark ?? false} />
               ))}
             </View>
           )}
@@ -1274,30 +1289,35 @@ const NoraScreenNew: React.FC = () => {
                     <Ionicons name="add" size={22} color={theme.textSecondary} />
                   </TouchableOpacity>
 
-                  {/* Deep Think toggle with glow effect */}
-                  <View style={styles.deepThinkWrapper}>
-                    {/* Glow layer */}
-                    <Animated.View
-                      style={[
-                        styles.deepThinkGlow,
-                        { backgroundColor: '#FF6B6B' },
-                        deepThinkGlowStyle,
-                      ]}
-                    />
-                    <TouchableOpacity
-                      style={[styles.inputIconButton, deepThink && styles.deepThinkActiveButton]}
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        setDeepThink(!deepThink);
-                      }}
-                    >
-                      <Ionicons
-                        name={deepThink ? 'flash' : 'flash-outline'}
-                        size={20}
-                        color={deepThink ? '#FF6B6B' : theme.textSecondary}
-                      />
-                    </TouchableOpacity>
-                  </View>
+                  {/* Mode selector pills */}
+                  {(['quick', 'deep', 'research'] as const).map((mode) => {
+                    const modeConfig = {
+                      quick: { icon: 'flash-outline' as const, color: theme.textSecondary, label: 'Quick' },
+                      deep: { icon: 'flash' as const, color: '#FF6B6B', label: 'Deep' },
+                      research: { icon: 'globe-outline' as const, color: '#4ECDC4', label: 'Research' },
+                    };
+                    const config = modeConfig[mode];
+                    const isActive = thinkingMode === mode;
+                    return (
+                      <TouchableOpacity
+                        key={mode}
+                        style={[
+                          styles.inputIconButton,
+                          isActive && { backgroundColor: config.color + '20', borderRadius: 12 },
+                        ]}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setThinkingMode(mode);
+                        }}
+                      >
+                        <Ionicons
+                          name={config.icon}
+                          size={18}
+                          color={isActive ? config.color : theme.textSecondary}
+                        />
+                      </TouchableOpacity>
+                    );
+                  })}
                   <View style={{ flex: 1 }} />
                 </>
               )}
@@ -1354,6 +1374,14 @@ const NoraScreenNew: React.FC = () => {
         pdfs={uploadedPdfs}
         onSelect={setSelectedPdf}
         theme={theme}
+      />
+
+      {/* Nora Onboarding - Required for first-time users */}
+      <NoraOnboarding
+        visible={showOnboarding}
+        onComplete={() => setShowOnboarding(false)}
+        onSkip={() => setShowOnboarding(false)}
+        isFirstTime={!onboardingStatus?.hasAcceptedPolicies}
       />
     </SafeAreaView>
   );

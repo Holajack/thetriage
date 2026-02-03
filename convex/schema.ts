@@ -35,7 +35,7 @@ export default defineSchema({
     locationVisibility: v.optional(v.string()),
     classesVisibility: v.optional(v.string()),
     // Subscription
-    subscriptionTier: v.optional(v.string()), // 'free' | 'premium' | 'pro'
+    subscriptionTier: v.optional(v.string()), // 'free' | 'premium' | 'elite'
     subscriptionStatus: v.optional(v.string()),
     trialStartedAt: v.optional(v.string()),
     trialEndsAt: v.optional(v.string()),
@@ -375,12 +375,26 @@ export default defineSchema({
   // AI CHAT HISTORY
   // ============================================================
 
+  noraChatSessions: defineTable({
+    userId: v.id("users"),
+    title: v.string(),
+    thinkingMode: v.optional(v.string()), // 'quick' | 'deep' | 'research'
+    lastMessageAt: v.string(), // ISO string
+    messageCount: v.optional(v.number()),
+    isArchived: v.optional(v.boolean()),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_userId_lastMessageAt", ["userId", "lastMessageAt"]),
+
   noraChat: defineTable({
     userId: v.id("users"),
+    sessionId: v.optional(v.id("noraChatSessions")),
     role: v.string(), // 'user' | 'assistant' | 'system'
     content: v.string(),
     metadata: v.optional(v.any()),
-  }).index("by_userId", ["userId"]),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_sessionId", ["sessionId"]),
 
   patrickChat: defineTable({
     userId: v.id("users"),
@@ -391,6 +405,378 @@ export default defineSchema({
 
   noraResponseIds: defineTable({
     userId: v.id("users"),
+    sessionId: v.optional(v.id("noraChatSessions")),
     responseId: v.string(), // OpenAI Responses API previous_response_id for conversation continuity
+  })
+    .index("by_userId", ["userId"])
+    .index("by_userId_sessionId", ["userId", "sessionId"]),
+
+  // ============================================================
+  // NORA MEMORY (Long-term learned facts)
+  // ============================================================
+
+  noraMemory: defineTable({
+    userId: v.id("users"),
+    category: v.string(), // 'academic' | 'preference' | 'struggle' | 'goal' | 'personal'
+    key: v.string(), // e.g. "favorite_study_time", "weak_subject"
+    value: v.string(),
+    confidence: v.number(), // 0.0-1.0
+    source: v.string(), // 'explicit' | 'inferred'
+    lastReferencedAt: v.optional(v.string()),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_userId_category", ["userId", "category"]),
+
+  // ============================================================
+  // NORA NOTIFICATIONS (Proactive messages)
+  // ============================================================
+
+  noraNotifications: defineTable({
+    userId: v.id("users"),
+    type: v.string(), // 'study_reminder' | 'streak_encouragement' | 'weekly_summary' | 'tip' | 'upgrade_nudge'
+    title: v.string(),
+    body: v.string(),
+    scheduledFor: v.string(), // ISO string
+    sentAt: v.optional(v.string()),
+    readAt: v.optional(v.string()),
+    metadata: v.optional(v.any()),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_userId_type", ["userId", "type"])
+    .index("by_scheduledFor", ["scheduledFor"]),
+
+  // ============================================================
+  // NORA ONBOARDING STATUS (Replaces AsyncStorage)
+  // ============================================================
+
+  noraOnboardingStatus: defineTable({
+    userId: v.id("users"),
+    completedAt: v.optional(v.string()),
+    acceptedPoliciesAt: v.optional(v.string()),
+    version: v.optional(v.number()), // For re-triggering if onboarding changes
   }).index("by_userId", ["userId"]),
+
+  // ============================================================
+  // SELF-DISCOVERY QUIZ SYSTEM
+  // ============================================================
+
+  // Quiz category definitions (Study Habits, Learning Style, etc.)
+  quizCategories: defineTable({
+    slug: v.string(), // 'study_habits', 'learning_style', 'motivation', etc.
+    name: v.string(),
+    description: v.string(),
+    icon: v.string(), // Icon name for display
+    color: v.string(), // Theme color for category
+    order: v.number(), // Display order
+    isActive: v.boolean(),
+    researchBasis: v.optional(v.string()), // Research framework reference (e.g., "MSLQ", "MAI")
+    questionsCount: v.optional(v.number()), // Cached count for display
+  })
+    .index("by_slug", ["slug"])
+    .index("by_order", ["order"])
+    .index("by_isActive", ["isActive"]),
+
+  // Sub-dimensions within each category (e.g., Time Management -> Planning, Prioritization)
+  quizSubDimensions: defineTable({
+    categoryId: v.id("quizCategories"),
+    slug: v.string(), // 'planning', 'prioritization', 'estimation'
+    name: v.string(),
+    description: v.string(),
+    weight: v.number(), // Relative weight within category (0.0-1.0)
+    order: v.number(), // Display order for radar chart
+  })
+    .index("by_categoryId", ["categoryId"])
+    .index("by_slug", ["slug"]),
+
+  // Question bank (500+ per category)
+  quizQuestions: defineTable({
+    // Core identifiers
+    questionId: v.string(), // Human-readable ID like 'TM_PLAN_001'
+    categoryId: v.id("quizCategories"),
+    subDimensionId: v.id("quizSubDimensions"),
+
+    // Question content
+    questionText: v.string(),
+    questionFormat: v.string(), // 'likert_5' | 'likert_7' | 'behavioral' | 'frequency' | 'scenario'
+
+    // Options (array of value/label pairs with optional scoring weight)
+    options: v.array(
+      v.object({
+        value: v.number(),
+        label: v.string(),
+        scoringWeight: v.optional(v.number()), // For non-linear scoring
+      })
+    ),
+
+    // Scoring metadata
+    weight: v.number(), // 1-5 importance scale
+    difficulty: v.number(), // 1-5 difficulty scale
+    isReversed: v.boolean(), // For reverse-coded items
+
+    // Age/education adaptation
+    educationLevels: v.array(v.string()), // ['high_school', 'college', 'graduate']
+    adaptedVersions: v.optional(
+      v.array(
+        v.object({
+          educationLevel: v.string(),
+          questionText: v.string(),
+          options: v.array(
+            v.object({
+              value: v.number(),
+              label: v.string(),
+            })
+          ),
+        })
+      )
+    ),
+
+    // Research backing
+    researchCitations: v.optional(
+      v.array(
+        v.object({
+          authors: v.string(),
+          year: v.number(),
+          title: v.string(),
+          journal: v.optional(v.string()),
+          doi: v.optional(v.string()),
+        })
+      )
+    ),
+
+    // Deduplication
+    semanticHash: v.optional(v.string()), // For similarity detection
+    similarQuestionIds: v.optional(v.array(v.string())), // Related questions
+
+    // Version control
+    version: v.number(),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+    isActive: v.boolean(),
+    deprecatedAt: v.optional(v.string()),
+    deprecationReason: v.optional(v.string()),
+  })
+    .index("by_questionId", ["questionId"])
+    .index("by_categoryId", ["categoryId"])
+    .index("by_subDimensionId", ["subDimensionId"])
+    .index("by_isActive", ["isActive"])
+    .index("by_categoryId_isActive", ["categoryId", "isActive"]),
+
+  // User quiz sessions (progress tracking)
+  quizSessions: defineTable({
+    userId: v.id("users"),
+    categoryId: v.id("quizCategories"),
+
+    // Session metadata
+    sessionType: v.string(), // 'full' | 'quick' | 'adaptive' | 'retest'
+    educationLevel: v.string(), // 'high_school' | 'college' | 'graduate'
+    questionsCount: v.number(), // Number of questions in this session
+
+    // Selected questions for this session (stored to ensure consistency)
+    questionIds: v.array(v.id("quizQuestions")),
+
+    // Progress tracking
+    status: v.string(), // 'in_progress' | 'completed' | 'abandoned'
+    currentQuestionIndex: v.number(),
+    startedAt: v.string(),
+    completedAt: v.optional(v.string()),
+    timeSpentSeconds: v.optional(v.number()),
+
+    // Results (populated on completion)
+    resultId: v.optional(v.id("quizResults")),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_userId_categoryId", ["userId", "categoryId"])
+    .index("by_userId_status", ["userId", "status"]),
+
+  // Individual question responses
+  quizResponses: defineTable({
+    sessionId: v.id("quizSessions"),
+    userId: v.id("users"),
+    questionId: v.id("quizQuestions"),
+
+    // Response data
+    selectedValue: v.number(),
+    responseTimeMs: v.number(), // Time to answer in milliseconds
+
+    // Scoring (computed)
+    rawScore: v.number(),
+    weightedScore: v.number(),
+
+    answeredAt: v.string(),
+  })
+    .index("by_sessionId", ["sessionId"])
+    .index("by_userId", ["userId"])
+    .index("by_questionId", ["questionId"]),
+
+  // Completed quiz results with trait profiles
+  quizResults: defineTable({
+    userId: v.id("users"),
+    sessionId: v.id("quizSessions"),
+    categoryId: v.id("quizCategories"),
+
+    // Overall scores
+    overallScore: v.number(), // 0-100 normalized
+    percentileRank: v.optional(v.number()), // 0-100 percentile
+
+    // Sub-dimension scores (for radar chart)
+    subDimensionScores: v.array(
+      v.object({
+        subDimensionId: v.id("quizSubDimensions"),
+        slug: v.string(),
+        name: v.string(),
+        rawScore: v.number(),
+        normalizedScore: v.number(), // 0-100
+        percentileRank: v.optional(v.number()),
+      })
+    ),
+
+    // Trait profile identification
+    dominantTrait: v.string(),
+    traitProfile: v.object({
+      primaryTrait: v.string(),
+      primaryScore: v.number(),
+      secondaryTrait: v.optional(v.string()),
+      secondaryScore: v.optional(v.number()),
+      profileDescription: v.string(),
+    }),
+
+    // Strengths and areas for growth
+    strengths: v.array(
+      v.object({
+        subDimensionSlug: v.string(),
+        score: v.number(),
+        description: v.string(),
+      })
+    ),
+    areasForGrowth: v.array(
+      v.object({
+        subDimensionSlug: v.string(),
+        score: v.number(),
+        description: v.string(),
+        recommendations: v.array(v.string()),
+      })
+    ),
+
+    // Metadata
+    completedAt: v.string(),
+    educationLevel: v.string(),
+    questionsAnswered: v.number(),
+    averageResponseTimeMs: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_userId_categoryId", ["userId", "categoryId"])
+    .index("by_sessionId", ["sessionId"])
+    .index("by_categoryId_score", ["categoryId", "overallScore"]),
+
+  // Historical tracking for improvement over time
+  quizProgressHistory: defineTable({
+    userId: v.id("users"),
+    categoryId: v.id("quizCategories"),
+    resultId: v.id("quizResults"),
+
+    // Snapshot data for historical comparison
+    overallScore: v.number(),
+    subDimensionScores: v.array(
+      v.object({
+        slug: v.string(),
+        score: v.number(),
+      })
+    ),
+    percentileRank: v.optional(v.number()),
+
+    recordedAt: v.string(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_userId_categoryId", ["userId", "categoryId"])
+    .index("by_userId_recordedAt", ["userId", "recordedAt"]),
+
+  // Aggregated stats for percentile calculations
+  quizBenchmarkStats: defineTable({
+    categoryId: v.id("quizCategories"),
+    educationLevel: v.string(),
+
+    // Distribution data (updated periodically)
+    sampleSize: v.number(),
+    mean: v.number(),
+    median: v.number(),
+    stdDev: v.number(),
+
+    // Percentile lookup table (5th, 10th, 25th, 50th, 75th, 90th, 95th)
+    percentiles: v.array(
+      v.object({
+        percentile: v.number(),
+        scoreThreshold: v.number(),
+      })
+    ),
+
+    // Sub-dimension benchmarks
+    subDimensionBenchmarks: v.array(
+      v.object({
+        subDimensionSlug: v.string(),
+        mean: v.number(),
+        stdDev: v.number(),
+        percentiles: v.array(
+          v.object({
+            percentile: v.number(),
+            scoreThreshold: v.number(),
+          })
+        ),
+      })
+    ),
+
+    lastUpdatedAt: v.string(),
+  })
+    .index("by_categoryId", ["categoryId"])
+    .index("by_categoryId_educationLevel", ["categoryId", "educationLevel"]),
+
+  // Extracted quiz insights for Nora AI personalization
+  quizNoraMemories: defineTable({
+    userId: v.id("users"),
+    resultId: v.id("quizResults"),
+    categoryId: v.id("quizCategories"),
+
+    // Extracted insights for Nora
+    memoryType: v.string(), // 'strength' | 'growth_area' | 'trait' | 'recommendation'
+    key: v.string(), // e.g., 'time_management_strength', 'procrastination_tendency'
+    value: v.string(),
+    confidence: v.number(), // 0.0-1.0
+
+    // Context
+    context: v.object({
+      score: v.number(),
+      percentile: v.optional(v.number()),
+      trend: v.optional(v.string()), // 'improving' | 'declining' | 'stable'
+      comparedToLast: v.optional(v.number()), // Score change
+    }),
+
+    // Recommendations for Nora to suggest
+    actionableInsights: v.array(v.string()),
+
+    extractedAt: v.string(),
+    expiresAt: v.optional(v.string()), // For time-sensitive insights
+  })
+    .index("by_userId", ["userId"])
+    .index("by_userId_categoryId", ["userId", "categoryId"])
+    .index("by_resultId", ["resultId"]),
+
+  // Nora recommendation triggers for proactive suggestions
+  quizRecommendationTriggers: defineTable({
+    userId: v.id("users"),
+
+    // Trigger conditions
+    triggerType: v.string(), // 'low_score' | 'declining_trend' | 'milestone' | 'periodic'
+    categoryId: v.optional(v.id("quizCategories")),
+    subDimensionSlug: v.optional(v.string()),
+
+    // Trigger data
+    threshold: v.optional(v.number()),
+    lastTriggeredAt: v.optional(v.string()),
+    isActive: v.boolean(),
+
+    // Action
+    recommendedAction: v.string(), // 'suggest_retake' | 'offer_tip' | 'celebrate_improvement'
+    messageTemplate: v.string(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_userId_triggerType", ["userId", "triggerType"]),
 });

@@ -8,175 +8,210 @@ import { BottomTabBar } from '../../components/BottomTabBar';
 import { UnifiedHeader } from '../../components/UnifiedHeader';
 import Animated, { FadeInUp, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { LinearGradient } from 'expo-linear-gradient';
 import { StaggeredItem } from '../../components/premium/StaggeredList';
-import { Typography, Spacing, BorderRadius, Shadows, PremiumColors } from '../../theme/premiumTheme';
-import { useFocusAnimationKey } from '../../utils/animationUtils';
+import { Typography, Spacing } from '../../theme/premiumTheme';
+import { useFocusAnimationKey, useCounterAnimation } from '../../utils/animationUtils';
+import { glassStyles } from '../../components/premium/LiquidGlass';
+import { useConvexAchievements } from '../../hooks/useConvex';
+
+const TOTAL_ACHIEVEMENTS = 14;
 
 const BonusesScreen = () => {
   const navigation = useNavigation();
-  const { theme } = useTheme();
-
-  // Force animations to replay on every screen focus
+  const { theme, isDark } = useTheme();
   const focusKey = useFocusAnimationKey();
+  const { achievements: earnedAchievements } = useConvexAchievements();
+
+  const earnedCount = earnedAchievements.length;
+  const completionPercent = Math.round((earnedCount / TOTAL_ACHIEVEMENTS) * 100);
+
+  const earnedCounter = useCounterAnimation(earnedCount, 800);
+  const percentCounter = useCounterAnimation(completionPercent, 1000);
 
   const bonusFeatures = [
     {
       id: 'achievements',
       title: 'Achievements',
-      description: 'Track your progress and unlock exclusive rewards',
-      icon: 'trophy-outline',
-      iconFamily: 'Ionicons',
+      stat: `${earnedCount} / ${TOTAL_ACHIEVEMENTS} unlocked`,
+      icon: 'trophy' as const,
       color: '#FFD700',
-      gradient: ['#FFD700', '#FFA000'],
       onPress: () => navigation.navigate('Achievements'),
-      stats: 'Unlock 50+ achievements'
     },
     {
       id: 'ebooks',
       title: 'E-Book Library',
-      description: 'Upload and access your textbooks anywhere, anytime',
-      icon: 'book-outline',
-      iconFamily: 'Ionicons',
+      stat: 'Upload & study anywhere',
+      icon: 'book' as const,
       color: '#4CAF50',
-      gradient: ['#4CAF50', '#2E7D32'],
       onPress: () => navigation.navigate('EBooks'),
-      stats: 'Support for 100MB+ files'
     },
     {
       id: 'self-discovery',
-      title: 'Self-Discovery Quizzes',
-      description: 'Discover your unique learning style and study patterns',
-      icon: 'bulb-outline',
-      iconFamily: 'Ionicons',
+      title: 'Self-Discovery',
+      stat: '6 assessments',
+      icon: 'bulb' as const,
       color: '#9C27B0',
-      gradient: ['#9C27B0', '#7B1FA2'],
       onPress: () => navigation.navigate('SelfDiscoveryQuiz'),
-      stats: '5 comprehensive assessments'
     },
     {
       id: 'brain-mapping',
-      title: 'Brain Activity Mapping',
-      description: 'Visualize your cognitive patterns and learning zones',
-      icon: 'pulse-outline',
-      iconFamily: 'Ionicons',
+      title: 'Brain Mapping',
+      stat: 'Cognitive insights',
+      icon: 'pulse' as const,
       color: '#E91E63',
-      gradient: ['#E91E63', '#C2185B'],
       onPress: () => navigation.navigate('BrainMapping'),
-      stats: 'Real-time brain insights'
-    }
+    },
   ];
 
-  const renderFeatureCard = (feature: any, index: number) => {
-    const IconComponent = Ionicons;
+  // Simple circular progress ring using View-based approach
+  const ProgressRing = () => {
+    const size = 100;
+    const strokeWidth = 8;
+    const radius = (size - strokeWidth) / 2;
+    const circumference = 2 * Math.PI * radius;
+    // We'll show the fill visually with a bordered circle approach
+    // Since we don't have SVG, use a simpler representation
 
     return (
-      <StaggeredItem
-        key={feature.id}
-        index={index}
-        delay="normal"
-        direction="up"
-      >
-        <TouchableOpacity
-          style={[styles.featureCard, { backgroundColor: theme.card }]}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            feature.onPress();
-          }}
-          activeOpacity={0.8}
-        >
-          <LinearGradient
-            colors={[feature.gradient[0] + '10', feature.gradient[1] + '05']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
-
-          <View style={styles.cardContent}>
-            <Animated.View
-              entering={FadeIn.delay(200 + index * 150)}
-              style={[styles.iconContainer, { backgroundColor: feature.color + '20' }]}
-            >
-              <IconComponent
-                name={feature.icon as any}
-                size={32}
-                color={feature.color}
-              />
-            </Animated.View>
-
-            <View style={styles.textContent}>
-              <Text style={[styles.featureTitle, { color: theme.text }]}>
-                {feature.title}
-              </Text>
-              <Text style={[styles.featureDescription, { color: theme.textSecondary }]}>
-                {feature.description}
-              </Text>
-              <Text style={[styles.featureStats, { color: feature.color }]}>
-                {feature.stats}
-              </Text>
-            </View>
-
-            <View style={styles.arrowContainer}>
-              <Ionicons
-                name="chevron-forward-outline"
-                size={24}
-                color={theme.textSecondary}
-              />
-            </View>
-          </View>
-        </TouchableOpacity>
-      </StaggeredItem>
+      <View style={[styles.progressRingOuter, { width: size, height: size }]}>
+        {/* Background ring */}
+        <View
+          style={[
+            styles.progressRingBg,
+            {
+              width: size,
+              height: size,
+              borderRadius: size / 2,
+              borderWidth: strokeWidth,
+              borderColor: theme.text + '12',
+            },
+          ]}
+        />
+        {/* Foreground ring (approximated) */}
+        <View
+          style={[
+            styles.progressRingFg,
+            {
+              width: size,
+              height: size,
+              borderRadius: size / 2,
+              borderWidth: strokeWidth,
+              borderColor: theme.primary,
+              // Show partial ring by making some borders transparent
+              borderTopColor: completionPercent > 0 ? theme.primary : 'transparent',
+              borderRightColor: completionPercent > 25 ? theme.primary : 'transparent',
+              borderBottomColor: completionPercent > 50 ? theme.primary : 'transparent',
+              borderLeftColor: completionPercent > 75 ? theme.primary : 'transparent',
+            },
+          ]}
+        />
+        {/* Center content */}
+        <View style={styles.progressRingCenter}>
+          <Ionicons name="trophy" size={20} color={theme.primary} />
+          <Animated.Text style={[styles.progressRingPercent, { color: theme.text }]}>
+            {Math.round(percentCounter.value)}%
+          </Animated.Text>
+        </View>
+      </View>
     );
   };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* Unified Header */}
       <UnifiedHeader title="Bonuses" onClose={() => navigation.navigate('Home')} />
 
       <ScrollView
         key={focusKey}
-        style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 100 }]}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Features Grid */}
-        <View style={styles.featuresContainer}>
-          {bonusFeatures.map((feature, index) => renderFeatureCard(feature, index))}
-        </View>
-
-        {/* Stats Card */}
-        <Animated.View
-          entering={FadeInUp.delay(600).duration(400)}
-          style={[styles.statsCard, { backgroundColor: theme.primary + '15' }]}
-        >
-          <LinearGradient
-            colors={[theme.primary + '10', theme.primary + '05']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.statsGradient}
-          >
-            <View style={styles.statsRow}>
-              <Animated.View entering={FadeIn.delay(700)} style={styles.statItem}>
-                <Text style={[styles.statNumber, { color: theme.primary }]}>4</Text>
-                <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Features</Text>
-              </Animated.View>
-              <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
-              <Animated.View entering={FadeIn.delay(750)} style={styles.statItem}>
-                <Text style={[styles.statNumber, { color: theme.primary }]}>∞</Text>
-                <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Possibilities</Text>
-              </Animated.View>
-              <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
-              <Animated.View entering={FadeIn.delay(800)} style={styles.statItem}>
-                <Text style={[styles.statNumber, { color: theme.primary }]}>24/7</Text>
-                <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Available</Text>
-              </Animated.View>
+        {/* ===== HERO PROGRESS CARD ===== */}
+        <Animated.View entering={FadeIn.duration(400)}>
+          <View style={[styles.heroCard, glassStyles.mediumCard(isDark), { backgroundColor: theme.card }]}>
+            <View style={styles.heroContent}>
+              <ProgressRing />
+              <View style={styles.heroStats}>
+                <View style={styles.heroStatRow}>
+                  <Animated.Text style={[styles.heroStatNumber, { color: theme.text }]}>
+                    {Math.round(earnedCounter.value)}
+                  </Animated.Text>
+                  <Text style={[styles.heroStatLabel, { color: theme.textSecondary }]}>
+                    {' '}/ {TOTAL_ACHIEVEMENTS} Unlocked
+                  </Text>
+                </View>
+                <Text style={[styles.heroSubtext, { color: theme.textSecondary }]}>
+                  {earnedCount === 0
+                    ? 'Start earning achievements!'
+                    : earnedCount < 5
+                    ? 'Great start! Keep going.'
+                    : earnedCount < 10
+                    ? 'Nice progress! Over halfway.'
+                    : 'Almost there! So close.'}
+                </Text>
+                <TouchableOpacity
+                  style={[styles.viewAllButton, { backgroundColor: theme.primary + '15' }]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    navigation.navigate('Achievements');
+                  }}
+                >
+                  <Text style={[styles.viewAllText, { color: theme.primary }]}>View All</Text>
+                  <Ionicons name="chevron-forward" size={14} color={theme.primary} />
+                </TouchableOpacity>
+              </View>
             </View>
-          </LinearGradient>
+          </View>
         </Animated.View>
+
+        {/* ===== SECTION: EXPLORE ===== */}
+        <Animated.View entering={FadeIn.delay(100).duration(400)}>
+          <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>EXPLORE</Text>
+        </Animated.View>
+
+        {/* ===== 2x2 FEATURE GRID ===== */}
+        <View style={styles.featureGrid}>
+          {bonusFeatures.map((feature, index) => (
+            <StaggeredItem
+              key={feature.id}
+              index={index}
+              delay="normal"
+              direction="up"
+              style={styles.featureCardWrapper}
+            >
+              <TouchableOpacity
+                style={[styles.featureCard, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  feature.onPress();
+                }}
+                activeOpacity={0.8}
+              >
+                {/* Subtle color tint overlay */}
+                <View
+                  style={[
+                    StyleSheet.absoluteFill,
+                    { backgroundColor: feature.color + '08', borderRadius: 14 },
+                  ]}
+                />
+
+                <View style={[styles.featureIconCircle, { backgroundColor: feature.color + '18' }]}>
+                  <Ionicons name={feature.icon} size={26} color={feature.color} />
+                </View>
+
+                <Text style={[styles.featureTitle, { color: theme.text }]}>
+                  {feature.title}
+                </Text>
+
+                <Text style={[styles.featureStat, { color: theme.textSecondary }]}>
+                  {feature.stat}
+                </Text>
+              </TouchableOpacity>
+            </StaggeredItem>
+          ))}
+        </View>
       </ScrollView>
 
-      {/* Bottom Tab Bar */}
       <BottomTabBar currentRoute="Bonuses" />
     </SafeAreaView>
   );
@@ -186,139 +221,122 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  navHeader: {
+
+  // ===== HERO PROGRESS CARD =====
+  heroCard: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    padding: 20,
+    borderRadius: 16,
+  },
+  heroContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 10,
   },
-  closeButton: {
-    padding: 4,
+  heroStats: {
+    flex: 1,
+    marginLeft: 20,
   },
-  closeButtonCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  heroStatRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  heroStatNumber: {
+    fontSize: 28,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  heroStatLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  heroSubtext: {
+    fontSize: 13,
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    gap: 2,
+  },
+  viewAllText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+
+  // ===== PROGRESS RING =====
+  progressRingOuter: {
+    position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  navHeaderTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    textAlign: 'center',
+  progressRingBg: {
+    position: 'absolute',
   },
-  headerSpacer: {
-    width: 48,
+  progressRingFg: {
+    position: 'absolute',
+    transform: [{ rotate: '-45deg' }],
   },
-  header: {
-    padding: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
+  progressRingCenter: {
+    alignItems: 'center',
+    gap: 2,
   },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 4,
+  progressRingPercent: {
+    fontSize: 18,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
   },
-  headerSubtitle: {
-    fontSize: 16,
-    lineHeight: 22,
+
+  // ===== SECTION LABEL =====
+  sectionLabel: {
+    ...Typography.label,
+    paddingHorizontal: 16,
+    marginTop: 28,
+    marginBottom: 12,
   },
-  scrollView: {
-    flex: 1,
+
+  // ===== 2x2 FEATURE GRID =====
+  featureGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 16,
+    gap: 12,
   },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-  featuresContainer: {
-    marginBottom: 24,
+  featureCardWrapper: {
+    width: '47%',
+    flexGrow: 1,
   },
   featureCard: {
-    borderRadius: BorderRadius.lg,
-    marginBottom: Spacing.md,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
+    borderRadius: 14,
+    padding: 20,
+    alignItems: 'center',
+    minHeight: 150,
+    justifyContent: 'center',
     overflow: 'hidden',
   },
-  cardContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 20,
-  },
-  iconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 16,
+  featureIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 16,
-  },
-  textContent: {
-    flex: 1,
+    marginBottom: 12,
   },
   featureTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
     marginBottom: 4,
   },
-  featureDescription: {
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 6,
-  },
-  featureStats: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginTop: 6,
-  },
-  arrowContainer: {
-    marginLeft: 12,
-  },
-  statsCard: {
-    borderRadius: BorderRadius.lg,
-    marginBottom: 8,
-    overflow: 'hidden',
-    ...Shadows.md,
-  },
-  statsGradient: {
-    padding: Spacing.lg,
-  },
-  statsTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+  featureStat: {
+    fontSize: 11,
+    fontWeight: '500',
     textAlign: 'center',
-    marginBottom: 16,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-  },
-  statItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    textAlign: 'center',
-  },
-  statDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-    marginHorizontal: 16,
   },
 });
 

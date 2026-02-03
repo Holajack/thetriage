@@ -10,6 +10,7 @@
 
 import type * as achievements from "../achievements.js";
 import type * as aiInsights from "../aiInsights.js";
+import type * as crons from "../crons.js";
 import type * as focusSessions from "../focusSessions.js";
 import type * as friends from "../friends.js";
 import type * as http from "../http.js";
@@ -19,8 +20,19 @@ import type * as leaderboard from "../leaderboard.js";
 import type * as learningMetrics from "../learningMetrics.js";
 import type * as messages from "../messages.js";
 import type * as noraChat from "../noraChat.js";
+import type * as noraMemory from "../noraMemory.js";
+import type * as noraNotifications from "../noraNotifications.js";
+import type * as noraOnboarding from "../noraOnboarding.js";
+import type * as noraSessions from "../noraSessions.js";
 import type * as onboarding from "../onboarding.js";
 import type * as patrickChat from "../patrickChat.js";
+import type * as quizBulkLoad from "../quizBulkLoad.js";
+import type * as quizNoraIntegration from "../quizNoraIntegration.js";
+import type * as quizQuestionData from "../quizQuestionData.js";
+import type * as quizQuestions from "../quizQuestions.js";
+import type * as quizSeed from "../quizSeed.js";
+import type * as quizSessions from "../quizSessions.js";
+import type * as quizVisualization from "../quizVisualization.js";
 import type * as settings from "../settings.js";
 import type * as studyRooms from "../studyRooms.js";
 import type * as subjects from "../subjects.js";
@@ -39,6 +51,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   achievements: typeof achievements;
   aiInsights: typeof aiInsights;
+  crons: typeof crons;
   focusSessions: typeof focusSessions;
   friends: typeof friends;
   http: typeof http;
@@ -48,8 +61,19 @@ declare const fullApi: ApiFromModules<{
   learningMetrics: typeof learningMetrics;
   messages: typeof messages;
   noraChat: typeof noraChat;
+  noraMemory: typeof noraMemory;
+  noraNotifications: typeof noraNotifications;
+  noraOnboarding: typeof noraOnboarding;
+  noraSessions: typeof noraSessions;
   onboarding: typeof onboarding;
   patrickChat: typeof patrickChat;
+  quizBulkLoad: typeof quizBulkLoad;
+  quizNoraIntegration: typeof quizNoraIntegration;
+  quizQuestionData: typeof quizQuestionData;
+  quizQuestions: typeof quizQuestions;
+  quizSeed: typeof quizSeed;
+  quizSessions: typeof quizSessions;
+  quizVisualization: typeof quizVisualization;
   settings: typeof settings;
   studyRooms: typeof studyRooms;
   subjects: typeof subjects;

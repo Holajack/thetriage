@@ -128,3 +128,60 @@ export function subscribeToMessageNotifications(
   // No-op: Convex useQuery is reactive
   return () => {};
 }
+
+/**
+ * Get all conversations for the current user.
+ * Returns conversations with partner info and last message.
+ */
+export async function getConversations(): Promise<{
+  success: boolean;
+  error?: string;
+  data?: Conversation[];
+}> {
+  try {
+    const client = getClient();
+    const conversations = await client.query(api.messages.listConversations, {});
+
+    if (!conversations) {
+      return { success: true, data: [] };
+    }
+
+    // Fetch partner user details for each conversation
+    const enrichedConversations: Conversation[] = [];
+    for (const conv of conversations) {
+      const partnerUser = await client.query(api.users.getUser, {
+        userId: conv.otherUserId as Id<"users">,
+      });
+
+      enrichedConversations.push({
+        participant: {
+          id: conv.otherUserId,
+          username: partnerUser?.username,
+          full_name: partnerUser?.fullName,
+          avatar_url: partnerUser?.avatarUrl,
+        },
+        last_message: conv.lastMessage
+          ? {
+              id: conv.lastMessage._id,
+              sender_id: conv.lastMessage.senderId,
+              recipient_id: conv.lastMessage.recipientId,
+              content: conv.lastMessage.content,
+              message_type: (conv.lastMessage.messageType ?? "text") as
+                | "text"
+                | "image"
+                | "file",
+              is_read: conv.lastMessage.isRead ?? false,
+              created_at: new Date(conv.lastMessage._creationTime).toISOString(),
+              updated_at: new Date(conv.lastMessage._creationTime).toISOString(),
+            }
+          : undefined,
+        unread_count: conv.unreadCount,
+      });
+    }
+
+    return { success: true, data: enrichedConversations };
+  } catch (error: any) {
+    console.error("Error fetching conversations:", error);
+    return { success: false, error: error.message };
+  }
+}

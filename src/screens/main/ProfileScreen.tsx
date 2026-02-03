@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Alert, TextInput, Modal, Pressable } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Alert, TextInput, Modal, Pressable, ImageSourcePropType } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -17,22 +17,15 @@ import { getUserBadges } from '../../utils/achievementManager';
 import { Badge } from '../../data/achievements';
 import QRCode from 'react-native-qrcode-svg';
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-  withDelay,
   FadeIn,
   FadeInUp,
-  SlideInRight,
-  Easing,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { AnimationConfig, TimingConfig, Typography } from '../../theme/premiumTheme';
-import { useButtonPressAnimation, useNavigationSlideAnimation, useFocusAnimationKey } from '../../utils/animationUtils';
+import { Typography } from '../../theme/premiumTheme';
+import { useNavigationSlideAnimation, useFocusAnimationKey, useCounterAnimation } from '../../utils/animationUtils';
 import { ShimmerLoader } from '../../components/premium/ShimmerLoader';
 import { glassStyles } from '../../components/premium/LiquidGlass';
-import { ImageSourcePropType } from 'react-native';
+import { AnimatedButton } from '../../components/premium/AnimatedButton';
 
 // Trail buddy portrait images (first frame of each animation)
 const TRAIL_BUDDY_IMAGES: Record<string, ImageSourcePropType> = {
@@ -41,6 +34,57 @@ const TRAIL_BUDDY_IMAGES: Record<string, ImageSourcePropType> = {
   deer: require('../../../assets/trail-buddies/deer-frames/deer_frame_00.png'),
   nora: require('../../../assets/trail-buddies/nora-frames/nora_frame_00.png'),
   wolf: require('../../../assets/trail-buddies/wolf-frames/wolf_frame_00.png'),
+};
+
+// Spritesheet configuration for walking animation
+const BUDDY_SPRITESHEETS: Record<string, ImageSourcePropType> = {
+  fox: require('../../../assets/trail-buddies/fox_walking_optimized.png'),
+  deer: require('../../../assets/trail-buddies/deer_walking_optimized.png'),
+  wolf: require('../../../assets/trail-buddies/wolf_walking_optimized.png'),
+  nora: require('../../../assets/trail-buddies/nora_walking_optimized.png'),
+  bear: require('../../../assets/trail-buddies/bear_walking_optimized.png'),
+};
+const SPRITE_FRAME_WIDTH = 200;
+const SPRITE_FRAME_HEIGHT = 200;
+const SPRITE_TOTAL_FRAMES = 28;
+
+const BUDDY_COLORS: Record<string, string> = {
+  fox: '#FF6B35',
+  bear: '#8B4513',
+  deer: '#C4A484',
+  nora: '#9B59B6',
+  wolf: '#708090',
+};
+
+// Walking animation sprite component
+const BuddyWalkingSprite = ({ buddyId, size = 90 }: { buddyId: string; size?: number }) => {
+  const [currentFrame, setCurrentFrame] = useState(0);
+  const spritesheet = BUDDY_SPRITESHEETS[buddyId] || BUDDY_SPRITESHEETS.bear;
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentFrame(prev => (prev + 1) % SPRITE_TOTAL_FRAMES);
+    }, 50);
+    return () => clearInterval(interval);
+  }, []);
+
+  const displayScale = size / SPRITE_FRAME_HEIGHT;
+  const frameOffset = -currentFrame * SPRITE_FRAME_WIDTH * displayScale;
+  const spritesheetWidth = SPRITE_FRAME_WIDTH * SPRITE_TOTAL_FRAMES * displayScale;
+
+  return (
+    <View style={{ width: size, height: size, overflow: 'hidden' }}>
+      <Image
+        source={spritesheet}
+        style={{
+          width: spritesheetWidth,
+          height: size,
+          transform: [{ translateX: frameOffset }],
+        }}
+        resizeMode="cover"
+      />
+    </View>
+  );
 };
 
 const ProfileScreen = () => {
@@ -61,27 +105,22 @@ const ProfileScreen = () => {
   const [editedClasses, setEditedClasses] = useState('');
   const [userBadges, setUserBadges] = useState<Badge[]>([]);
 
-  // Force animations to replay on every screen focus
   const focusKey = useFocusAnimationKey();
 
-  // Refetch profile when screen comes into focus (e.g., after changing trail buddy)
   useFocusEffect(
     useCallback(() => {
       refetchProfile();
     }, [refetchProfile])
   );
 
-  // Navigation slide animations
   const shopSlideAnimation = useNavigationSlideAnimation();
 
-  // Load user badges
   useEffect(() => {
     loadUserBadges();
   }, [user]);
 
   const loadUserBadges = async () => {
     if (!user?.id) return;
-
     try {
       const badges = await getUserBadges(user.id);
       setUserBadges(badges);
@@ -90,7 +129,6 @@ const ProfileScreen = () => {
     }
   };
 
-  // Initialize edit form with current values
   useEffect(() => {
     if (profile) {
       setEditedName(profile.full_name || '');
@@ -101,7 +139,7 @@ const ProfileScreen = () => {
     }
   }, [profile]);
 
-  // Calculate real stats from auth context leaderboard (Convex reactive data)
+  // Real stats from Convex reactive data
   const { leaderboard } = useAuth();
   const sessions = userData?.sessions ?? [];
   const totalSessions = leaderboard?.total_sessions ?? sessions.length ?? 0;
@@ -109,12 +147,15 @@ const ProfileScreen = () => {
   const totalHours = Math.floor(totalMinutes / 60);
   const remainingMinutes = totalMinutes % 60;
   const currentStreak = leaderboard?.current_streak ?? 0;
-
-  // Count session types
   const completedSessions = leaderboard?.sessions_completed ?? sessions.filter((s: any) => s.completed === true || s.status === 'completed').length ?? 0;
-
-  // Get Flint currency from profile
   const flintCurrency = profile?.flint_currency || 0;
+  const userLevel = leaderboard?.level ?? 1;
+
+  // Animated counters
+  const streakCounter = useCounterAnimation(currentStreak, 800);
+  const flintCounter = useCounterAnimation(flintCurrency, 1000);
+  const sessionsCounter = useCounterAnimation(totalSessions, 1000);
+  const completedCounter = useCounterAnimation(completedSessions, 1200);
 
   const avatarSource = profile?.avatar_url || user?.avatar_url;
 
@@ -185,113 +226,179 @@ const ProfileScreen = () => {
     }
   };
 
+  // Build detail chips from profile data
+  const detailChips: { icon: keyof typeof Ionicons.glyphMap; text: string }[] = [];
+  if (profile?.university) detailChips.push({ icon: 'school-outline', text: profile.university });
+  if (profile?.location) detailChips.push({ icon: 'location-outline', text: profile.location });
+  if (profile?.classes) detailChips.push({ icon: 'book-outline', text: profile.classes });
+
+  const buddyType = profile?.trail_buddy_type;
+  const buddyColor = buddyType ? BUDDY_COLORS[buddyType] || theme.primary : theme.primary;
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* Unified Header */}
       <UnifiedHeader title="Profile" onClose={() => navigation.navigate('Home')} />
 
       <ScrollView key={focusKey} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }}>
-        {/* Profile Card Section - Top Row */}
-        <Animated.View
-          entering={FadeIn.duration(400)}
-          style={styles.profileCardSection}
-        >
-          <View style={[styles.profileCard, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}>
-            {uploading ? (
-              <View style={[styles.profileCardImage, { justifyContent: 'center', alignItems: 'center' }]}>
-                <ShimmerLoader variant="custom" width="100%" height="100%" borderRadius={12} />
-              </View>
-            ) : (
-              <Image
-                source={avatarSource ? { uri: avatarSource } : require('../../../assets/homescreen-image.png')}
-                style={styles.profileCardImage}
-                resizeMode="cover"
-              />
-            )}
+
+        {/* ===== HERO SECTION ===== */}
+        <Animated.View entering={FadeIn.duration(400)} style={styles.heroSection}>
+          {/* QR button - top left */}
+          <Pressable
+            style={[styles.heroActionButton, styles.heroActionLeft, { backgroundColor: theme.card }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setShowQRModal(true);
+            }}
+          >
+            <Ionicons name="qr-code-outline" size={20} color={theme.primary} />
+          </Pressable>
+
+          {/* Edit button - top right */}
+          <Pressable
+            style={[styles.heroActionButton, styles.heroActionRight, { backgroundColor: theme.card }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setShowEditModal(true);
+            }}
+          >
+            <Ionicons name="create-outline" size={20} color={theme.primary} />
+          </Pressable>
+
+          {/* Avatar */}
+          <View style={styles.avatarContainer}>
+            <View style={[styles.avatarRing, { borderColor: theme.primary }]}>
+              {uploading ? (
+                <View style={styles.avatarInner}>
+                  <ShimmerLoader variant="circle" width={96} height={96} />
+                </View>
+              ) : (
+                <Image
+                  source={avatarSource ? { uri: avatarSource } : require('../../../assets/homescreen-image.png')}
+                  style={styles.avatarInner}
+                />
+              )}
+            </View>
+            {/* Camera button overlay */}
             <Pressable
-              style={[styles.changeButton, { backgroundColor: isDark ? theme.card : '#FFFFFF' }]}
+              style={[styles.cameraButton, { backgroundColor: theme.primary }]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 handlePickImage();
               }}
               disabled={uploading}
             >
-              <Text style={[styles.changeButtonText, { color: theme.primary }]}>
-                {uploading ? 'Uploading...' : 'Change'}
-              </Text>
+              <Ionicons name="camera" size={14} color="#FFFFFF" />
             </Pressable>
           </View>
 
-          {/* Compact Info Card - Name & Username Only */}
-          <Pressable
-            style={[styles.infoCardCompact, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setShowEditModal(true);
-            }}
-          >
-            <View style={styles.infoCardContent}>
-              <Text style={[styles.infoCardLabel, { color: theme.text + '99' }]}>NAME</Text>
-              <Text style={[styles.infoCardValue, { color: theme.text }]} numberOfLines={1}>
-                {profile?.full_name || 'Set your name'}
-              </Text>
+          {/* Name & Username */}
+          <Text style={[styles.heroName, { color: theme.text }]}>
+            {profile?.full_name || 'Set your name'}
+          </Text>
+          <Text style={[styles.heroUsername, { color: theme.textSecondary }]}>
+            @{profile?.username || 'username'}
+          </Text>
 
-              <Text style={[styles.infoCardLabel, { color: theme.text + '99', marginTop: 12 }]}>USERNAME</Text>
-              <Text style={[styles.infoCardValue, { color: theme.text }]} numberOfLines={1}>
-                @{profile?.username || 'username'}
+          {/* Detail Chips */}
+          {detailChips.length > 0 && (
+            <View style={styles.chipRow}>
+              {detailChips.map((chip, i) => (
+                <View key={i} style={[styles.chip, { backgroundColor: theme.primary + '12' }]}>
+                  <Ionicons name={chip.icon} size={12} color={theme.primary} style={{ marginRight: 4 }} />
+                  <Text style={[styles.chipText, { color: theme.text }]} numberOfLines={1}>
+                    {chip.text}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Prompt to add details if none set */}
+          {detailChips.length === 0 && (
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setShowEditModal(true);
+              }}
+            >
+              <Text style={[styles.addDetailsPrompt, { color: theme.primary }]}>
+                Tap to add your details
               </Text>
-            </View>
-            <View style={styles.iconRow}>
-              <Pressable
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setShowQRModal(true);
-                }}
-                style={{ marginRight: 16 }}
-              >
-                <Ionicons name="qr-code-outline" size={24} color={theme.primary} />
-              </Pressable>
-              <Ionicons name="create-outline" size={24} color={theme.primary} style={styles.editIcon} />
-            </View>
-          </Pressable>
+            </Pressable>
+          )}
         </Animated.View>
 
-        {/* Full-Width Details Card - University, Location, Classes */}
-        <Animated.View entering={FadeIn.delay(50).duration(400)}>
+        {/* ===== SECTION: YOUR JOURNEY ===== */}
+        <Animated.View entering={FadeIn.delay(100).duration(400)}>
+          <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>YOUR JOURNEY</Text>
+        </Animated.View>
+
+        {/* Streak Banner */}
+        <Animated.View entering={FadeInUp.delay(150).duration(400)}>
+          <View style={[styles.streakBanner, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}>
+            <View style={styles.streakLeft}>
+              <Text style={styles.streakEmoji}>
+                {currentStreak > 0 ? '\uD83D\uDD25' : '\u2728'}
+              </Text>
+              <View>
+                <Animated.Text style={[styles.streakCount, { color: theme.text }]}>
+                  {Math.round(streakCounter.value)}
+                </Animated.Text>
+                <Text style={[styles.streakLabel, { color: theme.textSecondary }]}>
+                  {currentStreak > 0 ? 'day streak' : 'Start your streak!'}
+                </Text>
+              </View>
+            </View>
+            <View style={[styles.levelBadge, { backgroundColor: theme.primary + '18' }]}>
+              <Ionicons name="shield" size={16} color={theme.primary} />
+              <Text style={[styles.levelText, { color: theme.primary }]}>Lv. {userLevel}</Text>
+            </View>
+          </View>
+        </Animated.View>
+
+        {/* Trail Buddy Feature Card */}
+        <Animated.View entering={FadeInUp.delay(200).duration(400)}>
           <Pressable
-            style={[styles.detailsCard, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}
+            style={[styles.buddyCard, glassStyles.mediumCard(isDark), { backgroundColor: theme.card }]}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setShowEditModal(true);
+              navigation.navigate('TrailBuddySelection' as any);
             }}
           >
-            <View style={styles.detailsCardContent}>
-              <Text style={[styles.infoCardLabel, { color: theme.text + '99' }]}>UNIVERSITY</Text>
-              <Text style={[styles.infoCardValue, { color: theme.text }]} numberOfLines={1}>
-                {profile?.university || 'Add your university'}
+            <View style={styles.buddyInfo}>
+              <Text style={[styles.buddyName, { color: theme.text }]}>
+                {profile?.trail_buddy_name || 'Choose Your Trail Buddy'}
               </Text>
-
-              <Text style={[styles.infoCardLabel, { color: theme.text + '99', marginTop: 12 }]}>LOCATION</Text>
-              <Text style={[styles.infoCardValue, { color: theme.text }]} numberOfLines={1}>
-                {profile?.location || 'Add your location'}
-              </Text>
-
-              <Text style={[styles.infoCardLabel, { color: theme.text + '99', marginTop: 12 }]}>CLASSES</Text>
-              <Text style={[styles.infoCardValue, { color: theme.text }]} numberOfLines={1}>
-                {profile?.classes || 'Add your classes'}
-              </Text>
+              {buddyType && (
+                <Text style={[styles.buddyType, { color: theme.textSecondary }]}>
+                  Your {buddyType.charAt(0).toUpperCase() + buddyType.slice(1)} companion
+                </Text>
+              )}
+              <View style={[styles.buddyChevronPill, { backgroundColor: buddyColor + '18' }]}>
+                <Text style={[styles.buddyChevronText, { color: buddyColor }]}>
+                  {buddyType ? 'Change' : 'Select'}
+                </Text>
+                <Ionicons name="chevron-forward" size={14} color={buddyColor} />
+              </View>
             </View>
-            <Ionicons name="create-outline" size={24} color={theme.primary} style={styles.editIconDetails} />
+            <View style={[styles.buddyAnimationContainer, { backgroundColor: buddyColor + '10' }]}>
+              {buddyType ? (
+                <BuddyWalkingSprite buddyId={buddyType} size={90} />
+              ) : (
+                <Text style={{ fontSize: 48 }}>{'\uD83E\uDD7E'}</Text>
+              )}
+            </View>
           </Pressable>
         </Animated.View>
 
         {/* Gear Shop Button */}
         <Animated.View
-          entering={FadeIn.delay(100).duration(400)}
+          entering={FadeInUp.delay(250).duration(400)}
           style={shopSlideAnimation.animatedStyle}
         >
           <Pressable
-            style={[styles.shopButton, { backgroundColor: theme.card, borderColor: '#FF5700' }]}
+            style={[styles.shopButton, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}
             onPressIn={shopSlideAnimation.onPressIn}
             onPressOut={shopSlideAnimation.onPressOut}
             onPress={() => {
@@ -299,10 +406,10 @@ const ProfileScreen = () => {
               navigation.navigate('Shop' as any);
             }}
           >
-            <View style={[styles.shopIconContainer, { backgroundColor: '#FF570020' }]}>
+            <View style={[styles.shopIconContainer, { backgroundColor: '#FF570015' }]}>
               <Image
                 source={require('../../../assets/trail-buddies/backpack for hikewise.png')}
-                style={{ width: 36, height: 36 }}
+                style={{ width: 32, height: 32 }}
                 resizeMode="contain"
               />
             </View>
@@ -312,129 +419,78 @@ const ProfileScreen = () => {
                 Equip Nora for the trail ahead
               </Text>
             </View>
-            <Ionicons name="chevron-forward-outline" size={24} color={theme.primary} />
+            <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
           </Pressable>
         </Animated.View>
 
-        {/* Trail Buddy Section */}
-        <Animated.View entering={FadeIn.delay(150).duration(400)}>
-          <Pressable
-            style={[styles.partnerSection, { backgroundColor: theme.card }]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              navigation.navigate('TrailBuddySelection' as any);
-            }}
-          >
-            <View style={styles.trailBuddyContent}>
-              <Text style={[styles.partnerTitle, { color: theme.text }]}>
-                {profile?.trail_buddy_name ? `${profile.trail_buddy_name}` : 'Choose Your Trail Buddy'}
-              </Text>
-              {profile?.trail_buddy_type && (
-                <Text style={[styles.trailBuddySubtitle, { color: theme.textSecondary }]}>
-                  Your {profile.trail_buddy_type.charAt(0).toUpperCase() + profile.trail_buddy_type.slice(1)} companion
-                </Text>
-              )}
-            </View>
-            <View style={[styles.partnerIcon, { backgroundColor: isDark ? theme.primary + '20' : '#E3F2FD', overflow: 'hidden' }]}>
-              {profile?.trail_buddy_type && TRAIL_BUDDY_IMAGES[profile.trail_buddy_type] ? (
-                <Image
-                  source={TRAIL_BUDDY_IMAGES[profile.trail_buddy_type]}
-                  style={styles.trailBuddyImage}
-                  resizeMode="contain"
-                />
-              ) : (
-                <Text style={{ fontSize: 30 }}>🥾</Text>
-              )}
-            </View>
-          </Pressable>
+        {/* ===== SECTION: YOUR STATS ===== */}
+        <Animated.View entering={FadeIn.delay(300).duration(400)}>
+          <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>YOUR STATS</Text>
         </Animated.View>
 
-        {/* Scene Card */}
-        <Animated.View
-          entering={FadeIn.delay(200).duration(400)}
-          style={[styles.sceneCard, { backgroundColor: theme.card }]}
-        >
-          <Image
-            source={require('../../../assets/homescreen-image.png')}
-            style={styles.sceneImage}
-            resizeMode="cover"
-          />
-          <Pressable
-            style={[styles.changeButton, { backgroundColor: isDark ? theme.card : '#FFFFFF', position: 'absolute', bottom: 16, left: 16 }]}
-            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-          >
-            <Text style={[styles.changeButtonText, { color: theme.primary }]}>Change</Text>
-          </Pressable>
-        </Animated.View>
-
-        {/* Stats Grid - Row 1 */}
-        <Animated.View
-          entering={FadeIn.delay(250).duration(400)}
-          style={styles.statsGrid}
-        >
-          <View style={[styles.statCard, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}>
-            <View style={[styles.statIcon, { backgroundColor: '#FF570020' }]}>
-              <FlintIcon size={32} color="#FF5700" />
+        {/* Stats Row 1 - Featured (2 wide cards) */}
+        <Animated.View entering={FadeInUp.delay(350).duration(400)} style={styles.statsRowFeatured}>
+          <View style={[styles.statCardFeatured, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}>
+            <View style={[styles.statIconSmall, { backgroundColor: '#FF570015' }]}>
+              <FlintIcon size={22} color="#FF5700" />
             </View>
-            <Text style={[styles.statNumber, { color: theme.text }]}>{flintCurrency.toFixed(1)}</Text>
-            <Text style={[styles.statLabel, { color: theme.primary }]}>Flint</Text>
+            <Animated.Text style={[styles.statNumberFeatured, { color: theme.text }]}>
+              {Math.round(flintCounter.value * 10) / 10}
+            </Animated.Text>
+            <Text style={[styles.statLabelFeatured, { color: theme.textSecondary }]}>Flint</Text>
           </View>
 
-          <View style={[styles.statCard, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}>
-            <View style={[styles.statIcon, { backgroundColor: '#FFD70020' }]}>
+          <View style={[styles.statCardFeatured, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}>
+            <View style={[styles.statIconSmall, { backgroundColor: theme.primary + '15' }]}>
+              <Ionicons name="time-outline" size={22} color={theme.primary} />
+            </View>
+            <Text style={[styles.statNumberFeatured, { color: theme.text }]}>
+              {totalHours}h {remainingMinutes}m
+            </Text>
+            <Text style={[styles.statLabelFeatured, { color: theme.textSecondary }]}>Focus Time</Text>
+          </View>
+        </Animated.View>
+
+        {/* Stats Row 2 - Compact (3 cards) */}
+        <Animated.View entering={FadeInUp.delay(400).duration(400)} style={styles.statsRowCompact}>
+          <View style={[styles.statCardCompact, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}>
+            <View style={[styles.statIconTiny, { backgroundColor: theme.primary + '15' }]}>
+              <Ionicons name="timer-outline" size={18} color={theme.primary} />
+            </View>
+            <Animated.Text style={[styles.statNumberCompact, { color: theme.text }]}>
+              {Math.round(sessionsCounter.value)}
+            </Animated.Text>
+            <Text style={[styles.statLabelCompact, { color: theme.textSecondary }]}>Sessions</Text>
+          </View>
+
+          <View style={[styles.statCardCompact, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}>
+            <View style={[styles.statIconTiny, { backgroundColor: '#FFD70015' }]}>
               {userBadges.length > 0 ? (
-                <Text style={{ fontSize: 32 }}>{userBadges[0].icon}</Text>
+                <Text style={{ fontSize: 18 }}>{userBadges[0].icon}</Text>
               ) : (
-                <Ionicons name="trophy-outline" size={32} color="#FFD700" />
+                <Ionicons name="trophy-outline" size={18} color="#FFD700" />
               )}
             </View>
-            <Text style={[styles.statNumber, { color: theme.text, fontSize: 16 }]} numberOfLines={1}>
+            <Text style={[styles.statNumberCompact, { color: theme.text, fontSize: 13 }]} numberOfLines={1}>
               {userBadges.length > 0 ? userBadges[0].name : 'No Peak'}
             </Text>
-            <Text style={[styles.statLabel, { color: theme.primary }]}>Peak Reached</Text>
+            <Text style={[styles.statLabelCompact, { color: theme.textSecondary }]}>Peak Reached</Text>
           </View>
 
-          <View style={[styles.statCard, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}>
-            <View style={[styles.statIcon, { backgroundColor: theme.primary + '20' }]}>
-              <Ionicons name="timer-outline" size={32} color={theme.primary} />
+          <View style={[styles.statCardCompact, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}>
+            <View style={[styles.statIconTiny, { backgroundColor: '#4CAF5015' }]}>
+              <Ionicons name="checkmark-circle-outline" size={18} color="#4CAF50" />
             </View>
-            <Text style={[styles.statNumber, { color: theme.text }]}>{totalSessions}</Text>
-            <Text style={[styles.statLabel, { color: theme.primary }]}>Sessions</Text>
+            <Animated.Text style={[styles.statNumberCompact, { color: theme.text }]}>
+              {Math.round(completedCounter.value)}
+            </Animated.Text>
+            <Text style={[styles.statLabelCompact, { color: theme.textSecondary }]}>Completed</Text>
           </View>
         </Animated.View>
 
-        {/* Stats Grid - Row 2 */}
-        <Animated.View
-          entering={FadeIn.delay(300).duration(400)}
-          style={styles.statsGrid}
-        >
-          <View style={[styles.statCard, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}>
-            <View style={[styles.statIcon, { backgroundColor: theme.primary + '20' }]}>
-              <Ionicons name="time-outline" size={32} color={theme.primary} />
-            </View>
-            <Text style={[styles.statNumber, { color: theme.text }]}>{totalHours}H</Text>
-            <Text style={[styles.statLabel, { color: theme.primary }]}>{totalHours}H {remainingMinutes}M</Text>
-          </View>
-
-          <View style={[styles.statCard, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}>
-            <View style={[styles.statIcon, { backgroundColor: '#4CAF5020' }]}>
-              <Ionicons name="checkmark-circle-outline" size={32} color="#4CAF50" />
-            </View>
-            <Text style={[styles.statNumber, { color: theme.text }]}>{completedSessions}</Text>
-            <Text style={[styles.statLabel, { color: theme.primary }]}>Completed</Text>
-          </View>
-
-          <View style={[styles.statCard, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}>
-            <View style={[styles.statIcon, { backgroundColor: '#FF851B20' }]}>
-              <Text style={{ fontSize: 32 }}>🔥</Text>
-            </View>
-            <Text style={[styles.statNumber, { color: theme.text }]}>{currentStreak}</Text>
-            <Text style={[styles.statLabel, { color: theme.primary }]}>Day Streak</Text>
-          </View>
-        </Animated.View>
       </ScrollView>
 
-      {/* Edit Profile Info Modal */}
+      {/* ===== EDIT PROFILE MODAL ===== */}
       <Modal
         visible={showEditModal}
         animationType="slide"
@@ -499,22 +555,19 @@ const ProfileScreen = () => {
               />
             </ScrollView>
 
-            <TouchableOpacity
-              style={[styles.saveButton, { backgroundColor: theme.primary }]}
+            <AnimatedButton
+              title={saving ? 'Saving...' : 'Save Changes'}
               onPress={handleSaveProfileInfo}
               disabled={saving}
-            >
-              {saving ? (
-                <ShimmerLoader variant="button" width="100%" height={20} />
-              ) : (
-                <Text style={styles.saveButtonText}>Save Changes</Text>
-              )}
-            </TouchableOpacity>
+              variant="primary"
+              size="large"
+              gradient={true}
+            />
           </View>
         </View>
       </Modal>
 
-      {/* QR Code Modal */}
+      {/* ===== QR CODE MODAL ===== */}
       <Modal
         visible={showQRModal}
         animationType="fade"
@@ -541,7 +594,7 @@ const ProfileScreen = () => {
                   userId: user?.id,
                   username: profile?.username,
                   fullName: profile?.full_name,
-                  profileUrl: `thetriage://profile/${user?.id}`
+                  profileUrl: `hikewise://profile/${user?.id}`
                 })}
                 size={250}
                 backgroundColor="white"
@@ -561,7 +614,6 @@ const ProfileScreen = () => {
         </View>
       </Modal>
 
-      {/* Bottom Tab Bar */}
       <BottomTabBar currentRoute="Profile" />
     </SafeAreaView>
   );
@@ -571,163 +623,294 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  profileCardSection: {
-    flexDirection: 'row',
+
+  // ===== HERO =====
+  heroSection: {
+    alignItems: 'center',
+    paddingTop: 24,
+    paddingBottom: 8,
     paddingHorizontal: 16,
-    paddingTop: 16,
-    gap: 12,
-  },
-  profileCard: {
-    width: 150,
-    height: 180,
-    borderRadius: 12,
-    overflow: 'hidden',
     position: 'relative',
   },
-  profileCardImage: {
-    width: '100%',
-    height: '100%',
-  },
-  changeButton: {
+  heroActionButton: {
     position: 'absolute',
-    bottom: 12,
-    left: '50%',
-    transform: [{ translateX: -35 }],
-    paddingHorizontal: 20,
-    paddingVertical: 8,
+    top: 24,
+    width: 40,
+    height: 40,
     borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
     shadowRadius: 4,
-    elevation: 3,
+    elevation: 2,
   },
-  changeButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
+  heroActionLeft: {
+    left: 16,
   },
-  infoCard: {
-    flex: 1,
-    borderRadius: 12,
-    padding: 16,
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  infoCardContent: {
-    flex: 1,
-  },
-  infoCardLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    letterSpacing: 1,
-    marginBottom: 4,
-  },
-  infoCardValue: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  editIcon: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-  },
-  infoCardCompact: {
-    flex: 1,
-    borderRadius: 12,
-    padding: 16,
-    justifyContent: 'center',
-    position: 'relative',
-    minHeight: 180,
-  },
-  detailsCard: {
-    marginHorizontal: 16,
-    marginTop: 16,
-    borderRadius: 12,
-    padding: 16,
-    position: 'relative',
-  },
-  detailsCardContent: {
-    paddingRight: 40,
-  },
-  editIconDetails: {
-    position: 'absolute',
-    top: 16,
+  heroActionRight: {
     right: 16,
   },
-  partnerSection: {
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: 12,
+  },
+  avatarRing: {
+    width: 106,
+    height: 106,
+    borderRadius: 53,
+    borderWidth: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInner: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    overflow: 'hidden',
+  },
+  cameraButton: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  heroName: {
+    ...Typography.h1,
+    textAlign: 'center',
+  },
+  heroUsername: {
+    ...Typography.bodySmall,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    marginTop: 12,
+    gap: 8,
+    paddingHorizontal: 16,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  chipText: {
+    fontSize: 12,
+    fontWeight: '500',
+    maxWidth: 140,
+  },
+  addDetailsPrompt: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 12,
+  },
+
+  // ===== SECTION LABELS =====
+  sectionLabel: {
+    ...Typography.label,
+    paddingHorizontal: 16,
+    marginTop: 28,
+    marginBottom: 10,
+  },
+
+  // ===== STREAK BANNER =====
+  streakBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginHorizontal: 16,
-    marginTop: 16,
-    padding: 16,
-    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 14,
   },
-  partnerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+  streakLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
-  trailBuddyContent: {
+  streakEmoji: {
+    fontSize: 28,
+  },
+  streakCount: {
+    fontSize: 22,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  streakLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    marginTop: -2,
+  },
+  levelBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 4,
+  },
+  levelText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  // ===== TRAIL BUDDY CARD =====
+  buddyCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginTop: 10,
+    paddingLeft: 20,
+    paddingRight: 8,
+    paddingVertical: 12,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  buddyInfo: {
     flex: 1,
   },
-  trailBuddySubtitle: {
-    fontSize: 14,
-    marginTop: 2,
+  buddyName: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 2,
   },
-  trailBuddyImage: {
-    width: 46,
-    height: 46,
+  buddyType: {
+    fontSize: 13,
+    fontWeight: '500',
+    marginBottom: 10,
   },
-  partnerIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+  buddyChevronPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    gap: 2,
+  },
+  buddyChevronText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  buddyAnimationContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  sceneCard: {
-    marginHorizontal: 16,
-    marginTop: 16,
-    height: 200,
-    borderRadius: 12,
     overflow: 'hidden',
-    position: 'relative',
   },
-  sceneImage: {
-    width: '100%',
-    height: '100%',
+
+  // ===== GEAR SHOP =====
+  shopButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginTop: 10,
+    padding: 14,
+    borderRadius: 14,
   },
-  statsGrid: {
+  shopIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  shopTextContainer: {
+    flex: 1,
+  },
+  shopButtonTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  shopButtonSubtitle: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+
+  // ===== STATS =====
+  statsRowFeatured: {
     flexDirection: 'row',
     paddingHorizontal: 16,
-    marginTop: 16,
     gap: 12,
   },
-  statCard: {
+  statCardFeatured: {
     flex: 1,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 16,
     alignItems: 'center',
-    overflow: 'hidden',
   },
-  statIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 12,
+  statIconSmall: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
   },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 4,
+  statNumberFeatured: {
+    fontSize: 22,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+    marginBottom: 2,
   },
-  statLabel: {
+  statLabelFeatured: {
     fontSize: 12,
+    fontWeight: '600',
+  },
+  statsRowCompact: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    marginTop: 12,
+    gap: 10,
+  },
+  statCardCompact: {
+    flex: 1,
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+  },
+  statIconTiny: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  statNumberCompact: {
+    fontSize: 18,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+    marginBottom: 2,
+  },
+  statLabelCompact: {
+    fontSize: 10,
     fontWeight: '600',
     textAlign: 'center',
   },
+
+  // ===== MODALS =====
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -769,54 +952,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 12,
     fontSize: 16,
-  },
-  saveButton: {
-    paddingVertical: 14,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  saveButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  shopButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    margin: 16,
-    marginTop: 24,
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  shopIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-  },
-  shopTextContainer: {
-    flex: 1,
-  },
-  shopButtonTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  shopButtonSubtitle: {
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  iconRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
   },
   qrModalContent: {
     width: '90%',

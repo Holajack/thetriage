@@ -81,15 +81,15 @@ export const MenuButton: React.FC<MenuButtonProps> = ({ onPress, isOpen }) => {
 
   useEffect(() => {
     rotation.value = withSpring(isOpen ? 1 : 0, {
-      damping: 15,
-      stiffness: 150,
+      damping: 22,
+      stiffness: 80,
     });
     iconOpacity1.value = withTiming(isOpen ? 0 : 1, { duration: 150 });
     iconOpacity2.value = withTiming(isOpen ? 1 : 0, { duration: 150 });
   }, [isOpen]);
 
   const handlePressIn = () => {
-    scale.value = withSpring(0.9, { damping: 15, stiffness: 300 });
+    scale.value = withSpring(0.95, { damping: 20, stiffness: 200 });
   };
 
   const handlePressOut = () => {
@@ -99,7 +99,7 @@ export const MenuButton: React.FC<MenuButtonProps> = ({ onPress, isOpen }) => {
   const containerStyle = useAnimatedStyle(() => ({
     transform: [
       { scale: scale.value },
-      { rotate: `${interpolate(rotation.value, [0, 1], [0, 90])}deg` },
+      { rotate: `${interpolate(rotation.value, [0, 1], [0, 0])}deg` },
     ],
   }));
 
@@ -155,12 +155,12 @@ const SlidingIndicator: React.FC<SlidingIndicatorProps> = ({ activeIndex, itemCo
   useEffect(() => {
     // Slight squeeze during movement
     scaleX.value = withSequence(
-      withTiming(0.97, { duration: 100 }),
-      withSpring(1, { damping: 15, stiffness: 200 })
+      withTiming(0.98, { duration: 100 }),
+      withSpring(1, { damping: 20, stiffness: 150 })
     );
     translateY.value = withSpring(activeIndex * ITEM_HEIGHT, {
-      damping: 18,
-      stiffness: 180,
+      damping: 22,
+      stiffness: 120,
       mass: 0.8,
     });
   }, [activeIndex]);
@@ -210,8 +210,8 @@ const NavItemComponent: React.FC<NavItemComponentProps> = ({
 
   useEffect(() => {
     if (isVisible) {
-      const delay = 80 + index * 40;
-      translateX.value = withDelay(delay, withSpring(0, { damping: 20, stiffness: 200 }));
+      const delay = 60 + index * 30;
+      translateX.value = withDelay(delay, withSpring(0, { damping: 22, stiffness: 120 }));
       opacity.value = withDelay(delay, withTiming(1, { duration: 200 }));
     } else {
       translateX.value = 50;
@@ -312,8 +312,8 @@ const ChatHistoryItem: React.FC<ChatHistoryItemProps> = ({
 
   useEffect(() => {
     if (isVisible) {
-      const delay = 200 + index * 30;
-      translateX.value = withDelay(delay, withSpring(0, { damping: 18, stiffness: 180 }));
+      const delay = 120 + index * 25;
+      translateX.value = withDelay(delay, withSpring(0, { damping: 22, stiffness: 120 }));
       opacity.value = withDelay(delay, withTiming(1, { duration: 180 }));
     } else {
       translateX.value = 30;
@@ -425,6 +425,31 @@ export const NoraSideNav: React.FC<NoraSideNavProps> = ({
   const newChatOpacity = useSharedValue(0);
 
   const activeIndex = items.findIndex((item) => item.id === activeItemId);
+
+  // Group sessions by date for section headers
+  const groupSessionsByDate = (sessions: ChatSession[]): { label: string; sessions: ChatSession[] }[] => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today.getTime() - 86400000);
+    const sevenDaysAgo = new Date(today.getTime() - 7 * 86400000);
+
+    const groups: Record<string, ChatSession[]> = {};
+    const order = ['Today', 'Yesterday', 'Previous 7 Days', 'Older'];
+
+    for (const session of sessions) {
+      const date = new Date(session.date);
+      let label: string;
+      if (date >= today) label = 'Today';
+      else if (date >= yesterday) label = 'Yesterday';
+      else if (date >= sevenDaysAgo) label = 'Previous 7 Days';
+      else label = 'Older';
+
+      if (!groups[label]) groups[label] = [];
+      groups[label].push(session);
+    }
+
+    return order.filter(l => groups[l]?.length > 0).map(label => ({ label, sessions: groups[label] }));
+  };
 
   // Handle opening/closing animations
   useEffect(() => {
@@ -618,15 +643,22 @@ export const NoraSideNav: React.FC<NoraSideNavProps> = ({
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.chatHistoryScrollContent}
               >
-                {chatSessions.map((session, index) => (
-                  <ChatHistoryItem
-                    key={session.id}
-                    session={session}
-                    index={index}
-                    onPress={() => handleSelectSession(session)}
-                    onDelete={() => handleDeleteSession(session.id)}
-                    isVisible={isOpen}
-                  />
+                {groupSessionsByDate(chatSessions || []).map((group) => (
+                  <View key={group.label}>
+                    <Text style={[styles.dateGroupHeader, { color: isDark ? '#505050' : '#888888' }]}>
+                      {group.label}
+                    </Text>
+                    {group.sessions.map((session, idx) => (
+                      <ChatHistoryItem
+                        key={session.id}
+                        session={session}
+                        onPress={() => handleSelectSession(session)}
+                        onDelete={() => handleDeleteSession(session.id)}
+                        index={idx}
+                        isVisible={isOpen}
+                      />
+                    ))}
+                  </View>
                 ))}
               </ScrollView>
             ) : (
@@ -826,6 +858,15 @@ const styles = StyleSheet.create({
   },
   emptyHistoryText: {
     fontSize: 13,
+  },
+  dateGroupHeader: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 6,
   },
 });
 

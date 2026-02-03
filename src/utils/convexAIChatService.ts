@@ -26,7 +26,8 @@ function getClient(): ConvexReactClient {
 
 export interface NoraChatArgs {
   message: string;
-  thinkingMode?: "fast" | "deep";
+  thinkingMode?: "quick" | "deep" | "research";
+  sessionId?: string;
   conversationHistory?: { role: string; content: string }[];
   userSettings?: any;
   pdfContext?: { title: string; file_path?: string } | null;
@@ -37,6 +38,7 @@ export interface AIChatResponse {
   response?: string;
   error?: string;
   success?: boolean;
+  sessionId?: string;
   tier?: string;
   remaining_messages?: number;
   upgrade_required?: boolean;
@@ -48,7 +50,8 @@ export async function sendNoraChatMessage(args: NoraChatArgs): Promise<AIChatRes
     const client = getClient();
     const result = await client.action(api.noraChat.sendMessage, {
       message: args.message,
-      thinkingMode: args.thinkingMode || "fast",
+      thinkingMode: args.thinkingMode || "quick",
+      sessionId: args.sessionId as any,
       conversationHistory: args.conversationHistory,
       userSettings: args.userSettings,
       pdfContext: args.pdfContext || null,

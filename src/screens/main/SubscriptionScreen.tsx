@@ -1,14 +1,22 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInUp, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { AnimatedButton } from '../../components/premium/AnimatedButton';
-import { StaggeredItem } from '../../components/premium/StaggeredList';
+import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
-import { Shadows, PremiumColors } from '../../theme/premiumTheme';
+import { Typography, Spacing, BorderRadius, PremiumColors, Shadows } from '../../theme/premiumTheme';
+import { StaggeredItem } from '../../components/premium/StaggeredList';
+
+// Sub-components
+import BillingToggle, { BillingPeriod } from './subscription/BillingToggle';
+import PlanCard, { PlanTier } from './subscription/PlanCard';
+import NoraShowcase from './subscription/NoraShowcase';
+import FeatureComparisonTable from './subscription/FeatureComparisonTable';
+import SocialProofBar from './subscription/SocialProofBar';
+import EliteCelebrationView from './subscription/EliteCelebrationView';
 
 // RevenueCat temporarily disabled for demo purposes
 // When ready to enable, uncomment the import below and remove mock functions
@@ -17,168 +25,148 @@ import { Shadows, PremiumColors } from '../../theme/premiumTheme';
 //   purchasePackage,
 //   restorePurchases,
 //   getCurrentTier,
-//   PurchasesPackage,
+//   getManagementURL,
 // } from '../../services/revenuecat';
 
-const plans = [
-  {
-    name: 'Basic',
-    price: 'Free',
-    features: [
-      'Balanced Focus Timer (45/15 min cycles)',
-      'Task & Subject Creation',
-      'Weekly Progress Tracking',
-      'Daily Inspiration Quotes',
-      'Basic AI-Powered Insights (limited)',
-      'Access to Community & Leaderboard',
-      'Profile Customization',
-    ],
-    highlight: true,
-    cta: 'Current Plan',
-    badge: null,
-  },
-  {
-    name: 'Premium',
-    price: '$4.99/mo',
-    features: [
-      'Everything in Basic',
-      'Unlimited AI-Powered Insights',
-      'Advanced Task Prioritization',
-      'Soundscapes for Focus',
-      'Calendar Integration',
-      'Chrome Extension Beta',
-      'Priority Support',
-    ],
-    highlight: false,
-    cta: 'Upgrade to Premium',
-    badge: 'Most Popular',
-  },
-  {
-    name: 'Pro',
-    price: '$14.99/mo',
-    features: [
-      'Everything in Premium',
-      'Personalized Study Plans (AI-generated)',
-      'Brain Mapping & Motivation Profile',
-      'Self-Discovery Quizzes',
-      'E-Books Library Access',
-      'Session Reports & Analytics',
-      'App/Website Blocking (Protection Center)',
-      'Early Access to New Features',
-      'Pro Badge in Leaderboard',
-    ],
-    highlight: false,
-    cta: 'Upgrade to Pro',
-    badge: null,
-  },
-];
+// ============================================
+// PLAN DATA
+// ============================================
 
-// Map plan names to RevenueCat product identifiers
-const PLAN_TO_PRODUCT: Record<string, string> = {
-  Premium: 'hikewise_premium_monthly',
-  Pro: 'hikewise_pro_monthly',
+const PREMIUM_PLAN: PlanTier = {
+  name: 'Premium',
+  tier: 'premium',
+  monthlyPrice: 7.99,
+  annualPrice: 57.99,
+  annualMonthlyEquivalent: 4.83,
+  badge: 'Most Popular',
+  tagline: 'Supercharge your study sessions',
+  features: [
+    { text: 'Unlimited AI-Powered Insights', included: true },
+    { text: 'Advanced Task Prioritization', included: true },
+    { text: 'Soundscapes for Focus', included: true },
+    { text: 'Calendar Integration', included: true },
+    { text: 'Chrome Extension Beta', included: true },
+    { text: 'Priority Support', included: true },
+  ],
+  gradient: PremiumColors.gradients.primary,
 };
 
-// Mock RevenueCat functions for demo mode
-const mockGetCurrentTier = async (): Promise<'free' | 'premium' | 'pro'> => {
+const ELITE_PLAN: PlanTier = {
+  name: 'Elite',
+  tier: 'elite',
+  monthlyPrice: 19.99,
+  annualPrice: 143.99,
+  annualMonthlyEquivalent: 12.00,
+  badge: 'Best Value',
+  tagline: 'The ultimate study companion with Nora AI',
+  features: [
+    { text: 'Everything in Premium', included: true },
+    { text: 'Nora AI Study Assistant', included: true, highlight: true },
+    { text: 'Voice Interaction & PDF Analysis', included: true, highlight: true },
+    { text: 'Personalized Study Plans', included: true },
+    { text: 'Brain Mapping & Motivation Profile', included: true },
+    { text: 'Self-Discovery Quizzes', included: true },
+    { text: 'eBooks Library Access', included: true },
+    { text: 'Session Reports & Analytics', included: true },
+    { text: 'App/Website Blocking', included: true },
+    { text: 'Early Access to New Features', included: true },
+    { text: 'Elite Badge in Leaderboard', included: true },
+  ],
+  gradient: PremiumColors.gradients.premium,
+};
+
+// Map plan tiers to RevenueCat product identifiers
+const PLAN_PRODUCTS: Record<string, Record<BillingPeriod, string>> = {
+  premium: {
+    monthly: 'hikewise_premium_monthly',
+    annual: 'hikewise_premium_yearly',
+  },
+  elite: {
+    monthly: 'hikewise_elite_monthly',
+    annual: 'hikewise_elite_yearly',
+  },
+};
+
+// ============================================
+// MOCK FUNCTIONS (Demo Mode)
+// ============================================
+
+const mockGetCurrentTier = async (): Promise<'free' | 'premium' | 'elite'> => {
   return 'free';
 };
 
 const mockPurchasePackage = async (planName: string): Promise<{ success: boolean; error?: string }> => {
-  // Simulate a purchase for demo purposes
   console.log('[Demo Mode] Purchase simulated for:', planName);
   return { success: true };
 };
 
-const mockRestorePurchases = async (): Promise<{ success: boolean; tier: 'free' | 'premium' | 'pro'; error?: string }> => {
+const mockRestorePurchases = async (): Promise<{ success: boolean; tier: 'free' | 'premium' | 'elite'; error?: string }> => {
   console.log('[Demo Mode] Restore purchases simulated');
   return { success: true, tier: 'free' };
 };
 
+// ============================================
+// SUBSCRIPTION SCREEN
+// ============================================
+
 const SubscriptionScreen = () => {
   const { theme } = useTheme();
-  const [selectedPlan, setSelectedPlan] = useState<string | null>('Basic');
+  const navigation = useNavigation<any>();
+  const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>('monthly');
+  const [currentTier, setCurrentTier] = useState<'free' | 'premium' | 'elite'>('free');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingTier, setProcessingTier] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
-  const [currentTier, setCurrentTier] = useState<'free' | 'premium' | 'pro'>('free');
   const [loadingPackages, setLoadingPackages] = useState(false);
 
-  // Fetch current subscription tier (demo mode - always returns free)
+  // Load current subscription tier
   useEffect(() => {
     const loadSubscriptionData = async () => {
       try {
         setLoadingPackages(true);
-
-        // Get current tier (mock)
         const tier = await mockGetCurrentTier();
         setCurrentTier(tier);
-
-        // Set selected plan based on current tier
-        if (tier === 'pro') setSelectedPlan('Pro');
-        else if (tier === 'premium') setSelectedPlan('Premium');
-        else setSelectedPlan('Basic');
       } catch (error) {
         console.error('Error loading subscription data:', error);
       } finally {
         setLoadingPackages(false);
       }
     };
-
     loadSubscriptionData();
   }, []);
 
-  const handlePlanSelect = (planName: string) => {
-    // Don't allow selecting current tier or lower
-    const tierRank = { Basic: 0, Premium: 1, Pro: 2 };
-    const currentRank = tierRank[currentTier === 'free' ? 'Basic' : currentTier === 'premium' ? 'Premium' : 'Pro'];
-    const selectedRank = tierRank[planName as keyof typeof tierRank];
-
-    if (selectedRank > currentRank) {
-      Haptics.selectionAsync();
-      setSelectedPlan(planName);
-    }
-  };
-
-  const handleUpgrade = async (planName: string) => {
-    if (planName === 'Basic') return;
-
+  const handleUpgrade = useCallback(async (plan: PlanTier) => {
     setIsProcessing(true);
+    setProcessingTier(plan.tier);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      // Demo mode: Show alert that RevenueCat is not configured
+      const productId = PLAN_PRODUCTS[plan.tier]?.[billingPeriod];
       Alert.alert(
         'Demo Mode',
-        `RevenueCat is not configured yet. In production, this would upgrade you to ${planName}.`,
+        `RevenueCat is not configured yet. In production, this would upgrade you to ${plan.name} (${productId}).`,
         [
           {
             text: 'Simulate Success',
             onPress: async () => {
-              const result = await mockPurchasePackage(planName);
-
+              const result = await mockPurchasePackage(plan.name);
               if (result.success) {
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                 Alert.alert(
-                  'Success! (Demo)',
-                  `You're now subscribed to ${planName}. (This is a demo - no actual purchase was made)`,
-                  [{ text: 'OK' }]
+                  'Welcome to ' + plan.name + '!',
+                  `You now have full ${plan.name} access. (Demo — no actual purchase made)`,
+                  [{ text: 'OK' }],
                 );
-
-                // Update local state for demo
-                const newTier = planName === 'Pro' ? 'pro' : 'premium';
-                setCurrentTier(newTier);
-                setSelectedPlan(planName);
+                setCurrentTier(plan.tier);
               }
             },
           },
           {
             text: 'Cancel',
             style: 'cancel',
-            onPress: () => {
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-            },
+            onPress: () => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning),
           },
-        ]
+        ],
       );
     } catch (error) {
       console.error('Purchase error:', error);
@@ -186,29 +174,28 @@ const SubscriptionScreen = () => {
       Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     } finally {
       setIsProcessing(false);
+      setProcessingTier(null);
     }
-  };
+  }, [billingPeriod]);
 
-  const handleRestorePurchases = async () => {
+  const handleRestorePurchases = useCallback(async () => {
     setIsRestoring(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
       const result = await mockRestorePurchases();
-
       if (result.success && result.tier !== 'free') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert(
-          'Purchases Restored (Demo)',
-          `Your ${result.tier} subscription has been restored. (Demo mode - RevenueCat not configured)`,
-          [{ text: 'OK' }]
+          'Purchases Restored',
+          `Your ${result.tier} subscription has been restored. (Demo mode)`,
+          [{ text: 'OK' }],
         );
         setCurrentTier(result.tier);
-        setSelectedPlan(result.tier === 'pro' ? 'Pro' : 'Premium');
       } else if (result.tier === 'free') {
-        Alert.alert('No Purchases Found (Demo)', 'No previous purchases were found to restore. (Demo mode)');
+        Alert.alert('No Purchases Found', 'No previous purchases were found to restore.');
       } else {
-        Alert.alert('Restore Failed', result.error || 'Could not restore purchases. Please try again.');
+        Alert.alert('Restore Failed', result.error || 'Could not restore purchases.');
       }
     } catch (error) {
       console.error('Restore error:', error);
@@ -216,158 +203,179 @@ const SubscriptionScreen = () => {
     } finally {
       setIsRestoring(false);
     }
-  };
+  }, []);
 
-  // Determine if a plan is the current plan
-  const isPlanCurrent = (planName: string): boolean => {
-    if (planName === 'Basic' && currentTier === 'free') return true;
-    if (planName === 'Premium' && currentTier === 'premium') return true;
-    if (planName === 'Pro' && currentTier === 'pro') return true;
-    return false;
-  };
+  const handleManageSubscription = useCallback(async () => {
+    // In production, use getManagementURL() from RevenueCat
+    Alert.alert(
+      'Manage Subscription',
+      'This would open your device subscription settings. (Demo mode)',
+      [{ text: 'OK' }],
+    );
+  }, []);
 
-  // Determine CTA text based on current tier
-  const getCtaText = (planName: string): string => {
-    if (isPlanCurrent(planName)) return 'Current Plan';
-    if (planName === 'Basic') return 'Downgrade';
-    return `Upgrade to ${planName}`;
-  };
+  const isEliteUser = currentTier === 'elite';
+  const isPremiumUser = currentTier === 'premium';
+  const isFreeUser = currentTier === 'free';
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Animated.View entering={FadeInUp.delay(100).duration(400)}>
-          <Text style={[styles.title, { color: theme.text }]}>Choose Your Plan</Text>
-          <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-            Unlock your full potential with advanced features and insights.
-          </Text>
+      {/* Header with back button */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Ionicons name="chevron-back" size={24} color={theme.primary} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>Subscription</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ============================================ */}
+        {/* HERO HEADER */}
+        {/* ============================================ */}
+        <Animated.View entering={FadeInUp.delay(100).duration(500)}>
+          <LinearGradient
+            colors={PremiumColors.gradients.premium as [string, string, ...string[]]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.heroGradient}
+          >
+            <Ionicons name="diamond-outline" size={40} color="rgba(255,255,255,0.9)" />
+            <Text style={styles.heroTitle}>
+              {isEliteUser ? 'Elite Member' : 'Unlock Your Full Potential'}
+            </Text>
+            <Text style={styles.heroSubtitle}>
+              {isEliteUser
+                ? 'You have access to everything'
+                : isPremiumUser
+                  ? 'Upgrade to Elite for Nora AI and more'
+                  : 'Choose the plan that fits your study goals'}
+            </Text>
+          </LinearGradient>
         </Animated.View>
 
-        <View style={styles.cardsColumn}>
-          {plans.map((plan, idx) => {
-            const isSelected = selectedPlan === plan.name;
-            const isPremiumPlan = !plan.highlight;
+        {/* ============================================ */}
+        {/* BILLING TOGGLE (non-elite users) */}
+        {/* ============================================ */}
+        {!isEliteUser && (
+          <BillingToggle
+            billingPeriod={billingPeriod}
+            onToggle={setBillingPeriod}
+            savingsPercent={40}
+          />
+        )}
 
-            return (
-              <StaggeredItem
-                key={plan.name}
-                index={idx}
-                delay="normal"
-                direction="up"
-                style={styles.cardWrapper}
+        {/* ============================================ */}
+        {/* TIER-ADAPTIVE CONTENT */}
+        {/* ============================================ */}
+        {isEliteUser ? (
+          /* --- Elite User: Celebration View --- */
+          <StaggeredItem index={0} delay="slow" direction="up">
+            <EliteCelebrationView onManageSubscription={handleManageSubscription} />
+          </StaggeredItem>
+        ) : isPremiumUser ? (
+          /* --- Premium User: Current Plan + Elite Upgrade --- */
+          <View>
+            {/* Current Plan Acknowledgment */}
+            <Animated.View entering={FadeIn.delay(350).duration(400)} style={styles.currentPlanBanner}>
+              <LinearGradient
+                colors={PremiumColors.gradients.primary as [string, string]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.currentPlanGradient}
               >
-                {plan.badge && (
-                  <Animated.View
-                    entering={FadeIn.delay(300 + idx * 150)}
-                    style={[styles.badgeAboveCard, { backgroundColor: theme.primary }]}
-                  >
-                    <LinearGradient
-                      colors={PremiumColors.gradients.gold as [string, string, ...string[]]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.badgeGradient}
-                    >
-                      <Text style={styles.badgeText}>✨ {plan.badge}</Text>
-                    </LinearGradient>
-                  </Animated.View>
-                )}
+                <Ionicons name="checkmark-circle" size={22} color="#FFFFFF" />
+                <Text style={styles.currentPlanText}>You're on Premium</Text>
+              </LinearGradient>
+            </Animated.View>
 
-                <TouchableOpacity
-                  activeOpacity={0.9}
-                  onPress={() => handlePlanSelect(plan.name)}
-                >
-                  <Animated.View
-                    style={[
-                      styles.card,
-                      { backgroundColor: theme.card, borderColor: theme.border },
-                      plan.highlight && styles.cardHighlight,
-                      isSelected && isPremiumPlan && {
-                        borderColor: theme.primary,
-                        borderWidth: 2.5,
-                        ...Shadows.glow(theme.primary),
-                      },
-                    ]}
-                  >
-                    <View style={styles.headerRow}>
-                      <Text style={[styles.planName, { color: theme.primary }]}>{plan.name}</Text>
-                      <Animated.View entering={FadeIn.delay(400 + idx * 150)}>
-                        <Text style={[styles.planPrice, { color: theme.primary }]}>{plan.price}</Text>
-                      </Animated.View>
-                    </View>
+            {/* Elite Upgrade Card */}
+            <StaggeredItem index={0} delay="slow" direction="up" style={styles.cardContainer}>
+              <PlanCard
+                plan={ELITE_PLAN}
+                isRecommended
+                isCurrent={false}
+                billingPeriod={billingPeriod}
+                onUpgrade={() => handleUpgrade(ELITE_PLAN)}
+                isProcessing={isProcessing && processingTier === 'elite'}
+                disabled={isProcessing || loadingPackages}
+              />
+            </StaggeredItem>
+          </View>
+        ) : (
+          /* --- Free User: Both Plan Cards --- */
+          <View>
+            <StaggeredItem index={0} delay="slow" direction="up" style={styles.cardContainer}>
+              <PlanCard
+                plan={PREMIUM_PLAN}
+                isCurrent={false}
+                billingPeriod={billingPeriod}
+                onUpgrade={() => handleUpgrade(PREMIUM_PLAN)}
+                isProcessing={isProcessing && processingTier === 'premium'}
+                disabled={isProcessing || loadingPackages}
+              />
+            </StaggeredItem>
 
-                    <View style={styles.featuresList}>
-                      {plan.features.map((feature, i) => (
-                        <Animated.View
-                          key={i}
-                          entering={FadeInUp.delay(450 + idx * 150 + i * 50).duration(400)}
-                          style={styles.featureRow}
-                        >
-                          <Ionicons
-                            name="checkmark-circle"
-                            size={18}
-                            color={plan.highlight ? PremiumColors.success.main : theme.primary}
-                            style={{ marginRight: 8 }}
-                          />
-                          <Text style={[styles.featureText, { color: theme.text }]}>{feature}</Text>
-                        </Animated.View>
-                      ))}
-                    </View>
+            <StaggeredItem index={1} delay="slow" direction="up" style={styles.cardContainer}>
+              <PlanCard
+                plan={ELITE_PLAN}
+                isRecommended
+                isCurrent={false}
+                billingPeriod={billingPeriod}
+                onUpgrade={() => handleUpgrade(ELITE_PLAN)}
+                isProcessing={isProcessing && processingTier === 'elite'}
+                disabled={isProcessing || loadingPackages}
+              />
+            </StaggeredItem>
+          </View>
+        )}
 
-                    {isPlanCurrent(plan.name) ? (
-                      <View style={[styles.ctaBtn, styles.ctaBtnCurrent, { borderColor: theme.border }]}>
-                        <Ionicons name="checkmark-circle" size={20} color={PremiumColors.success.main} />
-                        <Text style={[styles.ctaText, styles.ctaTextCurrent, { color: theme.textSecondary }]}>
-                          Current Plan
-                        </Text>
-                      </View>
-                    ) : plan.name === 'Basic' ? (
-                      <View style={[styles.ctaBtn, styles.ctaBtnCurrent, { borderColor: theme.border }]}>
-                        <Text style={[styles.ctaText, styles.ctaTextCurrent, { color: theme.textSecondary }]}>
-                          Free Tier
-                        </Text>
-                      </View>
-                    ) : (
-                      <AnimatedButton
-                        title={getCtaText(plan.name)}
-                        onPress={() => handleUpgrade(plan.name)}
-                        variant="primary"
-                        size="large"
-                        gradient
-                        gradientColors={PremiumColors.gradients.primary as [string, string, ...string[]]}
-                        loading={isProcessing && isSelected}
-                        disabled={isProcessing || loadingPackages}
-                        fullWidth
-                        icon={<Ionicons name="arrow-forward" size={20} color="#FFF" />}
-                        iconPosition="right"
-                      />
-                    )}
-                  </Animated.View>
-                </TouchableOpacity>
-              </StaggeredItem>
-            );
-          })}
-        </View>
+        {/* ============================================ */}
+        {/* NORA AI SHOWCASE (non-elite users) */}
+        {/* ============================================ */}
+        {!isEliteUser && (
+          <View style={styles.sectionPadding}>
+            <NoraShowcase onUpgradeToElite={() => handleUpgrade(ELITE_PLAN)} />
+          </View>
+        )}
 
-        {/* Restore Purchases Button */}
-        <Animated.View entering={FadeInUp.delay(800).duration(400)} style={styles.restoreContainer}>
-          <TouchableOpacity
-            style={[styles.restoreButton, { borderColor: theme.border }]}
-            onPress={handleRestorePurchases}
-            disabled={isRestoring}
-          >
-            {isRestoring ? (
-              <Text style={[styles.restoreText, { color: theme.textSecondary }]}>Restoring...</Text>
-            ) : (
-              <>
-                <Ionicons name="refresh" size={16} color={theme.textSecondary} />
-                <Text style={[styles.restoreText, { color: theme.textSecondary }]}>
-                  Restore Purchases
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
-          <Text style={[styles.termsText, { color: theme.textSecondary }]}>
-            Subscriptions auto-renew until canceled. Cancel anytime in your device settings.
+        {/* ============================================ */}
+        {/* FEATURE COMPARISON TABLE (non-elite users) */}
+        {/* ============================================ */}
+        {!isEliteUser && (
+          <View style={styles.sectionPadding}>
+            <FeatureComparisonTable />
+          </View>
+        )}
+
+        {/* ============================================ */}
+        {/* SOCIAL PROOF */}
+        {/* ============================================ */}
+        <SocialProofBar />
+
+        {/* ============================================ */}
+        {/* RESTORE + LEGAL FOOTER */}
+        {/* ============================================ */}
+        <Animated.View entering={FadeIn.delay(1000).duration(300)} style={styles.footer}>
+          <Animated.View style={styles.restoreButton}>
+            <Ionicons
+              name="refresh"
+              size={16}
+              color={theme.textSecondary}
+              style={{ marginRight: 6 }}
+            />
+            <Text
+              style={[styles.restoreText, { color: theme.textSecondary }]}
+              onPress={handleRestorePurchases}
+            >
+              {isRestoring ? 'Restoring...' : 'Restore Purchases'}
+            </Text>
+          </Animated.View>
+          <Text style={[styles.legalText, { color: theme.textSecondary }]}>
+            Subscriptions auto-renew until canceled.{'\n'}Cancel anytime in your device settings.
           </Text>
         </Animated.View>
       </ScrollView>
@@ -375,158 +383,109 @@ const SubscriptionScreen = () => {
   );
 };
 
+// ============================================
+// STYLES
+// ============================================
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FCF8' },
-  scrollContent: { padding: 24, alignItems: 'center' },
-  title: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: '#1B5E20',
-    marginBottom: 6,
-    textAlign: 'center',
+  container: {
+    flex: 1,
   },
-  subtitle: {
-    fontSize: 15,
-    color: '#555',
-    marginBottom: 24,
-    textAlign: 'center',
-    maxWidth: 320,
-  },
-  cardsColumn: {
-    width: '100%',
-    flexDirection: 'column',
-    gap: 24,
-  },
-  cardWrapper: {
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: 0,
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    padding: 22,
-    marginBottom: 8,
-    borderWidth: 1.5,
-    borderColor: '#E0E0E0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 2,
-    position: 'relative',
-    width: '100%',
-    maxWidth: 400,
-  },
-  cardHighlight: {
-    borderColor: '#388E3C',
-    shadowOpacity: 0.09,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  headerRow: {
+  header: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
     alignItems: 'center',
-    marginBottom: 10,
+    justifyContent: 'center',
   },
-  planName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#388E3C',
+  headerTitle: {
+    ...Typography.h2,
   },
-  planPrice: {
-    fontSize: 18,
-    color: '#7B61FF',
-    fontWeight: '600',
+  scrollContent: {
+    paddingBottom: 60,
   },
-  featuresList: {
-    marginBottom: 18,
-    marginTop: 6,
-  },
-  featureRow: {
-    flexDirection: 'row',
+
+  // Hero
+  heroGradient: {
+    paddingTop: Spacing.xl,
+    paddingBottom: Spacing.xxl,
+    paddingHorizontal: Spacing.lg,
     alignItems: 'center',
-    marginBottom: 7,
+    marginBottom: Spacing.lg,
   },
-  featureText: {
-    fontSize: 15,
-    color: '#222',
+  heroTitle: {
+    ...Typography.display,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.xs,
   },
-  ctaBtn: {
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: 6,
+  heroSubtitle: {
+    ...Typography.body,
+    color: 'rgba(255,255,255,0.85)',
+    textAlign: 'center',
+    maxWidth: 300,
   },
-  ctaBtnActive: {
-    backgroundColor: '#7B61FF',
+
+  // Card containers
+  cardContainer: {
+    paddingHorizontal: Spacing.lg,
   },
-  ctaBtnCurrent: {
-    backgroundColor: '#fff',
-    borderWidth: 1.5,
-    borderColor: '#BDBDBD',
+  sectionPadding: {
+    paddingHorizontal: Spacing.lg,
+  },
+
+  // Current Plan Banner (Premium users)
+  currentPlanBanner: {
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.md,
+    borderRadius: BorderRadius.md,
+    overflow: 'hidden',
+  },
+  currentPlanGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
   },
-  ctaText: {
-    fontWeight: 'bold',
-    fontSize: 16,
+  currentPlanText: {
+    color: '#FFFFFF',
+    ...Typography.h3,
   },
-  ctaTextActive: {
-    color: '#fff',
-  },
-  ctaTextCurrent: {
-    color: '#888',
-  },
-  badgeAboveCard: {
-    borderRadius: 8,
-    marginBottom: -12,
-    zIndex: 2,
-    alignSelf: 'center',
-    minWidth: 90,
-    marginTop: 0,
-    overflow: 'hidden',
-  },
-  badgeGradient: {
-    paddingHorizontal: 14,
-    paddingVertical: 4,
-  },
-  badgeText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 12,
-    letterSpacing: 0.5,
-    textAlign: 'center',
-  },
-  restoreContainer: {
-    marginTop: 24,
+
+  // Footer
+  footer: {
     alignItems: 'center',
-    paddingBottom: 40,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.xl,
   },
   restoreButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    borderWidth: 1,
-    marginBottom: 12,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.sm,
   },
   restoreText: {
-    fontSize: 14,
+    ...Typography.bodySmall,
     fontWeight: '500',
   },
-  termsText: {
-    fontSize: 12,
+  legalText: {
+    ...Typography.caption,
     textAlign: 'center',
-    maxWidth: 300,
     lineHeight: 18,
+    maxWidth: 300,
   },
 });
 
-export default SubscriptionScreen; 
+export default SubscriptionScreen;

@@ -13,6 +13,8 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
+import { useMutation } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -72,7 +74,7 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
     icon: 'warning-outline',
     warnings: [
       'I can make mistakes - always verify important information',
-      'I can\'t browse the internet or access real-time data',
+      'I can search the web for current information, but may occasionally find outdated sources',
       'I shouldn\'t be your only source for critical decisions',
       'I can\'t complete assignments for you or help with cheating',
       'My knowledge has limitations and may not be current',
@@ -111,26 +113,42 @@ export default function NoraOnboarding({
   isFirstTime = true,
 }: NoraOnboardingProps) {
   const { user } = useAuth();
+  const completeOnboarding = useMutation(api.noraOnboarding.complete);
   const [currentStep, setCurrentStep] = useState(0);
   const [hasAcceptedPolicies, setHasAcceptedPolicies] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
-  
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
 
+  // Track timeouts for cleanup
+  const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     console.log('NoraOnboarding: visible prop changed to:', visible);
+
+    // Clear any pending timeout from previous render
+    if (animationTimeoutRef.current) {
+      clearTimeout(animationTimeoutRef.current);
+      animationTimeoutRef.current = null;
+    }
+
+    // Stop all running animations to prevent stale callbacks from firing
+    fadeAnim.stopAnimation();
+    slideAnim.stopAnimation();
+    scaleAnim.stopAnimation();
+
     if (visible) {
       setIsVisible(true);
       // Reset animations to ensure they start from the right values
       fadeAnim.setValue(0);
       slideAnim.setValue(50);
       scaleAnim.setValue(0.9);
-      
+
       console.log('NoraOnboarding: Setting isVisible to true, starting animations');
       // Add a small delay to ensure modal is rendered before animations start
-      setTimeout(() => {
+      animationTimeoutRef.current = setTimeout(() => {
         Animated.parallel([
           Animated.timing(fadeAnim, {
             toValue: 1,
@@ -151,14 +169,6 @@ export default function NoraOnboarding({
         ]).start(() => {
           console.log('NoraOnboarding: Animations completed');
         });
-        
-        // Fallback to ensure visibility after animation duration
-        setTimeout(() => {
-          fadeAnim.setValue(1);
-          scaleAnim.setValue(1);
-          slideAnim.setValue(0);
-          console.log('NoraOnboarding: Fallback animation values set');
-        }, 600);
       }, 50);
     } else {
       console.log('NoraOnboarding: visible false, hiding modal');
@@ -180,6 +190,13 @@ export default function NoraOnboarding({
         console.log('NoraOnboarding: Modal completely hidden');
       });
     }
+
+    // Cleanup timeout on unmount or when visible changes
+    return () => {
+      if (animationTimeoutRef.current) {
+        clearTimeout(animationTimeoutRef.current);
+      }
+    };
   }, [visible]);
 
   const getCurrentStep = () => ONBOARDING_STEPS[currentStep];
@@ -195,14 +212,24 @@ export default function NoraOnboarding({
     return firstName || 'there';
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (isPolicyStep() && !hasAcceptedPolicies) {
       return; // Can't proceed without accepting policies
     }
 
     if (isLastStep()) {
+      try {
+        console.log('[NoraOnboarding] Completing onboarding...');
+        await completeOnboarding();
+        console.log('[NoraOnboarding] Onboarding completed successfully');
+      } catch (e) {
+        console.error('[NoraOnboarding] Failed to complete onboarding:', e);
+      }
       onComplete();
     } else {
+      // Stop any previous slide animation before starting new one
+      slideAnim.stopAnimation();
+
       // Animate transition
       Animated.sequence([
         Animated.timing(slideAnim, {
@@ -221,7 +248,7 @@ export default function NoraOnboarding({
           useNativeDriver: true,
         }),
       ]).start();
-      
+
       setCurrentStep(currentStep + 1);
     }
   };
@@ -360,7 +387,7 @@ export default function NoraOnboarding({
       visible={isVisible}
       transparent={true}
       animationType="none"
-      onRequestClose={handleSkip}
+      onRequestClose={isFirstTime ? undefined : handleSkip}
     >
       <View style={styles.modalOverlay}>
         <Animated.View

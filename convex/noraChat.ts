@@ -59,20 +59,21 @@ export const _checkRateLimit = internalQuery({
     const user = await ctx.db.get(userId);
     const tier = user?.subscriptionTier || "free";
 
-    // Nora is available for trial (limited) and Pro tiers
+    // Nora is available for trial (limited) and Elite tiers
     // Trial users get a taste of Nora, then must upgrade when trial ends
     const limits: Record<string, { enabled: boolean; perDay: number; maxLen: number }> = {
       free: { enabled: false, perDay: 0, maxLen: 500 },
       trial: { enabled: true, perDay: 10, maxLen: 2000 },
       premium: { enabled: false, perDay: 0, maxLen: 500 },
       pro: { enabled: true, perDay: 100, maxLen: 5000 },
+      elite: { enabled: true, perDay: 100, maxLen: 5000 },
     };
     const tierLimits = limits[tier] || limits.free;
 
     if (!tierLimits.enabled) {
       const reason = tier === "premium"
-        ? "Nora AI is a Pro-exclusive feature. You're already on Premium — upgrade to Pro to unlock web research, document analysis, and advanced study support!"
-        : "Nora AI is available for Pro members. Upgrade to Pro to unlock web research, document analysis, and advanced study support!";
+        ? "Nora AI is an Elite-exclusive feature. You're already on Premium — upgrade to Elite to unlock web research, document analysis, and advanced study support!"
+        : "Nora AI is available for Elite members. Upgrade to Elite to unlock web research, document analysis, and advanced study support!";
       return {
         allowed: false,
         tier,
@@ -95,7 +96,7 @@ export const _checkRateLimit = internalQuery({
       return {
         allowed: false,
         tier,
-        reason: `You've reached your daily Nora message limit (${tierLimits.perDay}). ${tier === "trial" ? "Upgrade to Pro for 100 messages per day!" : "Come back tomorrow!"}`,
+        reason: `You've reached your daily Nora message limit (${tierLimits.perDay}). ${tier === "trial" ? "Upgrade to Elite for 100 messages per day!" : "Come back tomorrow!"}`,
         remaining: 0,
         maxLen: tierLimits.maxLen,
       };
@@ -149,23 +150,37 @@ export const _logUsage = internalMutation({
   },
 });
 
-/** Save a chat message to noraChat */
+/** Save a chat message to noraChat (with optional session tagging) */
 export const _saveMessage = internalMutation({
   args: {
     userId: v.id("users"),
+    sessionId: v.optional(v.id("noraChatSessions")),
     role: v.string(),
     content: v.string(),
     metadata: v.optional(v.any()),
   },
-  handler: async (ctx, { userId, role, content, metadata }) => {
-    await ctx.db.insert("noraChat", { userId, role, content, metadata });
+  handler: async (ctx, { userId, sessionId, role, content, metadata }) => {
+    await ctx.db.insert("noraChat", { userId, sessionId, role, content, metadata });
   },
 });
 
-/** Get the last OpenAI response ID for conversation continuity */
+/** Get the last OpenAI response ID for conversation continuity (per session) */
 export const _getLastResponseId = internalQuery({
-  args: { userId: v.id("users") },
-  handler: async (ctx, { userId }) => {
+  args: {
+    userId: v.id("users"),
+    sessionId: v.optional(v.id("noraChatSessions")),
+  },
+  handler: async (ctx, { userId, sessionId }) => {
+    if (sessionId) {
+      const record = await ctx.db
+        .query("noraResponseIds")
+        .withIndex("by_userId_sessionId", (q) =>
+          q.eq("userId", userId).eq("sessionId", sessionId)
+        )
+        .unique();
+      return record?.responseId ?? null;
+    }
+    // Fallback to user-level lookup for backward compatibility
     const record = await ctx.db
       .query("noraResponseIds")
       .withIndex("by_userId", (q) => q.eq("userId", userId))
@@ -174,19 +189,39 @@ export const _getLastResponseId = internalQuery({
   },
 });
 
-/** Save/update the last OpenAI response ID */
+/** Save/update the last OpenAI response ID (per session) */
 export const _saveResponseId = internalMutation({
-  args: { userId: v.id("users"), responseId: v.string() },
-  handler: async (ctx, { userId, responseId }) => {
-    const existing = await ctx.db
-      .query("noraResponseIds")
-      .withIndex("by_userId", (q) => q.eq("userId", userId))
-      .unique();
+  args: {
+    userId: v.id("users"),
+    sessionId: v.optional(v.id("noraChatSessions")),
+    responseId: v.string(),
+  },
+  handler: async (ctx, { userId, sessionId, responseId }) => {
+    if (sessionId) {
+      const existing = await ctx.db
+        .query("noraResponseIds")
+        .withIndex("by_userId_sessionId", (q) =>
+          q.eq("userId", userId).eq("sessionId", sessionId)
+        )
+        .unique();
 
-    if (existing) {
-      await ctx.db.patch(existing._id, { responseId });
+      if (existing) {
+        await ctx.db.patch(existing._id, { responseId });
+      } else {
+        await ctx.db.insert("noraResponseIds", { userId, sessionId, responseId });
+      }
     } else {
-      await ctx.db.insert("noraResponseIds", { userId, responseId });
+      // Fallback for backward compatibility
+      const existing = await ctx.db
+        .query("noraResponseIds")
+        .withIndex("by_userId", (q) => q.eq("userId", userId))
+        .unique();
+
+      if (existing) {
+        await ctx.db.patch(existing._id, { responseId });
+      } else {
+        await ctx.db.insert("noraResponseIds", { userId, responseId });
+      }
     }
   },
 });
@@ -202,7 +237,7 @@ function sanitizeInput(input: string): string {
     .trim();
 }
 
-function buildInstructions(userCtx: any, pdfContext: any): string {
+function buildInstructions(userCtx: any, pdfContext: any, memories?: any[], thinkingMode?: string, quizInsights?: any[]): string {
   const userName = userCtx?.user?.fullName?.split(" ")[0] || "there";
   const focusMethod = userCtx?.onboarding?.focusMethod || "Balanced Focus";
   const weeklyGoal = userCtx?.onboarding?.weeklyFocusGoal || 5;
@@ -263,9 +298,66 @@ function buildInstructions(userCtx: any, pdfContext: any): string {
 - Provide guidance and scaffolding rather than complete graded work solutions
 - Refuse requests that constitute cheating`;
 
+  // Inject learned memories about the student
+  if (memories && memories.length > 0) {
+    const memoryLines = memories.map((m: any) => `- ${m.key}: ${m.value}`).join("\n");
+    instructions += `\n\n**What You've Learned About ${userName}:**
+${memoryLines}
+
+Use this knowledge naturally in conversation. Don't repeat it back unless asked. Reference it when relevant to personalize your responses.`;
+  }
+
+  // Inject quiz-based self-discovery insights
+  if (quizInsights && quizInsights.length > 0) {
+    const profileInsights = quizInsights.filter((i: any) => i.type === "quiz_profile");
+    const strengthInsights = quizInsights.filter((i: any) => i.type === "quiz_strength");
+    const growthInsights = quizInsights.filter((i: any) => i.type === "quiz_growth");
+
+    instructions += `\n\n**Self-Discovery Quiz Insights:**`;
+
+    if (profileInsights.length > 0) {
+      instructions += `\n*Learning Profile:*`;
+      for (const insight of profileInsights) {
+        instructions += `\n- ${insight.content}`;
+        if (insight.trend === "improving") {
+          instructions += " (showing improvement!)";
+        }
+      }
+    }
+
+    if (strengthInsights.length > 0) {
+      instructions += `\n*Strengths:*`;
+      for (const insight of strengthInsights.slice(0, 3)) {
+        instructions += `\n- ${insight.content}`;
+      }
+    }
+
+    if (growthInsights.length > 0) {
+      instructions += `\n*Areas for Development (be encouraging about these):*`;
+      for (const insight of growthInsights.slice(0, 3)) {
+        instructions += `\n- ${insight.content}`;
+        if (insight.trend === "improving") {
+          instructions += " (showing progress!)";
+        }
+      }
+    }
+
+    instructions += `\n\nUse these insights to personalize study recommendations, acknowledge progress, and gently guide improvement in growth areas without being preachy.`;
+  }
+
   if (pdfContext?.title) {
     instructions += `\n\n**Active Document:** "${pdfContext.title}"
 When the student asks about this document, use file_search to retrieve specific information from it.`;
+  }
+
+  // Research mode: add citation instructions
+  if (thinkingMode === "research") {
+    instructions += `\n\n**Research Mode Active:**
+- You are in research mode. Be thorough and cite your sources.
+- Cross-reference multiple sources when possible.
+- Clearly distinguish between established facts and emerging information.
+- Include relevant URLs or paper references when citing web sources.
+- Organize findings with clear headings and structure.`;
   }
 
   return instructions;
@@ -300,7 +392,8 @@ function fallbackResponse(message: string, userCtx: any, pdfContext: any): strin
 export const sendMessage = action({
   args: {
     message: v.string(),
-    thinkingMode: v.optional(v.string()), // 'fast' | 'deep'
+    thinkingMode: v.optional(v.string()), // 'quick' | 'deep' | 'research'
+    sessionId: v.optional(v.id("noraChatSessions")),
     conversationHistory: v.optional(v.array(v.object({ role: v.string(), content: v.string() }))),
     userSettings: v.optional(v.any()),
     pdfContext: v.optional(
@@ -312,7 +405,16 @@ export const sendMessage = action({
     screenContext: v.optional(v.any()),
     vectorStoreId: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{
+    error?: string;
+    response?: string;
+    success?: boolean;
+    sessionId?: any;
+    tier?: string;
+    remaining_messages?: number;
+    upgrade_required?: boolean;
+    context?: any;
+  }> => {
     // 1. Authenticate
     const currentUser: any = await ctx.runQuery(internal.noraChat._getCurrentUser);
     if (!currentUser) {
@@ -323,7 +425,19 @@ export const sendMessage = action({
     }
     const userId = currentUser._id as Id<"users">;
 
-    // 2. Rate limit check
+    // 2. Policy acceptance check (REQUIRED)
+    const policyAccepted: boolean = await ctx.runQuery(
+      internal.noraOnboarding._checkPolicyAccepted,
+      { userId }
+    );
+    if (!policyAccepted) {
+      return {
+        error: "POLICY_NOT_ACCEPTED",
+        response: "Please complete the Nora onboarding and accept the usage policies before chatting.",
+      };
+    }
+
+    // 3. Rate limit check
     const rateLimit: any = await ctx.runQuery(internal.noraChat._checkRateLimit, {
       userId,
       aiType: "nora",
@@ -338,40 +452,61 @@ export const sendMessage = action({
       };
     }
 
-    // 3. Sanitize & validate
+    // 4. Sanitize & validate
     const sanitized = sanitizeInput(args.message);
     if (sanitized.length > rateLimit.maxLen) {
       return {
         error: "MESSAGE_TOO_LONG",
         response: `Message too long. Max ${rateLimit.maxLen} chars for your plan. Current: ${sanitized.length}.`,
-        upgrade_required: rateLimit.tier !== "pro",
+        upgrade_required: rateLimit.tier !== "elite",
       };
     }
 
-    // 4. Get user context
-    const userCtx: any = await ctx.runQuery(internal.noraChat._getUserContext, { userId });
+    // 5. Session management -- create if needed
+    let sessionId = args.sessionId;
+    if (!sessionId) {
+      sessionId = await ctx.runMutation(internal.noraSessions._createSession, {
+        userId,
+        title: "New Chat",
+      });
+    }
 
-    // 5. Save user message
+    // 6. Get user context + memories + quiz insights
+    const userCtx: any = await ctx.runQuery(internal.noraChat._getUserContext, { userId });
+    const memories: any[] = await ctx.runQuery(internal.noraMemory._getTopMemories, {
+      userId,
+      limit: 20,
+    });
+    const quizInsights: any[] = await ctx.runQuery(internal.quizNoraIntegration.getQuizInsightsForNora, {
+      userId,
+    }) || [];
+
+    // 7. Save user message (tagged to session)
     await ctx.runMutation(internal.noraChat._saveMessage, {
       userId,
+      sessionId,
       role: "user",
       content: args.message,
     });
 
-    // 6. Build the Responses API call
+    // 8. Build the Responses API call
     const apiKey = process.env.OPENAI_API_KEY_NEW_NORA || process.env.OPENAI_API_KEY || "";
-    const thinkingMode = (args.thinkingMode || "fast") as "fast" | "deep";
+    const thinkingMode = (args.thinkingMode || "quick") as "quick" | "deep" | "research";
 
     if (!apiKey) {
       const responseText = fallbackResponse(sanitized, userCtx, args.pdfContext);
       await ctx.runMutation(internal.noraChat._saveMessage, {
         userId,
+        sessionId,
         role: "assistant",
         content: responseText,
       });
+      // Update session metadata
+      await ctx.runMutation(internal.noraSessions._updateSessionAfterMessage, { sessionId });
       return {
         response: responseText,
         success: true,
+        sessionId,
         tier: rateLimit.tier,
         remaining_messages: rateLimit.remaining - 1,
       };
@@ -380,16 +515,16 @@ export const sendMessage = action({
     let responseText: string;
 
     try {
-      // Get last response ID for conversation continuity
+      // Get last response ID for conversation continuity (per session)
       const previousResponseId: string | null = await ctx.runQuery(
         internal.noraChat._getLastResponseId,
-        { userId }
+        { userId, sessionId }
       );
 
-      // Build tools array
+      // Build tools array based on thinking mode
       const tools: any[] = [{ type: "web_search" }];
 
-      // Add file_search if a vector store is configured
+      // Add file_search if a vector store is configured OR in research mode
       if (args.vectorStoreId) {
         tools.push({
           type: "file_search",
@@ -397,19 +532,24 @@ export const sendMessage = action({
         });
       }
 
-      // Add code_interpreter for deep think mode (STEM calculations, data analysis)
-      if (thinkingMode === "deep") {
+      // Add code_interpreter for deep and research modes
+      if (thinkingMode === "deep" || thinkingMode === "research") {
         tools.push({
           type: "code_interpreter",
           container: { type: "auto" },
         });
       }
 
-      // Build instructions
-      const instructions = buildInstructions(userCtx, args.pdfContext);
+      // Build instructions with memories, quiz insights, and mode context
+      const instructions = buildInstructions(userCtx, args.pdfContext, memories, thinkingMode, quizInsights);
 
-      // Choose model based on thinking mode
-      const model = thinkingMode === "deep" ? "gpt-4o" : "gpt-4o-mini";
+      // Choose model and temperature based on thinking mode
+      const modeConfig: Record<string, { model: string; temperature: number }> = {
+        quick: { model: "gpt-4o-mini", temperature: 0.7 },
+        deep: { model: "gpt-4o", temperature: 0.8 },
+        research: { model: "gpt-4o", temperature: 0.6 },
+      };
+      const { model, temperature } = modeConfig[thinkingMode] || modeConfig.quick;
 
       // Build request body
       const requestBody: any = {
@@ -417,7 +557,7 @@ export const sendMessage = action({
         instructions,
         input: sanitized,
         tools,
-        temperature: thinkingMode === "deep" ? 0.8 : 0.7,
+        temperature,
       };
 
       // Chain to previous conversation if we have a response ID
@@ -454,10 +594,10 @@ export const sendMessage = action({
           if (!retryRes.ok) throw new Error(`OpenAI error: ${retryRes.status}`);
           const retryData = await retryRes.json();
           responseText = extractResponseText(retryData);
-          // Save new response ID
           if (retryData.id) {
             await ctx.runMutation(internal.noraChat._saveResponseId, {
               userId,
+              sessionId,
               responseId: retryData.id,
             });
           }
@@ -468,10 +608,11 @@ export const sendMessage = action({
         const data = await res.json();
         responseText = extractResponseText(data);
 
-        // Save response ID for conversation continuity
+        // Save response ID for conversation continuity (per session)
         if (data.id) {
           await ctx.runMutation(internal.noraChat._saveResponseId, {
             userId,
+            sessionId,
             responseId: data.id,
           });
         }
@@ -495,19 +636,28 @@ export const sendMessage = action({
       responseText = fallbackResponse(sanitized, userCtx, args.pdfContext);
     }
 
-    // 7. Save Nora's response
+    // 9. Save Nora's response (tagged to session)
     await ctx.runMutation(internal.noraChat._saveMessage, {
       userId,
+      sessionId,
       role: "assistant",
       content: responseText,
     });
 
-    // 8. Log usage (fallback estimation if not already logged from API response)
-    // Only log if we hit the fallback path (API path logs from actual usage data above)
+    // 10. Update session metadata
+    await ctx.runMutation(internal.noraSessions._updateSessionAfterMessage, { sessionId });
+
+    // 11. Extract memories asynchronously (fire-and-forget)
+    await ctx.scheduler.runAfter(0, internal.noraMemory.extractMemories, {
+      userId,
+      userMessage: args.message,
+      noraResponse: responseText,
+    });
 
     return {
       response: responseText,
       success: true,
+      sessionId,
       tier: rateLimit.tier,
       remaining_messages: rateLimit.remaining - 1,
       context: {

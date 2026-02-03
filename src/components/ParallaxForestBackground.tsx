@@ -6,6 +6,7 @@ import Animated, {
   withRepeat,
   withTiming,
   Easing,
+  cancelAnimation,
 } from 'react-native-reanimated';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -25,6 +26,17 @@ const BUDDY_SPRITESHEETS: Record<string, ImageSourcePropType> = {
   bear: require('../../assets/trail-buddies/bear_walking_optimized.png'),
 };
 
+// Resting spritesheets — same format (28 frames, 200x200 each, 5600x200 total)
+// These will be generated assets; fall back to walking sheets until they exist
+const BUDDY_RESTING_SPRITESHEETS: Record<string, ImageSourcePropType> = {
+  // TODO: Replace with actual resting spritesheets once generated
+  fox: require('../../assets/trail-buddies/fox_walking_optimized.png'),
+  deer: require('../../assets/trail-buddies/deer_walking_optimized.png'),
+  wolf: require('../../assets/trail-buddies/wolf_walking_optimized.png'),
+  nora: require('../../assets/trail-buddies/nora_walking_optimized.png'),
+  bear: require('../../assets/trail-buddies/bear_walking_optimized.png'),
+};
+
 // Parallax layer speeds (duration for full screen scroll)
 const PATH_SCROLL_DURATION = 6000; // Slower path - synced with walking animation
 const TREES_SCROLL_DURATION = 12000; // Medium - mid layer trees (slower to maintain parallax ratio)
@@ -37,27 +49,30 @@ interface ParallaxForestBackgroundProps {
   trailBuddyType?: string;
   isActive?: boolean;
   showTrailBuddy?: boolean;
+  showPath?: boolean;
+  treeScrollDuration?: number;
+  /** 'walking' = normal study session, 'resting' = break time (slower animation, resting sprite) */
+  animationMode?: 'walking' | 'resting';
 }
 
 // Animated Trail Buddy Component using spritesheet
-const TrailBuddySprite = ({ buddyType }: { buddyType: string }) => {
+const TrailBuddySprite = ({ buddyType, mode = 'walking' }: { buddyType: string; mode?: 'walking' | 'resting' }) => {
   const [currentFrame, setCurrentFrame] = useState(0);
 
-  // Get the spritesheet for this buddy type
-  const spritesheet = BUDDY_SPRITESHEETS[buddyType] || BUDDY_SPRITESHEETS.bear;
+  // Pick the right spritesheet based on animation mode
+  const spritesheets = mode === 'resting' ? BUDDY_RESTING_SPRITESHEETS : BUDDY_SPRITESHEETS;
+  const spritesheet = spritesheets[buddyType] || spritesheets.bear;
 
   useEffect(() => {
-    // Walking animation synced with path scroll speed (4000ms)
-    // 28 frames, path takes 4000ms to scroll full width
-    // For natural walking: ~70ms per frame = ~2000ms per walk cycle
-    // This makes footsteps appear to match the ground movement
-    const FRAME_DURATION = 70; // ms per frame - synced with path speed
+    // Walking: 70ms per frame (~2s cycle) — energetic trot
+    // Resting: 100ms per frame (~2.8s cycle) — slow peaceful breathing
+    const FRAME_DURATION = mode === 'resting' ? 100 : 70;
     const interval = setInterval(() => {
       setCurrentFrame(prev => (prev + 1) % TOTAL_FRAMES);
     }, FRAME_DURATION);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [mode]);
 
   // Calculate the offset to show the current frame (scaled to display size)
   const displayScale = 120 / FRAME_HEIGHT; // 120px display / 200px frame = 0.6
@@ -98,6 +113,10 @@ const ScrollingLayer = ({
 
   useEffect(() => {
     if (duration > 0) {
+      // Cancel any previous animation when duration changes
+      cancelAnimation(translateX);
+      // Reset position
+      translateX.value = 0;
       // Animate from 0 to -SCREEN_WIDTH, then reset (seamless loop)
       translateX.value = withRepeat(
         withTiming(-SCREEN_WIDTH, {
@@ -108,6 +127,11 @@ const ScrollingLayer = ({
         false // Don't reverse
       );
     }
+
+    // Cleanup: cancel animation on unmount
+    return () => {
+      cancelAnimation(translateX);
+    };
   }, [duration]);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -148,6 +172,9 @@ export const ParallaxForestBackground: React.FC<ParallaxForestBackgroundProps> =
   trailBuddyType = 'bear',
   isActive = true,
   showTrailBuddy = false,
+  showPath = true,
+  treeScrollDuration = TREES_SCROLL_DURATION,
+  animationMode = 'walking',
 }) => {
   if (!isActive) {
     return null;
@@ -176,23 +203,25 @@ export const ParallaxForestBackground: React.FC<ParallaxForestBackgroundProps> =
       {/* Layer 2: Mid Layer - Evergreen Trees (slow scroll) */}
       <ScrollingLayer
         source={require('../../assets/Background_animations/Forest/evergreen_tree.png')}
-        duration={TREES_SCROLL_DURATION}
+        duration={treeScrollDuration}
         zIndex={2}
         style={styles.treesLayer}
       />
 
       {/* Layer 3: Foreground - Path (fastest scroll) - behind the buddy */}
-      <ScrollingLayer
-        source={require('../../assets/Background_animations/Forest/path_animation.png')}
-        duration={PATH_SCROLL_DURATION}
-        zIndex={3}
-        style={styles.pathLayer}
-      />
+      {showPath && (
+        <ScrollingLayer
+          source={require('../../assets/Background_animations/Forest/path_animation.png')}
+          duration={PATH_SCROLL_DURATION}
+          zIndex={3}
+          style={styles.pathLayer}
+        />
+      )}
 
-      {/* Layer 4: Trail Buddy (walking animation) - in front of trees and on top of path */}
+      {/* Layer 4: Trail Buddy (walking or resting animation) - in front of trees and on top of path */}
       {showTrailBuddy && (
         <View style={[styles.buddyLayer, { zIndex: 4 }]}>
-          <TrailBuddySprite buddyType={trailBuddyType} />
+          <TrailBuddySprite buddyType={trailBuddyType} mode={animationMode} />
         </View>
       )}
     </View>

@@ -8,7 +8,7 @@ import {
   Alert,
   Modal,
   Platform,
-  Linking
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,8 +16,12 @@ import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
-import { WebView } from 'react-native-webview';
+import * as Haptics from 'expo-haptics';
 import { ShimmerLoader } from '../../components/premium/ShimmerLoader';
+import { AnimatedButton } from '../../components/premium/AnimatedButton';
+import { StaggeredItem } from '../../components/premium/StaggeredList';
+import { glassStyles } from '../../components/premium/LiquidGlass';
+import { Typography, Spacing, PremiumColors } from '../../theme/premiumTheme';
 import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
 import { useFocusAnimationKey } from '../../utils/animationUtils';
 
@@ -35,8 +39,7 @@ interface UploadedBook {
 const EBooksScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const { theme } = useTheme();
-
-  // Force animations to replay on every screen focus
+  const isDark = theme.isDark;
   const focusKey = useFocusAnimationKey();
 
   const [books, setBooks] = useState<UploadedBook[]>([]);
@@ -53,22 +56,6 @@ const EBooksScreen: React.FC = () => {
   useEffect(() => {
     fetchBooks();
   }, []);
-
-  // Configure header
-  useEffect(() => {
-    navigation.setOptions({
-      title: 'E-Books',
-      headerLeft: () => (
-        <TouchableOpacity
-          onPress={() => navigation.navigate('Bonuses' as never)}
-          style={{ marginLeft: 8 }}
-        >
-          <Ionicons name="arrow-back-outline" size={24} color={theme.primary} />
-        </TouchableOpacity>
-      ),
-      headerRight: () => null, // Remove hamburger menu
-    });
-  }, [navigation, theme]);
 
   /* ----------  React Native Compatible Upload Function  ---------- */
   const handleUpload = async () => {
@@ -100,12 +87,11 @@ const EBooksScreen: React.FC = () => {
       );
       setShowDisclaimer(false);
       return;
-
     } catch (error: any) {
       console.error('Upload error:', error);
-      
+
       let errorMessage = 'There was an error uploading your file.';
-      
+
       if (error.message.includes('Network request failed')) {
         errorMessage = 'Network connection issue. Please check your internet connection and try again.';
       } else if (error.message.includes('Unable to upload')) {
@@ -115,7 +101,7 @@ const EBooksScreen: React.FC = () => {
       } else if (error.message.includes('too large')) {
         errorMessage = 'File is too large. Please choose a file smaller than 100MB.';
       }
-      
+
       Alert.alert('Upload Failed', errorMessage);
     } finally {
       setLoading(false);
@@ -135,17 +121,14 @@ const EBooksScreen: React.FC = () => {
           onPress: async () => {
             try {
               // TODO: Delete from Convex file storage
-              // PDF storage will be migrated to Convex in a future phase
               Alert.alert('Feature Coming Soon', 'PDF deletion will be available in the next update.');
-
               await fetchBooks();
-              
             } catch (error) {
               console.error('Delete error:', error);
               Alert.alert('Error', 'Failed to delete the file.');
             }
-          }
-        }
+          },
+        },
       ]
     );
   };
@@ -153,7 +136,6 @@ const EBooksScreen: React.FC = () => {
   /* ----------  View PDF Function  ---------- */
   const viewPDF = async (book: UploadedBook) => {
     // TODO: View PDF from Convex file storage
-    // PDF storage will be migrated to Convex in a future phase
     Alert.alert('Feature Coming Soon', 'PDF viewing will be available in the next update!');
   };
 
@@ -170,15 +152,14 @@ const EBooksScreen: React.FC = () => {
             onPress: async () => {
               try {
                 // TODO: Send PDF to Nora from Convex file storage
-                // PDF storage will be migrated to Convex in a future phase
                 Alert.alert('Feature Coming Soon', 'Sending PDFs to Nora will be available in the next update!');
                 setLoading(false);
               } catch (error) {
                 console.error('Error:', error);
                 setLoading(false);
               }
-            }
-          }
+            },
+          },
         ]
       );
     } catch (error) {
@@ -196,113 +177,166 @@ const EBooksScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <Animated.View
-        key={`content-${focusKey}`}
-        entering={FadeInUp.duration(300)}
-        style={styles.content}
-      >
-        <Animated.Text
-          entering={FadeIn.delay(100).duration(250)}
-          style={[styles.subtitle, { color: theme.text }]}
+      {/* ===== HEADER ===== */}
+      <View style={[styles.header, { backgroundColor: theme.background }]}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            navigation.navigate('Bonuses' as never);
+          }}
         >
-          Upload your textbooks and class materials to access them anytime, anywhere.
-        </Animated.Text>
+          <View style={[styles.backButtonCircle, { backgroundColor: theme.text + '20' }]}>
+            <Ionicons name="arrow-back" size={22} color={theme.text} />
+          </View>
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>E-Books</Text>
+        <View style={styles.headerSpacer} />
+      </View>
 
-        <Animated.View entering={FadeInUp.delay(150).duration(300)}>
-          <TouchableOpacity
-            style={[styles.uploadArea, { borderColor: theme.primary }]}
-            onPress={() => setShowDisclaimer(true)}
-            disabled={loading}
-          >
-            {loading ? (
-              <ShimmerLoader variant="circular" size={48} />
-            ) : (
-              <>
-                <Ionicons name="cloud-upload-outline" size={40} color={theme.primary} />
-                <Text style={[styles.uploadText, { color: theme.text }]}>
-                  Upload New E-Book
-                </Text>
-                <Text style={[styles.uploadSubtext, { color: theme.text + '99' }]}>
-                  Tap to select PDF files (up to 100MB)
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </Animated.View>
+      <FlatList
+        key={focusKey}
+        data={books}
+        keyExtractor={(item) => item.id}
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <>
+            {/* ===== UPLOAD SECTION ===== */}
+            <Animated.View entering={FadeIn.delay(100).duration(400)}>
+              <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>UPLOAD</Text>
+            </Animated.View>
 
-        <FlatList
-          data={books}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <View style={[styles.bookItem, { backgroundColor: theme.card }]}>
-              <View style={styles.bookIcon}>
-                <Ionicons name="document-text-outline" size={32} color={theme.primary} />
+            <Animated.View entering={FadeInUp.delay(150).duration(400)}>
+              <TouchableOpacity
+                style={[
+                  styles.uploadArea,
+                  glassStyles.subtleCard(isDark),
+                  { backgroundColor: theme.card, borderColor: theme.primary + '40' },
+                ]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowDisclaimer(true);
+                }}
+                disabled={loading}
+                activeOpacity={0.8}
+              >
+                {loading ? (
+                  <ShimmerLoader variant="circle" width={48} height={48} />
+                ) : (
+                  <>
+                    <View style={[styles.uploadIconCircle, { backgroundColor: theme.primary + '15' }]}>
+                      <Ionicons name="cloud-upload-outline" size={32} color={theme.primary} />
+                    </View>
+                    <Text style={[styles.uploadText, { color: theme.text }]}>
+                      Upload New E-Book
+                    </Text>
+                    <Text style={[styles.uploadSubtext, { color: theme.textSecondary }]}>
+                      Tap to select PDF files (up to 100MB)
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </Animated.View>
+
+            {/* ===== LIBRARY SECTION ===== */}
+            <Animated.View entering={FadeIn.delay(200).duration(400)}>
+              <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>YOUR LIBRARY</Text>
+            </Animated.View>
+          </>
+        }
+        renderItem={({ item, index }) => (
+          <StaggeredItem key={item.id} index={index} delay="normal" direction="up">
+            <View
+              style={[
+                styles.bookItem,
+                glassStyles.subtleCard(isDark),
+                { backgroundColor: theme.card },
+              ]}
+            >
+              <View style={[styles.bookIconCircle, { backgroundColor: theme.primary + '15' }]}>
+                <Ionicons name="document-text-outline" size={26} color={theme.primary} />
               </View>
               <View style={styles.bookInfo}>
                 <Text style={[styles.bookTitle, { color: theme.text }]} numberOfLines={2}>
                   {item.name}
                 </Text>
-                <Text style={[styles.meta, { color: theme.text + '99' }]}>
+                <Text style={[styles.meta, { color: theme.textSecondary }]}>
                   {formatFileSize(item.file_size)} • {new Date(item.upload_date).toLocaleDateString()}
                 </Text>
               </View>
-              
+
               {/* Action Buttons */}
               <View style={styles.actionButtons}>
-                <TouchableOpacity 
-                  onPress={() => viewPDF(item)} 
+                <TouchableOpacity
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    viewPDF(item);
+                  }}
                   style={[styles.actionButton, { backgroundColor: theme.primary + '15' }]}
                 >
                   <Ionicons name="eye-outline" size={18} color={theme.primary} />
                 </TouchableOpacity>
-                
+
                 <TouchableOpacity
-                  onPress={() => sendToNora(item)}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    sendToNora(item);
+                  }}
                   style={[styles.actionButton, { backgroundColor: '#FF5722' + '15' }]}
                 >
                   <Ionicons name="chatbubble-ellipses-outline" size={18} color="#FF5722" />
                 </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  onPress={() => deleteBook(item)} 
+
+                <TouchableOpacity
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    deleteBook(item);
+                  }}
                   style={[styles.actionButton, { backgroundColor: '#FF5252' + '15' }]}
                 >
                   <Ionicons name="trash-outline" size={18} color="#FF5252" />
                 </TouchableOpacity>
               </View>
             </View>
-          )}
-          contentContainerStyle={styles.listContainer}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Ionicons name="book-outline" size={64} color={theme.text + '33'} />
-              <Text style={[styles.emptyText, { color: theme.text + '99' }]}>
+          </StaggeredItem>
+        )}
+        ListEmptyComponent={
+          <Animated.View entering={FadeInUp.delay(250).duration(400)}>
+            <View style={[styles.emptyContainer, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}>
+              <View style={[styles.emptyIconCircle, { backgroundColor: theme.textSecondary + '15' }]}>
+                <Ionicons name="book-outline" size={40} color={theme.textSecondary} />
+              </View>
+              <Text style={[styles.emptyText, { color: theme.text }]}>
                 No e-books uploaded yet
               </Text>
-              <Text style={[styles.emptySubtext, { color: theme.text + '66' }]}>
+              <Text style={[styles.emptySubtext, { color: theme.textSecondary }]}>
                 Upload your first textbook to get started
               </Text>
             </View>
-          }
-        />
-      </Animated.View>
+          </Animated.View>
+        }
+      />
 
-      {/* Enhanced Disclaimer Modal */}
-      <Modal visible={showDisclaimer} transparent animationType="slide">
+      {/* ===== DISCLAIMER MODAL ===== */}
+      <Modal visible={showDisclaimer} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
             <View style={styles.modalHeader}>
-              <Ionicons name="shield-checkmark-outline" size={32} color={theme.primary} />
+              <View style={[styles.modalIconCircle, { backgroundColor: theme.primary + '15' }]}>
+                <Ionicons name="shield-checkmark-outline" size={28} color={theme.primary} />
+              </View>
               <Text style={[styles.modalTitle, { color: theme.text }]}>
                 Upload Agreement
               </Text>
             </View>
-            
+
             <View style={styles.modalBody}>
               <Text style={[styles.disclaimerText, { color: theme.text }]}>
                 By uploading this file, you confirm that:
               </Text>
-              
+
               <View style={styles.agreementList}>
                 <Text style={[styles.agreementItem, { color: theme.text }]}>
                   • You own this content or have permission to upload it
@@ -317,31 +351,35 @@ const EBooksScreen: React.FC = () => {
                   • The file does not contain inappropriate content
                 </Text>
               </View>
-              
-              <Text style={[styles.noteText, { color: theme.text + '99' }]}>
+
+              <Text style={[styles.noteText, { color: theme.textSecondary }]}>
                 Files are stored securely and are only accessible by you.
               </Text>
             </View>
-            
+
             <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.agreeButton, { backgroundColor: theme.primary }]}
-                onPress={handleUpload}
+              <AnimatedButton
+                title={loading ? 'Uploading...' : 'I Agree & Upload'}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  handleUpload();
+                }}
+                variant="primary"
+                size="large"
+                gradient
+                gradientColors={PremiumColors.gradients.primary as [string, string, ...string[]]}
                 disabled={loading}
-              >
-                <Text style={styles.agreeButtonText}>
-                  {loading ? 'Uploading...' : 'I Agree & Upload'}
-                </Text>
-              </TouchableOpacity>
-              
+              />
+
               <TouchableOpacity
                 style={[styles.cancelButton, { borderColor: theme.text + '33' }]}
-                onPress={() => setShowDisclaimer(false)}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowDisclaimer(false);
+                }}
                 disabled={loading}
               >
-                <Text style={[styles.cancelButtonText, { color: theme.text }]}>
-                  Cancel
-                </Text>
+                <Text style={[styles.cancelButtonText, { color: theme.text }]}>Cancel</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -355,94 +393,139 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+
+  // ===== HEADER =====
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
+    paddingTop: 10,
+    paddingBottom: 10,
   },
   backButton: {
     padding: 4,
   },
+  backButtonCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
+    textAlign: 'center',
   },
-  content: {
-    flex: 1,
-    padding: 20,
+  headerSpacer: {
+    width: 48,
   },
-  subtitle: {
-    fontSize: 16,
-    marginBottom: 20,
-    lineHeight: 22,
+
+  // ===== SCROLL =====
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 24,
   },
+
+  // ===== SECTION LABELS =====
+  sectionLabel: {
+    ...Typography.label,
+    marginTop: 24,
+    marginBottom: 12,
+  },
+
+  // ===== UPLOAD AREA =====
   uploadArea: {
     borderWidth: 2,
     borderStyle: 'dashed',
-    borderRadius: 12,
-    padding: 32,
+    borderRadius: 14,
+    padding: 28,
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 8,
+  },
+  uploadIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
   },
   uploadText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginTop: 12,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 4,
   },
   uploadSubtext: {
-    fontSize: 14,
-    marginTop: 4,
+    fontSize: 13,
   },
-  listContainer: {
-    paddingBottom: 20,
-  },
+
+  // ===== BOOK LIST =====
   bookItem: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 14,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
   },
-  bookIcon: {
+  bookIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 12,
   },
   bookInfo: {
     flex: 1,
   },
   bookTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 15,
+    fontWeight: '700',
     marginBottom: 4,
   },
   meta: {
     fontSize: 12,
   },
-  deleteButton: {
-    padding: 8,
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 8,
   },
+  actionButton: {
+    padding: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // ===== EMPTY STATE =====
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 48,
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+    borderRadius: 14,
+  },
+  emptyIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
   },
   emptyText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginTop: 16,
-    marginBottom: 8,
+    fontSize: 17,
+    fontWeight: '700',
+    marginBottom: 6,
   },
   emptySubtext: {
-    fontSize: 14,
+    fontSize: 13,
     textAlign: 'center',
   },
+
+  // ===== MODAL =====
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -453,28 +536,30 @@ const styles = StyleSheet.create({
   modalContent: {
     width: '100%',
     maxWidth: 420,
-    borderRadius: 16,
-    padding: 0,
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 8,
+    borderRadius: 20,
   },
   modalHeader: {
     alignItems: 'center',
     padding: 24,
     paddingBottom: 16,
   },
+  modalIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
   modalTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    marginTop: 8,
+    fontWeight: '700',
   },
   modalBody: {
     paddingHorizontal: 24,
   },
   disclaimerText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     marginBottom: 16,
   },
@@ -494,17 +579,7 @@ const styles = StyleSheet.create({
   modalActions: {
     padding: 24,
     paddingTop: 16,
-  },
-  agreeButton: {
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  agreeButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+    gap: 12,
   },
   cancelButton: {
     paddingVertical: 14,
@@ -515,16 +590,6 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     fontSize: 16,
     fontWeight: '600',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  actionButton: {
-    padding: 8,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });
 

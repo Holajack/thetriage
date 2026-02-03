@@ -10,10 +10,10 @@ interface SplashScreenProps {
   onAnimationComplete: () => void;
 }
 
-const TriageLogo = ({ style }: { style?: any }) => (
+const HikeWiseLogo = ({ style }: { style?: any }) => (
   <View style={[styles.logoContainer, style]}>
-    <ThemedImage 
-      source={require('../assets/transparent-triage.png')} 
+    <ThemedImage
+      source={require('../assets/transparent-triage.png')}
       style={styles.logoImage}
       resizeMode="contain"
       applyFilter={true}
@@ -145,7 +145,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationComplete 
             },
           ]}
         >
-          <TriageLogo />
+          <HikeWiseLogo />
         </Animated.View>
 
         <Animated.View style={[styles.textContainer, { opacity: titleOpacity }]}>

@@ -160,7 +160,7 @@ export const CircularChart: React.FC<CircularChartProps> = ({
   color,
   size = 200,
   strokeWidth = 20,
-  label = 'The triage',
+  label = 'HikeWise',
 }) => {
   const radius = (size - strokeWidth) / 2;
   const circumference = radius * 2 * Math.PI;

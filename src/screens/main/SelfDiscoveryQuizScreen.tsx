@@ -1,18 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
+import * as Haptics from 'expo-haptics';
 import InteractiveQuiz from '../../components/InteractiveQuiz';
 import QuizResults from '../../components/QuizResults';
 import { QuizResult } from '../../data/quizData';
-import { getQuizCompletionStatus } from '../../utils/quizStorage';
 import { useAuth } from '../../context/AuthContext';
 import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
 import { useFocusAnimationKey } from '../../utils/animationUtils';
+import { ShimmerLoader } from '../../components/premium/ShimmerLoader';
+import { AnimatedButton } from '../../components/premium/AnimatedButton';
+import { StaggeredItem } from '../../components/premium/StaggeredList';
+import { glassStyles } from '../../components/premium/LiquidGlass';
+import { Typography, Spacing, PremiumColors } from '../../theme/premiumTheme';
+import { useQuizCategories, QuizCategory } from '../../hooks/useConvexQuiz';
+import { Id } from '../../../convex/_generated/dataModel';
 
 interface Quiz {
   id: string;
+  slug: string;
   name: string;
   description: string;
   detail: string;
@@ -21,138 +30,193 @@ interface Quiz {
   color: string;
   estimatedTime: string;
   questions: number;
+  hasResult: boolean;
+  latestScore: number | null;
+  completionCount: number;
+  categoryId?: Id<'quizCategories'>;
 }
 
-const QUIZ_DATA: Quiz[] = [
+// Fallback data if Convex is not available
+const FALLBACK_QUIZ_DATA: Quiz[] = [
   {
     id: '1',
+    slug: 'study_habits',
     name: 'Study Habits Quiz',
     description: 'Assess your current study methods',
     detail: 'This comprehensive quiz will help you identify your best and worst study habits, providing personalized recommendations to improve your learning efficiency and academic performance.',
-    progress: 0.7,
+    progress: 0,
     icon: 'book-outline',
     color: '#2196F3',
     estimatedTime: '5-7 min',
     questions: 15,
+    hasResult: false,
+    latestScore: null,
+    completionCount: 0,
   },
   {
     id: '2',
-    name: 'Focus Type Quiz',
+    slug: 'focus_attention',
+    name: 'Focus & Attention Quiz',
     description: 'Identify your optimal focus style',
     detail: 'Discover your unique focus patterns and learn what environmental factors, techniques, and strategies help you concentrate best during study sessions.',
-    progress: 0.3,
+    progress: 0,
     icon: 'radio-button-on-outline',
     color: '#F44336',
     estimatedTime: '4-6 min',
-    questions: 12,
+    questions: 15,
+    hasResult: false,
+    latestScore: null,
+    completionCount: 0,
   },
   {
     id: '3',
+    slug: 'motivation',
     name: 'Motivation Profile',
     description: 'Understand what drives you',
     detail: 'Uncover your main sources of motivation and learn how to leverage them effectively to maintain consistent study habits and achieve your academic goals.',
-    progress: 1.0,
+    progress: 0,
     icon: 'heart-outline',
     color: '#FF9800',
     estimatedTime: '6-8 min',
-    questions: 18,
+    questions: 15,
+    hasResult: false,
+    latestScore: null,
+    completionCount: 0,
   },
   {
     id: '4',
+    slug: 'learning_style',
     name: 'Learning Style Quiz',
     description: 'Discover how you learn best',
-    detail: 'Determine whether you\'re a visual, auditory, or kinesthetic learner, and get tailored study strategies that match your preferred learning style.',
-    progress: 0.5,
+    detail: "Determine whether you're a visual, auditory, or kinesthetic learner, and get tailored study strategies that match your preferred learning style.",
+    progress: 0,
     icon: 'bulb-outline',
     color: '#4CAF50',
     estimatedTime: '5-7 min',
-    questions: 14,
+    questions: 15,
+    hasResult: false,
+    latestScore: null,
+    completionCount: 0,
+  },
+  {
+    id: '5',
+    slug: 'goal_setting',
+    name: 'Goal Setting & Planning',
+    description: 'Master your goal achievement',
+    detail: 'Evaluate your goal-setting strategies, planning skills, and ability to track progress toward your academic objectives.',
+    progress: 0,
+    icon: 'flag-outline',
+    color: '#9C27B0',
+    estimatedTime: '5-7 min',
+    questions: 15,
+    hasResult: false,
+    latestScore: null,
+    completionCount: 0,
+  },
+  {
+    id: '6',
+    slug: 'stress_anxiety',
+    name: 'Stress & Academic Anxiety',
+    description: 'Understand your stress patterns',
+    detail: 'Assess your stress responses, anxiety triggers, and coping mechanisms to develop healthier approaches to academic challenges.',
+    progress: 0,
+    icon: 'fitness-outline',
+    color: '#00BCD4',
+    estimatedTime: '5-7 min',
+    questions: 15,
+    hasResult: false,
+    latestScore: null,
+    completionCount: 0,
   },
 ];
 
 const SelfDiscoveryQuizScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const { theme } = useTheme();
+  const isDark = theme.isDark;
   const { user } = useAuth();
-
-  // Force animations to replay on every screen focus
   const focusKey = useFocusAnimationKey();
+
+  // Convex quiz data
+  const { categories: convexCategories, isLoading: isLoadingConvex } = useQuizCategories();
 
   const [selectedQuiz, setSelectedQuiz] = useState<Quiz | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
   const [quizResult, setQuizResult] = useState<QuizResult | null>(null);
   const [showResults, setShowResults] = useState(false);
-  const [quizData, setQuizData] = useState(QUIZ_DATA);
-  const [isLoading, setIsLoading] = useState(true);
 
-  // Configure header
-  useEffect(() => {
-    navigation.setOptions({
-      title: 'Self-Discovery Quizzes',
-      headerLeft: () => (
-        <TouchableOpacity
-          onPress={() => navigation.navigate('Bonuses' as never)}
-          style={{ marginLeft: 8 }}
-        >
-          <Ionicons name="arrow-back-outline" size={24} color={theme.primary} />
-        </TouchableOpacity>
-      ),
-      headerRight: () => null, // Remove hamburger menu
-    });
-  }, [navigation, theme]);
-
-  // Load quiz progress
-  useEffect(() => {
-    loadQuizProgress();
-  }, [user]);
-
-  const loadQuizProgress = async () => {
-    if (!user?.id) {
-      setIsLoading(false);
-      return;
+  // Transform Convex categories to Quiz format
+  const quizData = useMemo((): Quiz[] => {
+    if (!convexCategories || convexCategories.length === 0) {
+      return FALLBACK_QUIZ_DATA;
     }
 
-    try {
-      const updatedQuizData = await Promise.all(
-        QUIZ_DATA.map(async (quiz) => {
-          const quizTypeMap: { [key: string]: string } = {
-            '1': 'study_habits',
-            '4': 'learning_style'
-          };
-          
-          const quizType = quizTypeMap[quiz.id];
-          if (quizType) {
-            const completionStatus = await getQuizCompletionStatus(user.id, quizType);
-            return {
-              ...quiz,
-              progress: completionStatus.completed ? 1.0 : 0.0
-            };
-          }
-          
-          return quiz;
-        })
-      );
+    // Map of category slugs to additional UI info
+    const categoryUIMap: Record<string, { detail: string; estimatedTime: string }> = {
+      study_habits: {
+        detail: 'This comprehensive quiz will help you identify your best and worst study habits, providing personalized recommendations to improve your learning efficiency and academic performance.',
+        estimatedTime: '5-7 min',
+      },
+      learning_style: {
+        detail: "Determine whether you're a visual, auditory, or kinesthetic learner, and get tailored study strategies that match your preferred learning style.",
+        estimatedTime: '5-7 min',
+      },
+      motivation: {
+        detail: 'Uncover your main sources of motivation and learn how to leverage them effectively to maintain consistent study habits and achieve your academic goals.',
+        estimatedTime: '6-8 min',
+      },
+      focus_attention: {
+        detail: 'Discover your unique focus patterns and learn what environmental factors, techniques, and strategies help you concentrate best during study sessions.',
+        estimatedTime: '4-6 min',
+      },
+      goal_setting: {
+        detail: 'Evaluate your goal-setting strategies, planning skills, and ability to track progress toward your academic objectives.',
+        estimatedTime: '5-7 min',
+      },
+      stress_anxiety: {
+        detail: 'Assess your stress responses, anxiety triggers, and coping mechanisms to develop healthier approaches to academic challenges.',
+        estimatedTime: '5-7 min',
+      },
+    };
 
-      setQuizData(updatedQuizData);
-    } catch (error) {
-      console.error('Error loading quiz progress:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    return convexCategories
+      .filter((cat) => cat.isActive)
+      .sort((a, b) => a.order - b.order)
+      .map((cat) => ({
+        id: cat._id,
+        slug: cat.slug,
+        name: cat.name,
+        description: cat.description,
+        detail: categoryUIMap[cat.slug]?.detail || cat.description,
+        progress: cat.hasResult ? 1.0 : 0.0,
+        icon: cat.icon,
+        color: cat.color,
+        estimatedTime: categoryUIMap[cat.slug]?.estimatedTime || '5-7 min',
+        questions: cat.questionsCount || 15,
+        hasResult: cat.hasResult,
+        latestScore: cat.latestScore,
+        completionCount: cat.completionCount,
+        categoryId: cat._id,
+      }));
+  }, [convexCategories]);
+
+  const isLoading = isLoadingConvex;
 
   const openQuizDetail = (quiz: Quiz) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedQuiz(quiz);
     setModalVisible(true);
   };
 
   const closeDetail = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setModalVisible(false);
     setSelectedQuiz(null);
   };
 
   const startQuiz = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     closeDetail();
     setShowQuiz(true);
   };
@@ -172,7 +236,6 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
     setShowResults(false);
     setQuizResult(null);
     setSelectedQuiz(null);
-    // Refresh quiz progress to show completion
     loadQuizProgress();
   };
 
@@ -182,81 +245,36 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
     setShowQuiz(true);
   };
 
-  const getQuizType = (quizId: string): 'study_habits' | 'learning_style' | 'motivation_profile' | 'focus_type' => {
-    if (quizId === '1') return 'study_habits';
-    if (quizId === '2') return 'focus_type';
-    if (quizId === '3') return 'motivation_profile';
-    if (quizId === '4') return 'learning_style';
-    return 'study_habits'; // Default fallback
+  const getQuizType = (quiz: Quiz): string => {
+    // If it's a Convex quiz, use the slug directly
+    if (quiz.slug) {
+      return quiz.slug;
+    }
+    // Fallback for legacy quiz IDs
+    const legacyMap: Record<string, string> = {
+      '1': 'study_habits',
+      '2': 'focus_attention',
+      '3': 'motivation',
+      '4': 'learning_style',
+      '5': 'goal_setting',
+      '6': 'stress_anxiety',
+    };
+    return legacyMap[quiz.id] || 'study_habits';
   };
 
   const getProgressColor = (progress: number) => {
     if (progress === 1.0) return '#4CAF50';
     if (progress > 0.5) return '#FF9800';
-    return '#2196F3';
+    return theme.primary;
   };
-
-  const renderQuizCard = ({ item }: { item: Quiz }) => (
-    <TouchableOpacity 
-      style={styles.quizCard}
-      onPress={() => openQuizDetail(item)}
-      activeOpacity={0.8}
-    >
-      <View style={[styles.iconContainer, { backgroundColor: `${item.color}15` }]}>
-        <Ionicons
-          name={item.icon as any}
-          size={32}
-          color={item.color}
-        />
-      </View>
-      
-      <View style={styles.quizContent}>
-        <View style={styles.quizHeader}>
-          <Text style={styles.quizTitle}>{item.name}</Text>
-          <Ionicons name="chevron-forward-outline" size={20} color="#666" />
-        </View>
-        
-        <Text style={styles.quizDescription}>{item.description}</Text>
-        
-        <View style={styles.quizMeta}>
-          <View style={styles.metaItem}>
-            <Ionicons name="time-outline" size={16} color="#666" />
-            <Text style={styles.metaText}>{item.estimatedTime}</Text>
-          </View>
-          <View style={styles.metaItem}>
-            <Ionicons name="help-circle-outline" size={16} color="#666" />
-            <Text style={styles.metaText}>{item.questions} questions</Text>
-          </View>
-        </View>
-        
-        <View style={styles.progressContainer}>
-          <View style={styles.progressInfo}>
-            <Text style={styles.progressLabel}>Progress</Text>
-            <Text style={[styles.progressValue, { color: getProgressColor(item.progress) }]}>
-              {Math.round(item.progress * 100)}%
-            </Text>
-          </View>
-          <View style={styles.progressBarBackground}>
-            <View 
-              style={[
-                styles.progressBarFill, 
-                { 
-                  width: `${item.progress * 100}%`,
-                  backgroundColor: getProgressColor(item.progress)
-                }
-              ]} 
-            />
-          </View>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
 
   // Show quiz interface if quiz is active
   if (showQuiz && selectedQuiz) {
     return (
       <InteractiveQuiz
-        quizType={getQuizType(selectedQuiz.id)}
+        quizType={getQuizType(selectedQuiz)}
+        categorySlug={selectedQuiz.slug}
+        categoryId={selectedQuiz.categoryId}
         onComplete={handleQuizComplete}
         onClose={handleCloseQuiz}
       />
@@ -274,180 +292,284 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
     );
   }
 
+  // Shimmer loading state
+  if (isLoading) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+        <View style={[styles.header, { backgroundColor: theme.background }]}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.navigate('Bonuses' as never)}
+          >
+            <View style={[styles.backButtonCircle, { backgroundColor: theme.text + '20' }]}>
+              <Ionicons name="arrow-back" size={22} color={theme.text} />
+            </View>
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>Self-Discovery</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+        <View style={styles.loadingContent}>
+          <ShimmerLoader variant="text" width={280} height={16} style={{ marginBottom: 8, marginHorizontal: 16 }} />
+          <ShimmerLoader variant="text" width={200} height={16} style={{ marginBottom: 24, marginHorizontal: 16 }} />
+          <ShimmerLoader variant="text" width={140} height={14} style={{ marginBottom: 16, marginHorizontal: 16 }} />
+          <ShimmerLoader variant="card" height={180} style={{ marginBottom: 16, marginHorizontal: 16, borderRadius: 14 }} />
+          <ShimmerLoader variant="card" height={180} style={{ marginBottom: 16, marginHorizontal: 16, borderRadius: 14 }} />
+          <ShimmerLoader variant="card" height={180} style={{ marginBottom: 16, marginHorizontal: 16, borderRadius: 14 }} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <Animated.View
-      key={`container-${focusKey}`}
-      entering={FadeIn.duration(250)}
-      style={[styles.container, { backgroundColor: theme.background }]}
-    >
-      <Animated.View
-        entering={FadeInUp.delay(100).duration(300)}
-        style={styles.headerContent}
-      >
-        <Text style={styles.subtitle}>
-          Discover your unique learning style, study habits, and motivation patterns through our comprehensive self-assessment quizzes.
-        </Text>
-      </Animated.View>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      {/* ===== HEADER ===== */}
+      <View style={[styles.header, { backgroundColor: theme.background }]}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            navigation.navigate('Bonuses' as never);
+          }}
+        >
+          <View style={[styles.backButtonCircle, { backgroundColor: theme.text + '20' }]}>
+            <Ionicons name="arrow-back" size={22} color={theme.text} />
+          </View>
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>Self-Discovery</Text>
+        <View style={styles.headerSpacer} />
+      </View>
 
-      <Animated.Text
-        entering={FadeIn.delay(150).duration(250)}
-        style={styles.sectionTitle}
-      >
-        Available Quizzes
-      </Animated.Text>
-
-      <Animated.FlatList
-        entering={FadeInUp.delay(200).duration(300)}
+      <FlatList
+        key={focusKey}
         data={quizData}
-        renderItem={renderQuizCard}
         keyExtractor={(item) => item.id}
-        style={styles.quizList}
-        contentContainerStyle={styles.listContent}
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        refreshing={isLoading}
-        onRefresh={loadQuizProgress}
+        ListHeaderComponent={
+          <>
+            {/* ===== SECTION LABEL ===== */}
+            <Animated.View entering={FadeIn.delay(100).duration(400)}>
+              <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
+                AVAILABLE QUIZZES
+              </Text>
+            </Animated.View>
+          </>
+        }
+        renderItem={({ item, index }) => (
+          <StaggeredItem key={item.id} index={index} delay="normal" direction="up">
+            <TouchableOpacity
+              style={[
+                styles.quizCard,
+                glassStyles.subtleCard(isDark),
+                { backgroundColor: theme.card },
+              ]}
+              onPress={() => openQuizDetail(item)}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.iconContainer, { backgroundColor: item.color + '15' }]}>
+                <Ionicons name={item.icon as any} size={32} color={item.color} />
+              </View>
+
+              <View style={styles.quizContent}>
+                <View style={styles.quizHeader}>
+                  <Text style={[styles.quizTitle, { color: theme.text }]}>{item.name}</Text>
+                  <Ionicons name="chevron-forward-outline" size={20} color={theme.textSecondary} />
+                </View>
+
+                <Text style={[styles.quizDescription, { color: theme.textSecondary }]}>
+                  {item.description}
+                </Text>
+
+                <View style={styles.quizMeta}>
+                  <View style={styles.metaItem}>
+                    <Ionicons name="time-outline" size={14} color={theme.textSecondary} />
+                    <Text style={[styles.metaText, { color: theme.textSecondary }]}>
+                      {item.estimatedTime}
+                    </Text>
+                  </View>
+                  <View style={styles.metaItem}>
+                    <Ionicons name="help-circle-outline" size={14} color={theme.textSecondary} />
+                    <Text style={[styles.metaText, { color: theme.textSecondary }]}>
+                      {item.questions} questions
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.progressContainer}>
+                  <View style={styles.progressInfo}>
+                    <Text style={[styles.progressLabel, { color: theme.textSecondary }]}>
+                      Progress
+                    </Text>
+                    <Text style={[styles.progressValue, { color: getProgressColor(item.progress) }]}>
+                      {Math.round(item.progress * 100)}%
+                    </Text>
+                  </View>
+                  <View style={[styles.progressBarBackground, { backgroundColor: theme.text + '15' }]}>
+                    <View
+                      style={[
+                        styles.progressBarFill,
+                        {
+                          width: `${item.progress * 100}%`,
+                          backgroundColor: getProgressColor(item.progress),
+                        },
+                      ]}
+                    />
+                  </View>
+                </View>
+              </View>
+            </TouchableOpacity>
+          </StaggeredItem>
+        )}
       />
 
-      {/* Quiz Detail Modal */}
+      {/* ===== QUIZ DETAIL MODAL ===== */}
       <Modal
         visible={modalVisible}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={closeDetail}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
             {selectedQuiz && (
               <>
                 <View style={styles.modalHeader}>
-                  <View style={[styles.modalIcon, { backgroundColor: `${selectedQuiz.color}15` }]}>
-                    <Ionicons
-                      name={selectedQuiz.icon as any}
-                      size={40}
-                      color={selectedQuiz.color}
-                    />
+                  <View style={[styles.modalIcon, { backgroundColor: selectedQuiz.color + '15' }]}>
+                    <Ionicons name={selectedQuiz.icon as any} size={40} color={selectedQuiz.color} />
                   </View>
-                  <TouchableOpacity style={styles.closeButton} onPress={closeDetail}>
-                    <Ionicons name="close-outline" size={24} color="#666" />
+                  <TouchableOpacity
+                    style={[styles.closeButton, { backgroundColor: theme.text + '15' }]}
+                    onPress={closeDetail}
+                  >
+                    <Ionicons name="close-outline" size={24} color={theme.text} />
                   </TouchableOpacity>
                 </View>
 
-                <Text style={styles.modalTitle}>{selectedQuiz.name}</Text>
-                <Text style={styles.modalDescription}>{selectedQuiz.detail}</Text>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>{selectedQuiz.name}</Text>
+                <Text style={[styles.modalDescription, { color: theme.textSecondary }]}>
+                  {selectedQuiz.detail}
+                </Text>
 
                 <View style={styles.modalMeta}>
                   <View style={styles.modalMetaItem}>
-                    <Ionicons name="time-outline" size={20} color="#666" />
-                    <Text style={styles.modalMetaText}>{selectedQuiz.estimatedTime}</Text>
+                    <Ionicons name="time-outline" size={18} color={theme.textSecondary} />
+                    <Text style={[styles.modalMetaText, { color: theme.textSecondary }]}>
+                      {selectedQuiz.estimatedTime}
+                    </Text>
                   </View>
                   <View style={styles.modalMetaItem}>
-                    <Ionicons name="help-circle-outline" size={20} color="#666" />
-                    <Text style={styles.modalMetaText}>{selectedQuiz.questions} questions</Text>
+                    <Ionicons name="help-circle-outline" size={18} color={theme.textSecondary} />
+                    <Text style={[styles.modalMetaText, { color: theme.textSecondary }]}>
+                      {selectedQuiz.questions} questions
+                    </Text>
                   </View>
                 </View>
 
                 <View style={styles.modalProgress}>
-                  <Text style={styles.modalProgressLabel}>
+                  <Text style={[styles.modalProgressLabel, { color: theme.textSecondary }]}>
                     Current Progress: {Math.round(selectedQuiz.progress * 100)}%
                   </Text>
-                  <View style={styles.modalProgressBar}>
-                    <View 
+                  <View style={[styles.modalProgressBar, { backgroundColor: theme.text + '20' }]}>
+                    <View
                       style={[
-                        styles.modalProgressFill, 
-                        { 
+                        styles.modalProgressFill,
+                        {
                           width: `${selectedQuiz.progress * 100}%`,
-                          backgroundColor: getProgressColor(selectedQuiz.progress)
-                        }
-                      ]} 
+                          backgroundColor: getProgressColor(selectedQuiz.progress),
+                        },
+                      ]}
                     />
                   </View>
                 </View>
 
-                <TouchableOpacity
-                  style={styles.startButton}
+                <AnimatedButton
+                  title={
+                    selectedQuiz.progress === 1.0
+                      ? 'Retake Quiz'
+                      : selectedQuiz.progress > 0
+                      ? 'Continue Quiz'
+                      : 'Start Quiz'
+                  }
                   onPress={startQuiz}
-                >
-                  <Text style={styles.startButtonText}>
-                    {selectedQuiz.progress === 1.0 ? 'Retake Quiz' :
-                     selectedQuiz.progress > 0 ? 'Continue Quiz' : 'Start Quiz'}
-                  </Text>
-                </TouchableOpacity>
+                  variant="primary"
+                  size="large"
+                  gradient
+                  gradientColors={PremiumColors.gradients.primary as [string, string, ...string[]]}
+                />
               </>
             )}
           </View>
         </View>
       </Modal>
-    </Animated.View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: '#FAFAF6',
+  container: {
+    flex: 1,
   },
+
+  // ===== HEADER =====
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
+    paddingTop: 10,
+    paddingBottom: 10,
   },
   backButton: {
+    padding: 4,
+  },
+  backButtonCircle: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#F0F0F0',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  title: { 
-    fontSize: 24, 
-    fontWeight: 'bold', 
-    color: '#1B5E20',
-  },
-  headerContent: {
-    paddingHorizontal: 20,
-    marginBottom: 24,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    lineHeight: 22,
-  },
-  sectionTitle: {
-    fontSize: 20,
+  headerTitle: {
+    fontSize: 22,
     fontWeight: 'bold',
-    color: '#1B5E20',
-    paddingHorizontal: 20,
-    marginBottom: 16,
+    textAlign: 'center',
   },
-  quizList: {
-    flex: 1,
+  headerSpacer: {
+    width: 48,
   },
-  listContent: {
-    paddingHorizontal: 20,
+
+  // ===== LOADING =====
+  loadingContent: {
+    paddingTop: 16,
+  },
+
+  // ===== SCROLL =====
+  scrollContent: {
+    paddingHorizontal: 16,
     paddingBottom: 24,
   },
+
+  // ===== SECTION LABEL =====
+  sectionLabel: {
+    ...Typography.label,
+    marginTop: 24,
+    marginBottom: 14,
+  },
+
+  // ===== QUIZ CARDS =====
   quizCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 14,
     padding: 20,
-    marginBottom: 16,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    marginBottom: 14,
   },
   iconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   quizContent: {
     flex: 1,
@@ -456,55 +578,51 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   quizTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1B5E20',
+    fontSize: 17,
+    fontWeight: '700',
     flex: 1,
   },
   quizDescription: {
-    fontSize: 14,
-    color: '#666',
-    lineHeight: 20,
-    marginBottom: 16,
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 14,
   },
   quizMeta: {
     flexDirection: 'row',
-    marginBottom: 16,
+    marginBottom: 14,
+    gap: 16,
   },
   metaItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 20,
+    gap: 4,
   },
   metaText: {
     fontSize: 12,
-    color: '#666',
-    marginLeft: 4,
+    fontWeight: '500',
   },
   progressContainer: {
-    marginTop: 8,
+    marginTop: 4,
   },
   progressInfo: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   progressLabel: {
     fontSize: 12,
-    color: '#666',
     fontWeight: '500',
   },
   progressValue: {
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   progressBarBackground: {
     height: 6,
-    backgroundColor: '#E0E0E0',
     borderRadius: 3,
     overflow: 'hidden',
   },
@@ -512,6 +630,8 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 3,
   },
+
+  // ===== MODAL =====
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -520,8 +640,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalContent: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
+    borderRadius: 20,
     padding: 24,
     width: '100%',
     maxHeight: '80%',
@@ -533,9 +652,9 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   modalIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -543,20 +662,17 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#F5F5F5',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalTitle: {
     fontSize: 22,
-    fontWeight: 'bold',
-    color: '#1B5E20',
-    marginBottom: 12,
+    fontWeight: '700',
+    marginBottom: 10,
     textAlign: 'center',
   },
   modalDescription: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: 15,
     lineHeight: 22,
     textAlign: 'center',
     marginBottom: 24,
@@ -565,29 +681,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     marginBottom: 24,
+    gap: 24,
   },
   modalMetaItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 16,
+    gap: 6,
   },
   modalMetaText: {
     fontSize: 14,
-    color: '#666',
-    marginLeft: 6,
   },
   modalProgress: {
-    marginBottom: 32,
+    marginBottom: 28,
   },
   modalProgressLabel: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 13,
     marginBottom: 8,
     textAlign: 'center',
   },
   modalProgressBar: {
     height: 8,
-    backgroundColor: '#E0E0E0',
     borderRadius: 4,
     overflow: 'hidden',
   },
@@ -595,24 +708,6 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 4,
   },
-  startButton: {
-    backgroundColor: '#1B5E20',
-    borderRadius: 16,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  startButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  comingSoonText: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    marginTop: 12,
-    fontStyle: 'italic',
-  },
 });
 
-export default SelfDiscoveryQuizScreen; 
+export default SelfDiscoveryQuizScreen;

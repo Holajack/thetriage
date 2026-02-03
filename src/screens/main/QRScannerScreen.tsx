@@ -73,8 +73,8 @@ const QRScannerScreen = () => {
         userId = qrData.userId;
       } catch (jsonError) {
         // If JSON parse fails, check if it's a deep link URL
-        if (data.startsWith('thetriage://profile/')) {
-          userId = data.replace('thetriage://profile/', '');
+        if (data.startsWith('hikewise://profile/')) {
+          userId = data.replace('hikewise://profile/', '');
         } else if (data.includes('profile/')) {
           // Handle other URL formats
           const match = data.match(/profile\/([a-zA-Z0-9-]+)/);

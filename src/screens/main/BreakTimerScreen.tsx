@@ -7,6 +7,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { useBackgroundMusic } from '../../hooks/useBackgroundMusic';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -72,6 +73,7 @@ export const BreakTimerScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute();
   const { theme } = useTheme();
+  const { profile } = useAuth();
   const insets = useSafeAreaInsets();
   const [showSessionInfo, setShowSessionInfo] = useState(false);
 
@@ -427,21 +429,20 @@ export const BreakTimerScreen = () => {
 
   return (
     <View style={styles.fullScreenContainer}>
-      {/* Full Screen Background - Same as Focus Screen */}
-      <ParallaxForestBackground style={StyleSheet.absoluteFillObject} />
+      {/* Full Screen Background - Show trail buddy resting during break */}
+      <ParallaxForestBackground
+        trailBuddyType={profile?.trail_buddy_type || 'bear'}
+        showTrailBuddy={true}
+        animationMode="resting"
+      />
 
       {/* Dark overlay for better text visibility */}
       <View style={styles.darkOverlay} />
 
       {/* Top Controls Bar */}
       <View style={[styles.topControlsBar, { paddingTop: insets.top + 8 }]}>
-        {/* Back Button (Top Left) */}
-        <TouchableOpacity
-          style={[styles.backButton, { backgroundColor: theme.primary }]}
-          onPress={() => navigation.navigate('Main', { screen: 'Home' })}
-        >
-          <Ionicons name="arrow-back" size={24} color="#fff" />
-        </TouchableOpacity>
+        {/* Empty spacer for layout balance (back button removed - users should complete break) */}
+        <View style={styles.backButton} />
 
         {/* Break Timer (Top Center) - Large and prominent */}
         <Animated.View style={[styles.breakTimerContainer, timerPulseStyle]}>
@@ -472,35 +473,16 @@ export const BreakTimerScreen = () => {
         <Ionicons name="information-circle-outline" size={28} color="#fff" />
       </TouchableOpacity>
 
-      {/* Relaxed Character Area (Center) */}
+      {/* Relaxation Message (Center - overlays the background with trail buddy) */}
       <View style={styles.characterContainer}>
-        {/* Relaxed Nora character - lying down smiling */}
-        <Animated.View style={[styles.relaxedCharacter, floatingStyle]}>
-          <View style={styles.characterBody}>
-            {/* Simple relaxed character representation */}
-            <View style={styles.relaxedFace}>
-              {/* Closed happy eyes */}
-              <View style={styles.relaxedEyesRow}>
-                <Text style={styles.relaxedEye}>◡</Text>
-                <Text style={styles.relaxedEye}>◡</Text>
-              </View>
-              {/* Happy smile */}
-              <Text style={styles.relaxedSmile}>⌣</Text>
-            </View>
-            {/* Relaxed body indication */}
-            <View style={styles.relaxedBodyHint}>
-              <MaterialIcons name="self-improvement" size={60} color="rgba(255,255,255,0.8)" />
-            </View>
-          </View>
+        <Animated.View style={[styles.relaxMessageContainer, floatingStyle]}>
+          <Animated.Text style={[styles.relaxMessage, headerAnimStyle]}>
+            Take a moment to relax...
+          </Animated.Text>
+          <Text style={styles.breakTip}>
+            {['Stretch your body', 'Hydrate with water', 'Rest your eyes', 'Take deep breaths'][Math.floor(timer / 15) % 4]}
+          </Text>
         </Animated.View>
-
-        {/* Relaxation message */}
-        <Animated.Text style={[styles.relaxMessage, headerAnimStyle]}>
-          Take a moment to relax...
-        </Animated.Text>
-        <Text style={styles.breakTip}>
-          {['Stretch your body', 'Hydrate with water', 'Rest your eyes', 'Take deep breaths'][Math.floor(timer / 15) % 4]}
-        </Text>
       </View>
 
       {/* End Break Button (Bottom Center) */}
@@ -732,42 +714,13 @@ const styles = StyleSheet.create({
   },
   characterContainer: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     alignItems: 'center',
     paddingHorizontal: 40,
+    paddingBottom: SCREEN_HEIGHT * 0.22,
   },
-  relaxedCharacter: {
+  relaxMessageContainer: {
     alignItems: 'center',
-    marginBottom: 30,
-  },
-  characterBody: {
-    alignItems: 'center',
-  },
-  relaxedFace: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 60,
-    width: 120,
-    height: 120,
-    justifyContent: 'center',
-    marginBottom: 10,
-  },
-  relaxedEyesRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 20,
-    marginBottom: 5,
-  },
-  relaxedEye: {
-    fontSize: 30,
-    color: '#fff',
-  },
-  relaxedSmile: {
-    fontSize: 40,
-    color: '#fff',
-  },
-  relaxedBodyHint: {
-    opacity: 0.8,
   },
   relaxMessage: {
     fontSize: 24,

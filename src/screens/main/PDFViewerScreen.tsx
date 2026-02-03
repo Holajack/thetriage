@@ -44,7 +44,7 @@ const PDFViewerScreen = () => {
   };
 
   const sendToPatrick = () => {
-    navigation.navigate('Patrick' as any, { 
+    navigation.navigate('PatrickSpeak' as any, {
       initialMessage: `I'm looking at "${title}". Can you help me study from this textbook?`,
       pdfContext: {
         title: title,

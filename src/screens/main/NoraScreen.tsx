@@ -208,10 +208,10 @@ const NoraScreen = () => {
         setShowPdfModal(true);
         break;
       case 'focus':
-        navigation.navigate('StudySession' as never);
+        navigation.navigate('StudySessionScreen' as never);
         break;
       case 'progress':
-        navigation.navigate('Analytics' as never);
+        navigation.navigate('Main' as never, { screen: 'Results' });
         break;
     }
   }, [navigation]);

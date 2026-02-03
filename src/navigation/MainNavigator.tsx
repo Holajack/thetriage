@@ -42,6 +42,12 @@ import AIIntegrationScreen from '../screens/main/AIIntegrationScreen';
 import QRScannerScreen from '../screens/main/QRScannerScreen';
 import EBooksScreen from '../screens/main/EBooksScreen';
 
+// Settings sub-screens
+import SoundSettingsScreen from '../screens/main/settings/SoundSettingsScreen';
+import ThemeSettingsScreen from '../screens/main/settings/ThemeSettingsScreen';
+import AISettingsScreen from '../screens/main/settings/AISettingsScreen';
+import NotificationSettingsScreen from '../screens/main/settings/NotificationSettingsScreen';
+
 const Drawer = createDrawerNavigator();
 
 function CustomDrawerContent(props: any) {
@@ -275,7 +281,7 @@ export const MainNavigator = () => {
           headerShown: false
         }}
       />
-      <Drawer.Screen name="Subscription" component={SubscriptionScreen} />
+      <Drawer.Screen name="Subscription" component={SubscriptionScreen} options={{ headerShown: false }} />
       <Drawer.Screen
         name="QRScanner"
         component={QRScannerScreen}
@@ -308,6 +314,7 @@ export const MainNavigator = () => {
         name="EBooks"
         component={EBooksScreen}
         options={{
+          headerShown: false,
           drawerItemStyle: { display: 'none' } // Hide from drawer
         }}
       />
@@ -315,6 +322,7 @@ export const MainNavigator = () => {
         name="Achievements"
         component={AchievementsScreen}
         options={{
+          headerShown: false,
           drawerItemStyle: { display: 'none' } // Hide from drawer
         }}
       />
@@ -322,6 +330,7 @@ export const MainNavigator = () => {
         name="SelfDiscoveryQuiz"
         component={SelfDiscoveryQuizScreen}
         options={{
+          headerShown: false,
           drawerItemStyle: { display: 'none' }, // Hide from drawer
           title: 'Self-Discovery Quiz'
         }}
@@ -409,9 +418,29 @@ export const MainNavigator = () => {
         name="AIIntegration"
         component={AIIntegrationScreen}
         options={{
-          drawerItemStyle: { display: 'none' }, // Hide from drawer
+          drawerItemStyle: { display: 'none' },
           title: 'AI Integration'
         }}
+      />
+      <Drawer.Screen
+        name="SoundSettings"
+        component={SoundSettingsScreen}
+        options={{ drawerItemStyle: { display: 'none' }, headerShown: false }}
+      />
+      <Drawer.Screen
+        name="ThemeSettings"
+        component={ThemeSettingsScreen}
+        options={{ drawerItemStyle: { display: 'none' }, headerShown: false }}
+      />
+      <Drawer.Screen
+        name="AISettings"
+        component={AISettingsScreen}
+        options={{ drawerItemStyle: { display: 'none' }, headerShown: false }}
+      />
+      <Drawer.Screen
+        name="NotificationSettings"
+        component={NotificationSettingsScreen}
+        options={{ drawerItemStyle: { display: 'none' }, headerShown: false }}
       />
     </Drawer.Navigator>
   );

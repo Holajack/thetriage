@@ -19,29 +19,36 @@ export const listConversations = query({
       .collect();
 
     // Build conversation map (grouped by other user)
+    // First pass: count unread messages per conversation
+    const unreadCounts = new Map<string, number>();
+    for (const msg of received) {
+      if (!msg.isRead) {
+        const senderId = msg.senderId as string;
+        unreadCounts.set(senderId, (unreadCounts.get(senderId) ?? 0) + 1);
+      }
+    }
+
+    // Second pass: find last message per conversation
     const conversationMap = new Map<
       string,
       { otherUserId: string; lastMessage: any; unreadCount: number }
     >();
 
-    for (const msg of [...sent, ...received]) {
+    const allMessages = [...sent, ...received].sort(
+      (a, b) => b._creationTime - a._creationTime
+    );
+
+    for (const msg of allMessages) {
       const otherUserId =
         msg.senderId === user._id ? msg.recipientId : msg.senderId;
 
-      const existing = conversationMap.get(otherUserId);
-      if (
-        !existing ||
-        msg._creationTime > existing.lastMessage._creationTime
-      ) {
-        conversationMap.set(otherUserId, {
-          otherUserId,
+      // Only set if we haven't seen this conversation yet (first = most recent)
+      if (!conversationMap.has(otherUserId as string)) {
+        conversationMap.set(otherUserId as string, {
+          otherUserId: otherUserId as string,
           lastMessage: msg,
-          unreadCount: existing?.unreadCount ?? 0,
+          unreadCount: unreadCounts.get(otherUserId as string) ?? 0,
         });
-      }
-      if (msg.recipientId === user._id && !msg.isRead) {
-        const entry = conversationMap.get(otherUserId)!;
-        entry.unreadCount++;
       }
     }
 

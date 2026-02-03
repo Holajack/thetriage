@@ -733,14 +733,55 @@ const CommunityScreen = () => {
       const fetchConvos = async () => {
         setLoading(true);
         if (!user) { setConversations([]); setLoading(false); return; }
-        // Convex conversations are managed via reactive queries
-        // For now, use the userConversations state populated elsewhere
-        setConversations(userConversations);
+        try {
+          // Fetch real conversations from Convex
+          const result = await MessageService.getConversations();
+          if (result.success && result.data) {
+            // Transform to format expected by the UI (with partner object)
+            const transformed = result.data.map((conv: any) => ({
+              id: conv.participant.id,
+              partner: {
+                id: conv.participant.id,
+                full_name: conv.participant.full_name,
+                username: conv.participant.username,
+                avatar_url: conv.participant.avatar_url,
+                email: conv.participant.username, // fallback
+                status: 'active',
+              },
+              lastMessage: {
+                content: conv.last_message?.content || '',
+                sender_id: conv.last_message?.sender_id,
+                created_at: conv.last_message?.created_at,
+              },
+              unreadCount: conv.unread_count,
+            }));
+            setConversations(transformed);
+          } else {
+            setConversations([]);
+          }
+        } catch (error) {
+          console.error('Error fetching conversations:', error);
+          setConversations([]);
+        }
         setLoading(false);
       };
       fetchConvos();
-    }, [user, userConversations]);
+    }, [user]);
     return { conversations, loading };
+  }
+
+  // Helper to format time ago
+  function formatTimeAgo(date: Date): string {
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 30) return `${diffDays}d ago`;
+    return `${Math.floor(diffDays / 30)} month${diffDays >= 60 ? 's' : ''} ago`;
   }
 
   function useConvexAllUsers(user: any) {
@@ -1280,7 +1321,7 @@ const CommunityScreen = () => {
           {!search.trim() && activeTab === 'Messages' && (
             <AnimatedFlatList
               key={`messages-${focusKey}`}
-              data={userConversations}
+              data={conversations}
               keyExtractor={item => item.id}
               contentContainerStyle={{ paddingBottom: 24 }}
               delay="fast"

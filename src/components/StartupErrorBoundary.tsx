@@ -44,7 +44,7 @@ export class StartupErrorBoundary extends React.Component<
         <View style={styles.container}>
           <Text style={styles.title}>App Startup Failed</Text>
           <Text style={styles.subtitle}>
-            The Triage System encountered a startup error.
+            HikeWise encountered a startup error.
           </Text>
           
           {__DEV__ && this.state.errorInfo && (

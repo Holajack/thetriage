@@ -52,7 +52,7 @@ const CustomDashboardHeader = ({ navigation }) => {
         <Pressable style={styles.drawerOverlay} onPress={() => setDrawerVisible(false)} />
         <View style={styles.drawer}>
           <View style={styles.drawerHeader}>
-            <Text style={styles.drawerTitle}>The Triage System</Text>
+            <Text style={styles.drawerTitle}>HikeWise</Text>
             <TouchableOpacity onPress={() => setDrawerVisible(false)}>
               <Ionicons name="close" size={28} color={theme.colors.primary} />
             </TouchableOpacity>
@@ -69,7 +69,7 @@ const CustomDashboardHeader = ({ navigation }) => {
             <Feather name="log-out" size={20} color="#fff" />
             <Text style={styles.logoutText}>Logout</Text>
           </TouchableOpacity>
-          <Text style={styles.copyright}>© 2025 The Triage System</Text>
+          <Text style={styles.copyright}>© 2025 HikeWise</Text>
         </View>
       </Modal>
     </>

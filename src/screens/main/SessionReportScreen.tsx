@@ -393,15 +393,15 @@ export const SessionReportScreen = () => {
         <View style={styles.actionsContainer}>
           <TouchableOpacity
             style={[styles.primaryBtn, { backgroundColor: theme.primary }]}
-            onPress={() => navigation.navigate('StudySessionScreen', { manualSelection: true })}
+            onPress={() => navigation.navigate('FocusPreparationScreen' as never)}
           >
             <MaterialIcons name="refresh" size={20} color="#fff" />
             <Text style={styles.primaryBtnText}>Start Another Session</Text>
           </TouchableOpacity>
-          
+
           <TouchableOpacity
             style={[styles.secondaryBtn, { borderColor: theme.border }]}
-            onPress={() => navigation.navigate('Main', { screen: 'Analytics' })}
+            onPress={() => navigation.navigate('Main' as never, { screen: 'Results' })}
           >
             <MaterialIcons name="analytics" size={20} color={theme.primary} />
             <Text style={[styles.secondaryBtnText, { color: theme.text }]}>View Analytics</Text>

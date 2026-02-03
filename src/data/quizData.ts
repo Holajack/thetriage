@@ -13,6 +13,35 @@ export interface QuizResult {
   description: string;
   recommendations: string[];
   completedAt: Date;
+  // Extended Convex data (optional for legacy compatibility)
+  convexResultId?: string;
+  subDimensionScores?: Array<{
+    subDimensionId: string;
+    slug: string;
+    name: string;
+    rawScore: number;
+    normalizedScore: number;
+    percentileRank?: number;
+  }>;
+  strengths?: Array<{
+    subDimensionSlug: string;
+    score: number;
+    description: string;
+  }>;
+  areasForGrowth?: Array<{
+    subDimensionSlug: string;
+    score: number;
+    description: string;
+    recommendations: string[];
+  }>;
+  traitProfile?: {
+    primaryTrait: string;
+    primaryScore: number;
+    secondaryTrait?: string;
+    secondaryScore?: number;
+    profileDescription: string;
+  };
+  percentileRank?: number;
 }
 
 // Study Habits Quiz - 70 questions

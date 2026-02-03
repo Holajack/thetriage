@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { QuizResult, STUDY_HABITS_RESULTS, LEARNING_STYLE_RESULTS } from '../data/quizData';
+import RadarChart, { RadarLegend } from './RadarChart';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface QuizResultsProps {
   result: QuizResult;
@@ -14,6 +17,24 @@ const QuizResults: React.FC<QuizResultsProps> = ({ result, onRetake, onClose }) 
   const { theme } = useTheme();
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedRecommendation, setSelectedRecommendation] = useState<string | null>(null);
+
+  // Check if this is a Convex result with sub-dimension scores
+  const hasRadarData = result.subDimensionScores && result.subDimensionScores.length > 0;
+
+  // Transform sub-dimension scores to radar chart data
+  const radarData = useMemo(() => {
+    if (!result.subDimensionScores) return [];
+
+    return result.subDimensionScores.map((score, index) => ({
+      axis: score.name,
+      slug: score.slug,
+      value: score.normalizedScore / 100, // Convert to 0-1 scale
+      displayValue: Math.round(score.normalizedScore),
+      percentile: score.percentileRank,
+      description: '', // Could be populated from sub-dimension data
+      order: index,
+    }));
+  }, [result.subDimensionScores]);
 
   const getScoreColor = (score: number) => {
     if (score >= 80) return '#4CAF50';
@@ -117,16 +138,118 @@ const QuizResults: React.FC<QuizResultsProps> = ({ result, onRetake, onClose }) 
               </Text>
             </View>
           </View>
-          
+
           <View style={styles.categoryInfo}>
             <Text style={[styles.categoryName, { color: theme.text }]}>
-              {categoryInfo?.name}
+              {result.traitProfile?.primaryTrait
+                ? result.traitProfile.primaryTrait.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
+                : categoryInfo?.name}
             </Text>
             <Text style={[styles.categoryDescription, { color: theme.text + '99' }]}>
-              {categoryInfo?.description}
+              {result.traitProfile?.profileDescription || categoryInfo?.description}
             </Text>
           </View>
+
+          {/* Percentile Rank (if available) */}
+          {result.percentileRank && (
+            <View style={[styles.percentileContainer, { borderTopColor: theme.text + '20' }]}>
+              <Text style={[styles.percentileLabel, { color: theme.text + '99' }]}>
+                Percentile Rank
+              </Text>
+              <Text style={[styles.percentileValue, { color: theme.primary }]}>
+                {result.percentileRank}th percentile
+              </Text>
+            </View>
+          )}
         </View>
+
+        {/* Radar Chart (if Convex data available) */}
+        {hasRadarData && (
+          <View style={[styles.radarCard, { backgroundColor: theme.card }]}>
+            <Text style={[styles.radarTitle, { color: theme.text }]}>
+              Your Trait Profile
+            </Text>
+            <Text style={[styles.radarSubtitle, { color: theme.text + '99' }]}>
+              See how you scored across different dimensions
+            </Text>
+            <View style={styles.radarContainer}>
+              <RadarChart
+                data={radarData}
+                size={Math.min(SCREEN_WIDTH - 80, 280)}
+                color={scoreColor}
+                showLabels={true}
+                showPercentiles={!!result.percentileRank}
+              />
+            </View>
+          </View>
+        )}
+
+        {/* Strengths Section (if available) */}
+        {result.strengths && result.strengths.length > 0 && (
+          <View style={[styles.strengthsCard, { backgroundColor: theme.card }]}>
+            <View style={styles.strengthsHeader}>
+              <Ionicons name="trophy-outline" size={24} color="#4CAF50" />
+              <Text style={[styles.strengthsTitle, { color: theme.text }]}>
+                Your Strengths
+              </Text>
+            </View>
+            {result.strengths.map((strength, index) => (
+              <View key={index} style={styles.strengthItem}>
+                <View style={[styles.strengthDot, { backgroundColor: '#4CAF50' }]} />
+                <View style={styles.strengthContent}>
+                  <Text style={[styles.strengthName, { color: theme.text }]}>
+                    {strength.subDimensionSlug.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
+                  </Text>
+                  <Text style={[styles.strengthScore, { color: '#4CAF50' }]}>
+                    {Math.round(strength.score)}%
+                  </Text>
+                </View>
+                <Text style={[styles.strengthDescription, { color: theme.text + '99' }]}>
+                  {strength.description}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Areas for Growth (if available) */}
+        {result.areasForGrowth && result.areasForGrowth.length > 0 && (
+          <View style={[styles.growthCard, { backgroundColor: theme.card }]}>
+            <View style={styles.growthHeader}>
+              <Ionicons name="trending-up-outline" size={24} color="#FF9800" />
+              <Text style={[styles.growthTitle, { color: theme.text }]}>
+                Areas for Growth
+              </Text>
+            </View>
+            {result.areasForGrowth.map((area, index) => (
+              <View key={index} style={styles.growthItem}>
+                <View style={styles.growthItemHeader}>
+                  <Text style={[styles.growthName, { color: theme.text }]}>
+                    {area.subDimensionSlug.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
+                  </Text>
+                  <Text style={[styles.growthScore, { color: '#FF9800' }]}>
+                    {Math.round(area.score)}%
+                  </Text>
+                </View>
+                <Text style={[styles.growthDescription, { color: theme.text + '99' }]}>
+                  {area.description}
+                </Text>
+                {area.recommendations.length > 0 && (
+                  <View style={styles.growthRecommendations}>
+                    {area.recommendations.slice(0, 2).map((rec, recIndex) => (
+                      <View key={recIndex} style={styles.growthRecItem}>
+                        <Ionicons name="chevron-forward-outline" size={14} color={theme.primary} />
+                        <Text style={[styles.growthRecText, { color: theme.text }]}>
+                          {rec}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            ))}
+          </View>
+        )}
 
         {/* Results Description */}
         <View style={[styles.descriptionCard, { backgroundColor: theme.card }]}>
@@ -515,6 +638,162 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFF',
+  },
+  // Percentile styles
+  percentileContainer: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  percentileLabel: {
+    fontSize: 14,
+  },
+  percentileValue: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // Radar chart styles
+  radarCard: {
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    alignItems: 'center',
+  },
+  radarTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  radarSubtitle: {
+    fontSize: 14,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  radarContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Strengths styles
+  strengthsCard: {
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+  },
+  strengthsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  strengthsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginLeft: 10,
+  },
+  strengthItem: {
+    marginBottom: 14,
+  },
+  strengthDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    position: 'absolute',
+    left: 0,
+    top: 6,
+  },
+  strengthContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingLeft: 16,
+  },
+  strengthName: {
+    fontSize: 15,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  strengthScore: {
+    fontSize: 15,
+    fontWeight: 'bold',
+  },
+  strengthDescription: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 4,
+    paddingLeft: 16,
+  },
+  // Growth areas styles
+  growthCard: {
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+  },
+  growthHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  growthTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginLeft: 10,
+  },
+  growthItem: {
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
+  },
+  growthItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  growthName: {
+    fontSize: 15,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  growthScore: {
+    fontSize: 15,
+    fontWeight: 'bold',
+  },
+  growthDescription: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 10,
+  },
+  growthRecommendations: {
+    marginTop: 8,
+  },
+  growthRecItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 6,
+  },
+  growthRecText: {
+    fontSize: 13,
+    lineHeight: 18,
+    flex: 1,
+    marginLeft: 6,
   },
 });
 

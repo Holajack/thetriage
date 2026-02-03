@@ -87,8 +87,14 @@ export const update = mutation({
 export const toggleComplete = mutation({
   args: { taskId: v.id("tasks") },
   handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new Error("Task not found");
+
+    // Validate that the task belongs to the current user
+    if (task.userId !== user._id) {
+      throw new Error("Not authorized to modify this task");
+    }
 
     const isCompleted = task.status === "completed";
     await ctx.db.patch(args.taskId, {
@@ -101,6 +107,15 @@ export const toggleComplete = mutation({
 export const remove = mutation({
   args: { taskId: v.id("tasks") },
   handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    const task = await ctx.db.get(args.taskId);
+    if (!task) throw new Error("Task not found");
+
+    // Validate that the task belongs to the current user
+    if (task.userId !== user._id) {
+      throw new Error("Not authorized to delete this task");
+    }
+
     // Delete subtasks first
     const subtasks = await ctx.db
       .query("subtasks")

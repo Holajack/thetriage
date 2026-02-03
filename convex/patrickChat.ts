@@ -325,11 +325,11 @@ export const sendMessage = action({
     if (args.pdfContext) {
       return {
         response:
-          "I appreciate you sharing that document! Unfortunately, I'm not able to read or analyze PDFs. But Nora AI on the Pro plan can dive deep into your documents — she'll create study guides, practice questions, and summaries from them. Want me to help you with something else in the meantime?",
+          "I appreciate you sharing that document! Unfortunately, I'm not able to read or analyze PDFs. But Nora AI on the Elite plan can dive deep into your documents — she'll create study guides, practice questions, and summaries from them. Want me to help you with something else in the meantime?",
         success: true,
         tier: rateLimit.tier,
         remaining_messages: rateLimit.remaining, // Don't count this against their limit
-        upgrade_prompt: "pro",
+        upgrade_prompt: "elite",
       };
     }
 

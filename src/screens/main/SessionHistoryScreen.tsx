@@ -54,8 +54,8 @@ const SessionHistoryScreen = () => {
     navigation.setOptions({
       title: 'Session History',
       headerLeft: () => (
-        <TouchableOpacity 
-          onPress={() => navigation.navigate('Home' as never)} 
+        <TouchableOpacity
+          onPress={() => navigation.navigate('Main' as never, { screen: 'Home' })}
           style={{ marginLeft: 8 }}
         >
           <Ionicons name="arrow-back" size={24} color={theme.primary} />
@@ -325,7 +325,7 @@ const SessionHistoryScreen = () => {
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-        <UnifiedHeader title="History" onClose={() => navigation.navigate('Home')} />
+        <UnifiedHeader title="History" onClose={() => navigation.navigate('Main' as never, { screen: 'Home' })} />
 
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
           <View style={styles.loadingContainer}>
@@ -344,7 +344,7 @@ const SessionHistoryScreen = () => {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Unified Header */}
-      <UnifiedHeader title="History" onClose={() => navigation.navigate('Home')} />
+      <UnifiedHeader title="History" onClose={() => navigation.navigate('Main' as never, { screen: 'Home' })} />
 
       {/* Time Filter */}
       <Animated.View

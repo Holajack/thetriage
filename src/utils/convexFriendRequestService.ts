@@ -224,12 +224,34 @@ export async function getUserProfile(
 
 /**
  * Search for users to send friend requests to.
- * Note: This requires a search query on the users table.
- * For now we return empty — a Convex search index would be needed for full-text search.
+ * Searches by username or full name.
  */
 export async function searchUsers(
-  _query: string
+  query: string
 ): Promise<{ success: boolean; error?: string; data?: any[] }> {
-  // TODO: Add a Convex search query/index for user search
-  return { success: true, data: [] };
+  if (!query || query.trim().length < 2) {
+    return { success: true, data: [] };
+  }
+
+  try {
+    const client = getClient();
+    const results = await client.query(api.users.searchUsers, {
+      query: query.trim(),
+    });
+
+    // Adapt to expected format
+    const adapted = (results ?? []).map((u: any) => ({
+      id: u._id,
+      username: u.username,
+      full_name: u.fullName,
+      avatar_url: u.avatarUrl,
+      university: u.university,
+      status: u.status,
+    }));
+
+    return { success: true, data: adapted };
+  } catch (error: any) {
+    console.error("User search error:", error);
+    return { success: false, error: error.message };
+  }
 }

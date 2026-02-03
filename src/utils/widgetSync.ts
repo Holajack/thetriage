@@ -11,7 +11,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform, NativeModules } from 'react-native';
 
-// Widget data structure (mirrors iOS TriageWidgetData)
+// Widget data structure (mirrors iOS HikeWiseWidgetData)
 export interface WidgetData {
   currentStreak: number;
   totalFocusMinutes: number;
@@ -25,7 +25,7 @@ export interface WidgetData {
 }
 
 // App Group identifier - must match iOS configuration
-const APP_GROUP_ID = 'group.com.thetriage.app';
+const APP_GROUP_ID = 'group.com.hikewise.app';
 
 // Keys for shared data
 const WIDGET_KEYS = {

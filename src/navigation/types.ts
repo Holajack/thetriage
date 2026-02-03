@@ -144,6 +144,10 @@ export type MainTabParamList = {
   ProTrekker: undefined;
   Subscription: undefined;
   QRScanner: undefined;
+  SoundSettings: undefined;
+  ThemeSettings: undefined;
+  AISettings: undefined;
+  NotificationSettings: undefined;
 };
 
 export type MessageContact = {

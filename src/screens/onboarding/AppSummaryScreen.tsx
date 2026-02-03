@@ -181,7 +181,7 @@ export default function AppSummaryScreen() {
               <View style={styles.welcomeIcon}>
                 <Ionicons name="school-outline" size={40} color="#4CAF50" />
               </View>
-              <Text style={[styles.welcomeTitle, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>Welcome to The Triage System</Text>
+              <Text style={[styles.welcomeTitle, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>Welcome to HikeWise</Text>
               <Text style={[styles.welcomeText, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>
                 Your personalized study companion designed to maximize focus, productivity, and learning outcomes through proven techniques and AI-powered insights.
               </Text>
@@ -283,7 +283,7 @@ export default function AppSummaryScreen() {
             <Text style={[styles.modalSubtitle, { color: theme.isDark ? '#FFD700' : '#FFD700' }]}>Thank you for being part of our journey</Text>
             
             <Text style={[styles.modalText, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>
-              You're among the first to experience The Triage System. Your feedback and usage will help us create a world-class study app that empowers students everywhere.
+              You're among the first to experience HikeWise. Your feedback and usage will help us create a world-class study app that empowers students everywhere.
             </Text>
             
             <Text style={[styles.modalText, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>

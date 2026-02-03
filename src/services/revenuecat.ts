@@ -41,20 +41,20 @@ const REVENUECAT_API_KEYS = {
 // Product identifiers matching RevenueCat dashboard
 export const PRODUCT_IDS = {
   PREMIUM_MONTHLY: 'hikewise_premium_monthly',
-  PRO_MONTHLY: 'hikewise_pro_monthly',
+  ELITE_MONTHLY: 'hikewise_elite_monthly',
   PREMIUM_YEARLY: 'hikewise_premium_yearly',
-  PRO_YEARLY: 'hikewise_pro_yearly',
+  ELITE_YEARLY: 'hikewise_elite_yearly',
 };
 
 // Entitlement identifiers
 export const ENTITLEMENTS = {
   PREMIUM: 'premium',
-  PRO: 'pro',
+  ELITE: 'elite',
 };
 
 // Map RevenueCat entitlements to subscription_tier values
-const ENTITLEMENT_TO_TIER: Record<string, 'free' | 'premium' | 'pro'> = {
-  [ENTITLEMENTS.PRO]: 'pro',
+const ENTITLEMENT_TO_TIER: Record<string, 'free' | 'premium' | 'elite'> = {
+  [ENTITLEMENTS.ELITE]: 'elite',
   [ENTITLEMENTS.PREMIUM]: 'premium',
 };
 
@@ -112,12 +112,12 @@ async function handleCustomerInfoUpdate(customerInfo: CustomerInfo): Promise<voi
  */
 function getSubscriptionTierFromCustomerInfo(
   customerInfo: CustomerInfo
-): 'free' | 'premium' | 'pro' {
+): 'free' | 'premium' | 'elite' {
   const activeEntitlements = customerInfo.entitlements.active;
 
-  // Check for highest tier first (pro)
-  if (activeEntitlements[ENTITLEMENTS.PRO]?.isActive) {
-    return 'pro';
+  // Check for highest tier first (elite)
+  if (activeEntitlements[ENTITLEMENTS.ELITE]?.isActive) {
+    return 'elite';
   }
 
   // Then check for premium
@@ -132,7 +132,7 @@ function getSubscriptionTierFromCustomerInfo(
  * Sync subscription tier to Convex
  */
 async function syncSubscriptionToConvex(
-  tier: 'free' | 'premium' | 'pro'
+  tier: 'free' | 'premium' | 'elite'
 ): Promise<void> {
   try {
     const client = getClient();
@@ -218,7 +218,7 @@ export async function purchasePackage(
  */
 export async function restorePurchases(): Promise<{
   success: boolean;
-  tier: 'free' | 'premium' | 'pro';
+  tier: 'free' | 'premium' | 'elite';
   error?: string;
 }> {
   try {
@@ -252,7 +252,7 @@ export async function getCustomerInfo(): Promise<CustomerInfo | null> {
 /**
  * Get current subscription tier
  */
-export async function getCurrentTier(): Promise<'free' | 'premium' | 'pro'> {
+export async function getCurrentTier(): Promise<'free' | 'premium' | 'elite'> {
   const customerInfo = await getCustomerInfo();
 
   if (!customerInfo) {
@@ -263,7 +263,7 @@ export async function getCurrentTier(): Promise<'free' | 'premium' | 'pro'> {
 }
 
 /**
- * Check if user has active premium or pro subscription
+ * Check if user has active premium or elite subscription
  */
 export async function hasActiveSubscription(): Promise<boolean> {
   const tier = await getCurrentTier();
