@@ -31,8 +31,8 @@
   "submit": {
     "production": {
       "ios": {
-        "ascAppId": "APP_STORE_CONNECT_APP_ID",
-        "appleTeamId": "APPLE_TEAM_ID"
+        "ascAppId": "6756673693",
+        "appleTeamId": "7YMK4D784T"
       },
       "android": {
         "serviceAccountKeyPath": "./google-service-account.json",
@@ -43,8 +43,8 @@
     },
     "internal": {
       "ios": {
-        "ascAppId": "APP_STORE_CONNECT_APP_ID",
-        "appleTeamId": "APPLE_TEAM_ID"
+        "ascAppId": "6756673693",
+        "appleTeamId": "7YMK4D784T"
       },
       "android": {
         "serviceAccountKeyPath": "./google-service-account.json",
@@ -54,8 +54,8 @@
     },
     "beta": {
       "ios": {
-        "ascAppId": "APP_STORE_CONNECT_APP_ID",
-        "appleTeamId": "APPLE_TEAM_ID"
+        "ascAppId": "6756673693",
+        "appleTeamId": "7YMK4D784T"
       },
       "android": {
         "serviceAccountKeyPath": "./google-service-account.json",
