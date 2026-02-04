@@ -8,6 +8,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { useUser } from '@clerk/clerk-expo';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { useConvexFocusSession, Task } from '../../hooks/useConvex';
@@ -80,6 +81,7 @@ export const StudySessionScreen = () => {
   const { theme } = useTheme();
   const environmentColors = theme;
   const { data: userData } = useUserAppData();
+  const { user } = useUser();
   const { profile } = useConvexProfile();
   const {
     startPlaylist,
