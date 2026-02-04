@@ -17,7 +17,7 @@ import { QRAcceptanceProvider } from './src/context/QRAcceptanceContext';
 import * as SplashScreen from 'expo-splash-screen';
 import { LogBox, Text, View } from 'react-native';
 import { StartupErrorBoundary } from './src/components/StartupErrorBoundary';
-import { ClerkProvider, ClerkLoaded } from '@clerk/clerk-expo';
+import { ClerkProvider } from '@clerk/clerk-expo';
 import * as SecureStore from 'expo-secure-store';
 
 // DEBUG flag no longer needed - OBJLoader URL error was fixed with React.lazy()
@@ -99,7 +99,6 @@ export default function App() {
       <SafeAreaProvider>
         <StartupErrorBoundary>
           <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
-            <ClerkLoaded>
               <ConvexClientProvider>
                 <ThemeProvider>
                   <AuthProvider>
@@ -110,7 +109,6 @@ export default function App() {
                   </AuthProvider>
                 </ThemeProvider>
               </ConvexClientProvider>
-            </ClerkLoaded>
           </ClerkProvider>
         </StartupErrorBoundary>
       </SafeAreaProvider>
