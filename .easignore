@@ -3,7 +3,6 @@ assets/examples/**
 assets/errors/**
 assets/Claude iOS Onboarding/**
 assets/trail-buddies/example-input-images/**
-assets/Background_animations/**
 
 # Exclude backup images
 assets/*-backup*.png
