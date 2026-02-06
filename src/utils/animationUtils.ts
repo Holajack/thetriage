@@ -299,12 +299,41 @@ export const useCounterAnimation = (
   duration: number = 1000
 ) => {
   const count = useSharedValue(0);
+  const [displayValue, setDisplayValue] = useState(0);
 
   useEffect(() => {
+    // Reset to 0 when target changes
+    count.value = 0;
+    setDisplayValue(0);
+
+    // Animate to target
     count.value = withTiming(targetValue, { duration });
+
+    // Also update React state for rendering (using JS animation for display)
+    if (targetValue === 0) {
+      setDisplayValue(0);
+      return;
+    }
+
+    const startTime = Date.now();
+    const startValue = 0;
+    const animate = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      // Ease out cubic for smooth deceleration
+      const easeProgress = 1 - Math.pow(1 - progress, 3);
+      const currentValue = Math.round(startValue + (targetValue - startValue) * easeProgress);
+      setDisplayValue(currentValue);
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
+    };
+    requestAnimationFrame(animate);
   }, [targetValue, duration]);
 
-  return count;
+  // Return object with both animated value and display value
+  return { value: displayValue, sharedValue: count };
 };
 
 // ============================================

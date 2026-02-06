@@ -1,0 +1,94 @@
+# Fastfile for HikeWise
+# This file defines fastlane lanes for app distribution
+#
+# Note: HikeWise primarily uses EAS for builds and submissions.
+# This Fastfile provides supplementary automation for metadata sync.
+
+default_platform(:ios)
+
+platform :ios do
+  # ============================================================
+  # METADATA MANAGEMENT
+  # ============================================================
+
+  desc "Download current metadata from App Store Connect"
+  lane :download_metadata do
+    download_metadata(
+      app_identifier: "com.hikewise.app",
+      force: true
+    )
+    UI.success "Metadata downloaded to fastlane/metadata"
+  end
+
+  desc "Upload metadata to App Store Connect"
+  lane :upload_metadata do
+    deliver(
+      skip_binary_upload: true,
+      skip_screenshots: true,
+      force: true,
+      metadata_path: "./fastlane/metadata",
+      app_identifier: "com.hikewise.app"
+    )
+    UI.success "Metadata uploaded successfully"
+  end
+
+  # ============================================================
+  # SCREENSHOTS
+  # ============================================================
+
+  desc "Upload screenshots to App Store Connect"
+  lane :upload_screenshots do
+    deliver(
+      skip_binary_upload: true,
+      skip_metadata: true,
+      force: true,
+      screenshots_path: "./store-assets/screenshots",
+      app_identifier: "com.hikewise.app"
+    )
+    UI.success "Screenshots uploaded successfully"
+  end
+
+  # ============================================================
+  # FULL METADATA SYNC
+  # ============================================================
+
+  desc "Sync all metadata and screenshots to App Store Connect"
+  lane :sync_store do
+    # Run the Python metadata sync first
+    sh("python ../execution/apple_metadata_sync.py --dry-run")
+
+    deliver(
+      skip_binary_upload: true,
+      force: true,
+      metadata_path: "./fastlane/metadata",
+      screenshots_path: "./store-assets/screenshots",
+      app_identifier: "com.hikewise.app",
+      precheck_include_in_app_purchases: false
+    )
+    UI.success "Store listing synced successfully"
+  end
+
+  # ============================================================
+  # VALIDATION
+  # ============================================================
+
+  desc "Validate metadata without uploading"
+  lane :validate_metadata do
+    precheck(
+      app_identifier: "com.hikewise.app"
+    )
+    UI.success "Metadata validation passed"
+  end
+
+  # ============================================================
+  # HELPER LANES
+  # ============================================================
+
+  desc "Print current app info"
+  lane :info do
+    UI.message "App Identifier: com.hikewise.app"
+    UI.message "Team ID: 7YMK4D784T"
+    UI.message "Metadata Path: ./fastlane/metadata"
+    UI.message "Screenshots Path: ./store-assets/screenshots"
+  end
+end

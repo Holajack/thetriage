@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Modal } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { QuizQuestion as LegacyQuizQuestion, QuizResult, STUDY_HABITS_QUESTIONS, LEARNING_STYLE_QUESTIONS, MOTIVATION_PROFILE_QUESTIONS, FOCUS_TYPE_QUESTIONS, STUDY_HABITS_RESULTS, LEARNING_STYLE_RESULTS, MOTIVATION_PROFILE_RESULTS, FOCUS_TYPE_RESULTS } from '../data/quizData';
@@ -71,6 +72,36 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({ quizType, categorySlu
 
   // Initialize quiz
   useEffect(() => {
+    // Don't initialize until Convex query is resolved (or if not using Convex)
+    if (categorySlug && convexQuestions === undefined) {
+      return; // Still loading Convex questions - wait
+    }
+
+    const initializeLegacyQuiz = () => {
+      let allQuestions: LegacyQuizQuestion[] = [];
+      switch (quizType) {
+        case 'study_habits':
+          allQuestions = STUDY_HABITS_QUESTIONS;
+          break;
+        case 'learning_style':
+          allQuestions = LEARNING_STYLE_QUESTIONS;
+          break;
+        case 'motivation_profile':
+        case 'motivation':
+          allQuestions = MOTIVATION_PROFILE_QUESTIONS;
+          break;
+        case 'focus_type':
+        case 'focus_attention':
+          allQuestions = FOCUS_TYPE_QUESTIONS;
+          break;
+        default:
+          allQuestions = STUDY_HABITS_QUESTIONS;
+      }
+      const shuffled = [...allQuestions].sort(() => 0.5 - Math.random());
+      const selected = shuffled.slice(0, 15);
+      setQuizQuestions(selected);
+    };
+
     const initializeQuiz = async () => {
       setIsInitializing(true);
       setStartTime(new Date());
@@ -97,41 +128,13 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({ quizType, categorySlu
           setUseConvex(false);
           initializeLegacyQuiz();
         }
-      } else if (!categorySlug) {
+      } else {
         // Use legacy mode
         setUseConvex(false);
         initializeLegacyQuiz();
       }
-      // If categorySlug exists but convexQuestions is still loading, wait
-      if (categorySlug && convexQuestions === undefined) {
-        return; // Still loading
-      }
-      setIsInitializing(false);
-    };
 
-    const initializeLegacyQuiz = () => {
-      let allQuestions: LegacyQuizQuestion[] = [];
-      switch (quizType) {
-        case 'study_habits':
-          allQuestions = STUDY_HABITS_QUESTIONS;
-          break;
-        case 'learning_style':
-          allQuestions = LEARNING_STYLE_QUESTIONS;
-          break;
-        case 'motivation_profile':
-        case 'motivation':
-          allQuestions = MOTIVATION_PROFILE_QUESTIONS;
-          break;
-        case 'focus_type':
-        case 'focus_attention':
-          allQuestions = FOCUS_TYPE_QUESTIONS;
-          break;
-        default:
-          allQuestions = STUDY_HABITS_QUESTIONS;
-      }
-      const shuffled = [...allQuestions].sort(() => 0.5 - Math.random());
-      const selected = shuffled.slice(0, 15);
-      setQuizQuestions(selected);
+      setIsInitializing(false);
     };
 
     initializeQuiz();
@@ -498,7 +501,7 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({ quizType, categorySlu
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={handleExit} style={styles.exitButton}>
@@ -656,7 +659,7 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({ quizType, categorySlu
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 };
 

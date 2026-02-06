@@ -82,10 +82,29 @@ export default function LoginScreen() {
         // Existing users signing in always go to Main
         console.log('🔐 [Login] Navigating to Main');
         navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'Main' }] }));
+      } else if (signInAttempt.status === 'needs_first_factor') {
+        // User needs to verify their identity via email code
+        console.log('[Login] needs_first_factor - preparing email verification...');
+        try {
+          // Send the verification code to user's email
+          await signIn.prepareFirstFactor({ strategy: 'email_code' });
+          console.log('[Login] Verification code sent, navigating to SignInVerification');
+          // Navigate to verification screen
+          navigation.navigate('SignInVerification', { email: loginEmail });
+        } catch (prepareErr: any) {
+          console.log('[Login] prepareFirstFactor error:', prepareErr);
+          const prepareErrorMsg = prepareErr?.errors?.[0]?.message || prepareErr?.message || 'Failed to send verification code.';
+          setLoginError(prepareErrorMsg);
+          triggerErrorShake();
+        }
+      } else if (signInAttempt.status === 'needs_second_factor') {
+        // User has 2FA enabled - navigate to 2FA verification screen
+        console.log('[Login] needs_second_factor - navigating to 2FA verification');
+        navigation.navigate('TwoFactorVerification', { email: loginEmail });
       } else {
-        // Handle other statuses (e.g., needs_first_factor, needs_second_factor)
-        console.log('Sign in status:', signInAttempt.status);
-        setLoginError('Additional verification required. Please check your email.');
+        // Handle other statuses
+        console.log('[Login] Unexpected sign in status:', signInAttempt.status);
+        setLoginError('Unable to complete sign in. Please try again.');
         triggerErrorShake();
       }
     } catch (err: any) {

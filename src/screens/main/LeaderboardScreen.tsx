@@ -14,12 +14,29 @@ import { AnimationConfig, Spacing, BorderRadius, Shadows } from '../../theme/pre
 import { UnifiedHeader } from '../../components/UnifiedHeader';
 import { StaggeredItem } from '../../components/premium/StaggeredList';
 import { ShimmerLoader } from '../../components/premium/ShimmerLoader';
+import { ProductivityScoreRing } from '../../components/premium/ProductivityScoreRing';
+import { StatOrb } from '../../components/premium/StatOrb';
+import { LiquidGlassCard } from '../../components/premium/LiquidGlass';
 
 // Import useAuth FIRST, before userAppData
 import { useAuth } from '../../context/AuthContext';
 
 // Import userAppData functions using CommonJS require
 const { useUserAppData, getLeaderboardData } = require('../../utils/userAppData');
+
+// Helper function to format focus time (minutes to human-readable)
+const formatFocusTime = (minutes: number): string => {
+  const hours = minutes / 60;
+  if (hours < 24) {
+    return `${hours.toFixed(1)}h`;
+  } else if (hours < 1000) {
+    const days = Math.floor(hours / 24);
+    const remainingHours = Math.round(hours % 24);
+    return remainingHours > 0 ? `${days}d ${remainingHours}h` : `${days}d`;
+  } else {
+    return `${Math.round(hours).toLocaleString()}h`;
+  }
+};
 
 const LeaderboardScreen = () => {
   const { user } = useAuth(); // This should now work
@@ -36,11 +53,6 @@ const LeaderboardScreen = () => {
   const tabRowRef = useRef<View>(null);
   const [tabWidth, setTabWidth] = React.useState(0);
 
-  const [leaderboardData, setLeaderboardData] = useState<any>({
-    friendsLeaderboard: [],
-    globalLeaderboard: [],
-  });
-
   // Use demo data when database fails
   const { data: userData, refreshData } = useUserAppData();
 
@@ -51,11 +63,16 @@ const LeaderboardScreen = () => {
     refetch: refetchLeaderboard
   } = useConvexLeaderboardWithFriends();
 
-  // Extract current user stats and leaderboard data
-  const currentUserStats = userData?.leaderboard || userData?.stats;
+  // Extract current user stats from Convex leaderboard data (properly formatted with snake_case)
+  // Find the current user's entry in the leaderboard for their stats
+  const currentUserEntry = convexLeaderboard?.friendsLeaderboard?.find((entry: Leaderboard) => entry.is_current_user)
+    || convexLeaderboard?.globalLeaderboard?.find((entry: Leaderboard) => entry.is_current_user);
+  const currentUserStats = currentUserEntry || userData?.leaderboard || userData?.stats;
+
+  // Use Convex data directly - Friends tab shows only friends, Global shows everyone
   const currentLeaderboard = tab === 'Friends'
-    ? (leaderboardData.friendsLeaderboard || convexLeaderboard?.friendsLeaderboard || [])
-    : (leaderboardData.globalLeaderboard || convexLeaderboard?.globalLeaderboard || []);
+    ? (convexLeaderboard?.friendsLeaderboard || [])
+    : (convexLeaderboard?.globalLeaderboard || []);
 
   // General loading and error states
   const loading = leaderboardLoading;
@@ -69,6 +86,7 @@ const LeaderboardScreen = () => {
       id: entry.user_id || entry.id || `${tab.toLowerCase()}-${index}`,
       user_name: entry.display_name || 'Unknown User',
       avatar_url: entry.avatar_url,
+      subscription_tier: entry.subscription_tier || 'free',
       points: entry.points ?? 0,
       weekly_focus_time: entry.weekly_focus_time ?? 0,
       total_focus_time: entry.total_focus_time ?? 0,
@@ -76,17 +94,6 @@ const LeaderboardScreen = () => {
       is_current_user: entry.is_current_user ?? false,
     }));
   }, [currentLeaderboard, tab]);
-
-  useEffect(() => {
-    if (leaderboardError) {
-      console.log('Using demo leaderboard data due to database error');
-      // Use demo data from your comprehensive system
-      const demoData = getLeaderboardData(userData);
-      setLeaderboardData(demoData);
-    } else if (convexLeaderboard) {
-      setLeaderboardData(convexLeaderboard);
-    }
-  }, [convexLeaderboard, leaderboardError, userData]);
 
   // Calculate tasks completed this week
   const getTasksCompletedThisWeek = () => {
@@ -96,12 +103,32 @@ const LeaderboardScreen = () => {
     return userData.dailyTasksCompleted.reduce((sum: number, day: any) => sum + (day.count || 0), 0);
   };
 
-  // Calculate weekly goal percentage
+  // Calculate weekly goal percentage using Convex data (weekly_focus_time is already in minutes)
   const getWeeklyGoalPercentage = () => {
-    const weeklyGoal = userData?.leaderboard?.weekly_focus_goal || currentUserStats?.weekly_focus_goal || 10;
-    const currentHours = userData ? (userData.weeklyFocusTime / 60) : (currentUserStats?.weekly_focus_time || 0) / 60; // Convert minutes to hours
+    const weeklyGoal = userData?.onboarding?.weekly_focus_goal || userData?.onboarding?.weeklyFocusGoal || 10; // in hours
+    // Use Convex leaderboard data first (snake_case, in minutes), then fall back to userData
+    const weeklyFocusMinutes = currentUserStats?.weekly_focus_time ?? currentUserStats?.weeklyFocusTime ?? userData?.weeklyFocusTime ?? 0;
+    const currentHours = weeklyFocusMinutes / 60; // Convert minutes to hours
     const percentage = Math.min(100, Math.round((currentHours / weeklyGoal) * 100));
-    return { percentage, currentHours, weeklyGoal };
+    return { percentage, currentHours: Math.round(currentHours * 10) / 10, weeklyGoal };
+  };
+
+  // Get progress bar color based on percentage
+  const getProgressColor = (percentage: number): string => {
+    if (percentage >= 100) return '#F59E0B'; // Gold
+    if (percentage >= 75) return '#22C55E';  // Green
+    if (percentage >= 50) return '#06B6D4';  // Cyan
+    if (percentage >= 25) return '#3B82F6';  // Blue
+    return '#9CA3AF'; // Gray
+  };
+
+  // Get motivational message based on progress
+  const getMotivationalMessage = (percentage: number): string => {
+    if (percentage >= 100) return "Goal crushed! You're a focus champion!";
+    if (percentage >= 75) return "Almost there! Final push!";
+    if (percentage >= 50) return "Halfway! You're crushing it.";
+    if (percentage >= 25) return "Quarter way there! Building momentum.";
+    return "Every minute counts. Keep going!";
   };
 
   // Animate indicator when tab changes
@@ -158,12 +185,14 @@ const LeaderboardScreen = () => {
   const AnimatedLeaderboardEntry = ({ entry, index, theme }: { entry: Leaderboard; index: number; theme: any }) => {
     const rank = index + 1;
     const isTopThree = rank <= 3;
+    const isElite = entry.subscription_tier === 'elite';
     const { animatedStyle: pressStyle, onPressIn, onPressOut } = useButtonPressAnimation();
     const pulseStyle = usePulseAnimation(entry.is_current_user);
 
     // Count up animation for numbers
     const pointsCount = useCounterAnimation(entry.points || 0, 800);
-    const hoursCount = useCounterAnimation(entry.weekly_focus_time || 0, 800);
+    // Convert minutes to hours for display (data stored in minutes)
+    const hoursCount = useCounterAnimation((entry.weekly_focus_time || 0) / 60, 800);
     const streakCount = useCounterAnimation(entry.current_streak || 0, 800);
 
     // Rank change tracking and animation
@@ -245,6 +274,15 @@ const LeaderboardScreen = () => {
           entry.is_current_user && styles.currentUserEntry,
           entry.is_current_user && { backgroundColor: isDark ? 'rgba(76, 175, 80, 0.1)' : '#F1F8E9' },
           entry.is_current_user && pulseStyle,
+          // Elite member styling - subtle purple border and glow
+          isElite && !entry.is_current_user && {
+            borderWidth: 1.5,
+            borderColor: 'rgba(139, 92, 246, 0.4)',
+            shadowColor: '#8B5CF6',
+            shadowOpacity: 0.15,
+            shadowRadius: 8,
+            shadowOffset: { width: 0, height: 2 },
+          },
         ]}
       >
         {/* Background flash for rank changes */}
@@ -292,28 +330,40 @@ const LeaderboardScreen = () => {
         </View>
 
       <View style={styles.userInfo}>
-        {entry.avatar_url ? (
-          <Image source={{ uri: entry.avatar_url }} style={styles.avatar} />
-        ) : (
-          <View style={[
-            styles.avatar,
-            styles.defaultAvatar,
-            { backgroundColor: isDark ? 'rgba(76, 175, 80, 0.15)' : '#E8F5E9' }
-          ]}>
-            <Ionicons name="person-outline" size={20} color="#4CAF50" />
-          </View>
-        )}
+        {/* Avatar with Elite ring */}
+        <View style={[styles.avatarContainer, isElite && styles.eliteAvatarContainer]}>
+          {isElite && (
+            <View style={styles.eliteRing} />
+          )}
+          {entry.avatar_url ? (
+            <Image source={{ uri: entry.avatar_url }} style={[styles.avatar, isElite && styles.eliteAvatar]} />
+          ) : (
+            <View style={[
+              styles.avatar,
+              styles.defaultAvatar,
+              { backgroundColor: isDark ? 'rgba(76, 175, 80, 0.15)' : '#E8F5E9' },
+              isElite && styles.eliteAvatar,
+              isElite && { backgroundColor: isDark ? 'rgba(139, 92, 246, 0.15)' : 'rgba(139, 92, 246, 0.1)' }
+            ]}>
+              <Ionicons name="person-outline" size={isElite ? 16 : 20} color={isElite ? '#8B5CF6' : '#4CAF50'} />
+            </View>
+          )}
+        </View>
 
         <View style={styles.userDetails}>
-          <Text style={[
-            styles.userName,
-            { color: theme.primary },
-            entry.is_current_user && styles.currentUserText,
-            entry.is_current_user && { color: theme.accent }
-          ]}>
-            {entry.display_name || 'Unknown User'}
-          </Text>
-          <Text style={[styles.userLevel, { color: theme.accent }]}>Level {entry.level || 1}</Text>
+          {/* Name with Elite diamond icon */}
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            {isElite && <Ionicons name="diamond" size={12} color="#8B5CF6" style={{ marginRight: 4 }} />}
+            <Text style={[
+              styles.userName,
+              { color: isElite ? '#8B5CF6' : theme.primary },
+              entry.is_current_user && styles.currentUserText,
+              entry.is_current_user && { color: theme.accent }
+            ]}>
+              {entry.display_name || 'Unknown User'}
+            </Text>
+          </View>
+          <Text style={[styles.userLevel, { color: isElite ? '#8B5CF6' : theme.accent }]}>Level {entry.level || 1}</Text>
         </View>
       </View>
 
@@ -326,7 +376,7 @@ const LeaderboardScreen = () => {
 
         <View style={styles.statsContainer}>
           <Animated.Text style={[styles.hoursText, { color: '#4CAF50' }]}>
-            {Math.round(hoursCount.value)}h
+            {hoursCount.value.toFixed(1)}h
           </Animated.Text>
           <Text style={[styles.statsLabel, { color: theme.textSecondary || '#666' }]}>this week</Text>
         </View>
@@ -364,72 +414,111 @@ const LeaderboardScreen = () => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Personal Productivity Summary */}
+        {/* Personal Productivity Summary - Premium Redesign */}
         <View style={[styles.card, { backgroundColor: theme.card }]}>
-        <View style={styles.cardHeaderRow}>
-          <Ionicons name="person-circle-outline" size={24} color="#4CAF50" />
-          <Text style={[styles.sectionTitle, { color: theme.primary }]}>Personal Productivity</Text>
-        </View>
-        
-        {/* Main Stats */}
-        <View style={styles.productivityStats}>
-          <TouchableOpacity style={styles.productivityStatItem}>
-            <View style={styles.productivityStatRow}>
-              <Ionicons name="flame-outline" size={20} color="#4CAF50" />
-              <Text style={[styles.productivityStatLabel, { color: theme.primary }]}>Current Streak</Text>
+          <StaggeredItem index={0} delay="fast" direction="fade">
+            <View style={styles.cardHeaderRow}>
+              <Ionicons name="stats-chart" size={24} color="#4CAF50" />
+              <Text style={[styles.sectionTitle, { color: theme.primary, marginLeft: 8 }]}>Your Progress</Text>
             </View>
-            <Text style={[styles.productivityStatValue, { color: theme.primary }]}>{currentUserStats?.current_streak || 0} days</Text>
-          </TouchableOpacity>
+          </StaggeredItem>
 
-          <TouchableOpacity style={styles.productivityStatItem}>
-            <View style={styles.productivityStatRow}>
-              <Ionicons name="time-outline" size={20} color="#4CAF50" />
-              <Text style={[styles.productivityStatLabel, { color: theme.primary }]}>Focus Time</Text>
-            </View>
-            <Text style={[styles.productivityStatValue, { color: theme.primary }]}>
-              {((currentUserStats?.weekly_focus_time || 0) / 60).toFixed(1)} hours
-            </Text>
-          </TouchableOpacity>
+          {/* Productivity Score Ring */}
+          <StaggeredItem index={1} delay="fast" direction="up">
+            <ProductivityScoreRing
+              streak={currentUserStats?.current_streak || 0}
+              focusProgress={getWeeklyGoalPercentage().percentage}
+              tasksCompleted={getTasksCompletedThisWeek()}
+            />
+          </StaggeredItem>
 
-          <TouchableOpacity style={styles.productivityStatItem}>
-            <View style={styles.productivityStatRow}>
-              <Ionicons name="checkmark-circle-outline" size={20} color="#4CAF50" />
-              <Text style={[styles.productivityStatLabel, { color: theme.primary }]}>Tasks Completed</Text>
-            </View>
-            <Text style={[styles.productivityStatValue, { color: theme.primary }]}>{getTasksCompletedThisWeek()} this week</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Weekly Focus Goal */}
-        <View style={styles.weeklyGoalSection}>
-          <View style={styles.weeklyGoalHeader}>
-            <View style={styles.weeklyGoalIconText}>
-              <Ionicons name="locate-outline" size={24} color="#7B61FF" />
-              <Text style={[styles.weeklyGoalTitle, { color: theme.primary }]}>Weekly Focus Goal</Text>
-            </View>
-            <Text style={[styles.weeklyGoalProgress, { color: theme.primary }]}>
-              {Math.round((userData?.weeklyFocusTime || 0) / 60)}/{userData?.onboarding?.weekly_focus_goal || 10} hours
-            </Text>
-          </View>
-          
-          <View style={[
-            styles.goalProgressBar,
-            { backgroundColor: isDark ? 'rgba(76, 175, 80, 0.15)' : '#E8F5E9' }
-          ]}>
-            <Animated.View
-              entering={FadeIn.delay(400).duration(600)}
-              style={[
-                styles.goalProgressFill,
-                { width: `${getWeeklyGoalPercentage().percentage}%` }
-              ]}
+          {/* Stat Orbs Row */}
+          <View style={styles.statOrbsContainer}>
+            <StatOrb
+              type="streak"
+              value={currentUserStats?.current_streak || 0}
+              label="days"
+              sublabel={`best: ${currentUserStats?.longest_streak || currentUserStats?.current_streak || 0}`}
+              delay={200}
+            />
+            <StatOrb
+              type="focus"
+              value={Number(((currentUserStats?.weekly_focus_time || 0) / 60).toFixed(1))}
+              label="hours"
+              sublabel={`${getWeeklyGoalPercentage().percentage}% of goal`}
+              delay={280}
+            />
+            <StatOrb
+              type="tasks"
+              value={getTasksCompletedThisWeek()}
+              label="tasks"
+              sublabel="this week"
+              delay={360}
             />
           </View>
-          
-          <Text style={[styles.goalPercentageText, { color: theme.primary }]}>
-            You're {getWeeklyGoalPercentage().percentage}% of the way to your 10-hour weekly focus goal
-          </Text>
+
+          {/* Enhanced Weekly Focus Goal */}
+          <StaggeredItem index={5} delay="normal" direction="up">
+            <LiquidGlassCard
+              intensity="subtle"
+              showGlow={getWeeklyGoalPercentage().percentage >= 100}
+              style={styles.weeklyGoalCard}
+            >
+              <View style={styles.weeklyGoalHeader}>
+                <View style={styles.weeklyGoalIconText}>
+                  <Ionicons name="flag" size={20} color="#8B5CF6" />
+                  <Text style={[styles.weeklyGoalTitle, { color: theme.primary, marginLeft: 8 }]}>
+                    Weekly Goal
+                  </Text>
+                </View>
+                <Text style={[styles.weeklyGoalProgress, { color: theme.accent }]}>
+                  {getWeeklyGoalPercentage().currentHours}/{getWeeklyGoalPercentage().weeklyGoal}h
+                </Text>
+              </View>
+
+              {/* Progress bar with milestones */}
+              <View style={styles.progressBarContainer}>
+                <View style={[
+                  styles.goalProgressBar,
+                  { backgroundColor: isDark ? 'rgba(139, 92, 246, 0.15)' : 'rgba(139, 92, 246, 0.1)' }
+                ]}>
+                  <Animated.View
+                    entering={FadeIn.delay(500).duration(800)}
+                    style={[
+                      styles.goalProgressFill,
+                      {
+                        width: `${Math.min(getWeeklyGoalPercentage().percentage, 100)}%`,
+                        backgroundColor: getProgressColor(getWeeklyGoalPercentage().percentage),
+                      }
+                    ]}
+                  />
+                </View>
+                {/* Milestone markers */}
+                <View style={styles.milestonesRow}>
+                  {[25, 50, 75, 100].map((milestone) => (
+                    <View
+                      key={milestone}
+                      style={[
+                        styles.milestone,
+                        {
+                          left: `${milestone}%`,
+                          backgroundColor: getWeeklyGoalPercentage().percentage >= milestone
+                            ? getProgressColor(milestone)
+                            : isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)',
+                        },
+                      ]}
+                    />
+                  ))}
+                </View>
+              </View>
+
+              {/* Motivational message */}
+              <Text style={[styles.motivationalText, { color: theme.textSecondary }]}>
+                {getMotivationalMessage(getWeeklyGoalPercentage().percentage)}
+              </Text>
+            </LiquidGlassCard>
+          </StaggeredItem>
         </View>
-      </View>
 
       {/* Leaderboard Rankings */}
       <View style={[styles.card, { backgroundColor: theme.card }]}>
@@ -543,7 +632,9 @@ const LeaderboardScreen = () => {
 
         {currentActivity.length > 0 ? (
           <View style={styles.activityContainer}>
-            {currentActivity.map((activity: any, index: number) => (
+            {currentActivity.map((activity: any, index: number) => {
+              const isActivityElite = activity.subscription_tier === 'elite';
+              return (
               <View
                 key={activity.id || index}
                 style={[
@@ -555,31 +646,46 @@ const LeaderboardScreen = () => {
                   },
                 ]}
               >
-                {activity.avatar_url ? (
-                  <Image source={{ uri: activity.avatar_url }} style={styles.activityAvatar} />
-                ) : (
-                  <View style={[
-                    styles.activityAvatar,
-                    styles.activityAvatarFallback,
-                    { backgroundColor: isDark ? 'rgba(76, 175, 80, 0.18)' : 'rgba(76, 175, 80, 0.12)' }
-                  ]}>
-                    <Ionicons
-                      name={activity.is_current_user ? 'person-circle' : 'people-circle'}
-                      size={26}
-                      color="#4CAF50"
-                    />
-                  </View>
-                )}
+                {/* Avatar with Elite ring */}
+                <View style={[styles.activityAvatarContainer, isActivityElite && styles.eliteAvatarContainer]}>
+                  {isActivityElite && (
+                    <View style={styles.eliteRing} />
+                  )}
+                  {activity.avatar_url ? (
+                    <Image source={{ uri: activity.avatar_url }} style={[
+                      styles.activityAvatar,
+                      isActivityElite && styles.eliteAvatar
+                    ]} />
+                  ) : (
+                    <View style={[
+                      styles.activityAvatar,
+                      styles.activityAvatarFallback,
+                      { backgroundColor: isDark ? 'rgba(76, 175, 80, 0.18)' : 'rgba(76, 175, 80, 0.12)' },
+                      isActivityElite && styles.eliteAvatar,
+                      isActivityElite && { backgroundColor: isDark ? 'rgba(139, 92, 246, 0.18)' : 'rgba(139, 92, 246, 0.12)' }
+                    ]}>
+                      <Ionicons
+                        name={activity.is_current_user ? 'person-circle' : 'people-circle'}
+                        size={isActivityElite ? 18 : 26}
+                        color={isActivityElite ? '#8B5CF6' : '#4CAF50'}
+                      />
+                    </View>
+                  )}
+                </View>
                 <View style={styles.activityContent}>
                   <View style={styles.activityHeaderRow}>
-                    <Text
-                      style={[
-                        styles.activityUserName,
-                        { color: activity.is_current_user ? theme.accent : theme.primary },
-                      ]}
-                    >
-                      {activity.is_current_user ? 'You' : activity.user_name}
-                    </Text>
+                    {/* Name with Elite diamond icon */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      {isActivityElite && <Ionicons name="diamond" size={11} color="#8B5CF6" style={{ marginRight: 4 }} />}
+                      <Text
+                        style={[
+                          styles.activityUserName,
+                          { color: isActivityElite ? '#8B5CF6' : (activity.is_current_user ? theme.accent : theme.primary) },
+                        ]}
+                      >
+                        {activity.is_current_user ? 'You' : activity.user_name}
+                      </Text>
+                    </View>
                     <Text style={[styles.activityPoints, { color: theme.accent }]}>
                       {activity.points?.toLocaleString?.() || activity.points || 0} pts
                     </Text>
@@ -593,7 +699,7 @@ const LeaderboardScreen = () => {
                     >
                       <Ionicons name="time-outline" size={14} color="#4CAF50" style={{ marginRight: 4 }} />
                       <Text style={[styles.activityTagText, { color: theme.text }]}>
-                        {activity.weekly_focus_time || 0}h this week
+                        {((activity.weekly_focus_time || 0) / 60).toFixed(1)}h this week
                       </Text>
                     </View>
                     <View
@@ -615,13 +721,14 @@ const LeaderboardScreen = () => {
                     >
                       <Ionicons name="hourglass-outline" size={14} color="#42A5F5" style={{ marginRight: 4 }} />
                       <Text style={[styles.activityTagText, { color: theme.text }]}>
-                        {activity.total_focus_time || 0}h total
+                        {formatFocusTime(activity.total_focus_time || 0)} total
                       </Text>
                     </View>
                   </View>
                 </View>
               </View>
-            ))}
+              );
+            })}
           </View>
         ) : (
           <View style={styles.emptyLeaderboard}>
@@ -747,11 +854,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   weeklyGoalTitle: {
-    fontWeight: 'bold',
-    fontSize: 16,
+    fontWeight: '600',
+    fontSize: 14,
   },
   weeklyGoalProgress: {
-    fontSize: 12,
+    fontSize: 14,
+    fontWeight: '600',
   },
   goalProgressBar: {
     borderRadius: 8,
@@ -765,6 +873,42 @@ const styles = StyleSheet.create({
   },
   goalPercentageText: {
     fontSize: 12,
+  },
+  // New premium styles for redesigned productivity section
+  statOrbsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginVertical: 16,
+    paddingHorizontal: 8,
+  },
+  weeklyGoalCard: {
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  progressBarContainer: {
+    position: 'relative',
+    marginVertical: 12,
+  },
+  milestonesRow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 20,
+  },
+  milestone: {
+    position: 'absolute',
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    top: 8,
+    marginLeft: -2,
+  },
+  motivationalText: {
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 4,
+    fontStyle: 'italic',
   },
   tabRow: {
     flexDirection: 'row',
@@ -890,6 +1034,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  avatarContainer: {
+    width: 40,
+    height: 40,
+    marginRight: 12,
+    position: 'relative',
+  },
+  eliteAvatarContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  eliteRing: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#8B5CF6',
+  },
+  eliteAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    marginRight: 0,
+  },
   userDetails: {
     flex: 1,
   },
@@ -970,6 +1138,12 @@ const styles = StyleSheet.create({
   activityAvatarFallback: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  activityAvatarContainer: {
+    width: 40,
+    height: 40,
+    marginRight: 12,
+    position: 'relative',
   },
   activityHeaderRow: {
     flexDirection: 'row',

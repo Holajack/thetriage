@@ -16,6 +16,13 @@ import { Typography, Spacing, PremiumColors } from '../../theme/premiumTheme';
 import { glassStyles } from '../../components/premium/LiquidGlass';
 import { useCounterAnimation, useFocusAnimationKey } from '../../utils/animationUtils';
 
+interface AchievementProgress {
+  percent: number;
+  current: number;
+  required: number;
+  unit: string;
+}
+
 interface Achievement {
   id: string;
   title: string;
@@ -24,7 +31,7 @@ interface Achievement {
   iconFamily: 'Ionicons';
   category: string;
   requiredValue: number;
-  currentValue?: number;
+  progress?: AchievementProgress;
   earned: boolean;
   earnedAt?: string;
   color: string;
@@ -43,8 +50,11 @@ const AchievementsScreen = () => {
   const focusKey = useFocusAnimationKey();
 
   // Real user stats from Convex leaderboard
+  // Note: total_focus_time is in MINUTES from Convex
+  const totalFocusMinutes = leaderboard?.total_focus_time ?? 0;
   const userStats = {
-    totalFocusTime: Math.round((leaderboard?.total_focus_time ?? 0) / 60), // hours
+    totalFocusTime: totalFocusMinutes / 60, // hours (keep as decimal for accurate progress)
+    totalFocusMinutes: totalFocusMinutes, // raw minutes for display
     totalSessions: leaderboard?.total_sessions ?? 0,
     currentStreak: leaderboard?.current_streak ?? 0,
     longestStreak: leaderboard?.longest_streak ?? 0,
@@ -251,28 +261,45 @@ const AchievementsScreen = () => {
   ];
 
   // Calculate progress for each achievement
-  const getAchievementProgress = (achievement: Achievement): number => {
+  const getAchievementProgress = (achievement: Achievement): { percent: number; current: number; required: number; unit: string } => {
     let currentValue = 0;
+    let unit = '';
 
     switch (achievement.category) {
       case 'Focus Time':
-        currentValue = userStats.totalFocusTime;
-        break;
+        // Use minutes for more precise display
+        const requiredMinutes = achievement.requiredValue * 60;
+        currentValue = Math.min(userStats.totalFocusMinutes, requiredMinutes);
+        return {
+          percent: Math.min((userStats.totalFocusMinutes / requiredMinutes) * 100, 100),
+          current: userStats.totalFocusMinutes,
+          required: requiredMinutes,
+          unit: 'minutes',
+        };
       case 'Streaks':
         currentValue = Math.max(userStats.currentStreak, userStats.longestStreak);
+        unit = 'days';
         break;
       case 'Tasks':
         currentValue = userStats.tasksCompleted;
+        unit = 'tasks';
         break;
       case 'Social':
         currentValue = userStats.friendsCount;
+        unit = 'friends';
         break;
       case 'Levels':
         currentValue = userStats.level;
+        unit = '';
         break;
     }
 
-    return Math.min((currentValue / achievement.requiredValue) * 100, 100);
+    return {
+      percent: Math.min((currentValue / achievement.requiredValue) * 100, 100),
+      current: currentValue,
+      required: achievement.requiredValue,
+      unit,
+    };
   };
 
   // Check if achievement is earned
@@ -289,7 +316,7 @@ const AchievementsScreen = () => {
     acc[achievement.category].push({
       ...achievement,
       earned,
-      currentValue: getAchievementProgress(achievement),
+      progress: getAchievementProgress(achievement),
     });
     return acc;
   }, {} as Record<string, Achievement[]>);
@@ -481,7 +508,7 @@ const AchievementsScreen = () => {
                     icon={renderIcon(achievement)}
                     unlocked={achievement.earned}
                     rarity={achievement.rarity}
-                    progress={achievement.earned ? 1 : (achievement.currentValue || 0) / 100}
+                    progress={achievement.earned ? 1 : (achievement.progress?.percent || 0) / 100}
                     size="small"
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -535,14 +562,14 @@ const AchievementsScreen = () => {
                         style={[
                           styles.modalProgressFill,
                           {
-                            width: `${selectedAchievement.currentValue || 0}%`,
+                            width: `${selectedAchievement.progress?.percent || 0}%`,
                             backgroundColor: selectedAchievement.color,
                           },
                         ]}
                       />
                     </View>
                     <Text style={[styles.progressText, { color: theme.textSecondary }]}>
-                      Progress: {Math.round(selectedAchievement.currentValue || 0)}%
+                      {selectedAchievement.progress?.current || 0}/{selectedAchievement.progress?.required || 0} {selectedAchievement.progress?.unit || ''} ({Math.round(selectedAchievement.progress?.percent || 0)}%)
                     </Text>
                   </View>
                 )}

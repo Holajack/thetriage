@@ -1,0 +1,225 @@
+# HikeWise Discovery Flow: Data Persistence
+# Purpose: Verify data saves correctly and persists across app restarts
+# Run: maestro test maestro/flows/discovery/data-persistence.yaml
+
+appId: com.hikewise.app
+name: Data Persistence Check
+tags:
+  - discovery
+  - data
+  - persistence
+
+---
+- launchApp:
+    clearState: true
+    env:
+      EXPO_PUBLIC_TEST_MODE: "true"
+
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 15000
+
+# ==========================================
+# TEST 1: Profile Data Persistence
+# ==========================================
+
+# Navigate to Edit Profile
+- tapOn: "Profile"
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+
+- tapOn:
+    text: "Edit Profile"
+    optional: true
+- extendedWaitUntil:
+    visible: "Edit"
+    timeout: 5000
+    optional: true
+
+# Note the current bio text
+- takeScreenshot: "persistence/step1-edit-profile-before"
+
+# Modify bio with unique text
+- tapOn:
+    id: "bio-input"
+    optional: true
+- inputText: "Test bio persistence - ${timestamp}"
+- takeScreenshot: "persistence/step2-bio-modified"
+
+# Save changes
+- tapOn:
+    text: "Save"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- takeScreenshot: "persistence/step3-saved"
+
+# Navigate away
+- pressKey: back
+- pressKey: back
+- tapOn: "Home"
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 5000
+
+# Force close and reopen app
+- stopApp
+- launchApp:
+    env:
+      EXPO_PUBLIC_TEST_MODE: "true"
+
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 15000
+
+# Navigate back to profile and verify
+- tapOn: "Profile"
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+- takeScreenshot: "persistence/step4-profile-after-restart"
+
+# Check bio contains our text
+- tapOn:
+    text: "Edit Profile"
+    optional: true
+- extendedWaitUntil:
+    visible: "Edit"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "persistence/step5-verify-bio-persisted"
+
+# ==========================================
+# TEST 2: Settings Persistence
+# ==========================================
+
+- pressKey: back
+- pressKey: back
+- tapOn: "Home"
+
+# Go to settings
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 5000
+
+# Go to Sound settings
+- tapOn:
+    text: "Sound"
+    optional: true
+- extendedWaitUntil:
+    visible: "Sound"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "persistence/step6-sound-settings-before"
+
+# Change sound preference
+- tapOn:
+    text: "Ocean"
+    optional: true
+- tapOn:
+    text: "Forest"
+    optional: true
+- takeScreenshot: "persistence/step7-sound-changed"
+
+# Navigate away
+- pressKey: back
+- pressKey: back
+- tapOn: "Home"
+
+# Force close and reopen
+- stopApp
+- launchApp:
+    env:
+      EXPO_PUBLIC_TEST_MODE: "true"
+
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 15000
+
+# Verify sound setting persisted
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 5000
+
+- tapOn:
+    text: "Sound"
+    optional: true
+- extendedWaitUntil:
+    visible: "Sound"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "persistence/step8-verify-sound-persisted"
+
+# ==========================================
+# TEST 3: Focus Session Data
+# ==========================================
+
+- pressKey: back
+- pressKey: back
+- tapOn: "Home"
+
+# Start a quick session
+- tapOn:
+    text: "Start Session"
+    optional: true
+- tapOn:
+    text: "Start"
+    optional: true
+- extendedWaitUntil:
+    visible: "Focus"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "persistence/step9-session-started"
+
+# Wait a few seconds
+- wait: 3000
+
+# End session
+- tapOn:
+    text: "End"
+    optional: true
+- tapOn:
+    text: "End Session"
+    optional: true
+- extendedWaitUntil:
+    visible: "Complete"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "persistence/step10-session-complete"
+
+# Note session count
+- tapOn: "Home"
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 5000
+- takeScreenshot: "persistence/step11-home-after-session"
+
+# Force close and reopen
+- stopApp
+- launchApp:
+    env:
+      EXPO_PUBLIC_TEST_MODE: "true"
+
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 15000
+- takeScreenshot: "persistence/step12-verify-session-persisted"
+
+# Check analytics for the session
+- tapOn: "Analytics"
+- extendedWaitUntil:
+    visible: "Analytics"
+    timeout: 5000
+- takeScreenshot: "persistence/step13-analytics-verify"
+
+# ==========================================
+# FINAL CHECK
+# ==========================================
+
+- tapOn: "Home"
+- assertVisible: "Home"
+- takeScreenshot: "persistence/data-persistence-complete"

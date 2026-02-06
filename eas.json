@@ -32,7 +32,10 @@
     "production": {
       "ios": {
         "ascAppId": "6756673693",
-        "appleTeamId": "7YMK4D784T"
+        "appleTeamId": "7YMK4D784T",
+        "ascApiKeyPath": "~/credentials/AuthKey_HKFQXFLWA5.p8",
+        "ascApiKeyIssuerId": "${ASC_ISSUER_ID}",
+        "ascApiKeyId": "${ASC_KEY_ID}"
       },
       "android": {
         "serviceAccountKeyPath": "./google-service-account.json",
@@ -44,7 +47,10 @@
     "internal": {
       "ios": {
         "ascAppId": "6756673693",
-        "appleTeamId": "7YMK4D784T"
+        "appleTeamId": "7YMK4D784T",
+        "ascApiKeyPath": "~/credentials/AuthKey_HKFQXFLWA5.p8",
+        "ascApiKeyIssuerId": "${ASC_ISSUER_ID}",
+        "ascApiKeyId": "${ASC_KEY_ID}"
       },
       "android": {
         "serviceAccountKeyPath": "./google-service-account.json",
@@ -55,7 +61,10 @@
     "beta": {
       "ios": {
         "ascAppId": "6756673693",
-        "appleTeamId": "7YMK4D784T"
+        "appleTeamId": "7YMK4D784T",
+        "ascApiKeyPath": "~/credentials/AuthKey_HKFQXFLWA5.p8",
+        "ascApiKeyIssuerId": "${ASC_ISSUER_ID}",
+        "ascApiKeyId": "${ASC_KEY_ID}"
       },
       "android": {
         "serviceAccountKeyPath": "./google-service-account.json",

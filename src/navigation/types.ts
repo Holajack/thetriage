@@ -6,6 +6,8 @@ export type AuthStackParamList = {
   ForgotPassword: undefined;
   ResetPassword: { access_token?: string; refresh_token?: string } | undefined;
   EmailVerification: { email: string };
+  SignInVerification: { email: string };
+  TwoFactorVerification: { email: string };
 };
 
 export type OnboardingStackParamList = {
@@ -37,13 +39,22 @@ export type RootStackParamList = {
       plannedDuration: number;
     };
   } | undefined;
-  StudySessionScreen: { 
+  StudySessionScreen: {
     task?: Task;
-    group?: boolean; 
+    group?: boolean;
     room?: any;
     autoStart?: boolean;
     selectedTask?: any;
     manualSelection?: boolean;
+    selectionMode?: 'auto' | 'manual';
+    focusMode?: 'basecamp' | 'summit';
+    tasks?: any[];
+    duration?: number;
+    breakDuration?: number;
+    autoProgress?: boolean;
+    currentTaskIndex?: number;
+    completedTasksData?: any[];
+    sessionType?: 'deep_work' | 'balanced' | 'sprint';
   } | undefined;
   SessionReportScreen: {
     sessionDuration: number;

@@ -1,0 +1,107 @@
+{
+  "name": "HikeWise Discovery",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "discovery-trigger",
+      "name": "Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "command": "cd /Users/jackenholland/AppDev/thetriage && python execution/discovery_agent.py --action discover"
+      },
+      "id": "run-discovery",
+      "name": "Run Discovery",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "command": "cd /Users/jackenholland/AppDev/thetriage && python execution/issue_classifier.py --action classify --input .tmp/discovery/issue_report.json"
+      },
+      "id": "classify-issues",
+      "name": "Classify Issues",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        650,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "command": "cd /Users/jackenholland/AppDev/thetriage && python execution/kanban_state_manager.py --action import --from-file .tmp/swarm/classified_issues.json"
+      },
+      "id": "update-kanban",
+      "name": "Update Kanban",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        850,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Every 6 Hours": {
+      "main": [
+        [
+          {
+            "node": "Run Discovery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Discovery": {
+      "main": [
+        [
+          {
+            "node": "Classify Issues",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Issues": {
+      "main": [
+        [
+          {
+            "node": "Update Kanban",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    "hikewise",
+    "discovery",
+    "automation"
+  ]
+}

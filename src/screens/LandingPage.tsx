@@ -37,17 +37,19 @@ const HikeWiseLogo = ({ style }: { style?: any }) => (
 
 const LandingPage: React.FC = () => {
   const navigation = useNavigation<LandingNavigationProp>();
-  const { setHasSeenLanding, isAuthenticated, hasCompletedOnboarding, isRecentLogin } = useAuth();
+  const { setHasSeenLanding, isAuthenticated, hasCompletedOnboarding, isRecentLogin, hasSeenSplashAnimation, setHasSeenSplashAnimation } = useAuth();
   const { isSignedIn, signOut } = useClerkAuth();
   const { user: clerkUser } = useUser();
   const { theme } = useTheme();
   const [signingOut, setSigningOut] = useState(false);
-  const logoOpacity = useRef(new Animated.Value(0)).current;
-  const logoScale = useRef(new Animated.Value(0.8)).current;
-  const titleOpacity = useRef(new Animated.Value(0)).current;
-  const taglineOpacity = useRef(new Animated.Value(0)).current;
-  const buttonOpacity = useRef(new Animated.Value(0)).current;
-  const buttonScale = useRef(new Animated.Value(0.9)).current;
+
+  // If user has seen splash animation before, start with final animation values
+  const logoOpacity = useRef(new Animated.Value(hasSeenSplashAnimation ? 1 : 0)).current;
+  const logoScale = useRef(new Animated.Value(hasSeenSplashAnimation ? 1 : 0.8)).current;
+  const titleOpacity = useRef(new Animated.Value(hasSeenSplashAnimation ? 1 : 0)).current;
+  const taglineOpacity = useRef(new Animated.Value(hasSeenSplashAnimation ? 1 : 0)).current;
+  const buttonOpacity = useRef(new Animated.Value(hasSeenSplashAnimation ? 1 : 0)).current;
+  const buttonScale = useRef(new Animated.Value(hasSeenSplashAnimation ? 1 : 0.9)).current;
 
   // Log Clerk auth state for debugging
   useEffect(() => {
@@ -102,6 +104,14 @@ const LandingPage: React.FC = () => {
   };
 
   useEffect(() => {
+    // Skip animation if user has already seen it
+    if (hasSeenSplashAnimation) {
+      console.log('LandingPage: Skipping splash animation (already seen)');
+      return;
+    }
+
+    console.log('LandingPage: Playing splash animation for first time');
+
     const animationSequence = Animated.sequence([
       // Logo appears
       Animated.parallel([
@@ -145,8 +155,11 @@ const LandingPage: React.FC = () => {
       ]),
     ]);
 
-    animationSequence.start();
-  }, []);
+    animationSequence.start(() => {
+      // Mark animation as seen once it completes
+      setHasSeenSplashAnimation(true);
+    });
+  }, [hasSeenSplashAnimation]);
 
   const handleGetStarted = () => {
     // Add a small animation before navigation

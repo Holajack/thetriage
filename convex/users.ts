@@ -179,6 +179,46 @@ export const deleteUser = mutation({
   },
 });
 
+// --- Presence Tracking ---
+
+export const updatePresence = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getCurrentUser(ctx);
+    await ctx.db.patch(user._id, {
+      lastSeen: Date.now(),
+      isOnline: true,
+    });
+  },
+});
+
+export const setOffline = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getCurrentUserOrNull(ctx);
+    if (user) {
+      await ctx.db.patch(user._id, { isOnline: false });
+    }
+  },
+});
+
+export const getUserPresence = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) return null;
+
+    // Consider user offline if lastSeen is more than 2 minutes ago
+    const twoMinutesAgo = Date.now() - 2 * 60 * 1000;
+    const isOnline = user.isOnline && (user.lastSeen ?? 0) > twoMinutesAgo;
+
+    return {
+      isOnline,
+      lastSeen: user.lastSeen,
+    };
+  },
+});
+
 // --- User Search ---
 
 export const searchUsers = query({

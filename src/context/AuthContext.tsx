@@ -17,6 +17,8 @@ interface AuthContextType {
   isInitialLoading: boolean;
   hasSeenLanding: boolean;
   setHasSeenLanding: (seen: boolean) => Promise<void>;
+  hasSeenSplashAnimation: boolean;
+  setHasSeenSplashAnimation: (seen: boolean) => Promise<void>;
   clearJustLoggedIn: () => void;
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
   signUp: (email: string, password: string, userData: any) => Promise<{ error?: string }>;
@@ -33,8 +35,81 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // Stable empty args object to prevent useQuery re-subscriptions
 const EMPTY_ARGS = {} as Record<string, never>;
 
+// TEST_MODE bypass for Maestro E2E testing
+// When EXPO_PUBLIC_TEST_MODE=true, bypasses Clerk auth and uses mock admin user
+const isTestMode = process.env.EXPO_PUBLIC_TEST_MODE === 'true';
+
+// Mock admin user for test mode (matches seeded admin from Convex)
+const TEST_MODE_USER = {
+  id: 'test-admin-user',
+  email: 'admin@hikewise.test',
+  username: 'test_admin',
+  full_name: 'Test Admin',
+  first_name: 'Test',
+  last_name: 'Admin',
+  avatar_url: null,
+  bio: 'Automated test admin account',
+  university: 'Test University',
+  major: 'Computer Science',
+  location: 'Test City',
+  classes: ['CS101', 'CS201'],
+  website: null,
+  time_zone: 'America/Chicago',
+  status: 'active',
+  sound_preference: 'nature',
+  weekly_focus_goal: 600,
+  focus_duration: 25,
+  break_duration: 5,
+  subscription_tier: 'elite', // Full access for testing
+  trail_buddy_type: 'owl',
+  trail_buddy_name: 'Testy',
+  flint_currency: 10000,
+  first_session_bonus_claimed: true,
+};
+
+const TEST_MODE_ONBOARDING = {
+  id: 'test-onboarding',
+  user_id: 'test-admin-user',
+  is_onboarding_complete: true,
+  weekly_focus_goal: 600,
+  welcome_completed: true,
+  goals_set: true,
+  first_session_completed: true,
+  profile_customized: true,
+  bio: 'Test admin account',
+  allow_direct_messages: true,
+  avatar_url: null,
+  focus_method: 'pomodoro',
+  education_level: 'university',
+  university: 'Test University',
+  major: 'Computer Science',
+  location: 'Test City',
+  timezone: 'America/Chicago',
+  completed_at: new Date().toISOString(),
+};
+
+const TEST_MODE_LEADERBOARD = {
+  id: 'test-leaderboard',
+  user_id: 'test-admin-user',
+  total_focus_time: 36000,
+  weekly_focus_time: 3600,
+  monthly_focus_time: 14400,
+  level: 10,
+  points: 5000,
+  current_streak: 7,
+  longest_streak: 30,
+  sessions_completed: 100,
+  total_sessions: 100,
+  achievements_earned: 25,
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Clerk auth state
+  // Log test mode status on mount (only in development)
+  if (isTestMode && __DEV__) {
+    console.log('[AuthContext] TEST_MODE enabled - using mock admin user for Maestro testing');
+  }
+
+  // Clerk auth state (skipped in test mode)
   const { isSignedIn, isLoaded: clerkLoaded, signOut: clerkSignOut } = useClerkAuth();
 
   // Convex queries (reactive, auto-updating) — skip when not signed in
@@ -50,78 +125,97 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Local state
   const [justLoggedIn, setJustLoggedIn] = useState(false);
   const [hasSeenLanding, setHasSeenLandingState] = useState(false);
+  const [hasSeenSplashAnimation, setHasSeenSplashAnimationState] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
 
-  // Derived authentication state
-  const isAuthenticated = isSignedIn ?? false;
+  // Derived authentication state (always true in test mode)
+  const isAuthenticated = isTestMode ? true : (isSignedIn ?? false);
 
   // Map Convex user to match legacy interface (memoized to prevent cascading re-renders)
-  const user = useMemo(() => convexUser ? {
-    id: convexUser._id,
-    email: convexUser.email,
-    username: convexUser.username,
-    full_name: convexUser.fullName,
-    first_name: convexUser.firstName,
-    last_name: convexUser.lastName,
-    avatar_url: convexUser.avatarUrl,
-    bio: convexUser.bio,
-    university: convexUser.university,
-    major: convexUser.major,
-    location: convexUser.location,
-    classes: convexUser.classes,
-    website: convexUser.website,
-    time_zone: convexUser.timeZone,
-    status: convexUser.status,
-    sound_preference: convexUser.soundPreference,
-    weekly_focus_goal: convexUser.weeklyFocusGoal,
-    focus_duration: convexUser.focusDuration,
-    break_duration: convexUser.breakDuration,
-    subscription_tier: convexUser.subscriptionTier,
-    trail_buddy_type: convexUser.trailBuddyType,
-    trail_buddy_name: convexUser.trailBuddyName,
-    flint_currency: convexUser.flintCurrency,
-    first_session_bonus_claimed: convexUser.firstSessionBonusClaimed,
-  } : null, [convexUser]);
+  // In test mode, use mock admin user data
+  const user = useMemo(() => {
+    if (isTestMode) {
+      return TEST_MODE_USER;
+    }
+    return convexUser ? {
+      id: convexUser._id,
+      email: convexUser.email,
+      username: convexUser.username,
+      full_name: convexUser.fullName,
+      first_name: convexUser.firstName,
+      last_name: convexUser.lastName,
+      avatar_url: convexUser.avatarUrl,
+      bio: convexUser.bio,
+      university: convexUser.university,
+      major: convexUser.major,
+      location: convexUser.location,
+      classes: convexUser.classes,
+      website: convexUser.website,
+      time_zone: convexUser.timeZone,
+      status: convexUser.status,
+      sound_preference: convexUser.soundPreference,
+      weekly_focus_goal: convexUser.weeklyFocusGoal,
+      focus_duration: convexUser.focusDuration,
+      break_duration: convexUser.breakDuration,
+      subscription_tier: convexUser.subscriptionTier,
+      trail_buddy_type: convexUser.trailBuddyType,
+      trail_buddy_name: convexUser.trailBuddyName,
+      flint_currency: convexUser.flintCurrency,
+      first_session_bonus_claimed: convexUser.firstSessionBonusClaimed,
+    } : null;
+  }, [convexUser]);
 
   // Map Convex onboarding to match legacy interface (memoized)
-  const onboarding = useMemo(() => convexOnboarding ? {
-    id: convexOnboarding._id,
-    user_id: convexOnboarding.userId,
-    is_onboarding_complete: convexOnboarding.isOnboardingComplete,
-    weekly_focus_goal: convexOnboarding.weeklyFocusGoal,
-    welcome_completed: convexOnboarding.welcomeCompleted,
-    goals_set: convexOnboarding.goalsSet,
-    first_session_completed: convexOnboarding.firstSessionCompleted,
-    profile_customized: convexOnboarding.profileCustomized,
-    bio: convexOnboarding.bio,
-    allow_direct_messages: convexOnboarding.allowDirectMessages,
-    avatar_url: convexOnboarding.avatarUrl,
-    focus_method: convexOnboarding.focusMethod,
-    education_level: convexOnboarding.educationLevel,
-    university: convexOnboarding.university,
-    major: convexOnboarding.major,
-    location: convexOnboarding.location,
-    timezone: convexOnboarding.timezone,
-    completed_at: convexOnboarding.completedAt,
-  } : null, [convexOnboarding]);
+  // In test mode, use mock onboarding data (completed)
+  const onboarding = useMemo(() => {
+    if (isTestMode) {
+      return TEST_MODE_ONBOARDING;
+    }
+    return convexOnboarding ? {
+      id: convexOnboarding._id,
+      user_id: convexOnboarding.userId,
+      is_onboarding_complete: convexOnboarding.isOnboardingComplete,
+      weekly_focus_goal: convexOnboarding.weeklyFocusGoal,
+      welcome_completed: convexOnboarding.welcomeCompleted,
+      goals_set: convexOnboarding.goalsSet,
+      first_session_completed: convexOnboarding.firstSessionCompleted,
+      profile_customized: convexOnboarding.profileCustomized,
+      bio: convexOnboarding.bio,
+      allow_direct_messages: convexOnboarding.allowDirectMessages,
+      avatar_url: convexOnboarding.avatarUrl,
+      focus_method: convexOnboarding.focusMethod,
+      education_level: convexOnboarding.educationLevel,
+      university: convexOnboarding.university,
+      major: convexOnboarding.major,
+      location: convexOnboarding.location,
+      timezone: convexOnboarding.timezone,
+      completed_at: convexOnboarding.completedAt,
+    } : null;
+  }, [convexOnboarding]);
 
   // Map Convex leaderboard to match legacy interface (memoized)
-  const leaderboard = useMemo(() => convexLeaderboard ? {
-    id: convexLeaderboard._id,
-    user_id: convexLeaderboard.userId,
-    total_focus_time: convexLeaderboard.totalFocusTime,
-    weekly_focus_time: convexLeaderboard.weeklyFocusTime,
-    monthly_focus_time: convexLeaderboard.monthlyFocusTime,
-    level: convexLeaderboard.level,
-    points: convexLeaderboard.points,
-    current_streak: convexLeaderboard.currentStreak,
-    longest_streak: convexLeaderboard.longestStreak,
-    sessions_completed: convexLeaderboard.sessionsCompleted,
-    total_sessions: convexLeaderboard.totalSessions,
-    achievements_earned: convexLeaderboard.achievementsEarned,
-  } : null, [convexLeaderboard]);
+  // In test mode, use mock leaderboard data
+  const leaderboard = useMemo(() => {
+    if (isTestMode) {
+      return TEST_MODE_LEADERBOARD;
+    }
+    return convexLeaderboard ? {
+      id: convexLeaderboard._id,
+      user_id: convexLeaderboard.userId,
+      total_focus_time: convexLeaderboard.totalFocusTime,
+      weekly_focus_time: convexLeaderboard.weeklyFocusTime,
+      monthly_focus_time: convexLeaderboard.monthlyFocusTime,
+      level: convexLeaderboard.level,
+      points: convexLeaderboard.points,
+      current_streak: convexLeaderboard.currentStreak,
+      longest_streak: convexLeaderboard.longestStreak,
+      sessions_completed: convexLeaderboard.sessionsCompleted,
+      total_sessions: convexLeaderboard.totalSessions,
+      achievements_earned: convexLeaderboard.achievementsEarned,
+    } : null;
+  }, [convexLeaderboard]);
 
   // Landing page state management (stable reference)
   const setHasSeenLanding = useCallback(async (seen: boolean) => {
@@ -131,6 +225,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Failed to update hasSeenLanding in AsyncStorage:', error);
       setHasSeenLandingState(seen);
+    }
+  }, []);
+
+  // Splash animation state management (stable reference)
+  const setHasSeenSplashAnimation = useCallback(async (seen: boolean) => {
+    try {
+      await AsyncStorage.setItem('hasSeenSplashAnimation', JSON.stringify(seen));
+      setHasSeenSplashAnimationState(seen);
+    } catch (error) {
+      console.error('Failed to update hasSeenSplashAnimation in AsyncStorage:', error);
+      setHasSeenSplashAnimationState(seen);
     }
   }, []);
 
@@ -172,6 +277,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const loadHasSeenSplashAnimation = async () => {
+    try {
+      const stored = await AsyncStorage.getItem('hasSeenSplashAnimation');
+      if (stored !== null) {
+        setHasSeenSplashAnimationState(JSON.parse(stored));
+      }
+    } catch (error) {
+      console.error('Failed to load hasSeenSplashAnimation from AsyncStorage:', error);
+    }
+  };
+
   // Sign in function - now a no-op since auth screens use Clerk directly
   const signIn = async (email: string, password: string): Promise<{ error?: string }> => {
     console.warn('AuthContext.signIn is deprecated - auth screens should use Clerk directly');
@@ -185,7 +301,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Sign out (stable reference)
+  // In test mode, sign out is a no-op
   const signOut = useCallback(async () => {
+    if (isTestMode) {
+      console.log('[TEST_MODE] Sign out skipped - maintaining test session');
+      return;
+    }
     try {
       await clerkSignOut();
       setJustLoggedIn(false);
@@ -295,7 +416,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const hasScheduledGoals = useRef(false);
 
   // Initialize user data when authenticated
+  // Skip in test mode - using mock data
   useEffect(() => {
+    if (isTestMode) {
+      // In test mode, skip Convex initialization
+      return;
+    }
+
     const initializeUser = async () => {
       if (!isSignedIn || !clerkLoaded) {
         // Reset flags on sign out so re-login works
@@ -336,7 +463,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Update hasCompletedOnboarding when onboarding data changes
   // Guard with value comparison to prevent unnecessary state updates
+  // In test mode, onboarding is always complete
   useEffect(() => {
+    if (isTestMode) {
+      setHasCompletedOnboarding(true);
+      return;
+    }
     const newValue = convexOnboarding?.isOnboardingComplete || false;
     setHasCompletedOnboarding(prev => {
       if (prev === newValue) return prev; // No change, skip update
@@ -348,6 +480,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const initialize = async () => {
       await loadHasSeenLanding();
+      await loadHasSeenSplashAnimation();
       await checkNetworkConnectivity();
       setIsInitializing(false);
     };
@@ -372,7 +505,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => clearInterval(interval);
   }, []);
 
-  const isInitialLoading = isInitializing || !clerkLoaded;
+  // In test mode, skip waiting for Clerk to load
+  const isInitialLoading = isTestMode ? isInitializing : (isInitializing || !clerkLoaded);
 
   const value = useMemo(() => ({
     isAuthenticated,
@@ -385,6 +519,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isInitialLoading,
     hasSeenLanding,
     setHasSeenLanding,
+    hasSeenSplashAnimation,
+    setHasSeenSplashAnimation,
     clearJustLoggedIn,
     signIn,
     signUp,
@@ -403,12 +539,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     justLoggedIn,
     isInitialLoading,
     hasSeenLanding,
+    hasSeenSplashAnimation,
     clearJustLoggedIn,
     signOut,
     isRecentLogin,
     setLastLoginTime,
     isOffline,
     setHasSeenLanding,
+    setHasSeenSplashAnimation,
     refreshUserData,
     // signIn, signUp, updateOnboarding are inline but rarely change
   ]);

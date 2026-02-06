@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
@@ -12,6 +12,8 @@ import { useButtonPressAnimation, useCounterAnimation, triggerHaptic, useFocusAn
 import { ShimmerLoader, SkeletonCard } from '../../components/premium/ShimmerLoader';
 import { AnimatedFlatList, StaggeredItem } from '../../components/premium/StaggeredList';
 import { Typography, Spacing, AnimationConfig } from '../../theme/premiumTheme';
+import { useQuery } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 
 interface SessionHistoryItem {
   id: string;
@@ -36,19 +38,81 @@ const SessionHistoryScreen = () => {
   const { theme } = useTheme();
   const navigation = useNavigation();
 
-  const [sessions, setSessions] = useState<SessionHistoryItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [timeFilter, setTimeFilter] = useState<'all' | 'week' | 'month'>('all');
 
   // Force animations to replay on every screen focus
   const focusKey = useFocusAnimationKey();
 
+  // Fetch sessions from Convex using reactive query
+  const rawSessions = useQuery(api.focusSessions.list, {});
+
+  // Transform and filter sessions based on time filter
+  const sessions = useMemo(() => {
+    if (!rawSessions) return [];
+
+    // Calculate date filter threshold
+    let dateThreshold: Date | null = null;
+    if (timeFilter === 'week') {
+      dateThreshold = new Date();
+      dateThreshold.setDate(dateThreshold.getDate() - 7);
+    } else if (timeFilter === 'month') {
+      dateThreshold = new Date();
+      dateThreshold.setMonth(dateThreshold.getMonth() - 1);
+    }
+
+    return rawSessions
+      .filter(session => {
+        // Filter by date if threshold is set
+        if (dateThreshold) {
+          const sessionDate = new Date(session.startTime);
+          if (sessionDate < dateThreshold) return false;
+        }
+        return true;
+      })
+      .map(session => {
+        // Generate a friendly session name based on sessionType
+        let sessionName = 'Study Session';
+        if (session.sessionType === 'individual') {
+          sessionName = 'Focus Session';
+        } else if (session.sessionType === 'group') {
+          sessionName = 'Group Study Session';
+        } else if (session.sessionType === 'deep_work') {
+          sessionName = 'Deep Work Session';
+        } else if (session.sessionType === 'sprint') {
+          sessionName = 'Sprint Session';
+        } else if (session.sessionType === 'balanced') {
+          sessionName = 'Balanced Session';
+        }
+
+        return {
+          id: session._id,
+          user_id: session.userId,
+          start_time: session.startTime,
+          end_time: session.endTime || '',
+          duration_minutes: session.durationSeconds ? Math.round(session.durationSeconds / 60) : 0,
+          intended_duration: 0,
+          status: (session.status || 'completed') as 'completed' | 'cancelled' | 'paused' | 'active',
+          focus_quality: 0,
+          interruptions: 0,
+          session_type: session.sessionType || 'individual',
+          subject: sessionName,
+          notes: '',
+          created_at: session.startTime,
+          task_title: sessionName,
+          productivity_rating: 0,
+        } as SessionHistoryItem;
+      });
+  }, [rawSessions, timeFilter]);
+
+  const loading = rawSessions === undefined;
+  const error = null; // Convex handles errors via query state
+  const refreshing = false; // Convex queries auto-refresh
+
   const onRefresh = () => {
-    fetchSessionHistory(true);
+    // Convex queries are reactive and auto-refresh
+    // This is a no-op but kept for UI consistency
   };
-  
+
   // Configure header with refresh button
   useEffect(() => {
     navigation.setOptions({
@@ -68,90 +132,6 @@ const SessionHistoryScreen = () => {
       ),
     });
   }, [navigation, theme]);
-
-  useEffect(() => {
-    if (user) {
-      fetchSessionHistory();
-    }
-  }, [user, timeFilter]);
-
-  const fetchSessionHistory = async (isRefresh = false) => {
-    if (isRefresh) {
-      setRefreshing(true);
-    } else {
-      setLoading(true);
-    }
-    setError(null);
-
-    try {
-      if (!user) {
-        throw new Error('No authenticated user');
-      }
-
-      // Calculate date filter
-      let dateFilter = '';
-      if (timeFilter === 'week') {
-        const weekAgo = new Date();
-        weekAgo.setDate(weekAgo.getDate() - 7);
-        dateFilter = weekAgo.toISOString();
-      } else if (timeFilter === 'month') {
-        const monthAgo = new Date();
-        monthAgo.setMonth(monthAgo.getMonth() - 1);
-        dateFilter = monthAgo.toISOString();
-      }
-
-      // TODO: Fetch sessions from Convex using api.focusSessions.list
-      // For now, return empty array until Convex integration is complete
-      const sessionsData: any[] = [];
-
-      // Transform the data to match the expected interface
-      const transformedSessions: SessionHistoryItem[] = (sessionsData || [])
-        .map(session => {
-          // Generate a friendly session name based on session_type
-          let sessionName = 'Study Session';
-          if (session.session_type === 'individual') {
-            sessionName = 'Focus Session';
-          } else if (session.session_type === 'group') {
-            sessionName = 'Group Study Session';
-          } else if (session.session_type === 'deep_work') {
-            sessionName = 'Deep Work Session';
-          } else if (session.session_type === 'sprint') {
-            sessionName = 'Sprint Session';
-          } else if (session.session_type === 'balanced') {
-            sessionName = 'Balanced Session';
-          }
-
-          return {
-            id: session.id,
-            user_id: session.user_id,
-            start_time: session.start_time,
-            end_time: session.end_time || '',
-            duration_minutes: session.duration_seconds ? Math.round(session.duration_seconds / 60) : 0,
-            intended_duration: 0,
-            status: session.status as 'completed' | 'cancelled' | 'paused',
-            focus_quality: 0,
-            interruptions: 0,
-            session_type: session.session_type,
-            subject: sessionName,
-            notes: '',
-            created_at: session.created_at,
-            task_title: sessionName,
-            productivity_rating: 0,
-          };
-        })
-        .filter(session => session.duration_minutes >= 5); // Filter out sessions less than 5 minutes
-
-      setSessions(transformedSessions);
-      console.log(`SessionHistory: Loaded ${transformedSessions.length} sessions`);
-
-    } catch (error) {
-      console.error('Error fetching session history:', error);
-      setError(error instanceof Error ? error.message : 'Failed to load session history');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
 
   const formatDuration = (minutes: number) => {
     const hours = Math.floor(minutes / 60);

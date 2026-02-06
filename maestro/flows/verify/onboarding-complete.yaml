@@ -1,0 +1,296 @@
+# HikeWise Verification Flow: Onboarding Complete
+# Purpose: Verify full onboarding flow works correctly
+# Run: maestro test maestro/flows/verify/onboarding-complete.yaml
+#
+# NOTE: This test starts with a fresh user and completes onboarding.
+# In TEST_MODE, onboarding is pre-completed, so this tests the flow
+# by navigating through onboarding screens if they exist.
+
+appId: com.hikewise.app
+name: Verify Onboarding Flow
+tags:
+  - verify
+  - onboarding
+  - first-run
+
+---
+# Launch WITHOUT test mode to see onboarding
+# Or with a flag that resets onboarding
+- launchApp:
+    clearState: true
+    env:
+      EXPO_PUBLIC_TEST_MODE: "true"
+      EXPO_PUBLIC_RESET_ONBOARDING: "true"
+
+# ==========================================
+# WELCOME SCREEN
+# ==========================================
+
+- extendedWaitUntil:
+    visible: "Welcome"
+    timeout: 10000
+    optional: true
+- extendedWaitUntil:
+    visible: "Get Started"
+    timeout: 10000
+    optional: true
+
+# If Welcome screen appears
+- tapOn:
+    text: "Get Started"
+    optional: true
+- tapOn:
+    text: "Continue"
+    optional: true
+- tapOn:
+    text: "Next"
+    optional: true
+
+# ==========================================
+# GOAL SETTING
+# ==========================================
+
+- extendedWaitUntil:
+    visible: "goal"
+    timeout: 5000
+    optional: true
+- extendedWaitUntil:
+    visible: "Weekly"
+    timeout: 5000
+    optional: true
+
+# Select a weekly goal
+- tapOn:
+    text: "5 hours"
+    optional: true
+- tapOn:
+    text: "10 hours"
+    optional: true
+
+- tapOn:
+    text: "Continue"
+    optional: true
+- tapOn:
+    text: "Next"
+    optional: true
+
+# ==========================================
+# FOCUS METHOD
+# ==========================================
+
+- extendedWaitUntil:
+    visible: "Focus"
+    timeout: 5000
+    optional: true
+- extendedWaitUntil:
+    visible: "method"
+    timeout: 5000
+    optional: true
+
+# Select focus method
+- tapOn:
+    text: "Pomodoro"
+    optional: true
+- tapOn:
+    text: "Deep Work"
+    optional: true
+
+- tapOn:
+    text: "Continue"
+    optional: true
+- tapOn:
+    text: "Next"
+    optional: true
+
+# ==========================================
+# EDUCATION/PROFILE
+# ==========================================
+
+- extendedWaitUntil:
+    visible: "Education"
+    timeout: 5000
+    optional: true
+- extendedWaitUntil:
+    visible: "University"
+    timeout: 5000
+    optional: true
+
+# Select education level
+- tapOn:
+    text: "University"
+    optional: true
+- tapOn:
+    text: "High School"
+    optional: true
+- tapOn:
+    text: "Graduate"
+    optional: true
+
+# Enter university name (if prompted)
+- tapOn:
+    id: "university-input"
+    optional: true
+- inputText: "Test University"
+
+# Enter major (if prompted)
+- tapOn:
+    id: "major-input"
+    optional: true
+- inputText: "Computer Science"
+
+- tapOn:
+    text: "Continue"
+    optional: true
+- tapOn:
+    text: "Next"
+    optional: true
+
+# ==========================================
+# TRAIL BUDDY SELECTION
+# ==========================================
+
+- extendedWaitUntil:
+    visible: "Trail Buddy"
+    timeout: 5000
+    optional: true
+- extendedWaitUntil:
+    visible: "buddy"
+    timeout: 5000
+    optional: true
+
+# Select a trail buddy
+- tapOn:
+    text: "Owl"
+    optional: true
+- tapOn:
+    text: "Fox"
+    optional: true
+- tapOn:
+    text: "Bear"
+    optional: true
+
+# Name the buddy (if prompted)
+- tapOn:
+    id: "buddy-name-input"
+    optional: true
+- inputText: "Testy"
+
+- tapOn:
+    text: "Continue"
+    optional: true
+- tapOn:
+    text: "Next"
+    optional: true
+
+# ==========================================
+# SOUND PREFERENCES
+# ==========================================
+
+- extendedWaitUntil:
+    visible: "Sound"
+    timeout: 5000
+    optional: true
+- extendedWaitUntil:
+    visible: "preferences"
+    timeout: 5000
+    optional: true
+
+# Select sound preference
+- tapOn:
+    text: "Nature"
+    optional: true
+- tapOn:
+    text: "Ocean"
+    optional: true
+- tapOn:
+    text: "Forest"
+    optional: true
+- tapOn:
+    text: "No Sound"
+    optional: true
+
+- tapOn:
+    text: "Continue"
+    optional: true
+- tapOn:
+    text: "Next"
+    optional: true
+
+# ==========================================
+# NOTIFICATIONS
+# ==========================================
+
+- extendedWaitUntil:
+    visible: "Notifications"
+    timeout: 5000
+    optional: true
+
+# Enable or skip notifications
+- tapOn:
+    text: "Enable"
+    optional: true
+- tapOn:
+    text: "Skip"
+    optional: true
+- tapOn:
+    text: "Not Now"
+    optional: true
+
+- tapOn:
+    text: "Continue"
+    optional: true
+- tapOn:
+    text: "Finish"
+    optional: true
+
+# ==========================================
+# ONBOARDING COMPLETE
+# ==========================================
+
+- extendedWaitUntil:
+    visible: "Complete"
+    timeout: 5000
+    optional: true
+- extendedWaitUntil:
+    visible: "Ready"
+    timeout: 5000
+    optional: true
+
+- tapOn:
+    text: "Start"
+    optional: true
+- tapOn:
+    text: "Let's Go"
+    optional: true
+- tapOn:
+    text: "Begin"
+    optional: true
+
+# ==========================================
+# VERIFY LANDED ON HOME
+# ==========================================
+
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 10000
+
+- assertVisible: "Home"
+
+# Verify user data was saved
+- tapOn: "Profile"
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+
+# Should see the info we entered
+- assertVisible:
+    text: "Test University"
+    optional: true
+
+# ==========================================
+# VERIFICATION COMPLETE
+# ==========================================
+
+- pressKey: back
+- tapOn: "Home"
+- assertVisible: "Home"

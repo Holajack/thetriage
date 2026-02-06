@@ -1,0 +1,192 @@
+# HikeWise Discovery Flow: Navigation Integrity
+# Purpose: Verify back button behavior and navigation stack integrity
+# Run: maestro test maestro/flows/discovery/navigation-integrity.yaml
+
+appId: com.hikewise.app
+name: Navigation Integrity Check
+tags:
+  - discovery
+  - navigation
+  - critical
+
+---
+- launchApp:
+    clearState: true
+    env:
+      EXPO_PUBLIC_TEST_MODE: "true"
+
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 15000
+
+# ==========================================
+# TEST 1: Profile Navigation Stack
+# Home -> Profile -> Personal Info -> Back -> Back
+# ==========================================
+
+- tapOn: "Profile"
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+- takeScreenshot: "nav-test/step1-profile"
+
+- tapOn:
+    text: "Personal Information"
+    optional: true
+- extendedWaitUntil:
+    visible: "Personal Information"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "nav-test/step2-personal-info"
+
+# CRITICAL: Back should return to Profile, NOT Home
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+- assertVisible: "Profile"
+- takeScreenshot: "nav-test/step3-back-to-profile"
+
+# Back again should return to Home
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 5000
+- assertVisible: "Home"
+- takeScreenshot: "nav-test/step4-back-to-home"
+
+# ==========================================
+# TEST 2: Settings Navigation Stack
+# Home -> Settings -> Sound -> Back -> Back
+# ==========================================
+
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 5000
+- takeScreenshot: "nav-test/step5-settings"
+
+- tapOn:
+    text: "Sound"
+    optional: true
+- extendedWaitUntil:
+    visible: "Sound"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "nav-test/step6-sound-settings"
+
+# Back should return to Settings
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 5000
+- assertVisible: "Settings"
+- takeScreenshot: "nav-test/step7-back-to-settings"
+
+# Back should return to Home
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 5000
+- assertVisible: "Home"
+- takeScreenshot: "nav-test/step8-back-to-home-2"
+
+# ==========================================
+# TEST 3: Deep Navigation (3+ levels)
+# Home -> Profile -> Edit Profile -> Change Photo -> Back x3
+# ==========================================
+
+- tapOn: "Profile"
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+
+- tapOn:
+    text: "Edit Profile"
+    optional: true
+- extendedWaitUntil:
+    visible: "Edit"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "nav-test/step9-edit-profile"
+
+# Tap on avatar to change photo (if available)
+- tapOn:
+    id: "avatar"
+    optional: true
+- takeScreenshot: "nav-test/step10-change-photo"
+
+# Navigate back through all levels
+- pressKey: back
+- pressKey: back
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 5000
+- assertVisible: "Home"
+- takeScreenshot: "nav-test/step11-deep-back-home"
+
+# ==========================================
+# TEST 4: Tab + Stack Mix
+# Home -> Analytics -> (tap something) -> Back -> Should stay in Analytics
+# ==========================================
+
+- tapOn: "Analytics"
+- extendedWaitUntil:
+    visible: "Analytics"
+    timeout: 5000
+- takeScreenshot: "nav-test/step12-analytics"
+
+# Tap on a detail if available
+- tapOn:
+    text: "View Details"
+    optional: true
+- tapOn:
+    text: "Session Details"
+    optional: true
+
+# Back should return to Analytics tab, not Home
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Analytics"
+    timeout: 5000
+- assertVisible: "Analytics"
+- takeScreenshot: "nav-test/step13-back-to-analytics"
+
+# ==========================================
+# TEST 5: Drawer Navigation
+# Open drawer -> Navigate -> Back
+# ==========================================
+
+- tapOn: "Home"
+
+# Open drawer (swipe or hamburger)
+- swipe:
+    direction: RIGHT
+    duration: 300
+    optional: true
+- takeScreenshot: "nav-test/step14-drawer-open"
+
+# Tap a drawer item if visible
+- tapOn:
+    text: "Study Rooms"
+    optional: true
+- extendedWaitUntil:
+    visible: "Study Rooms"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "nav-test/step15-study-rooms"
+
+# Back should close the screen, not crash
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 5000
+- takeScreenshot: "nav-test/step16-drawer-back"
+
+# ==========================================
+# FINAL CHECK
+# ==========================================
+
+- assertVisible: "Home"
+- takeScreenshot: "nav-test/navigation-integrity-complete"

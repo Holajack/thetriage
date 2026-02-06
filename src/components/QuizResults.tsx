@@ -323,7 +323,10 @@ const QuizResults: React.FC<QuizResultsProps> = ({ result, onRetake, onClose }) 
               Completed:
             </Text>
             <Text style={[styles.quizInfoValue, { color: theme.text }]}>
-              {result.completedAt.toLocaleDateString()}
+              {(result.completedAt instanceof Date
+                ? result.completedAt
+                : new Date(result.completedAt)
+              ).toLocaleDateString()}
             </Text>
           </View>
           <View style={styles.quizInfoRow}>

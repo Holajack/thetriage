@@ -1,0 +1,171 @@
+# HikeWise Verification Flow: Navigation Back Button
+# Purpose: Verify back button returns to correct parent screen
+# Run: maestro test maestro/flows/verify/navigation-back-button.yaml
+#
+# CRITICAL TEST: This verifies the fix for the back button bug where
+# pressing back from a nested screen returns to Home instead of parent.
+
+appId: com.hikewise.app
+name: Verify Back Button Navigation
+tags:
+  - verify
+  - navigation
+  - critical
+  - regression
+
+---
+- launchApp:
+    clearState: true
+    env:
+      EXPO_PUBLIC_TEST_MODE: "true"
+
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 15000
+
+# ==========================================
+# TEST CASE 1: Profile -> Personal Information -> Back
+# Expected: Back returns to Profile, NOT Home
+# ==========================================
+
+- tapOn: "Profile"
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+- assertVisible: "Profile"
+
+# Navigate deeper
+- tapOn:
+    text: "Personal Information"
+    optional: true
+- extendedWaitUntil:
+    visible: "Personal Information"
+    timeout: 5000
+    optional: true
+- assertVisible:
+    text: "Personal Information"
+    optional: true
+
+# CRITICAL ASSERTION: Back should return to Profile
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+
+# This is the key assertion - we should see Profile, not Home
+- assertVisible: "Profile"
+- assertNotVisible:
+    text: "Welcome"
+    optional: true
+
+# ==========================================
+# TEST CASE 2: Settings -> Sound -> Back
+# Expected: Back returns to Settings, NOT Home
+# ==========================================
+
+- pressKey: back
+- tapOn: "Home"
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 5000
+
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 5000
+- assertVisible: "Settings"
+
+- tapOn:
+    text: "Sound"
+    optional: true
+- extendedWaitUntil:
+    visible: "Sound"
+    timeout: 5000
+    optional: true
+
+# CRITICAL ASSERTION: Back should return to Settings
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 5000
+- assertVisible: "Settings"
+
+# ==========================================
+# TEST CASE 3: Profile -> Edit Profile -> Back
+# ==========================================
+
+- pressKey: back
+- tapOn: "Home"
+- tapOn: "Profile"
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+
+- tapOn:
+    text: "Edit Profile"
+    optional: true
+- extendedWaitUntil:
+    visible: "Edit"
+    timeout: 5000
+    optional: true
+
+# Back should return to Profile
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+- assertVisible: "Profile"
+
+# ==========================================
+# TEST CASE 4: Full Stack - Home -> Profile -> Settings -> Notifications -> Back x3
+# ==========================================
+
+- pressKey: back
+- tapOn: "Home"
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 5000
+
+# Build up navigation stack
+- tapOn: "Profile"
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 5000
+
+- tapOn:
+    text: "Notifications"
+    optional: true
+- extendedWaitUntil:
+    visible: "Notifications"
+    timeout: 5000
+    optional: true
+
+# Navigate back through entire stack
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 5000
+- assertVisible: "Settings"
+
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+- assertVisible: "Profile"
+
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 5000
+- assertVisible: "Home"
+
+# ==========================================
+# VERIFICATION COMPLETE
+# ==========================================
+
+- assertVisible: "Home"

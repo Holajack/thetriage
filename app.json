@@ -21,9 +21,55 @@
       "buildNumber": "15",
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses camera for document scanning",
-        "NSMicrophoneUsageDescription": "This app uses microphone for voice features"
+        "NSMicrophoneUsageDescription": "This app uses microphone for voice features",
+        "NSPhotoLibraryUsageDescription": "Allow HikeWise to access your photos to set a profile picture",
+        "NSFaceIDUsageDescription": "Use Face ID to quickly and securely access your HikeWise account",
+        "NSUserTrackingUsageDescription": "This allows HikeWise to provide personalized study recommendations and improve the app experience"
       },
-      "associatedDomains": []
+      "associatedDomains": [],
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": ["CA92.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+            "NSPrivacyAccessedAPITypeReasons": ["C617.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryDiskSpace",
+            "NSPrivacyAccessedAPITypeReasons": ["E174.1"]
+          }
+        ],
+        "NSPrivacyCollectedDataTypes": [
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeEmailAddress",
+            "NSPrivacyCollectedDataTypeLinked": true,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": ["NSPrivacyCollectedDataTypePurposeAppFunctionality"]
+          },
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeName",
+            "NSPrivacyCollectedDataTypeLinked": true,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": ["NSPrivacyCollectedDataTypePurposeAppFunctionality"]
+          },
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeUserID",
+            "NSPrivacyCollectedDataTypeLinked": true,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": ["NSPrivacyCollectedDataTypePurposeAppFunctionality"]
+          },
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeProductInteraction",
+            "NSPrivacyCollectedDataTypeLinked": false,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": ["NSPrivacyCollectedDataTypePurposeAnalytics"]
+          }
+        ],
+        "NSPrivacyTracking": false
+      }
     },
     "android": {
       "package": "com.hikewise.app",
@@ -44,7 +90,13 @@
           "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera for QR code scanning and document capture."
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-tracking-transparency",
+        {
+          "userTrackingPermission": "This allows HikeWise to provide personalized study recommendations and improve the app experience"
+        }
+      ]
     ],
     "owner": "hollaj"
   }

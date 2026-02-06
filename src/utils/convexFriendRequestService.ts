@@ -105,7 +105,7 @@ export async function getPendingFriendRequests(): Promise<{
     const requests = await client.query(api.friends.listRequests, {
       type: "incoming",
     });
-    const adapted = (requests ?? []).map((r) => ({
+    const adapted = (requests ?? []).map((r: any) => ({
       id: r._id,
       sender_id: r.senderId,
       recipient_id: r.recipientId,
@@ -113,6 +113,26 @@ export async function getPendingFriendRequests(): Promise<{
       message: r.message,
       created_at: r._creationTime ? new Date(r._creationTime).toISOString() : "",
       responded_at: r.respondedAt,
+      sender: r.sender
+        ? {
+            id: r.sender.id,
+            username: r.sender.username,
+            full_name: r.sender.fullName,
+            avatar_url: r.sender.avatarUrl,
+            email: r.sender.email,
+            status: r.sender.status,
+          }
+        : undefined,
+      recipient: r.recipient
+        ? {
+            id: r.recipient.id,
+            username: r.recipient.username,
+            full_name: r.recipient.fullName,
+            avatar_url: r.recipient.avatarUrl,
+            email: r.recipient.email,
+            status: r.recipient.status,
+          }
+        : undefined,
     }));
     return { success: true, data: adapted };
   } catch (error: any) {
@@ -133,7 +153,7 @@ export async function getSentFriendRequests(): Promise<{
     const requests = await client.query(api.friends.listRequests, {
       type: "outgoing",
     });
-    const adapted = (requests ?? []).map((r) => ({
+    const adapted = (requests ?? []).map((r: any) => ({
       id: r._id,
       sender_id: r.senderId,
       recipient_id: r.recipientId,
@@ -141,6 +161,26 @@ export async function getSentFriendRequests(): Promise<{
       message: r.message,
       created_at: r._creationTime ? new Date(r._creationTime).toISOString() : "",
       responded_at: r.respondedAt,
+      sender: r.sender
+        ? {
+            id: r.sender.id,
+            username: r.sender.username,
+            full_name: r.sender.fullName,
+            avatar_url: r.sender.avatarUrl,
+            email: r.sender.email,
+            status: r.sender.status,
+          }
+        : undefined,
+      recipient: r.recipient
+        ? {
+            id: r.recipient.id,
+            username: r.recipient.username,
+            full_name: r.recipient.fullName,
+            avatar_url: r.recipient.avatarUrl,
+            email: r.recipient.email,
+            status: r.recipient.status,
+          }
+        : undefined,
     }));
     return { success: true, data: adapted };
   } catch (error: any) {

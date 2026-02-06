@@ -1,0 +1,237 @@
+# HikeWise Discovery Flow: Error Hunting
+# Purpose: Deliberately trigger edge cases and error conditions
+# Run: maestro test maestro/flows/discovery/error-hunting.yaml
+
+appId: com.hikewise.app
+name: Error Hunting
+tags:
+  - discovery
+  - errors
+  - edge-cases
+
+---
+- launchApp:
+    clearState: true
+    env:
+      EXPO_PUBLIC_TEST_MODE: "true"
+
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 15000
+
+# ==========================================
+# TEST 1: Rapid Navigation
+# Quickly tap through screens to trigger race conditions
+# ==========================================
+
+- tapOn: "Profile"
+- tapOn: "Home"
+- tapOn: "Analytics"
+- tapOn: "Shop"
+- tapOn: "Home"
+- tapOn: "Profile"
+- tapOn: "Settings"
+- pressKey: back
+- pressKey: back
+- tapOn: "Home"
+- takeScreenshot: "errors/step1-rapid-navigation"
+
+# App should not crash
+- assertVisible: "Home"
+
+# ==========================================
+# TEST 2: Double Tap Prevention
+# Double tap on buttons that should only trigger once
+# ==========================================
+
+- tapOn: "Profile"
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+
+# Double tap on edit profile
+- tapOn:
+    text: "Edit Profile"
+    optional: true
+- tapOn:
+    text: "Edit Profile"
+    optional: true
+- takeScreenshot: "errors/step2-double-tap"
+
+# Should only open one screen
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+- assertVisible: "Profile"
+- pressKey: back
+
+# ==========================================
+# TEST 3: Empty Input Handling
+# Submit forms with empty required fields
+# ==========================================
+
+- tapOn: "Home"
+- tapOn: "Profile"
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+
+- tapOn:
+    text: "Edit Profile"
+    optional: true
+- extendedWaitUntil:
+    visible: "Edit"
+    timeout: 5000
+    optional: true
+
+# Clear all text fields
+- tapOn:
+    id: "name-input"
+    optional: true
+- clearText
+- takeScreenshot: "errors/step3-empty-name"
+
+# Try to save with empty required fields
+- tapOn:
+    text: "Save"
+    optional: true
+- takeScreenshot: "errors/step4-save-empty"
+
+# Should show error or prevent save
+- pressKey: back
+- pressKey: back
+
+# ==========================================
+# TEST 4: Long Text Input
+# Enter very long text to test truncation/overflow
+# ==========================================
+
+- tapOn: "Home"
+- tapOn: "Profile"
+- tapOn:
+    text: "Edit Profile"
+    optional: true
+- extendedWaitUntil:
+    visible: "Edit"
+    timeout: 5000
+    optional: true
+
+- tapOn:
+    id: "bio-input"
+    optional: true
+- inputText: "This is a very long bio text that exceeds normal limits and tests how the app handles overflow situations. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat."
+- takeScreenshot: "errors/step5-long-text"
+
+- pressKey: back
+- pressKey: back
+
+# ==========================================
+# TEST 5: Back Button Spam
+# Rapidly press back button
+# ==========================================
+
+- tapOn: "Home"
+- tapOn: "Profile"
+- tapOn:
+    text: "Personal Information"
+    optional: true
+- extendedWaitUntil:
+    visible: "Personal"
+    timeout: 5000
+    optional: true
+
+# Spam back button
+- pressKey: back
+- pressKey: back
+- pressKey: back
+- pressKey: back
+- takeScreenshot: "errors/step6-back-spam"
+
+# App should land at Home, not crash or go further back
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 5000
+- assertVisible: "Home"
+
+# ==========================================
+# TEST 6: Session Interruption
+# Start session then navigate away
+# ==========================================
+
+- tapOn:
+    text: "Start Session"
+    optional: true
+- tapOn:
+    text: "Start"
+    optional: true
+- extendedWaitUntil:
+    visible: "Focus"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "errors/step7-session-started"
+
+# Navigate away during session
+- pressKey: back
+- takeScreenshot: "errors/step8-session-interrupt"
+
+# Try to start another session
+- tapOn:
+    text: "Start Session"
+    optional: true
+- takeScreenshot: "errors/step9-second-session-attempt"
+
+# Should either show warning or handle gracefully
+- pressKey: back
+
+# ==========================================
+# TEST 7: Gesture Conflicts
+# Test swipe gestures near drawer
+# ==========================================
+
+- tapOn: "Home"
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 5000
+
+# Try to swipe when not expected
+- swipe:
+    direction: RIGHT
+    duration: 100
+- takeScreenshot: "errors/step10-swipe-right"
+
+- swipe:
+    direction: LEFT
+    duration: 100
+- takeScreenshot: "errors/step11-swipe-left"
+
+- swipe:
+    direction: UP
+    duration: 100
+- swipe:
+    direction: DOWN
+    duration: 100
+- takeScreenshot: "errors/step12-swipe-all"
+
+# ==========================================
+# TEST 8: Network Simulation (if available)
+# Note: Actual network disconnection requires device-level control
+# ==========================================
+
+# This test documents expected behavior
+- tapOn: "Analytics"
+- extendedWaitUntil:
+    visible: "Analytics"
+    timeout: 5000
+- takeScreenshot: "errors/step13-analytics-online"
+
+# ==========================================
+# FINAL CHECK
+# ==========================================
+
+- tapOn: "Home"
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 5000
+- assertVisible: "Home"
+- takeScreenshot: "errors/error-hunting-complete"

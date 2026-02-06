@@ -350,10 +350,20 @@ const ProfileScreen = () => {
                 </Text>
               </View>
             </View>
-            <View style={[styles.levelBadge, { backgroundColor: theme.primary + '18' }]}>
+            <Pressable
+              style={[styles.levelBadge, { backgroundColor: theme.primary + '18' }]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                Alert.alert(
+                  `Level ${userLevel}`,
+                  'Your level increases based on total focus time and achievements. Keep completing sessions to level up!\n\n• Level up every 60 minutes of focus\n• Unlock new badges at higher levels\n• Earn bonus rewards as you progress'
+                );
+              }}
+            >
               <Ionicons name="shield" size={16} color={theme.primary} />
               <Text style={[styles.levelText, { color: theme.primary }]}>Lv. {userLevel}</Text>
-            </View>
+              <Ionicons name="information-circle-outline" size={12} color={theme.primary} style={{ marginLeft: 2 }} />
+            </Pressable>
           </View>
         </Animated.View>
 
@@ -430,7 +440,16 @@ const ProfileScreen = () => {
 
         {/* Stats Row 1 - Featured (2 wide cards) */}
         <Animated.View entering={FadeInUp.delay(350).duration(400)} style={styles.statsRowFeatured}>
-          <View style={[styles.statCardFeatured, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}>
+          <Pressable
+            style={[styles.statCardFeatured, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              Alert.alert(
+                'Flint Currency',
+                `You have ${flintCurrency} Flint!\n\nEarn 1 Flint for every minute of completed focus time. Spend Flint in the Gear Shop to customize your trail buddy and unlock new trails.`
+              );
+            }}
+          >
             <View style={[styles.statIconSmall, { backgroundColor: '#FF570015' }]}>
               <FlintIcon size={22} color="#FF5700" />
             </View>
@@ -438,9 +457,18 @@ const ProfileScreen = () => {
               {Math.round(flintCounter.value * 10) / 10}
             </Animated.Text>
             <Text style={[styles.statLabelFeatured, { color: theme.textSecondary }]}>Flint</Text>
-          </View>
+          </Pressable>
 
-          <View style={[styles.statCardFeatured, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}>
+          <Pressable
+            style={[styles.statCardFeatured, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              Alert.alert(
+                'Total Focus Time',
+                `You've focused for ${totalHours} hours and ${remainingMinutes} minutes total!\n\nThis is your lifetime focus time across all completed sessions. Keep building your focus habit!`
+              );
+            }}
+          >
             <View style={[styles.statIconSmall, { backgroundColor: theme.primary + '15' }]}>
               <Ionicons name="time-outline" size={22} color={theme.primary} />
             </View>
@@ -448,22 +476,34 @@ const ProfileScreen = () => {
               {totalHours}h {remainingMinutes}m
             </Text>
             <Text style={[styles.statLabelFeatured, { color: theme.textSecondary }]}>Focus Time</Text>
-          </View>
+          </Pressable>
         </Animated.View>
 
         {/* Stats Row 2 - Compact (3 cards) */}
         <Animated.View entering={FadeInUp.delay(400).duration(400)} style={styles.statsRowCompact}>
-          <View style={[styles.statCardCompact, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}>
+          <Pressable
+            style={[styles.statCardCompact, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              Alert.alert('Total Sessions', 'The total number of focus sessions you\'ve started, including both completed and cancelled sessions.');
+            }}
+          >
             <View style={[styles.statIconTiny, { backgroundColor: theme.primary + '15' }]}>
               <Ionicons name="timer-outline" size={18} color={theme.primary} />
             </View>
             <Animated.Text style={[styles.statNumberCompact, { color: theme.text }]}>
               {Math.round(sessionsCounter.value)}
             </Animated.Text>
-            <Text style={[styles.statLabelCompact, { color: theme.textSecondary }]}>Sessions</Text>
-          </View>
+            <Text style={[styles.statLabelCompact, { color: theme.textSecondary }]}>Total Sessions</Text>
+          </Pressable>
 
-          <View style={[styles.statCardCompact, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}>
+          <Pressable
+            style={[styles.statCardCompact, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              Alert.alert('Peak Reached', 'Your highest achievement badge earned so far. Complete more focus sessions to unlock new achievements!');
+            }}
+          >
             <View style={[styles.statIconTiny, { backgroundColor: '#FFD70015' }]}>
               {userBadges.length > 0 ? (
                 <Text style={{ fontSize: 18 }}>{userBadges[0].icon}</Text>
@@ -475,9 +515,15 @@ const ProfileScreen = () => {
               {userBadges.length > 0 ? userBadges[0].name : 'No Peak'}
             </Text>
             <Text style={[styles.statLabelCompact, { color: theme.textSecondary }]}>Peak Reached</Text>
-          </View>
+          </Pressable>
 
-          <View style={[styles.statCardCompact, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}>
+          <Pressable
+            style={[styles.statCardCompact, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              Alert.alert('Completed Sessions', 'Focus sessions you finished successfully (not cancelled). Only completed sessions count toward your Flint earnings!');
+            }}
+          >
             <View style={[styles.statIconTiny, { backgroundColor: '#4CAF5015' }]}>
               <Ionicons name="checkmark-circle-outline" size={18} color="#4CAF50" />
             </View>
@@ -485,7 +531,7 @@ const ProfileScreen = () => {
               {Math.round(completedCounter.value)}
             </Animated.Text>
             <Text style={[styles.statLabelCompact, { color: theme.textSecondary }]}>Completed</Text>
-          </View>
+          </Pressable>
         </Animated.View>
 
       </ScrollView>

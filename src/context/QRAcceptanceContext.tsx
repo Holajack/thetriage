@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { Modal, View, Text, Image, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation, NavigationContainerRef } from '@react-navigation/native';
 import { useAuth } from './AuthContext';
 import { useTheme } from './ThemeContext';
 import {
@@ -9,6 +10,13 @@ import {
   declineQRRequest,
   QRScanNotification,
 } from '../utils/qrAcceptanceService';
+
+// Store navigation ref for use outside of components
+let navigationRef: NavigationContainerRef<any> | null = null;
+
+export const setQRNavigationRef = (ref: NavigationContainerRef<any> | null) => {
+  navigationRef = ref;
+};
 
 interface QRAcceptanceContextType {
   // Currently empty, but can add methods here if needed
@@ -50,11 +58,28 @@ export const QRAcceptanceProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const result = await acceptQRRequest(notification.requestId);
 
     if (result.success) {
-      // Show success briefly then close
+      console.log('✅ Friend request accepted, navigating to Community');
+
+      // Close modal first
+      setNotification(null);
+      setProcessing(false);
+
+      // Navigate to Community screen (Friends tab) after a brief delay
       setTimeout(() => {
-        setNotification(null);
-        setProcessing(false);
-      }, 1000);
+        if (navigationRef) {
+          // Navigate to Main > Community with Friends tab selected
+          navigationRef.navigate('Main', {
+            screen: 'HomeDrawer',
+            params: {
+              screen: 'HomeTabs',
+              params: {
+                screen: 'Community',
+                params: { initialTab: 'friends' }
+              }
+            }
+          });
+        }
+      }, 300);
     } else {
       setProcessing(false);
       alert(result.error || 'Failed to accept request');

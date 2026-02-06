@@ -78,13 +78,20 @@ SplashScreen.preventAutoHideAsync();
 
 export default function App() {
   useEffect(() => {
-    // Prepare app and let our custom splash screen handle the timing
+    // Prepare app and hide splash screen
     const prepare = async () => {
       try {
         // Add any initialization logic here
         await new Promise(resolve => setTimeout(resolve, 500)); // Shorter delay for mobile
+        // Hide the native splash screen to reveal our LandingPage
+        await SplashScreen.hideAsync();
+        console.log('App: Splash screen hidden, showing LandingPage');
       } catch (e) {
         console.warn('App: Initialization error:', e);
+        // Try to hide splash anyway
+        try {
+          await SplashScreen.hideAsync();
+        } catch {}
       }
     };
 

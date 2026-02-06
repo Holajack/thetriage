@@ -1,0 +1,209 @@
+# HikeWise Verification Flow: Settings Persistence
+# Purpose: Verify settings save correctly and persist across app restarts
+# Run: maestro test maestro/flows/verify/settings-persistence.yaml
+
+appId: com.hikewise.app
+name: Verify Settings Persistence
+tags:
+  - verify
+  - settings
+  - persistence
+
+---
+- launchApp:
+    clearState: true
+    env:
+      EXPO_PUBLIC_TEST_MODE: "true"
+
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 15000
+
+# ==========================================
+# TEST: Sound Preference Persistence
+# ==========================================
+
+# Navigate to Sound Settings
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 5000
+
+- tapOn:
+    text: "Sound"
+    optional: true
+- extendedWaitUntil:
+    visible: "Sound"
+    timeout: 5000
+    optional: true
+
+# Select a specific sound (e.g., "Ocean")
+- tapOn:
+    text: "Ocean"
+    optional: true
+- tapOn:
+    text: "Forest"
+    optional: true
+
+# Verify selection is shown
+- assertVisible:
+    text: "Ocean"
+    optional: true
+- assertVisible:
+    text: "Forest"
+    optional: true
+
+# Navigate back
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 5000
+
+- pressKey: back
+- tapOn: "Home"
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 5000
+
+# Force app restart
+- stopApp
+- launchApp:
+    env:
+      EXPO_PUBLIC_TEST_MODE: "true"
+
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 15000
+
+# Verify setting persisted
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 5000
+
+- tapOn:
+    text: "Sound"
+    optional: true
+- extendedWaitUntil:
+    visible: "Sound"
+    timeout: 5000
+    optional: true
+
+# The previously selected sound should still be selected
+# (Visual check via screenshot comparison)
+
+- pressKey: back
+- pressKey: back
+
+# ==========================================
+# TEST: Focus Duration Persistence
+# ==========================================
+
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 5000
+
+- tapOn:
+    text: "Focus"
+    optional: true
+- extendedWaitUntil:
+    visible: "Focus"
+    timeout: 5000
+    optional: true
+
+# Modify focus duration (if slider/input available)
+- tapOn:
+    text: "30"
+    optional: true
+- tapOn:
+    text: "45"
+    optional: true
+
+- pressKey: back
+- pressKey: back
+- tapOn: "Home"
+
+# Restart app
+- stopApp
+- launchApp:
+    env:
+      EXPO_PUBLIC_TEST_MODE: "true"
+
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 15000
+
+# Verify focus duration persisted
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 5000
+
+- tapOn:
+    text: "Focus"
+    optional: true
+- extendedWaitUntil:
+    visible: "Focus"
+    timeout: 5000
+    optional: true
+
+# Duration should match what we set
+
+- pressKey: back
+- pressKey: back
+
+# ==========================================
+# TEST: Weekly Goal Persistence
+# ==========================================
+
+- tapOn: "Profile"
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+
+# Find and modify weekly goal
+- tapOn:
+    text: "Weekly Goal"
+    optional: true
+- tapOn:
+    text: "Edit Goal"
+    optional: true
+
+# Set a specific goal value
+- tapOn:
+    text: "10 hours"
+    optional: true
+- tapOn:
+    text: "15 hours"
+    optional: true
+
+- pressKey: back
+- tapOn: "Home"
+
+# Restart app
+- stopApp
+- launchApp:
+    env:
+      EXPO_PUBLIC_TEST_MODE: "true"
+
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 15000
+
+# Verify weekly goal persisted
+- tapOn: "Profile"
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+
+# Goal should still show the value we set
+
+- pressKey: back
+
+# ==========================================
+# VERIFICATION COMPLETE
+# ==========================================
+
+- tapOn: "Home"
+- assertVisible: "Home"

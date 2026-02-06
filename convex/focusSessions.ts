@@ -44,6 +44,8 @@ export const start = mutation({
   args: {
     sessionType: v.optional(v.string()),
     roomId: v.optional(v.id("studyRooms")),
+    subject: v.optional(v.string()),
+    taskId: v.optional(v.id("tasks")),
   },
   handler: async (ctx, args) => {
     const user = await getCurrentUser(ctx);
@@ -53,6 +55,8 @@ export const start = mutation({
       sessionType: args.sessionType ?? "individual",
       status: "active",
       roomId: args.roomId,
+      subject: args.subject,
+      taskId: args.taskId,
     });
   },
 });
@@ -90,25 +94,59 @@ export const end = mutation({
       }
     }
 
-    // Update leaderboard stats
+    // Update leaderboard stats with proper daily streak logic
     const existingStats = await ctx.db
       .query("leaderboardStats")
       .withIndex("by_userId", (q) => q.eq("userId", session.userId))
       .unique();
 
+    // Get today's date in YYYY-MM-DD format (UTC)
+    const today = endTime.toISOString().split("T")[0];
+
+    // Helper to calculate streak based on last session date
+    const calculateStreak = (
+      lastSessionDate: string | undefined,
+      currentStreak: number
+    ): number => {
+      if (!lastSessionDate) {
+        // First session ever
+        return 1;
+      }
+
+      const lastDate = new Date(lastSessionDate + "T00:00:00Z");
+      const todayDate = new Date(today + "T00:00:00Z");
+      const diffTime = todayDate.getTime() - lastDate.getTime();
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays === 0) {
+        // Same day - maintain current streak (don't increment)
+        return currentStreak;
+      } else if (diffDays === 1) {
+        // Consecutive day - increment streak
+        return currentStreak + 1;
+      } else {
+        // Missed days - reset to 1
+        return 1;
+      }
+    };
+
     if (existingStats) {
+      const newStreak = calculateStreak(
+        existingStats.lastSessionDate,
+        existingStats.currentStreak ?? 0
+      );
+
       // Update existing stats
       await ctx.db.patch(existingStats._id, {
         totalFocusTime: (existingStats.totalFocusTime ?? 0) + durationMinutes,
         weeklyFocusTime: (existingStats.weeklyFocusTime ?? 0) + durationMinutes,
-        monthlyFocusTime: (existingStats.monthlyFocusTime ?? 0) + durationMinutes,
+        monthlyFocusTime:
+          (existingStats.monthlyFocusTime ?? 0) + durationMinutes,
         sessionsCompleted: (existingStats.sessionsCompleted ?? 0) + 1,
         totalSessions: (existingStats.totalSessions ?? 0) + 1,
-        currentStreak: (existingStats.currentStreak ?? 0) + 1,
-        longestStreak: Math.max(
-          existingStats.longestStreak ?? 0,
-          (existingStats.currentStreak ?? 0) + 1
-        ),
+        currentStreak: newStreak,
+        longestStreak: Math.max(existingStats.longestStreak ?? 0, newStreak),
+        lastSessionDate: today,
         points: (existingStats.points ?? 0) + durationMinutes,
       });
     } else {
@@ -122,6 +160,7 @@ export const end = mutation({
         totalSessions: 1,
         currentStreak: 1,
         longestStreak: 1,
+        lastSessionDate: today,
         points: durationMinutes,
         level: 1,
         achievementsEarned: 0,

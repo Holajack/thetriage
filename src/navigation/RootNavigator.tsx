@@ -1,10 +1,11 @@
 // RESTORED: Original RootNavigator after fixing OBJLoader URL error
-import React, { useState, useEffect, useRef } from 'react';
-import { Platform, Linking } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Linking } from 'react-native';
 import { NavigationContainer, NavigationContainerRef, CommonActions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth as useClerkAuth } from '@clerk/clerk-expo';
 import { useAuth } from '../context/AuthContext';
+import { setQRNavigationRef } from '../context/QRAcceptanceContext';
 // import { FloatingNoraProvider } from '../context/FloatingNoraContext'; // Disabled - using modal instead
 import { MainNavigator } from './MainNavigator';
 import { AuthNavigator } from './AuthNavigator';
@@ -17,7 +18,6 @@ import MessageScreen from '../screens/main/MessageScreen';
 import StudyRoomScreen from '../screens/main/StudyRoomScreen';
 import { PatrickSpeakScreen } from '../screens/main/PatrickScreen';
 import LandingPage from '../screens/LandingPage';
-import { SplashScreen } from '../components/SplashScreen';
 import SessionHistoryScreen from '../screens/main/SessionHistoryScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -32,7 +32,6 @@ export const RootNavigator = () => {
   // Fall back to legacy auth if Clerk isn't providing sign-in state
   const isSignedIn = clerkSignedIn ?? (user !== null);
 
-  const [showSplash, setShowSplash] = useState(true);
   // Track if we've ever completed the initial load - prevents splash from showing again after sign out
   const hasEverLoaded = useRef(false);
   const navigationRef = useRef<NavigationContainerRef<RootStackParamList>>(null);
@@ -41,7 +40,7 @@ export const RootNavigator = () => {
   useEffect(() => {
     if (isClerkLoaded && !hasEverLoaded.current) {
       hasEverLoaded.current = true;
-      console.log('RootNavigator: Initial Clerk load complete, will not show splash again');
+      console.log('RootNavigator: Initial Clerk load complete');
     }
   }, [isClerkLoaded]);
 
@@ -50,25 +49,9 @@ export const RootNavigator = () => {
   // Use Clerk's isSignedIn for authentication check
   const isAuthenticated = isSignedIn ?? false;
 
-  const handleSplashComplete = () => {
-    setShowSplash(false);
-  };
-
-  // Fallback timeout to prevent splash screen from being stuck
-  useEffect(() => {
-    const maxSplashTime = setTimeout(() => {
-      if (showSplash) {
-        console.log('RootNavigator: Splash timeout reached, forcing completion');
-        setShowSplash(false);
-      }
-    }, Platform.OS === 'ios' ? 6000 : 8000); // Shorter timeout for iOS: 6 seconds vs 8 seconds
-
-    return () => clearTimeout(maxSplashTime);
-  }, [showSplash]);
-
   // Navigation logic for post-authentication routing
   useEffect(() => {
-    if (isInitialLoading || showSplash || !navigationRef.current) {
+    if (isInitialLoading || !navigationRef.current) {
       return;
     }
 
@@ -78,8 +61,7 @@ export const RootNavigator = () => {
       hasCompletedOnboarding,
       justLoggedIn,
       currentRoute: currentRoute?.name,
-      isInitialLoading,
-      showSplash
+      isInitialLoading
     });
 
     // ONLY handle navigation for users who just logged in - NOT existing authenticated users
@@ -122,7 +104,7 @@ export const RootNavigator = () => {
         })
       );
     }
-  }, [isAuthenticated, hasCompletedOnboarding, justLoggedIn, isInitialLoading, showSplash, clearJustLoggedIn]);
+  }, [isAuthenticated, hasCompletedOnboarding, justLoggedIn, isInitialLoading, clearJustLoggedIn]);
 
   // Note: Clerk handles password reset via email code verification
   // The ResetPassword screen is navigated to from ForgotPassword screen after initiating reset
@@ -167,13 +149,23 @@ export const RootNavigator = () => {
     },
   };
 
-  if (isInitialLoading || showSplash) {
-    return <SplashScreen onAnimationComplete={handleSplashComplete} />;
+  // Show a minimal loading indicator while Clerk initializes
+  // The LandingPage will handle its own animations
+  if (isInitialLoading) {
+    return null; // Minimal flash - Clerk loads very fast
   }
 
   // Note: linking config defined but not used - can re-enable after verifying deep links work
   return (
-    <NavigationContainer ref={navigationRef}>
+    <NavigationContainer
+      ref={navigationRef}
+      onReady={() => {
+        // Set navigation ref for QR acceptance context when navigation is ready
+        if (navigationRef.current) {
+          setQRNavigationRef(navigationRef.current);
+        }
+      }}
+    >
       <Stack.Navigator
         screenOptions={{
           headerShown: false,

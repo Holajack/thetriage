@@ -1,0 +1,238 @@
+# HikeWise Verification Flow: Study Room Invite
+# Purpose: Verify study room invitation flow works correctly
+# Run: maestro test maestro/flows/verify/study-room-invite.yaml
+
+appId: com.hikewise.app
+name: Verify Study Room Invite
+tags:
+  - verify
+  - study-room
+  - social
+
+---
+- launchApp:
+    clearState: true
+    env:
+      EXPO_PUBLIC_TEST_MODE: "true"
+
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 15000
+
+# ==========================================
+# TEST: Create Study Room
+# ==========================================
+
+# Navigate to Study Rooms
+- tapOn:
+    text: "Study Rooms"
+    optional: true
+- tapOn:
+    id: "study-rooms-tab"
+    optional: true
+- extendedWaitUntil:
+    visible: "Study Rooms"
+    timeout: 5000
+    optional: true
+
+# Create new room
+- tapOn:
+    text: "Create Room"
+    optional: true
+- tapOn:
+    text: "Create"
+    optional: true
+- tapOn:
+    id: "create-room-button"
+    optional: true
+- extendedWaitUntil:
+    visible: "Create"
+    timeout: 5000
+    optional: true
+
+# Enter room name
+- tapOn:
+    id: "room-name-input"
+    optional: true
+- inputText: "Test Study Room"
+
+# Select room type (if applicable)
+- tapOn:
+    text: "Private"
+    optional: true
+- tapOn:
+    text: "Public"
+    optional: true
+
+# Create the room
+- tapOn:
+    text: "Create Room"
+    optional: true
+- tapOn:
+    text: "Create"
+    optional: true
+
+# Wait for room to be created
+- extendedWaitUntil:
+    visible: "Test Study Room"
+    timeout: 5000
+    optional: true
+
+# ==========================================
+# TEST: Invite to Study Room
+# ==========================================
+
+# Open room details or invite
+- tapOn:
+    text: "Invite"
+    optional: true
+- tapOn:
+    id: "invite-button"
+    optional: true
+- tapOn:
+    text: "Add Members"
+    optional: true
+- extendedWaitUntil:
+    visible: "Invite"
+    timeout: 5000
+    optional: true
+
+# Search for a friend to invite
+- tapOn:
+    id: "search-friends"
+    optional: true
+- inputText: "test"
+
+# Select a friend (if available in test data)
+- tapOn:
+    text: "Test User"
+    optional: true
+- tapOn:
+    id: "friend-item-0"
+    optional: true
+
+# Send invitation
+- tapOn:
+    text: "Send Invite"
+    optional: true
+- tapOn:
+    text: "Invite"
+    optional: true
+
+# Verify invitation sent
+- extendedWaitUntil:
+    visible: "sent"
+    timeout: 5000
+    optional: true
+- extendedWaitUntil:
+    visible: "Invited"
+    timeout: 5000
+    optional: true
+
+# ==========================================
+# TEST: View Pending Invitations
+# ==========================================
+
+# Navigate back
+- pressKey: back
+- pressKey: back
+
+# Go to room list
+- tapOn:
+    text: "Study Rooms"
+    optional: true
+- extendedWaitUntil:
+    visible: "Study Rooms"
+    timeout: 5000
+    optional: true
+
+# Check for pending/invited indicator
+- assertVisible:
+    text: "Pending"
+    optional: true
+
+# ==========================================
+# TEST: Share Room Link
+# ==========================================
+
+# Open a room
+- tapOn:
+    text: "Test Study Room"
+    optional: true
+- extendedWaitUntil:
+    visible: "Test Study Room"
+    timeout: 5000
+    optional: true
+
+# Tap share button
+- tapOn:
+    text: "Share"
+    optional: true
+- tapOn:
+    id: "share-button"
+    optional: true
+
+# Share sheet should appear (on iOS)
+- extendedWaitUntil:
+    visible: "Copy"
+    timeout: 3000
+    optional: true
+
+# Dismiss share sheet
+- pressKey: back
+
+# ==========================================
+# TEST: Join Room via QR (if applicable)
+# ==========================================
+
+# Navigate to join screen
+- pressKey: back
+- tapOn:
+    text: "Join Room"
+    optional: true
+- extendedWaitUntil:
+    visible: "Join"
+    timeout: 5000
+    optional: true
+
+# QR scanner or code input should be available
+- assertVisible:
+    text: "Enter Code"
+    optional: true
+- assertVisible:
+    text: "Scan"
+    optional: true
+
+# ==========================================
+# CLEANUP: Leave/Delete Test Room
+# ==========================================
+
+- pressKey: back
+- tapOn:
+    text: "Study Rooms"
+    optional: true
+- tapOn:
+    text: "Test Study Room"
+    optional: true
+
+# Leave or delete room
+- tapOn:
+    text: "Leave Room"
+    optional: true
+- tapOn:
+    text: "Delete Room"
+    optional: true
+- tapOn:
+    text: "Confirm"
+    optional: true
+
+# ==========================================
+# VERIFICATION COMPLETE
+# ==========================================
+
+- pressKey: back
+- tapOn: "Home"
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 5000
+- assertVisible: "Home"

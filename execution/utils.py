@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 PROJECT_ROOT = Path(__file__).parent.parent
 TMP_DIR = PROJECT_ROOT / ".tmp"
 ENV_FILE = PROJECT_ROOT / ".env"
+ENV_LOCAL_FILE = PROJECT_ROOT / ".env.local"
 
 # Ensure .tmp exists
 TMP_DIR.mkdir(exist_ok=True)
@@ -30,10 +31,16 @@ logger = logging.getLogger("execution")
 
 def load_env() -> dict:
     """
-    Load environment variables from .env file.
+    Load environment variables from .env and .env.local files.
+    .env.local takes precedence over .env.
     Returns dict of all env vars for easy access.
     """
-    load_dotenv(ENV_FILE)
+    # Load base .env first
+    if ENV_FILE.exists():
+        load_dotenv(ENV_FILE)
+    # Then load .env.local (overrides .env values)
+    if ENV_LOCAL_FILE.exists():
+        load_dotenv(ENV_LOCAL_FILE, override=True)
     return dict(os.environ)
 
 

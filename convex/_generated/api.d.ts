@@ -33,6 +33,7 @@ import type * as quizQuestions from "../quizQuestions.js";
 import type * as quizSeed from "../quizSeed.js";
 import type * as quizSessions from "../quizSessions.js";
 import type * as quizVisualization from "../quizVisualization.js";
+import type * as seedAdminUser from "../seedAdminUser.js";
 import type * as settings from "../settings.js";
 import type * as studyRooms from "../studyRooms.js";
 import type * as subjects from "../subjects.js";
@@ -74,6 +75,7 @@ declare const fullApi: ApiFromModules<{
   quizSeed: typeof quizSeed;
   quizSessions: typeof quizSessions;
   quizVisualization: typeof quizVisualization;
+  seedAdminUser: typeof seedAdminUser;
   settings: typeof settings;
   studyRooms: typeof studyRooms;
   subjects: typeof subjects;

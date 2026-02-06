@@ -52,35 +52,35 @@ interface ShopItem {
   icon: string;
 }
 
-// Expanded shop items
+// Expanded shop items (prices in Flint = minutes of focus time required)
 const SHOP_ITEMS: ShopItem[] = [
-  // Trail Gear (for pets/animals)
-  { id: 'bandana', name: 'Bandana', description: 'A colorful bandana', cost: 4, category: 'gear', icon: '🧣' },
-  { id: 'hat', name: 'Explorer Hat', description: 'Perfect for adventures', cost: 6, category: 'gear', icon: '🎩' },
-  { id: 'vest', name: 'Adventure Vest', description: 'Hiking vest', cost: 8, category: 'gear', icon: '🦺' },
-  { id: 'sunglasses', name: 'Sunglasses', description: 'Cool shades for sunny trails', cost: 10, category: 'gear', icon: '🕶️' },
-  { id: 'backpack', name: 'Mini Backpack', description: 'Carry essentials on the trail', cost: 12, category: 'gear', icon: '🎒' },
-  { id: 'scarf', name: 'Cozy Scarf', description: 'Warm scarf for cold trails', cost: 14, category: 'gear', icon: '🧵' },
-  { id: 'boots', name: 'Hiking Boots', description: 'Sturdy boots for any terrain', cost: 16, category: 'gear', icon: '🥾' },
-  { id: 'compass', name: 'Compass Necklace', description: 'Never lose your way', cost: 18, category: 'gear', icon: '🧭' },
+  // Trail Gear (for pets/animals) - 1-10 hours of focus
+  { id: 'bandana', name: 'Bandana', description: 'A colorful bandana (1 hour)', cost: 60, category: 'gear', icon: '🧣' },
+  { id: 'hat', name: 'Explorer Hat', description: 'Perfect for adventures (2 hours)', cost: 120, category: 'gear', icon: '🎩' },
+  { id: 'vest', name: 'Adventure Vest', description: 'Hiking vest (3 hours)', cost: 180, category: 'gear', icon: '🦺' },
+  { id: 'sunglasses', name: 'Sunglasses', description: 'Cool shades for sunny trails (4 hours)', cost: 240, category: 'gear', icon: '🕶️' },
+  { id: 'backpack', name: 'Mini Backpack', description: 'Carry essentials on the trail (5 hours)', cost: 300, category: 'gear', icon: '🎒' },
+  { id: 'scarf', name: 'Cozy Scarf', description: 'Warm scarf for cold trails (6 hours)', cost: 360, category: 'gear', icon: '🧵' },
+  { id: 'boots', name: 'Hiking Boots', description: 'Sturdy boots for any terrain (8 hours)', cost: 480, category: 'gear', icon: '🥾' },
+  { id: 'compass', name: 'Compass Necklace', description: 'Never lose your way (10 hours)', cost: 600, category: 'gear', icon: '🧭' },
 
-  // Shelters
-  { id: 'tent', name: 'Camping Tent', description: 'Cozy tent for breaks', cost: 20, category: 'shelter', icon: '⛺' },
-  { id: 'cabin', name: 'Log Cabin', description: 'A warm cabin retreat', cost: 30, category: 'shelter', icon: '🛖' },
-  { id: 'treehouse', name: 'Tree House', description: 'A house in the trees', cost: 40, category: 'shelter', icon: '🏠' },
-  { id: 'igloo', name: 'Ice Igloo', description: 'Cool shelter for arctic trails', cost: 50, category: 'shelter', icon: '🏔️' },
-  { id: 'lighthouse', name: 'Lighthouse', description: 'Coastal shelter with a view', cost: 60, category: 'shelter', icon: '🗼' },
-  { id: 'castle', name: 'Stone Castle', description: 'Royal mountain fortress', cost: 80, category: 'shelter', icon: '🏰' },
+  // Shelters - 5-60 hours of focus (progressive goals)
+  { id: 'tent', name: 'Camping Tent', description: 'Cozy tent for breaks (5 hours)', cost: 300, category: 'shelter', icon: '⛺' },
+  { id: 'cabin', name: 'Log Cabin', description: 'A warm cabin retreat (10 hours)', cost: 600, category: 'shelter', icon: '🛖' },
+  { id: 'treehouse', name: 'Tree House', description: 'A house in the trees (20 hours)', cost: 1200, category: 'shelter', icon: '🏠' },
+  { id: 'igloo', name: 'Ice Igloo', description: 'Cool shelter for arctic trails (30 hours)', cost: 1800, category: 'shelter', icon: '🏔️' },
+  { id: 'lighthouse', name: 'Lighthouse', description: 'Coastal shelter with a view (40 hours)', cost: 2400, category: 'shelter', icon: '🗼' },
+  { id: 'castle', name: 'Stone Castle', description: 'Royal mountain fortress (60 hours)', cost: 3600, category: 'shelter', icon: '🏰' },
 
-  // Trails (removed mountains - that's the starting trail)
-  { id: 'forest', name: 'Forest Path', description: 'Walk through tall trees', cost: 25, category: 'trail', icon: '🌲' },
-  { id: 'desert', name: 'Desert Trail', description: 'Explore sandy dunes', cost: 35, category: 'trail', icon: '🏜️' },
-  { id: 'beach', name: 'Beach Path', description: 'Walk along the shore', cost: 45, category: 'trail', icon: '🏖️' },
-  { id: 'jungle', name: 'Jungle Trek', description: 'Adventure through the jungle', cost: 55, category: 'trail', icon: '🌴' },
-  { id: 'snow', name: 'Snowy Path', description: 'Winter wonderland trail', cost: 65, category: 'trail', icon: '❄️' },
-  { id: 'canyon', name: 'Grand Canyon', description: 'Majestic canyon views', cost: 75, category: 'trail', icon: '🏞️' },
-  { id: 'volcano', name: 'Volcano Trail', description: 'Hike near active volcano', cost: 85, category: 'trail', icon: '🌋' },
-  { id: 'northern', name: 'Northern Lights', description: 'Aurora borealis path', cost: 95, category: 'trail', icon: '🌌' },
+  // Trails - 3-60 hours of focus (progressive goals)
+  { id: 'forest', name: 'Forest Path', description: 'Walk through tall trees (3 hours)', cost: 180, category: 'trail', icon: '🌲' },
+  { id: 'desert', name: 'Desert Trail', description: 'Explore sandy dunes (6 hours)', cost: 360, category: 'trail', icon: '🏜️' },
+  { id: 'beach', name: 'Beach Path', description: 'Walk along the shore (10 hours)', cost: 600, category: 'trail', icon: '🏖️' },
+  { id: 'jungle', name: 'Jungle Trek', description: 'Adventure through the jungle (15 hours)', cost: 900, category: 'trail', icon: '🌴' },
+  { id: 'snow', name: 'Snowy Path', description: 'Winter wonderland trail (20 hours)', cost: 1200, category: 'trail', icon: '❄️' },
+  { id: 'canyon', name: 'Grand Canyon', description: 'Majestic canyon views (30 hours)', cost: 1800, category: 'trail', icon: '🏞️' },
+  { id: 'volcano', name: 'Volcano Trail', description: 'Hike near active volcano (45 hours)', cost: 2700, category: 'trail', icon: '🌋' },
+  { id: 'northern', name: 'Northern Lights', description: 'Aurora borealis path (60 hours)', cost: 3600, category: 'trail', icon: '🌌' },
 ];
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);

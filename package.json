@@ -51,6 +51,7 @@
     "expo-splash-screen": "~31.0.10",
     "expo-status-bar": "~3.0.8",
     "expo-three": "^8.0.0",
+    "expo-tracking-transparency": "~6.0.8",
     "expo-updates": "~29.0.11",
     "expo-web-browser": "~15.0.10",
     "https-browserify": "^1.0.0",

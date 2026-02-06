@@ -1,0 +1,108 @@
+{
+  "name": "HikeWise Release",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 10 * * 5"
+            }
+          ]
+        }
+      },
+      "id": "release-trigger",
+      "name": "Friday 10am",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "command": "cd /Users/jackenholland/AppDev/thetriage && python execution/version_bumper.py --action current"
+      },
+      "id": "check-version",
+      "name": "Check Version",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "command": "cd /Users/jackenholland/AppDev/thetriage && python execution/eas_build_manager.py --action list --limit 1 --platform ios"
+      },
+      "id": "check-builds",
+      "name": "Check Recent Builds",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        650,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "content": "=Weekly Release Check Complete\n\nVersion: {{ $('Check Version').item.json.stdout }}\nBuilds: {{ $('Check Recent Builds').item.json.stdout }}",
+        "options": {}
+      },
+      "id": "summary",
+      "name": "Summary",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [
+        850,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Friday 10am": {
+      "main": [
+        [
+          {
+            "node": "Check Version",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Version": {
+      "main": [
+        [
+          {
+            "node": "Check Recent Builds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Recent Builds": {
+      "main": [
+        [
+          {
+            "node": "Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    "hikewise",
+    "release",
+    "automation"
+  ]
+}

@@ -83,12 +83,13 @@ async function fetchUserAppData(userId = null) {
     const weekStart = new Date(today);
     weekStart.setDate(today.getDate() - today.getDay());
 
+    // Calculate weekly focus time in minutes (durationSeconds is in seconds, convert to minutes)
     const weeklyFocusTime = safeSessions
       .filter((session) => {
         const sessionDate = new Date(session.startTime || session._creationTime);
         return sessionDate >= weekStart && session.status === 'completed';
       })
-      .reduce((total, session) => total + (session.duration || 0), 0);
+      .reduce((total, session) => total + ((session.durationSeconds || 0) / 60), 0);
 
     // Daily focus data for the past 7 days
     const dailyFocusData = [];
@@ -100,12 +101,13 @@ async function fetchUserAppData(userId = null) {
       const dayName = daysOfWeek[date.getDay()];
       const dateString = date.toISOString().split('T')[0];
 
+      // Calculate daily focus time in minutes (durationSeconds is in seconds, convert to minutes)
       const daySessionsMinutes = safeSessions
         .filter((session) => {
           const sessionDate = (session.startTime || new Date(session._creationTime).toISOString()).split('T')[0];
           return sessionDate === dateString && session.status === 'completed';
         })
-        .reduce((total, session) => total + (session.duration || 0), 0);
+        .reduce((total, session) => total + ((session.durationSeconds || 0) / 60), 0);
 
       dailyFocusData.push({
         day: dayName,

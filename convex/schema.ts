@@ -51,6 +51,9 @@ export default defineSchema({
     trailBuddyName: v.optional(v.string()),
     flintCurrency: v.optional(v.number()),
     firstSessionBonusClaimed: v.optional(v.boolean()),
+    // Presence tracking
+    lastSeen: v.optional(v.number()), // Unix timestamp
+    isOnline: v.optional(v.boolean()),
   })
     .index("by_clerkId", ["clerkId"])
     .index("by_email", ["email"])
@@ -172,8 +175,10 @@ export default defineSchema({
     startTime: v.string(),
     endTime: v.optional(v.string()),
     durationSeconds: v.optional(v.number()),
-    sessionType: v.optional(v.string()), // 'individual' | 'group'
+    sessionType: v.optional(v.string()), // 'individual' | 'group' | 'deep_work' | 'balanced' | 'sprint'
     status: v.optional(v.string()), // 'active' | 'paused' | 'completed' | 'cancelled'
+    subject: v.optional(v.string()), // Topic/subject for analytics tracking
+    taskId: v.optional(v.id("tasks")), // Associated task if any
   })
     .index("by_userId", ["userId"])
     .index("by_userId_status", ["userId", "status"]),
@@ -291,6 +296,7 @@ export default defineSchema({
     points: v.optional(v.number()),
     currentStreak: v.optional(v.number()),
     longestStreak: v.optional(v.number()),
+    lastSessionDate: v.optional(v.string()), // YYYY-MM-DD format for streak tracking
     sessionsCompleted: v.optional(v.number()),
     totalSessions: v.optional(v.number()),
     achievementsEarned: v.optional(v.number()),

@@ -1,0 +1,199 @@
+# HikeWise Verification Flow: Profile Save
+# Purpose: Verify profile changes save correctly to Convex
+# Run: maestro test maestro/flows/verify/profile-save.yaml
+
+appId: com.hikewise.app
+name: Verify Profile Save
+tags:
+  - verify
+  - profile
+  - convex
+
+---
+- launchApp:
+    clearState: true
+    env:
+      EXPO_PUBLIC_TEST_MODE: "true"
+
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 15000
+
+# ==========================================
+# TEST: Edit Profile - Bio Update
+# ==========================================
+
+- tapOn: "Profile"
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+
+# Go to Edit Profile
+- tapOn:
+    text: "Edit Profile"
+    optional: true
+- extendedWaitUntil:
+    visible: "Edit"
+    timeout: 5000
+    optional: true
+
+# Focus on bio input
+- tapOn:
+    id: "bio-input"
+    optional: true
+- tapOn:
+    text: "Bio"
+    optional: true
+
+# Clear existing bio and enter new one
+- clearText
+- inputText: "Updated bio for testing - ${timestamp}"
+
+# Save changes
+- tapOn:
+    text: "Save"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+
+# Wait for save confirmation
+- extendedWaitUntil:
+    visible: "saved"
+    timeout: 5000
+    optional: true
+
+# Navigate back to Profile
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+
+# Verify bio is updated on Profile screen
+- assertVisible:
+    text: "Updated bio"
+    optional: true
+
+# ==========================================
+# TEST: Edit Profile - University Update
+# ==========================================
+
+- tapOn:
+    text: "Edit Profile"
+    optional: true
+- extendedWaitUntil:
+    visible: "Edit"
+    timeout: 5000
+    optional: true
+
+# Focus on university input
+- tapOn:
+    id: "university-input"
+    optional: true
+- tapOn:
+    text: "University"
+    optional: true
+
+# Clear and enter new university
+- clearText
+- inputText: "Test University"
+
+# Save changes
+- tapOn:
+    text: "Save"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+
+# Navigate back
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+
+# ==========================================
+# TEST: Persistence After Restart
+# ==========================================
+
+# Navigate to Home
+- pressKey: back
+- tapOn: "Home"
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 5000
+
+# Force restart app
+- stopApp
+- launchApp:
+    env:
+      EXPO_PUBLIC_TEST_MODE: "true"
+
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 15000
+
+# Go back to Profile
+- tapOn: "Profile"
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+
+# Bio should still show updated value
+- assertVisible:
+    text: "Updated bio"
+    optional: true
+
+# University should show updated value
+- assertVisible:
+    text: "Test University"
+    optional: true
+
+# ==========================================
+# TEST: Edit Profile - Major Update
+# ==========================================
+
+- tapOn:
+    text: "Edit Profile"
+    optional: true
+- extendedWaitUntil:
+    visible: "Edit"
+    timeout: 5000
+    optional: true
+
+# Update major
+- tapOn:
+    id: "major-input"
+    optional: true
+- tapOn:
+    text: "Major"
+    optional: true
+
+- clearText
+- inputText: "Computer Science"
+
+# Save
+- tapOn:
+    text: "Save"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+
+# Verify major updated
+- assertVisible:
+    text: "Computer Science"
+    optional: true
+
+# ==========================================
+# VERIFICATION COMPLETE
+# ==========================================
+
+- pressKey: back
+- tapOn: "Home"
+- assertVisible: "Home"

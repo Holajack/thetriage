@@ -133,6 +133,35 @@ export function subscribeToMessageNotifications(
  * Get all conversations for the current user.
  * Returns conversations with partner info and last message.
  */
+/**
+ * Get messages for a specific conversation
+ */
+export async function getConversation(
+  otherUserId: string
+): Promise<{ success: boolean; error?: string; data?: Message[] }> {
+  try {
+    const client = getClient();
+    const messages = await client.query(api.messages.getConversation, {
+      otherUserId: otherUserId as Id<"users">,
+    });
+    if (!messages) return { success: true, data: [] };
+    const adapted = messages.map((m: any) => ({
+      id: m._id,
+      sender_id: m.senderId,
+      recipient_id: m.recipientId,
+      content: m.content,
+      message_type: (m.messageType || "text") as "text" | "image" | "file",
+      is_read: m.isRead ?? false,
+      created_at: new Date(m._creationTime).toISOString(),
+      updated_at: new Date(m._creationTime).toISOString(),
+    }));
+    return { success: true, data: adapted };
+  } catch (error: any) {
+    console.error("Error fetching conversation:", error);
+    return { success: false, error: error.message };
+  }
+}
+
 export async function getConversations(): Promise<{
   success: boolean;
   error?: string;

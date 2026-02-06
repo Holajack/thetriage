@@ -622,6 +622,13 @@ export default function FocusPreparationScreen() {
     return defaultResponses[Math.floor(Math.random() * defaultResponses.length)];
   };
 
+  // Calculate session type from selected time (minutes)
+  const getSessionType = (minutes: number): 'deep_work' | 'balanced' | 'sprint' => {
+    if (minutes >= 90) return 'deep_work';
+    if (minutes >= 45) return 'balanced';
+    return 'sprint';
+  };
+
   const handleStartFocus = async () => {
     if (!selectedTask) {
       Alert.alert('Select a Task', 'Please select a task to focus on');
@@ -654,6 +661,8 @@ export default function FocusPreparationScreen() {
         // Pass explicit selectionMode for StudySessionScreen
         manualSelection: isManualMode,
         selectionMode: isManualMode ? 'manual' : 'auto',
+        // Pass session type based on selected duration
+        sessionType: getSessionType(selectedTime),
       } as never);
       // Reset animation for next time
       colorFillAnim.setValue(0);

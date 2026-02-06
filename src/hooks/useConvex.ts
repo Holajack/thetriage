@@ -51,6 +51,7 @@ export interface Leaderboard {
   display_name?: string;
   avatar_url?: string;
   is_current_user?: boolean;
+  subscription_tier?: string;
   total_focus_time?: number;
   weekly_focus_time?: number;
   monthly_focus_time?: number;
@@ -214,6 +215,7 @@ export const useConvexLeaderboardWithFriends = () => {
       ? "You"
       : entry.user?.fullName || entry.user?.username || "Unknown User",
     avatar_url: entry.user?.avatarUrl,
+    subscription_tier: entry.user?.subscriptionTier || "free",
     total_focus_time: entry.totalFocusTime ?? 0,
     weekly_focus_time: entry.weeklyFocusTime ?? 0,
     monthly_focus_time: entry.monthlyFocusTime ?? 0,
@@ -360,7 +362,8 @@ export const useConvexStudyRooms = () => {
   const rooms = useQuery(api.studyRooms.list, {});
   const loading = rooms === undefined;
 
-  const adapted = (rooms ?? []).map((r) => ({
+  // Memoize adapted array to prevent infinite loop from new array reference on every render
+  const adapted = useMemo(() => (rooms ?? []).map((r) => ({
     ...r,
     id: r._id,
     creator_id: r.ownerId,
@@ -372,7 +375,7 @@ export const useConvexStudyRooms = () => {
     session_duration: r.sessionDuration,
     break_duration: r.breakDuration,
     created_at: r._creationTime ? new Date(r._creationTime).toISOString() : "",
-  }));
+  })), [rooms]);
 
   return {
     rooms: adapted,
@@ -398,11 +401,15 @@ export const useConvexFocusSession = () => {
 
   const startSession = async (
     roomId?: string,
-    sessionType: "individual" | "group" = "individual"
+    sessionType: "individual" | "group" | "deep_work" | "balanced" | "sprint" = "individual",
+    subject?: string,
+    taskId?: string
   ) => {
     const sessionId = await startMutation({
       sessionType,
       roomId: roomId ? (roomId as Id<"studyRooms">) : undefined,
+      subject,
+      taskId: taskId ? (taskId as Id<"tasks">) : undefined,
     });
 
     const session = {
@@ -412,6 +419,8 @@ export const useConvexFocusSession = () => {
       status: "active",
       start_time: new Date().toISOString(),
       startTime: new Date().toISOString(),
+      subject,
+      taskId,
     };
 
     setCurrentSession(session);

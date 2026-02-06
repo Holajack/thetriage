@@ -9,6 +9,7 @@ const { useUserAppData } = require('../../utils/userAppData');
 import { BottomTabBar } from '../../components/BottomTabBar';
 import { CircularChart, AnimatedCircularChart } from '../../components/CircularChart';
 import { UnifiedHeader } from '../../components/UnifiedHeader';
+import Svg, { Path, Rect, Defs, LinearGradient, Stop } from 'react-native-svg';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -23,6 +24,13 @@ import Animated, {
   FadeInUp,
   FadeInDown,
 } from 'react-native-reanimated';
+
+// Session type colors for stacked charts
+const SESSION_TYPE_COLORS = {
+  deepWork: '#9C27B0',   // Purple
+  balanced: '#FF9800',   // Orange
+  sprint: '#2196F3',     // Blue
+};
 import {
   useCounterAnimation,
   useProgressAnimation,
@@ -83,11 +91,279 @@ const AnimatedBarColumn: React.FC<AnimatedBarColumnProps> = ({
   );
 };
 
+// Stacked Bar Column for Week View
+interface StackedBarColumnProps {
+  data: { deepWork: number; balanced: number; sprint: number; total: number };
+  maxHeight: number;
+  index: number;
+  label: string;
+  theme: any;
+  animationProgress: Animated.SharedValue<number>;
+}
+
+const StackedBarColumn: React.FC<StackedBarColumnProps> = ({
+  data,
+  maxHeight,
+  index,
+  label,
+  theme,
+  animationProgress,
+}) => {
+  const deepWorkPercent = maxHeight > 0 ? (data.deepWork / maxHeight) * 100 : 0;
+  const balancedPercent = maxHeight > 0 ? (data.balanced / maxHeight) * 100 : 0;
+  const sprintPercent = maxHeight > 0 ? (data.sprint / maxHeight) * 100 : 0;
+
+  const deepWorkStyle = useAnimatedStyle(() => ({
+    height: `${deepWorkPercent * animationProgress.value}%`,
+  }));
+
+  const balancedStyle = useAnimatedStyle(() => ({
+    height: `${balancedPercent * animationProgress.value}%`,
+  }));
+
+  const sprintStyle = useAnimatedStyle(() => ({
+    height: `${sprintPercent * animationProgress.value}%`,
+  }));
+
+  return (
+    <Animated.View
+      entering={FadeIn.delay(index * 50).duration(300)}
+      style={styles.barColumn}
+    >
+      <View style={styles.barWrapper}>
+        <View style={styles.stackedBarContainer}>
+          <Animated.View
+            style={[styles.stackedBarSegment, { backgroundColor: SESSION_TYPE_COLORS.deepWork }, deepWorkStyle]}
+          />
+          <Animated.View
+            style={[styles.stackedBarSegment, { backgroundColor: SESSION_TYPE_COLORS.balanced }, balancedStyle]}
+          />
+          <Animated.View
+            style={[styles.stackedBarSegment, { backgroundColor: SESSION_TYPE_COLORS.sprint }, sprintStyle]}
+          />
+        </View>
+      </View>
+      <Text style={[styles.barLabel, { color: theme.primary, fontSize: 9 }]}>{label}</Text>
+    </Animated.View>
+  );
+};
+
+// Heat Map Component for Month View
+interface HeatMapProps {
+  data: { day: number; minutes: number; intensity: number }[];
+  firstDayOfMonth: number;
+  daysInMonth: number;
+  theme: any;
+}
+
+const HeatMapChart: React.FC<HeatMapProps> = ({ data, firstDayOfMonth, daysInMonth, theme }) => {
+  const weekDays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+  // Heat map colors (0 = no data, 1-4 = increasing intensity)
+  const getHeatColor = (intensity: number) => {
+    const colors = [
+      theme.text + '15', // 0 - no activity
+      '#4CAF5040',       // 1 - light
+      '#4CAF5080',       // 2 - medium
+      '#4CAF50B0',       // 3 - high
+      '#4CAF50',         // 4 - max
+    ];
+    return colors[Math.min(intensity, 4)];
+  };
+
+  // Create grid with empty cells for alignment
+  const gridCells: (typeof data[0] | null)[] = [];
+  for (let i = 0; i < firstDayOfMonth; i++) {
+    gridCells.push(null); // Empty cells before first day
+  }
+  data.forEach(d => gridCells.push(d));
+
+  // Fill to complete last week
+  const remainder = gridCells.length % 7;
+  if (remainder > 0) {
+    for (let i = 0; i < 7 - remainder; i++) {
+      gridCells.push(null);
+    }
+  }
+
+  // Split into weeks (rows)
+  const weeks: (typeof gridCells)[] = [];
+  for (let i = 0; i < gridCells.length; i += 7) {
+    weeks.push(gridCells.slice(i, i + 7));
+  }
+
+  return (
+    <View style={styles.heatMapContainer}>
+      {/* Header row with day labels */}
+      <View style={styles.heatMapRow}>
+        {weekDays.map((day, index) => (
+          <View key={`header-${index}`} style={styles.heatMapHeaderCell}>
+            <Text style={[styles.heatMapHeaderText, { color: theme.textSecondary }]}>{day}</Text>
+          </View>
+        ))}
+      </View>
+
+      {/* Heat map grid */}
+      {weeks.map((week, weekIndex) => (
+        <Animated.View
+          key={`week-${weekIndex}`}
+          entering={FadeIn.delay(weekIndex * 100).duration(300)}
+          style={styles.heatMapRow}
+        >
+          {week.map((cell, dayIndex) => (
+            <View
+              key={`cell-${weekIndex}-${dayIndex}`}
+              style={[
+                styles.heatMapCell,
+                { backgroundColor: cell ? getHeatColor(cell.intensity) : 'transparent' },
+              ]}
+            >
+              {cell && (
+                <Text style={[styles.heatMapDayText, { color: cell.intensity >= 3 ? '#fff' : theme.text }]}>
+                  {cell.day}
+                </Text>
+              )}
+            </View>
+          ))}
+        </Animated.View>
+      ))}
+
+      {/* Legend */}
+      <View style={styles.heatMapLegend}>
+        <Text style={[styles.heatMapLegendLabel, { color: theme.textSecondary }]}>Less</Text>
+        {[0, 1, 2, 3, 4].map((i) => (
+          <View key={`legend-${i}`} style={[styles.heatMapLegendCell, { backgroundColor: getHeatColor(i) }]} />
+        ))}
+        <Text style={[styles.heatMapLegendLabel, { color: theme.textSecondary }]}>More</Text>
+      </View>
+    </View>
+  );
+};
+
+// Stacked Area Chart Component for Year View
+interface StackedAreaChartProps {
+  data: { deepWork: number; balanced: number; sprint: number; total: number }[];
+  labels: string[];
+  theme: any;
+  maxHeight: number;
+}
+
+const StackedAreaChart: React.FC<StackedAreaChartProps> = ({ data, labels, theme, maxHeight }) => {
+  const chartWidth = width - 80;
+  const chartHeight = 140;
+  const padding = 10;
+
+  if (data.length === 0 || maxHeight === 0) {
+    return (
+      <View style={[styles.areaChartContainer, { height: chartHeight }]}>
+        <Text style={[styles.emptyChartText, { color: theme.textSecondary }]}>No data available</Text>
+      </View>
+    );
+  }
+
+  const pointSpacing = (chartWidth - padding * 2) / (data.length - 1);
+
+  // Create paths for each layer (stacked from bottom)
+  const createAreaPath = (getData: (d: typeof data[0]) => number, baseGetData?: (d: typeof data[0]) => number) => {
+    let path = '';
+    const baseY = chartHeight - padding;
+
+    // Top line (left to right)
+    data.forEach((d, i) => {
+      const x = padding + i * pointSpacing;
+      const value = getData(d);
+      const baseValue = baseGetData ? baseGetData(d) : 0;
+      const y = baseY - ((value + baseValue) / maxHeight) * (chartHeight - padding * 2);
+
+      if (i === 0) {
+        path += `M ${x} ${y}`;
+      } else {
+        path += ` L ${x} ${y}`;
+      }
+    });
+
+    // Bottom line (right to left) to close the area
+    for (let i = data.length - 1; i >= 0; i--) {
+      const x = padding + i * pointSpacing;
+      const baseValue = baseGetData ? baseGetData(data[i]) : 0;
+      const y = baseY - (baseValue / maxHeight) * (chartHeight - padding * 2);
+      path += ` L ${x} ${y}`;
+    }
+
+    path += ' Z';
+    return path;
+  };
+
+  const sprintPath = createAreaPath(
+    (d) => d.sprint,
+    (d) => d.deepWork + d.balanced
+  );
+  const balancedPath = createAreaPath(
+    (d) => d.balanced,
+    (d) => d.deepWork
+  );
+  const deepWorkPath = createAreaPath((d) => d.deepWork);
+
+  return (
+    <View style={styles.areaChartContainer}>
+      <Svg width={chartWidth} height={chartHeight}>
+        <Defs>
+          <LinearGradient id="deepWorkGrad" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0%" stopColor={SESSION_TYPE_COLORS.deepWork} stopOpacity="0.8" />
+            <Stop offset="100%" stopColor={SESSION_TYPE_COLORS.deepWork} stopOpacity="0.3" />
+          </LinearGradient>
+          <LinearGradient id="balancedGrad" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0%" stopColor={SESSION_TYPE_COLORS.balanced} stopOpacity="0.8" />
+            <Stop offset="100%" stopColor={SESSION_TYPE_COLORS.balanced} stopOpacity="0.3" />
+          </LinearGradient>
+          <LinearGradient id="sprintGrad" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0%" stopColor={SESSION_TYPE_COLORS.sprint} stopOpacity="0.8" />
+            <Stop offset="100%" stopColor={SESSION_TYPE_COLORS.sprint} stopOpacity="0.3" />
+          </LinearGradient>
+        </Defs>
+        <Path d={deepWorkPath} fill="url(#deepWorkGrad)" />
+        <Path d={balancedPath} fill="url(#balancedGrad)" />
+        <Path d={sprintPath} fill="url(#sprintGrad)" />
+      </Svg>
+
+      {/* X-axis labels */}
+      <View style={styles.areaChartLabels}>
+        {labels.map((label, index) => (
+          <Text
+            key={index}
+            style={[styles.areaChartLabel, { color: theme.primary }]}
+          >
+            {label}
+          </Text>
+        ))}
+      </View>
+    </View>
+  );
+};
+
+// Session Type Legend Component
+const SessionTypeLegend: React.FC<{ theme: any }> = ({ theme }) => (
+  <View style={styles.sessionTypeLegend}>
+    <View style={styles.legendItemRow}>
+      <View style={[styles.legendDotSmall, { backgroundColor: SESSION_TYPE_COLORS.deepWork }]} />
+      <Text style={[styles.legendTextSmall, { color: theme.textSecondary }]}>Deep Work</Text>
+    </View>
+    <View style={styles.legendItemRow}>
+      <View style={[styles.legendDotSmall, { backgroundColor: SESSION_TYPE_COLORS.balanced }]} />
+      <Text style={[styles.legendTextSmall, { color: theme.textSecondary }]}>Balanced</Text>
+    </View>
+    <View style={styles.legendItemRow}>
+      <View style={[styles.legendDotSmall, { backgroundColor: SESSION_TYPE_COLORS.sprint }]} />
+      <Text style={[styles.legendTextSmall, { color: theme.textSecondary }]}>Sprint</Text>
+    </View>
+  </View>
+);
+
 const AnalyticsScreen = () => {
   const navigation = useNavigation();
   const { user } = useAuth();
   const { theme } = useTheme();
-  const [timeRange, setTimeRange] = useState('year');
+  const [timeRange, setTimeRange] = useState('day');
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const { data: userData, isLoading } = useUserAppData();
@@ -106,17 +382,26 @@ const AnalyticsScreen = () => {
   const remainingMinutes = totalMinutes % 60;
 
   // Count session types: Deep Work, Balanced, Sprint (only completed sessions)
-  const deepWorkCount = sessions.filter((s: any) => s.session_type === 'deep_work' || s.session_type === 'individual').length ?? 0;
-  const balancedCount = sessions.filter((s: any) => s.session_type === 'balanced').length ?? 0;
-  const sprintCount = sessions.filter((s: any) => s.session_type === 'sprint').length ?? 0;
+  // Note: Convex uses 'sessionType' while legacy data may use 'session_type'
+  const deepWorkCount = sessions.filter((s: any) => s.sessionType === 'deep_work' || s.sessionType === 'individual' || s.session_type === 'deep_work' || s.session_type === 'individual').length ?? 0;
+  const balancedCount = sessions.filter((s: any) => s.sessionType === 'balanced' || s.session_type === 'balanced').length ?? 0;
+  const sprintCount = sessions.filter((s: any) => s.sessionType === 'sprint' || s.session_type === 'sprint').length ?? 0;
 
   // Helper function to get session duration in minutes
   const getSessionDuration = (session: any): number => {
-    // Handle different duration field names from database
+    // Handle different duration field names from database (Convex uses durationSeconds)
+    if (session.durationSeconds) return session.durationSeconds / 60;
     if (session.duration_minutes) return session.duration_minutes;
     if (session.duration) return session.duration; // Already in minutes
     if (session.duration_seconds) return session.duration_seconds / 60;
     return 0;
+  };
+
+  // Helper function to get session date (Convex uses startTime)
+  const getSessionDate = (session: any): Date | null => {
+    const dateStr = session.startTime || session.created_at || session.start_time;
+    if (!dateStr) return null;
+    return new Date(dateStr);
   };
 
   // Calculate time spent per subject
@@ -147,6 +432,148 @@ const AnalyticsScreen = () => {
   // Colors for different subjects
   const subjectColors = ['#FF6B35', '#4ECDC4', '#F7B801', '#95E1D3', '#9B59B6', '#E74C3C', '#3498DB', '#2ECC71'];
 
+  // Generate dynamic insights based on user data
+  const dynamicInsights = useMemo(() => {
+    const insights: { icon: string; text: string; iconColor?: string }[] = [];
+    const now = new Date();
+    const currentStreak = leaderboard?.current_streak ?? leaderboard?.currentStreak ?? 0;
+    const longestStreak = leaderboard?.longest_streak ?? leaderboard?.longestStreak ?? 0;
+
+    // Basic stats insight
+    if (totalSessions > 0) {
+      insights.push({
+        icon: 'bulb',
+        text: `You've completed ${totalSessions} sessions totaling ${totalHours}h ${remainingMinutes}m of focus time.`,
+      });
+    } else {
+      insights.push({
+        icon: 'bulb',
+        text: 'Start your first study session to see insights here!',
+      });
+    }
+
+    // Streak insight
+    if (currentStreak > 0) {
+      if (currentStreak === longestStreak && currentStreak > 1) {
+        insights.push({
+          icon: 'flame',
+          text: `🔥 You're on your longest streak ever: ${currentStreak} days! Keep it going!`,
+          iconColor: '#FF5722',
+        });
+      } else if (currentStreak >= 7) {
+        insights.push({
+          icon: 'flame',
+          text: `Amazing! You've maintained a ${currentStreak}-day streak. Your consistency is paying off!`,
+          iconColor: '#FF5722',
+        });
+      } else if (currentStreak >= 3) {
+        insights.push({
+          icon: 'flame',
+          text: `Nice ${currentStreak}-day streak! Studies show it takes 21 days to form a habit.`,
+          iconColor: '#FF5722',
+        });
+      }
+    }
+
+    // Session type dominance insight
+    if (deepWorkCount > 0 || balancedCount > 0 || sprintCount > 0) {
+      const totalTyped = deepWorkCount + balancedCount + sprintCount;
+      if (deepWorkCount > balancedCount && deepWorkCount > sprintCount) {
+        const percent = Math.round((deepWorkCount / totalTyped) * 100);
+        insights.push({
+          icon: 'bulb-outline',
+          text: `Deep Work is your preferred method (${percent}% of sessions). Great for complex tasks!`,
+          iconColor: '#9C27B0',
+        });
+      } else if (balancedCount > sprintCount) {
+        const percent = Math.round((balancedCount / totalTyped) * 100);
+        insights.push({
+          icon: 'fitness-outline',
+          text: `Balanced Focus leads at ${percent}%. A versatile approach for varied work!`,
+          iconColor: '#FF9800',
+        });
+      } else if (sprintCount > 0) {
+        const percent = Math.round((sprintCount / totalTyped) * 100);
+        insights.push({
+          icon: 'flash-outline',
+          text: `Sprint Focus is your go-to (${percent}%). Quick bursts keep you energized!`,
+          iconColor: '#2196F3',
+        });
+      }
+    }
+
+    // Best time of day insight
+    const hourlyData: number[] = Array(24).fill(0);
+    sessions.forEach((s: any) => {
+      const sessionDate = getSessionDate(s);
+      if (sessionDate) {
+        const hour = sessionDate.getHours();
+        hourlyData[hour] += getSessionDuration(s);
+      }
+    });
+    const maxHour = hourlyData.indexOf(Math.max(...hourlyData));
+    if (Math.max(...hourlyData) > 0) {
+      const timeLabel = maxHour < 12 ? `${maxHour || 12}AM` : `${maxHour === 12 ? 12 : maxHour - 12}PM`;
+      const period = maxHour < 6 ? 'early morning' : maxHour < 12 ? 'morning' : maxHour < 17 ? 'afternoon' : maxHour < 21 ? 'evening' : 'night';
+      insights.push({
+        icon: 'time-outline',
+        text: `Your peak productivity is around ${timeLabel}. You're most focused in the ${period}!`,
+        iconColor: '#00BCD4',
+      });
+    }
+
+    // Weekly comparison insight
+    const thisWeekStart = new Date(now);
+    thisWeekStart.setDate(now.getDate() - now.getDay());
+    thisWeekStart.setHours(0, 0, 0, 0);
+    const lastWeekStart = new Date(thisWeekStart);
+    lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+
+    const thisWeekMinutes = sessions.reduce((sum: number, s: any) => {
+      const sessionDate = getSessionDate(s);
+      if (sessionDate && sessionDate >= thisWeekStart) {
+        return sum + getSessionDuration(s);
+      }
+      return sum;
+    }, 0);
+
+    const lastWeekMinutes = sessions.reduce((sum: number, s: any) => {
+      const sessionDate = getSessionDate(s);
+      if (sessionDate && sessionDate >= lastWeekStart && sessionDate < thisWeekStart) {
+        return sum + getSessionDuration(s);
+      }
+      return sum;
+    }, 0);
+
+    if (lastWeekMinutes > 0 && thisWeekMinutes > 0) {
+      const change = Math.round(((thisWeekMinutes - lastWeekMinutes) / lastWeekMinutes) * 100);
+      if (change > 10) {
+        insights.push({
+          icon: 'trending-up',
+          text: `You're up ${change}% this week compared to last week! Great momentum!`,
+          iconColor: '#4CAF50',
+        });
+      } else if (change < -10) {
+        insights.push({
+          icon: 'trending-down',
+          text: `Focus time is down ${Math.abs(change)}% this week. Time to get back on track!`,
+          iconColor: '#FF5722',
+        });
+      }
+    }
+
+    // Subject diversity insight
+    if (subjectBreakdown.length > 3) {
+      insights.push({
+        icon: 'layers-outline',
+        text: `You've studied ${subjectBreakdown.length} different subjects. Diverse learning strengthens neural connections!`,
+        iconColor: '#9C27B0',
+      });
+    }
+
+    return insights.slice(0, 4); // Limit to 4 insights
+  }, [sessions, totalSessions, totalHours, remainingMinutes, leaderboard, deepWorkCount, balancedCount, sprintCount, subjectBreakdown]);
+
   // Generate chart data based on time range
   const getChartData = () => {
     if (timeRange === 'year') {
@@ -176,8 +603,8 @@ const AnalyticsScreen = () => {
       // Calculate hours per month for the current year
       return Array.from({ length: 12 }, (_, monthIndex) => {
         const monthSessions = sessions.filter((s: any) => {
-          if (!s.created_at) return false;
-          const sessionDate = new Date(s.created_at);
+          const sessionDate = getSessionDate(s);
+          if (!sessionDate) return false;
           return sessionDate.getFullYear() === year && sessionDate.getMonth() === monthIndex;
         });
         return monthSessions.reduce((sum: number, s: any) => sum + getSessionDuration(s), 0) / 60;
@@ -190,8 +617,8 @@ const AnalyticsScreen = () => {
         if (day % 2 === 0 || day > daysInMonth) return 0; // Skip even days and invalid days
 
         const daySessions = sessions.filter((s: any) => {
-          if (!s.created_at) return false;
-          const sessionDate = new Date(s.created_at);
+          const sessionDate = getSessionDate(s);
+          if (!sessionDate) return false;
           return sessionDate.getFullYear() === year &&
                  sessionDate.getMonth() === month &&
                  sessionDate.getDate() === day;
@@ -208,8 +635,8 @@ const AnalyticsScreen = () => {
         day.setDate(startOfWeek.getDate() + dayIndex);
 
         const daySessions = sessions.filter((s: any) => {
-          if (!s.created_at) return false;
-          const sessionDate = new Date(s.created_at);
+          const sessionDate = getSessionDate(s);
+          if (!sessionDate) return false;
           return sessionDate.toDateString() === day.toDateString();
         });
         return daySessions.reduce((sum: number, s: any) => sum + getSessionDuration(s), 0) / 60;
@@ -221,8 +648,8 @@ const AnalyticsScreen = () => {
         const endHour = startHour + 2;
 
         const daySessions = sessions.filter((s: any) => {
-          if (!s.created_at) return false;
-          const sessionDate = new Date(s.created_at);
+          const sessionDate = getSessionDate(s);
+          if (!sessionDate) return false;
           const sessionHour = sessionDate.getHours();
           return sessionDate.toDateString() === now.toDateString() &&
                  sessionHour >= startHour && sessionHour < endHour;
@@ -238,6 +665,101 @@ const AnalyticsScreen = () => {
   const barHeights = getBarHeights();
   const maxHeight = Math.max(...barHeights, 1);
 
+  // Calculate stacked data by session type for Week and Year views
+  const getStackedData = () => {
+    const now = currentDate;
+    const year = now.getFullYear();
+
+    if (timeRange === 'week') {
+      // Get start of week
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - now.getDay());
+
+      return Array.from({ length: 7 }, (_, dayIndex) => {
+        const day = new Date(startOfWeek);
+        day.setDate(startOfWeek.getDate() + dayIndex);
+
+        const daySessions = sessions.filter((s: any) => {
+          const sessionDate = getSessionDate(s);
+          if (!sessionDate) return false;
+          return sessionDate.toDateString() === day.toDateString();
+        });
+
+        const deepWork = daySessions
+          .filter((s: any) => s.sessionType === 'deep_work' || s.sessionType === 'individual' || s.session_type === 'deep_work' || s.session_type === 'individual')
+          .reduce((sum: number, s: any) => sum + getSessionDuration(s), 0) / 60;
+        const balanced = daySessions
+          .filter((s: any) => s.sessionType === 'balanced' || s.session_type === 'balanced')
+          .reduce((sum: number, s: any) => sum + getSessionDuration(s), 0) / 60;
+        const sprint = daySessions
+          .filter((s: any) => s.sessionType === 'sprint' || s.session_type === 'sprint')
+          .reduce((sum: number, s: any) => sum + getSessionDuration(s), 0) / 60;
+
+        return { deepWork, balanced, sprint, total: deepWork + balanced + sprint };
+      });
+    } else if (timeRange === 'year') {
+      return Array.from({ length: 12 }, (_, monthIndex) => {
+        const monthSessions = sessions.filter((s: any) => {
+          const sessionDate = getSessionDate(s);
+          if (!sessionDate) return false;
+          return sessionDate.getFullYear() === year && sessionDate.getMonth() === monthIndex;
+        });
+
+        const deepWork = monthSessions
+          .filter((s: any) => s.sessionType === 'deep_work' || s.sessionType === 'individual' || s.session_type === 'deep_work' || s.session_type === 'individual')
+          .reduce((sum: number, s: any) => sum + getSessionDuration(s), 0) / 60;
+        const balanced = monthSessions
+          .filter((s: any) => s.sessionType === 'balanced' || s.session_type === 'balanced')
+          .reduce((sum: number, s: any) => sum + getSessionDuration(s), 0) / 60;
+        const sprint = monthSessions
+          .filter((s: any) => s.sessionType === 'sprint' || s.session_type === 'sprint')
+          .reduce((sum: number, s: any) => sum + getSessionDuration(s), 0) / 60;
+
+        return { deepWork, balanced, sprint, total: deepWork + balanced + sprint };
+      });
+    }
+
+    return [];
+  };
+
+  // Calculate heat map data for Month view
+  const getHeatMapData = () => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const firstDayOfMonth = new Date(year, month, 1).getDay();
+
+    const heatMapData: { day: number; minutes: number; intensity: number }[] = [];
+    let maxMinutes = 0;
+
+    // Calculate minutes for each day
+    for (let day = 1; day <= daysInMonth; day++) {
+      const daySessions = sessions.filter((s: any) => {
+        const sessionDate = getSessionDate(s);
+        if (!sessionDate) return false;
+        return sessionDate.getFullYear() === year &&
+               sessionDate.getMonth() === month &&
+               sessionDate.getDate() === day;
+      });
+      const minutes = daySessions.reduce((sum: number, s: any) => sum + getSessionDuration(s), 0);
+      maxMinutes = Math.max(maxMinutes, minutes);
+      heatMapData.push({ day, minutes, intensity: 0 });
+    }
+
+    // Calculate intensity (0-4 scale)
+    heatMapData.forEach(item => {
+      if (maxMinutes > 0) {
+        item.intensity = Math.ceil((item.minutes / maxMinutes) * 4);
+      }
+    });
+
+    return { data: heatMapData, firstDayOfMonth, daysInMonth };
+  };
+
+  const stackedData = getStackedData();
+  const stackedMaxHeight = Math.max(...stackedData.map(d => d.total), 1);
+  const heatMapInfo = timeRange === 'month' ? getHeatMapData() : null;
+
   // Log data for debugging
   useEffect(() => {
     console.log(`📊 Stats for ${timeRange} view (${currentDate.toDateString()}):`, {
@@ -245,10 +767,10 @@ const AnalyticsScreen = () => {
       totalSessions: sessions.length,
       maxHeight,
       sampleSession: sessions[0] ? {
-        created_at: sessions[0].created_at,
-        duration: sessions[0].duration,
-        duration_minutes: sessions[0].duration_minutes,
-        duration_seconds: sessions[0].duration_seconds,
+        startTime: sessions[0].startTime,
+        durationSeconds: sessions[0].durationSeconds,
+        sessionType: sessions[0].sessionType,
+        subject: sessions[0].subject,
         status: sessions[0].status,
       } : null,
     });
@@ -469,54 +991,97 @@ const AnalyticsScreen = () => {
           />
         </Animated.View>
 
-        {/* Bar Chart */}
+        {/* Chart - Different types based on time range */}
         <Animated.View
           entering={FadeInUp.delay(400).duration(400)}
           style={[styles.chartContainer, { backgroundColor: theme.card }]}
         >
-          {/* Y-axis label */}
-          <View style={styles.yAxisContainer}>
-            <Text style={[styles.axisLabel, { color: theme.text + '88' }]}>
-              {timeRange === 'day' ? 'Minutes' : 'Hours'}
-            </Text>
-          </View>
+          {/* Day View - Bar Chart */}
+          {timeRange === 'day' && (
+            <>
+              <View style={styles.yAxisContainer}>
+                <Text style={[styles.axisLabel, { color: theme.text + '88' }]}>Minutes</Text>
+              </View>
+              <View style={styles.chartWithAxis}>
+                <View style={styles.yAxisScale}>
+                  {[60, 45, 30, 15, 0].map((minute) => (
+                    <Text key={minute} style={[styles.yAxisScaleText, { color: theme.text + '66' }]}>
+                      {minute}
+                    </Text>
+                  ))}
+                </View>
+                <View style={styles.chartBars}>
+                  {barHeights.map((height, index) => (
+                    <AnimatedBarColumn
+                      key={index}
+                      height={height}
+                      maxHeight={maxHeight}
+                      index={index}
+                      label={chartLabels[index]}
+                      theme={theme}
+                      timeRange={timeRange}
+                      animationProgress={barAnimationProgress}
+                    />
+                  ))}
+                </View>
+              </View>
+              <Text style={[styles.xAxisLabel, { color: theme.text + '88' }]}>Hours of Day</Text>
+            </>
+          )}
 
-          <View style={styles.chartWithAxis}>
-            {/* Y-axis scale for day view */}
-            {timeRange === 'day' && (
-              <View style={styles.yAxisScale}>
-                {[60, 45, 30, 15, 0].map((minute) => (
-                  <Text key={minute} style={[styles.yAxisScaleText, { color: theme.text + '66' }]}>
-                    {minute}
-                  </Text>
+          {/* Week View - Stacked Bar Chart */}
+          {timeRange === 'week' && (
+            <>
+              <View style={styles.yAxisContainer}>
+                <Text style={[styles.axisLabel, { color: theme.text + '88' }]}>Hours</Text>
+              </View>
+              <View style={styles.chartBars}>
+                {stackedData.map((data, index) => (
+                  <StackedBarColumn
+                    key={index}
+                    data={data}
+                    maxHeight={stackedMaxHeight}
+                    index={index}
+                    label={chartLabels[index]}
+                    theme={theme}
+                    animationProgress={barAnimationProgress}
+                  />
                 ))}
               </View>
-            )}
+              <Text style={[styles.xAxisLabel, { color: theme.text + '88' }]}>Days of Week</Text>
+              <SessionTypeLegend theme={theme} />
+            </>
+          )}
 
-            {/* Chart bars */}
-            <View style={styles.chartBars}>
-              {barHeights.map((height, index) => (
-                <AnimatedBarColumn
-                  key={index}
-                  height={height}
-                  maxHeight={maxHeight}
-                  index={index}
-                  label={chartLabels[index]}
-                  theme={theme}
-                  timeRange={timeRange}
-                  animationProgress={barAnimationProgress}
-                />
-              ))}
-            </View>
-          </View>
+          {/* Month View - Heat Map */}
+          {timeRange === 'month' && heatMapInfo && (
+            <>
+              <Text style={[styles.chartSubtitle, { color: theme.textSecondary }]}>Focus Activity</Text>
+              <HeatMapChart
+                data={heatMapInfo.data}
+                firstDayOfMonth={heatMapInfo.firstDayOfMonth}
+                daysInMonth={heatMapInfo.daysInMonth}
+                theme={theme}
+              />
+            </>
+          )}
 
-          {/* X-axis label */}
-          <Text style={[styles.xAxisLabel, { color: theme.text + '88' }]}>
-            {timeRange === 'year' ? 'Months' :
-             timeRange === 'month' ? 'Days' :
-             timeRange === 'week' ? 'Days of Week' :
-             'Hours of Day'}
-          </Text>
+          {/* Year View - Stacked Area Chart */}
+          {timeRange === 'year' && (
+            <>
+              <View style={styles.yAxisContainer}>
+                <Text style={[styles.axisLabel, { color: theme.text + '88' }]}>Hours</Text>
+              </View>
+              <StackedAreaChart
+                data={stackedData}
+                labels={chartLabels}
+                theme={theme}
+                maxHeight={stackedMaxHeight}
+              />
+              <Text style={[styles.xAxisLabel, { color: theme.text + '88' }]}>Months</Text>
+              <SessionTypeLegend theme={theme} />
+            </>
+          )}
 
           <Text style={[styles.chartTotal, { color: theme.primary }]}>
             Total: {totalHours}h {remainingMinutes}m
@@ -571,26 +1136,19 @@ const AnalyticsScreen = () => {
         >
           <Text style={[styles.insightsTitle, { color: theme.text }]}>Insights</Text>
           <StaggeredList delay="fast">
-            <View style={styles.insightItem}>
-              <Ionicons name="bulb" size={20} color={theme.primary} style={{ marginRight: 12 }} />
-              <Text style={[styles.insightText, { color: theme.text }]}>
-                {totalSessions > 0
-                  ? `You've completed ${totalSessions} sessions totaling ${totalHours}h ${remainingMinutes}m of focus time.`
-                  : 'Start your first study session to see insights here!'}
-              </Text>
-            </View>
-            {deepWorkCount > 0 && (
-              <View style={styles.insightItem}>
-                <Ionicons name="trending-up" size={20} color={theme.primary} style={{ marginRight: 12 }} />
+            {dynamicInsights.map((insight, index) => (
+              <View key={index} style={styles.insightItem}>
+                <Ionicons
+                  name={insight.icon as any}
+                  size={20}
+                  color={insight.iconColor || theme.primary}
+                  style={{ marginRight: 12 }}
+                />
                 <Text style={[styles.insightText, { color: theme.text }]}>
-                  {deepWorkCount > balancedCount && deepWorkCount > sprintCount
-                    ? `Deep Work is your most used method with ${deepWorkCount} sessions. Great for intensive study!`
-                    : balancedCount > sprintCount
-                    ? `Balanced Focus is your go-to with ${balancedCount} sessions. A well-rounded approach!`
-                    : `Sprint Focus leads with ${sprintCount} sessions. Quick and efficient!`}
+                  {insight.text}
                 </Text>
               </View>
-            )}
+            ))}
           </StaggeredList>
         </Animated.View>
       </ScrollView>
@@ -827,6 +1385,127 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     lineHeight: 20,
+  },
+
+  // Stacked Bar Chart Styles
+  stackedBarContainer: {
+    width: '100%',
+    height: '100%',
+    flexDirection: 'column-reverse', // Stack from bottom
+    justifyContent: 'flex-start',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  stackedBarSegment: {
+    width: '100%',
+    borderRadius: 0,
+  },
+
+  // Heat Map Styles
+  heatMapContainer: {
+    width: '100%',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  heatMapRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  heatMapHeaderCell: {
+    width: 36,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 2,
+  },
+  heatMapHeaderText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  heatMapCell: {
+    width: 36,
+    height: 36,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 2,
+  },
+  heatMapDayText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  heatMapLegend: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    gap: 4,
+  },
+  heatMapLegendCell: {
+    width: 16,
+    height: 16,
+    borderRadius: 3,
+  },
+  heatMapLegendLabel: {
+    fontSize: 11,
+    marginHorizontal: 4,
+  },
+
+  // Stacked Area Chart Styles
+  areaChartContainer: {
+    width: '100%',
+    alignItems: 'center',
+    marginVertical: 8,
+  },
+  areaChartLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingHorizontal: 10,
+    marginTop: 4,
+  },
+  areaChartLabel: {
+    fontSize: 8,
+    fontWeight: '600',
+  },
+  emptyChartText: {
+    fontSize: 14,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: 60,
+  },
+
+  // Session Type Legend
+  sessionTypeLegend: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 16,
+    marginTop: 12,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.1)',
+  },
+  legendItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  legendDotSmall: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  legendTextSmall: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+
+  // Chart subtitle
+  chartSubtitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 8,
+    alignSelf: 'flex-start',
   },
 });
 

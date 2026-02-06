@@ -1,0 +1,219 @@
+# HikeWise Discovery Flow: Explore All Screens
+# Purpose: Visit every screen in the app to discover issues
+# Run: maestro test maestro/flows/discovery/explore-all-screens.yaml
+
+appId: com.hikewise.app
+name: Explore All Screens
+tags:
+  - discovery
+  - navigation
+  - smoke
+
+---
+# App should auto-authenticate in TEST_MODE
+- launchApp:
+    clearState: true
+    env:
+      EXPO_PUBLIC_TEST_MODE: "true"
+
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 15000
+
+# ==========================================
+# MAIN TABS
+# ==========================================
+
+# Home Tab
+- assertVisible: "Home"
+- takeScreenshot: "screens/home"
+
+# Analytics Tab
+- tapOn: "Analytics"
+- extendedWaitUntil:
+    visible: "Analytics"
+    timeout: 5000
+- takeScreenshot: "screens/analytics"
+
+# Leaderboard Tab (if exists)
+- tapOn:
+    text: "Leaderboard"
+    optional: true
+- extendedWaitUntil:
+    visible: "Leaderboard"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "screens/leaderboard"
+
+# Shop Tab
+- tapOn: "Shop"
+- extendedWaitUntil:
+    visible: "Shop"
+    timeout: 5000
+- takeScreenshot: "screens/shop"
+
+# Return to Home
+- tapOn: "Home"
+
+# ==========================================
+# PROFILE SCREENS
+# ==========================================
+
+# Profile via drawer or icon
+- tapOn:
+    id: "profile-button"
+    optional: true
+- tapOn:
+    text: "Profile"
+    optional: true
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+- takeScreenshot: "screens/profile"
+
+# Personal Information
+- tapOn:
+    text: "Personal Information"
+    optional: true
+- extendedWaitUntil:
+    visible: "Personal Information"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "screens/personal-info"
+- pressKey: back
+
+# Edit Profile
+- tapOn:
+    text: "Edit Profile"
+    optional: true
+- extendedWaitUntil:
+    visible: "Edit Profile"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "screens/edit-profile"
+- pressKey: back
+
+# ==========================================
+# SETTINGS SCREENS
+# ==========================================
+
+# Settings
+- tapOn:
+    text: "Settings"
+    optional: true
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 5000
+- takeScreenshot: "screens/settings"
+
+# Sound Settings
+- tapOn:
+    text: "Sound"
+    optional: true
+- extendedWaitUntil:
+    visible: "Sound"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "screens/sound-settings"
+- pressKey: back
+
+# Notification Settings
+- tapOn:
+    text: "Notifications"
+    optional: true
+- extendedWaitUntil:
+    visible: "Notifications"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "screens/notification-settings"
+- pressKey: back
+
+# Focus Settings
+- tapOn:
+    text: "Focus"
+    optional: true
+- extendedWaitUntil:
+    visible: "Focus"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "screens/focus-settings"
+- pressKey: back
+
+# Back to Home
+- tapOn: "Home"
+
+# ==========================================
+# STUDY ROOM SCREENS
+# ==========================================
+
+# Study Rooms
+- tapOn:
+    text: "Study Rooms"
+    optional: true
+- extendedWaitUntil:
+    visible: "Study Rooms"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "screens/study-rooms"
+
+# Create Study Room
+- tapOn:
+    text: "Create Room"
+    optional: true
+- extendedWaitUntil:
+    visible: "Create"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "screens/create-study-room"
+- pressKey: back
+- pressKey: back
+
+# ==========================================
+# FOCUS SESSION SCREENS
+# ==========================================
+
+# Start Focus Session
+- tapOn: "Home"
+- tapOn:
+    text: "Start Session"
+    optional: true
+- tapOn:
+    text: "Start"
+    optional: true
+- extendedWaitUntil:
+    visible: "Focus"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "screens/focus-session"
+
+# End Session if started
+- tapOn:
+    text: "End"
+    optional: true
+- tapOn:
+    text: "End Session"
+    optional: true
+- takeScreenshot: "screens/session-complete"
+
+# ==========================================
+# ACHIEVEMENTS & BONUSES
+# ==========================================
+
+- tapOn: "Home"
+- tapOn:
+    text: "Achievements"
+    optional: true
+- extendedWaitUntil:
+    visible: "Achievements"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "screens/achievements"
+- pressKey: back
+
+# ==========================================
+# COMPLETION
+# ==========================================
+
+- tapOn: "Home"
+- assertVisible: "Home"
+- takeScreenshot: "screens/exploration-complete"

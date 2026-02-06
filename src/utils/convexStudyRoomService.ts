@@ -279,13 +279,21 @@ export async function getStudyRoomMessages(
     const messages = await client.query(api.studyRooms.getMessages, {
       roomId: roomId as Id<"studyRooms">,
     });
-    const adapted = (messages ?? []).map((m) => ({
+    const adapted = (messages ?? []).map((m: any) => ({
       id: m._id,
       room_id: m.roomId,
       sender_id: m.senderId,
       content: m.content,
       message_type: (m.messageType ?? "text") as "text" | "system" | "join" | "leave",
       created_at: m._creationTime ? new Date(m._creationTime).toISOString() : "",
+      sender: m.sender
+        ? {
+            id: m.sender._id,
+            username: m.sender.username,
+            full_name: m.sender.fullName,
+            avatar_url: m.sender.avatarUrl,
+          }
+        : undefined,
     }));
     return { success: true, data: adapted };
   } catch (error: any) {

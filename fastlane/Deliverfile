@@ -1,0 +1,41 @@
+# Deliverfile for HikeWise
+# Configuration for fastlane deliver
+
+# App information
+app_identifier "com.hikewise.app"
+username ENV["APPLE_ID"] || "your-apple-id@email.com"
+
+# Metadata
+metadata_path "./metadata"
+screenshots_path "../store-assets/screenshots"
+
+# Skip options (we use EAS for binary uploads)
+skip_binary_upload true
+skip_app_version_update true
+
+# Submission options
+submit_for_review false
+automatic_release false
+phased_release true
+
+# Force overwrite
+force true
+
+# Don't fail on missing screenshots during validation
+ignore_language_directory_validation true
+
+# Precheck settings
+precheck_include_in_app_purchases false
+
+# App Store rating
+app_rating_config_path "./rating_config.json"
+
+# Price tier (0 = free)
+price_tier 0
+
+# Categories
+primary_category "Education"
+secondary_category "Productivity"
+
+# Copyright
+copyright "#{Time.now.year} HikeWise"

@@ -40,9 +40,8 @@ const StudyRoomScreen = () => {
   const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
   const [inviteMessage, setInviteMessage] = useState('');
   const flatListRef = useRef<FlatList>(null);
-  const unsubscribeRef = useRef<(() => void) | null>(null);
 
-  // Load messages and set up real-time subscription
+  // Load messages and set up polling for real-time updates
   useEffect(() => {
     if (!roomData?.id || !user?.id) return;
 
@@ -64,22 +63,31 @@ const StudyRoomScreen = () => {
 
     loadMessages();
 
-    // Set up real-time subscription
-    unsubscribeRef.current = StudyRoomService.subscribeToStudyRoomMessages(
-      roomData.id,
-      (newMessage) => {
-        setMessages((prev) => [...prev, newMessage]);
-        // Scroll to bottom
-        setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
-        }, 100);
+    // Poll for new messages every 3 seconds for real-time updates
+    const pollInterval = setInterval(async () => {
+      try {
+        const result = await StudyRoomService.getStudyRoomMessages(roomData.id);
+        if (result.success) {
+          setMessages((prevMessages) => {
+            const newMessages = result.data || [];
+            // Only update if there are new messages to avoid unnecessary re-renders
+            if (newMessages.length !== prevMessages.length) {
+              // Scroll to bottom if new messages
+              setTimeout(() => {
+                flatListRef.current?.scrollToEnd({ animated: true });
+              }, 100);
+              return newMessages;
+            }
+            return prevMessages;
+          });
+        }
+      } catch (error) {
+        console.error('Error polling messages:', error);
       }
-    );
+    }, 3000);
 
     return () => {
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
-      }
+      clearInterval(pollInterval);
     };
   }, [roomData?.id, user?.id]);
 

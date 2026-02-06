@@ -117,6 +117,7 @@ export const StudySessionScreen = () => {
     autoProgress?: boolean;
     currentTaskIndex?: number;
     completedTasksData?: any[];
+    sessionType?: 'deep_work' | 'balanced' | 'sprint';
   } | undefined;
 
   // State variables - must be defined before any useEffect that uses them
@@ -219,7 +220,7 @@ export const StudySessionScreen = () => {
     }
     return getWorkStyleDuration(userData?.onboarding?.focus_method);
   }, [userData?.onboarding?.focus_method, selectedDuration, params?.duration]);
-  
+
   const [timer, setTimer] = useState(initialDuration);
   const [isPaused, setIsPaused] = useState(false);
   const [showEndModal, setShowEndModal] = useState(false);
@@ -477,9 +478,11 @@ export const StudySessionScreen = () => {
       
       // Start session automatically
       setTimeout(() => {
-        const sessionTypeParam = isGroupSession ? 'group' : 'individual';
+        // Use sessionType from params (deep_work/balanced/sprint), fallback to group/individual
+        const sessionTypeParam = isGroupSession ? 'group' : (params?.sessionType || 'balanced');
         const roomId = room?.id || undefined;
-        startSession(roomId, sessionTypeParam);
+        // Pass subject and taskId for analytics tracking
+        startSession(roomId, sessionTypeParam, autoSubject, currentTask?.id || currentTask?._id);
         startTimeRef.current = Date.now();
         setSessionStarted(true);
         // Music will be started by the consolidated music effect
@@ -488,14 +491,16 @@ export const StudySessionScreen = () => {
     // If auto-start is true but no task is found, start general study session
     else if (params?.autoStart === true && !sessionStarted && !currentTask) {
       console.log('🔄 Auto-starting general study session (no tasks available)');
-      
+
       // Automatically set subject to "General Study" for auto mode with no tasks
       setSelectedSubject('General Study');
-      
+
       setTimeout(() => {
-        const sessionTypeParam = isGroupSession ? 'group' : 'individual';
+        // Use sessionType from params (deep_work/balanced/sprint), fallback to group/individual
+        const sessionTypeParam = isGroupSession ? 'group' : (params?.sessionType || 'balanced');
         const roomId = room?.id || undefined;
-        startSession(roomId, sessionTypeParam);
+        // Pass subject for analytics tracking
+        startSession(roomId, sessionTypeParam, 'General Study');
         startTimeRef.current = Date.now();
         setSessionStarted(true);
         // Music will be started by the consolidated music effect
@@ -571,12 +576,15 @@ export const StudySessionScreen = () => {
     
     // Close modal and start session
     setShowPreSessionModal(false);
-    
+
     // Start session immediately after modal closes
     setTimeout(() => {
-      const sessionTypeParam = isGroupSession ? 'group' : 'individual';
+      // Use sessionType from params (deep_work/balanced/sprint), fallback to group/individual
+      const sessionTypeParam = isGroupSession ? 'group' : (params?.sessionType || 'balanced');
       const roomId = room?.id || undefined;
-      startSession(roomId, sessionTypeParam);
+      // Pass subject and first task's ID for analytics tracking
+      const firstTask = taskOrder[0];
+      startSession(roomId, sessionTypeParam, selectedSubject, firstTask?.id || firstTask?._id);
       startTimeRef.current = Date.now();
       setSessionStarted(true);
       // Music will be started by the consolidated music effect

@@ -65,10 +65,18 @@ export const getParticipants = query({
 export const getMessages = query({
   args: { roomId: v.id("studyRooms") },
   handler: async (ctx, args) => {
-    return await ctx.db
+    const messages = await ctx.db
       .query("studyRoomMessages")
       .withIndex("by_roomId", (q) => q.eq("roomId", args.roomId))
       .collect();
+
+    // Enrich with sender data
+    const enriched = [];
+    for (const m of messages) {
+      const sender = await ctx.db.get(m.senderId);
+      enriched.push({ ...m, sender });
+    }
+    return enriched;
   },
 });
 
@@ -128,7 +136,8 @@ export const join = mutation({
       )
       .first();
 
-    if (existing?.isActive) throw new Error("Already in room");
+    // If already active in room, just return silently (idempotent)
+    if (existing?.isActive) return;
 
     if (existing) {
       // Rejoin

@@ -42,7 +42,7 @@ export const startSession = mutation({
 
     if (inProgressSession) {
       // Return existing session instead of creating a new one
-      return inProgressSession._id;
+      return { sessionId: inProgressSession._id };
     }
 
     // Create new session
@@ -58,7 +58,7 @@ export const startSession = mutation({
       startedAt: new Date().toISOString(),
     });
 
-    return sessionId;
+    return { sessionId };
   },
 });
 
@@ -259,7 +259,8 @@ export const completeSession = mutation({
 
     if (session.status === "completed") {
       // Already completed, return existing result
-      return session.resultId;
+      const existingResult = session.resultId ? await ctx.db.get(session.resultId) : null;
+      return { result: existingResult, sessionId: args.sessionId };
     }
 
     // Get all responses
@@ -343,7 +344,10 @@ export const completeSession = mutation({
       recordedAt: new Date().toISOString(),
     });
 
-    return resultId;
+    // Fetch full result for frontend
+    const fullResult = await ctx.db.get(resultId);
+
+    return { result: fullResult, sessionId: args.sessionId };
   },
 });
 

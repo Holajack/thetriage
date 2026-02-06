@@ -40,19 +40,53 @@ export const listRequests = query({
     if (!user) return null;
     const type = args.type ?? "incoming";
 
+    let requests;
     if (type === "incoming") {
-      return await ctx.db
+      requests = await ctx.db
         .query("friendRequests")
         .withIndex("by_recipientId_status", (q) =>
           q.eq("recipientId", user._id).eq("status", "pending")
         )
         .collect();
     } else {
-      return await ctx.db
+      requests = await ctx.db
         .query("friendRequests")
         .withIndex("by_senderId", (q) => q.eq("senderId", user._id))
         .collect();
     }
+
+    // Enrich requests with sender/recipient profile data
+    const enrichedRequests = await Promise.all(
+      requests.map(async (request) => {
+        const sender = await ctx.db.get(request.senderId);
+        const recipient = await ctx.db.get(request.recipientId);
+        return {
+          ...request,
+          sender: sender
+            ? {
+                id: sender._id,
+                username: sender.username,
+                fullName: sender.fullName,
+                avatarUrl: sender.avatarUrl,
+                email: sender.email,
+                status: sender.status,
+              }
+            : null,
+          recipient: recipient
+            ? {
+                id: recipient._id,
+                username: recipient.username,
+                fullName: recipient.fullName,
+                avatarUrl: recipient.avatarUrl,
+                email: recipient.email,
+                status: recipient.status,
+              }
+            : null,
+        };
+      })
+    );
+
+    return enrichedRequests;
   },
 });
 
