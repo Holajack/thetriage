@@ -1,0 +1,505 @@
+# HikeWise Discovery Flow: Back Navigation Audit
+# Purpose: Systematically test back button on EVERY screen to find navigation bugs
+# Run: maestro test maestro/flows/discovery/back-navigation-audit.yaml
+#
+# This flow tests the pattern:
+#   Parent Screen → Child Screen → Press Back → Should return to Parent (NOT Home)
+#
+# Common bug: Back returns to Home instead of the parent screen
+
+appId: com.hikewise.app
+name: Back Navigation Audit
+tags:
+  - discovery
+  - navigation
+  - back-button
+  - critical
+
+---
+- launchApp:
+    clearState: true
+    env:
+      EXPO_PUBLIC_TEST_MODE: "true"
+
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 15000
+
+# ==============================================================================
+# SETTINGS SCREEN BACK NAVIGATION TESTS
+# ==============================================================================
+
+# Navigate to Settings
+- tapOn:
+    text: "Settings"
+    optional: true
+- tapOn:
+    id: "settings-tab"
+    optional: true
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 5000
+- takeScreenshot: "back-audit/settings-main"
+
+# --- Test 1: Settings → AI Integration → Back ---
+- tapOn:
+    text: "AI Integration"
+    optional: true
+- extendedWaitUntil:
+    visible: "AI"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "back-audit/ai-integration"
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 5000
+- assertVisible:
+    text: "Settings"
+- assertNotVisible:
+    text: "Welcome"
+    optional: true
+- takeScreenshot: "back-audit/ai-integration-back-result"
+
+# --- Test 2: Settings → Sound → Back ---
+- tapOn:
+    text: "Sound"
+    optional: true
+- extendedWaitUntil:
+    visible: "Sound"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "back-audit/sound-settings"
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 5000
+- assertVisible: "Settings"
+- takeScreenshot: "back-audit/sound-back-result"
+
+# --- Test 3: Settings → Notifications → Back ---
+- tapOn:
+    text: "Notifications"
+    optional: true
+- extendedWaitUntil:
+    visible: "Notifications"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "back-audit/notifications"
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 5000
+- assertVisible: "Settings"
+- takeScreenshot: "back-audit/notifications-back-result"
+
+# --- Test 4: Settings → Focus Settings → Back ---
+- tapOn:
+    text: "Focus"
+    optional: true
+- tapOn:
+    text: "Focus Settings"
+    optional: true
+- extendedWaitUntil:
+    visible: "Focus"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "back-audit/focus-settings"
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 5000
+- assertVisible: "Settings"
+- takeScreenshot: "back-audit/focus-back-result"
+
+# --- Test 5: Settings → Privacy → Back ---
+- tapOn:
+    text: "Privacy"
+    optional: true
+- extendedWaitUntil:
+    visible: "Privacy"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "back-audit/privacy"
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 5000
+- assertVisible: "Settings"
+- takeScreenshot: "back-audit/privacy-back-result"
+
+# --- Test 6: Settings → Account → Back ---
+- tapOn:
+    text: "Account"
+    optional: true
+- extendedWaitUntil:
+    visible: "Account"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "back-audit/account"
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 5000
+- assertVisible: "Settings"
+- takeScreenshot: "back-audit/account-back-result"
+
+# --- Test 7: Settings → About → Back ---
+- tapOn:
+    text: "About"
+    optional: true
+- extendedWaitUntil:
+    visible: "About"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "back-audit/about"
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 5000
+- assertVisible: "Settings"
+- takeScreenshot: "back-audit/about-back-result"
+
+# --- Test 8: Settings → Help → Back ---
+- tapOn:
+    text: "Help"
+    optional: true
+- extendedWaitUntil:
+    visible: "Help"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "back-audit/help"
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 5000
+- assertVisible: "Settings"
+- takeScreenshot: "back-audit/help-back-result"
+
+# Return to Home for next section
+- tapOn: "Home"
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 5000
+
+# ==============================================================================
+# PROFILE SCREEN BACK NAVIGATION TESTS
+# ==============================================================================
+
+- tapOn: "Profile"
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+- takeScreenshot: "back-audit/profile-main"
+
+# --- Test 9: Profile → Personal Information → Back ---
+- tapOn:
+    text: "Personal Information"
+    optional: true
+- extendedWaitUntil:
+    visible: "Personal"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "back-audit/personal-info"
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+- assertVisible: "Profile"
+- assertNotVisible:
+    text: "Welcome"
+    optional: true
+- takeScreenshot: "back-audit/personal-info-back-result"
+
+# --- Test 10: Profile → Edit Profile → Back ---
+- tapOn:
+    text: "Edit Profile"
+    optional: true
+- extendedWaitUntil:
+    visible: "Edit"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "back-audit/edit-profile"
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+- assertVisible: "Profile"
+- takeScreenshot: "back-audit/edit-profile-back-result"
+
+# --- Test 11: Profile → Achievements → Back ---
+- tapOn:
+    text: "Achievements"
+    optional: true
+- extendedWaitUntil:
+    visible: "Achievements"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "back-audit/achievements"
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+- assertVisible: "Profile"
+- takeScreenshot: "back-audit/achievements-back-result"
+
+# --- Test 12: Profile → Statistics → Back ---
+- tapOn:
+    text: "Statistics"
+    optional: true
+- tapOn:
+    text: "Stats"
+    optional: true
+- extendedWaitUntil:
+    visible: "Statistics"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "back-audit/statistics"
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+- assertVisible: "Profile"
+- takeScreenshot: "back-audit/statistics-back-result"
+
+# --- Test 13: Profile → Session History → Back ---
+- tapOn:
+    text: "Session History"
+    optional: true
+- tapOn:
+    text: "History"
+    optional: true
+- extendedWaitUntil:
+    visible: "History"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "back-audit/session-history"
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+- assertVisible: "Profile"
+- takeScreenshot: "back-audit/session-history-back-result"
+
+# Return to Home
+- pressKey: back
+- tapOn: "Home"
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 5000
+
+# ==============================================================================
+# STUDY ROOMS BACK NAVIGATION TESTS
+# ==============================================================================
+
+- tapOn:
+    text: "Study Rooms"
+    optional: true
+- extendedWaitUntil:
+    visible: "Study"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "back-audit/study-rooms-main"
+
+# --- Test 14: Study Rooms → Create Room → Back ---
+- tapOn:
+    text: "Create"
+    optional: true
+- tapOn:
+    text: "Create Room"
+    optional: true
+- extendedWaitUntil:
+    visible: "Create"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "back-audit/create-room"
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Study"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "back-audit/create-room-back-result"
+
+# --- Test 15: Study Rooms → Join Room → Back ---
+- tapOn:
+    text: "Join"
+    optional: true
+- tapOn:
+    text: "Join Room"
+    optional: true
+- extendedWaitUntil:
+    visible: "Join"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "back-audit/join-room"
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Study"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "back-audit/join-room-back-result"
+
+# Return to Home
+- pressKey: back
+- tapOn: "Home"
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 5000
+
+# ==============================================================================
+# ANALYTICS BACK NAVIGATION TESTS
+# ==============================================================================
+
+- tapOn: "Analytics"
+- extendedWaitUntil:
+    visible: "Analytics"
+    timeout: 5000
+- takeScreenshot: "back-audit/analytics-main"
+
+# --- Test 16: Analytics → Detailed Stats → Back ---
+- tapOn:
+    text: "View Details"
+    optional: true
+- tapOn:
+    text: "More"
+    optional: true
+- extendedWaitUntil:
+    visible: "Details"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "back-audit/analytics-details"
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Analytics"
+    timeout: 5000
+- assertVisible: "Analytics"
+- takeScreenshot: "back-audit/analytics-details-back-result"
+
+# Return to Home
+- tapOn: "Home"
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 5000
+
+# ==============================================================================
+# SHOP BACK NAVIGATION TESTS
+# ==============================================================================
+
+- tapOn: "Shop"
+- extendedWaitUntil:
+    visible: "Shop"
+    timeout: 5000
+- takeScreenshot: "back-audit/shop-main"
+
+# --- Test 17: Shop → Item Details → Back ---
+- tapOn:
+    id: "shop-item-0"
+    optional: true
+- tapOn:
+    text: "View"
+    optional: true
+- extendedWaitUntil:
+    visible: "Details"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "back-audit/shop-item"
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Shop"
+    timeout: 5000
+- assertVisible: "Shop"
+- takeScreenshot: "back-audit/shop-item-back-result"
+
+# ==============================================================================
+# NESTED NAVIGATION TESTS (2+ levels deep)
+# ==============================================================================
+
+# Return to Home first
+- tapOn: "Home"
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 5000
+
+# --- Test 18: Home → Profile → Edit Profile → Change Avatar → Back x2 ---
+- tapOn: "Profile"
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+- tapOn:
+    text: "Edit Profile"
+    optional: true
+- extendedWaitUntil:
+    visible: "Edit"
+    timeout: 5000
+    optional: true
+- tapOn:
+    id: "avatar"
+    optional: true
+- tapOn:
+    text: "Change Photo"
+    optional: true
+- takeScreenshot: "back-audit/nested-avatar"
+
+# Back should return to Edit Profile
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Edit"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "back-audit/nested-avatar-back-1"
+
+# Back should return to Profile
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 5000
+- assertVisible: "Profile"
+- takeScreenshot: "back-audit/nested-avatar-back-2"
+
+# --- Test 19: Settings → Focus → Advanced → Back x2 ---
+- pressKey: back
+- tapOn: "Home"
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 5000
+- tapOn:
+    text: "Focus"
+    optional: true
+- extendedWaitUntil:
+    visible: "Focus"
+    timeout: 5000
+    optional: true
+- tapOn:
+    text: "Advanced"
+    optional: true
+- extendedWaitUntil:
+    visible: "Advanced"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "back-audit/nested-focus-advanced"
+
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Focus"
+    timeout: 5000
+    optional: true
+- takeScreenshot: "back-audit/nested-focus-back-1"
+
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 5000
+- assertVisible: "Settings"
+- takeScreenshot: "back-audit/nested-focus-back-2"
+
+# ==============================================================================
+# FINAL CHECK
+# ==============================================================================
+
+- tapOn: "Home"
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 5000
+- assertVisible: "Home"
+- takeScreenshot: "back-audit/complete"

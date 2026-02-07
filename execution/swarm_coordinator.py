@@ -12,10 +12,13 @@ Main orchestrator for the agent swarm system. Coordinates:
 This extends the existing agent_coordinator.py with mobile-specific features.
 
 Usage:
-    # Full swarm run
+    # Full swarm run (discovers AND fixes)
     python execution/swarm_coordinator.py \
         --action run \
         --max-agents 3
+
+    # AUDIT MODE: Discover and document only (NO FIXING)
+    python execution/swarm_coordinator.py --action audit
 
     # Discovery only
     python execution/swarm_coordinator.py --action discover
@@ -480,6 +483,142 @@ class SwarmCoordinator:
             "agents": agents.data if agents.success else {}
         })
 
+    def audit(self, skip_discovery: bool = False, run_maestro: bool = True) -> ExecutionResult:
+        """
+        AUDIT MODE: Discover and document issues WITHOUT fixing them.
+
+        This mode:
+        1. Runs Maestro discovery flows (if run_maestro=True)
+        2. Parses navigation for structural issues
+        3. Classifies all discovered issues
+        4. Generates detailed fix plans
+        5. Exports LLM-ready markdown todos
+        6. Generates comprehensive audit report
+
+        NO CODE IS MODIFIED. This is read-only exploration.
+        """
+        log(f"Starting AUDIT run: {self.state.run_id}")
+        log("MODE: Audit only - NO FIXES will be made")
+        self.state.phase = "audit"
+        self._save_state()
+
+        audit_results = {
+            "run_id": self.state.run_id,
+            "mode": "audit",
+            "started_at": self.state.started_at,
+            "phases": {}
+        }
+
+        try:
+            # Phase 1: Navigation Analysis
+            log("Phase 1: Analyzing navigation structure...")
+            from navigation_flow_verifier import NavigationFlowVerifier
+
+            nav_verifier = NavigationFlowVerifier(self.project_path)
+            nav_parse = nav_verifier.parse_navigation_files()
+            nav_verify = nav_verifier.verify_navigation()
+
+            audit_results["phases"]["navigation"] = {
+                "screens_found": nav_parse.data.get("screens_found", 0) if nav_parse.success else 0,
+                "navigation_calls": nav_parse.data.get("navigation_calls", 0) if nav_parse.success else 0,
+                "issues": nav_verify.data if nav_verify.success else {}
+            }
+
+            # Generate navigation diagram
+            diagram_path = get_tmp_path("swarm/navigation_diagram.mermaid")
+            nav_verifier.generate_diagram(diagram_path)
+            log(f"Navigation diagram saved to: {diagram_path}")
+
+            # Phase 2: Maestro Discovery (optional)
+            if run_maestro and not skip_discovery:
+                log("Phase 2: Running Maestro discovery flows...")
+                flows_dir = os.path.join(self.project_path, "maestro/flows/discovery")
+
+                if os.path.exists(flows_dir):
+                    discovery_result = self.discovery.run_all_discovery_flows(flows_dir)
+                    audit_results["phases"]["maestro_discovery"] = (
+                        discovery_result.data if discovery_result.success else {"error": discovery_result.error}
+                    )
+                else:
+                    log("Maestro flows not found, skipping...", level="warning")
+                    audit_results["phases"]["maestro_discovery"] = {"skipped": True, "reason": "flows_dir not found"}
+            else:
+                log("Phase 2: Skipping Maestro discovery (disabled)")
+                audit_results["phases"]["maestro_discovery"] = {"skipped": True}
+
+            # Phase 3: Classification
+            log("Phase 3: Classifying all issues...")
+            self._run_classification()
+
+            kanban_stats = self.kanban.get_stats()
+            audit_results["phases"]["classification"] = (
+                kanban_stats.data if kanban_stats.success else {}
+            )
+
+            # Phase 4: Generate Fix Plans
+            log("Phase 4: Generating fix plans...")
+            from issue_plan_generator import IssuePlanGenerator
+
+            plan_generator = IssuePlanGenerator(self.project_path)
+            plans_result = plan_generator.generate_all_plans()
+            audit_results["phases"]["fix_plans"] = (
+                plans_result.data if plans_result.success else {"error": plans_result.error}
+            )
+
+            # Phase 5: Export LLM Todos
+            log("Phase 5: Exporting LLM-ready markdown...")
+            todos_path = get_tmp_path("swarm/llm_todos.md")
+            todos_result = plan_generator.export_todos_markdown(todos_path)
+            audit_results["phases"]["llm_export"] = {
+                "path": todos_path,
+                "issues_count": todos_result.data.get("issues_count", 0) if todos_result.success else 0
+            }
+
+            # Phase 6: Generate Audit Report
+            log("Phase 6: Generating audit report...")
+            report_result = plan_generator.generate_audit_report()
+            audit_results["phases"]["audit_report"] = (
+                report_result.data if report_result.success else {"error": report_result.error}
+            )
+
+            # Summary
+            audit_results["completed_at"] = timestamp()
+            audit_results["summary"] = {
+                "total_issues": kanban_stats.data.get("columns", {}).get("suggestions", 0) if kanban_stats.success else 0,
+                "navigation_issues": audit_results["phases"]["navigation"].get("issues", {}).get("total_issues", 0),
+                "by_priority": kanban_stats.data.get("by_priority", {}) if kanban_stats.success else {},
+                "by_category": kanban_stats.data.get("by_category", {}) if kanban_stats.success else {}
+            }
+
+            # Save audit results
+            save_json(audit_results, f"swarm/audit_{self.state.run_id}.json")
+
+            # Print summary
+            log("=" * 50)
+            log("AUDIT COMPLETE")
+            log("=" * 50)
+            log(f"Total issues found: {audit_results['summary']['total_issues']}")
+            log(f"Navigation issues: {audit_results['summary']['navigation_issues']}")
+            log("")
+            log("Generated files:")
+            log(f"  - LLM Todos: {todos_path}")
+            log(f"  - Audit Report: {report_result.data.get('markdown_path', 'N/A') if report_result.success else 'N/A'}")
+            log(f"  - Navigation Diagram: {diagram_path}")
+            log(f"  - Fix Plans: .tmp/swarm/plans/")
+            log("")
+            log("Next steps:")
+            log("  1. Review: cat .tmp/swarm/llm_todos.md")
+            log("  2. Pick an issue and copy its LLM prompt")
+            log("  3. Give the prompt to Claude/GPT to generate a fix")
+            log("  4. Review and apply the fix manually")
+            log("=" * 50)
+
+            return ExecutionResult.ok(data=audit_results)
+
+        except Exception as e:
+            log(f"Audit error: {e}", level="error")
+            return ExecutionResult.fail(error=str(e))
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -488,13 +627,14 @@ def main():
     parser.add_argument(
         "--action",
         required=True,
-        choices=["run", "discover", "classify", "status", "cleanup"],
+        choices=["run", "audit", "discover", "classify", "status", "cleanup"],
         help="Action to perform"
     )
     parser.add_argument("--max-agents", type=int, default=3, help="Max parallel agents")
     parser.add_argument("--base-port", type=int, default=8081, help="Base port for agents")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be done")
     parser.add_argument("--skip-discovery", action="store_true", help="Skip discovery phase")
+    parser.add_argument("--skip-maestro", action="store_true", help="Skip Maestro in audit mode")
     args = parser.parse_args()
 
     load_env()
@@ -502,6 +642,12 @@ def main():
 
     if args.action == "run":
         result = coordinator.run(dry_run=args.dry_run, skip_discovery=args.skip_discovery)
+
+    elif args.action == "audit":
+        result = coordinator.audit(
+            skip_discovery=args.skip_discovery,
+            run_maestro=not args.skip_maestro
+        )
 
     elif args.action == "discover":
         result = coordinator._run_discovery()
