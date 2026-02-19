@@ -19,8 +19,6 @@ import { StaggeredItem } from '../../components/premium/StaggeredList';
 import SettingsRow from './settings/components/SettingsRow';
 import SettingsGroup from './settings/components/SettingsGroup';
 import SettingsSectionHeader from './settings/components/SettingsSectionHeader';
-import { resetWalkthrough, resetAllWalkthroughs } from '../../hooks/useScreenWalkthrough';
-import { WALKTHROUGH_SCREENS } from '../../config/walkthroughSteps';
 
 const { useUserAppData } = require('../../utils/userAppData');
 
@@ -307,33 +305,6 @@ const SettingsScreen = () => {
     );
   };
 
-  // --- Walkthrough replay ---
-  const handleReplayWalkthrough = (screenId: string, navigateTo: string) => {
-    Alert.alert('Replay Walkthrough', `Replay the ${WALKTHROUGH_SCREENS.find(s => s.id === screenId)?.label ?? screenId} walkthrough?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Replay',
-        onPress: async () => {
-          await resetWalkthrough(screenId);
-          (navigation as any).navigate(navigateTo);
-        },
-      },
-    ]);
-  };
-
-  const handleReplayAll = () => {
-    Alert.alert('Replay All Walkthroughs', 'Reset all walkthroughs so they show again on each screen?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Reset All',
-        onPress: async () => {
-          await resetAllWalkthroughs();
-          Alert.alert('Done', 'All walkthroughs will replay on your next visit to each screen.');
-        },
-      },
-    ]);
-  };
-
   // --- Modal styles ---
   const modalBoxStyle = useMemo(() => ({
     backgroundColor: isDark ? (theme.surface ?? '#1E1E1E') : (theme.card ?? '#FFFFFF'),
@@ -552,30 +523,8 @@ const SettingsScreen = () => {
           </SettingsGroup>
         </StaggeredItem>
 
-        {/* TUTORIALS */}
-        <StaggeredItem index={8}>
-          <SettingsSectionHeader title="TUTORIALS" />
-          <SettingsGroup>
-            {WALKTHROUGH_SCREENS.map((screen, idx) => (
-              <SettingsRow
-                key={screen.id}
-                icon="play-circle-outline"
-                label={`${screen.label} Walkthrough`}
-                onPress={() => handleReplayWalkthrough(screen.id, screen.navigateTo)}
-                isLast={idx === WALKTHROUGH_SCREENS.length - 1}
-              />
-            ))}
-          </SettingsGroup>
-          <TouchableOpacity
-            style={{ alignItems: 'center', marginTop: 8, marginBottom: 4, paddingVertical: 8 }}
-            onPress={handleReplayAll}
-          >
-            <Text style={{ color: theme.primary, fontSize: 14, fontWeight: '600' }}>Reset All Walkthroughs</Text>
-          </TouchableOpacity>
-        </StaggeredItem>
-
         {/* DANGER ZONE */}
-        <StaggeredItem index={9}>
+        <StaggeredItem index={8}>
           <View style={{ marginTop: Spacing.lg }}>
             <SettingsGroup>
               <SettingsRow icon="log-out-outline" label="Sign Out" onPress={handleSignOut} isLast />

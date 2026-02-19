@@ -200,17 +200,6 @@ export const PROFILE_STEPS: WalkthroughStep[] = [
 
 export const BONUSES_STEPS: WalkthroughStep[] = [
   {
-    id: 'stats-bar',
-    title: 'Your Progress at a Glance',
-    description: 'Streaks, badges, focus time, and Flint — all in one place.',
-    spotlightKeys: ['stats-bar'],
-    spotlightShape: 'roundedRect',
-    spotlightPadding: 10,
-    tooltipPosition: 'below',
-    icon: 'trending-up-outline',
-    iconColor: '#4CAF50',
-  },
-  {
     id: 'feature-grid',
     title: 'Explore These Features',
     description: 'Dive into e-books, take a self-discovery quiz, or map your brain — all here to help you grow.',
@@ -220,17 +209,6 @@ export const BONUSES_STEPS: WalkthroughStep[] = [
     tooltipPosition: 'above',
     icon: 'grid-outline',
     iconColor: '#2196F3',
-  },
-  {
-    id: 'coming-soon',
-    title: 'More Coming Soon',
-    description: 'Challenges, daily rewards, and more are on the way. Stay tuned!',
-    spotlightKeys: ['coming-soon'],
-    spotlightShape: 'roundedRect',
-    spotlightPadding: 10,
-    tooltipPosition: 'above',
-    icon: 'sparkles-outline',
-    iconColor: '#FF9800',
   },
   {
     id: 'badge-award',

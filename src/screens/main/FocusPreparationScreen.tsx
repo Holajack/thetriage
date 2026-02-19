@@ -639,7 +639,7 @@ export default function FocusPreparationScreen() {
 
   // Calculate session type from selected time (minutes)
   const getSessionType = (minutes: number): 'deep_work' | 'balanced' | 'sprint' => {
-    if (minutes >= 90) return 'deep_work';
+    if (minutes >= 60) return 'deep_work';
     if (minutes >= 45) return 'balanced';
     return 'sprint';
   };

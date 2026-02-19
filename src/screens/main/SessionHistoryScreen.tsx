@@ -70,19 +70,15 @@ const SessionHistoryScreen = () => {
         return true;
       })
       .map(session => {
-        // Generate a friendly session name based on sessionType
-        let sessionName = 'Study Session';
-        if (session.sessionType === 'individual') {
-          sessionName = 'Focus Session';
-        } else if (session.sessionType === 'group') {
-          sessionName = 'Group Study Session';
-        } else if (session.sessionType === 'deep_work') {
-          sessionName = 'Deep Work Session';
-        } else if (session.sessionType === 'sprint') {
-          sessionName = 'Sprint Session';
-        } else if (session.sessionType === 'balanced') {
-          sessionName = 'Balanced Session';
-        }
+        // Map sessionType to user-friendly display name
+        const typeLabels: Record<string, string> = {
+          deep_work: 'Deep Work',
+          balanced: 'Balance',
+          sprint: 'Sprint',
+          group: 'Group Study',
+          individual: 'Focus Session',
+        };
+        const sessionName = typeLabels[session.sessionType || ''] || 'Focus Session';
 
         return {
           id: session._id,
@@ -251,7 +247,7 @@ const SessionHistoryScreen = () => {
               <Ionicons name="calendar-outline" size={16} color={theme.primary} />
               <Text style={[styles.statLabel, { color: theme.textSecondary ?? theme.text }]}>Type</Text>
               <Text style={[styles.statValue, { color: theme.text }]}>
-                {session.session_type === 'individual' ? 'Solo' : 'Group'}
+                {session.subject || 'Focus'}
               </Text>
             </View>
 
@@ -429,6 +425,28 @@ const SessionHistoryScreen = () => {
                     {sessions.filter(s => s.status === 'completed').length}
                   </Text>
                   <Text style={[styles.summaryLabel, { color: theme.textSecondary ?? theme.text }]}>Completed</Text>
+                </Animated.View>
+              </View>
+
+              {/* Session Type Breakdown */}
+              <View style={[styles.summaryStats, { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border }]}>
+                <Animated.View entering={FadeIn.delay(700).duration(400)} style={styles.summaryItem}>
+                  <Text style={[styles.summaryValue, { color: '#E91E63' }]}>
+                    {sessions.filter(s => s.session_type === 'deep_work').length}
+                  </Text>
+                  <Text style={[styles.summaryLabel, { color: theme.textSecondary ?? theme.text }]}>Deep Work</Text>
+                </Animated.View>
+                <Animated.View entering={FadeIn.delay(800).duration(400)} style={styles.summaryItem}>
+                  <Text style={[styles.summaryValue, { color: '#4CAF50' }]}>
+                    {sessions.filter(s => s.session_type === 'balanced').length}
+                  </Text>
+                  <Text style={[styles.summaryLabel, { color: theme.textSecondary ?? theme.text }]}>Balance</Text>
+                </Animated.View>
+                <Animated.View entering={FadeIn.delay(900).duration(400)} style={styles.summaryItem}>
+                  <Text style={[styles.summaryValue, { color: '#FF9800' }]}>
+                    {sessions.filter(s => s.session_type === 'sprint').length}
+                  </Text>
+                  <Text style={[styles.summaryLabel, { color: theme.textSecondary ?? theme.text }]}>Sprint</Text>
                 </Animated.View>
               </View>
             </Animated.View>
