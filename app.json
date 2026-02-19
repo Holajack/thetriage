@@ -2,8 +2,8 @@
   "expo": {
     "name": "HikeWise",
     "slug": "thetriage",
-    "version": "1.7.0",
-    "runtimeVersion": "1.7.0",
+    "version": "2.0.0",
+    "runtimeVersion": "2.0.0",
     "sdkVersion": "54.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon-ios-white-1024.png",
@@ -18,7 +18,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.hikewise.app",
       "icon": "./assets/icon-ios-white-1024.png",
-      "buildNumber": "15",
+      "buildNumber": "16",
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses camera for document scanning",
         "NSMicrophoneUsageDescription": "This app uses microphone for voice features",
@@ -88,7 +88,7 @@
     },
     "android": {
       "package": "com.hikewise.app",
-      "versionCode": 19,
+      "versionCode": 20,
       "intentFilters": []
     },
     "extra": {

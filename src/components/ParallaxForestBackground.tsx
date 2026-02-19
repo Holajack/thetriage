@@ -56,6 +56,8 @@ interface ParallaxForestBackgroundProps {
   animationMode?: 'walking' | 'resting';
   /** Trail environment ID - determines which parallax layers to render. Defaults to 'forest'. */
   trailType?: string;
+  /** When true, stops scrolling layers and slows buddy animation for accessibility */
+  reduceMotion?: boolean;
 }
 
 // Animated Trail Buddy Component using spritesheet
@@ -63,7 +65,7 @@ interface ParallaxForestBackgroundProps {
 const WALK_DISPLAY_SIZE = 120;
 const REST_DISPLAY_SIZE = 300;
 
-const TrailBuddySprite = ({ buddyType, mode = 'walking' }: { buddyType: string; mode?: 'walking' | 'resting' }) => {
+const TrailBuddySprite = ({ buddyType, mode = 'walking', reduceMotion = false }: { buddyType: string; mode?: 'walking' | 'resting'; reduceMotion?: boolean }) => {
   const [currentFrame, setCurrentFrame] = useState(0);
 
   // Pick the right spritesheet based on animation mode
@@ -73,15 +75,17 @@ const TrailBuddySprite = ({ buddyType, mode = 'walking' }: { buddyType: string; 
   const displaySize = mode === 'resting' ? REST_DISPLAY_SIZE : WALK_DISPLAY_SIZE;
 
   useEffect(() => {
-    // Walking: 70ms per frame (~2s cycle) — energetic trot
-    // Resting: 140ms per frame (~4s cycle) — slow peaceful breathing
-    const FRAME_DURATION = mode === 'resting' ? 140 : 70;
+    // Normal: Walking 70ms (~2s), Resting 140ms (~4s)
+    // Reduce motion: Walking 280ms (~8s gentle), Resting 300ms (~8.4s very slow)
+    const FRAME_DURATION = reduceMotion
+      ? (mode === 'resting' ? 300 : 280)
+      : (mode === 'resting' ? 140 : 70);
     const interval = setInterval(() => {
       setCurrentFrame(prev => (prev + 1) % TOTAL_FRAMES);
     }, FRAME_DURATION);
 
     return () => clearInterval(interval);
-  }, [mode]);
+  }, [mode, reduceMotion]);
 
   // Calculate the offset to show the current frame (scaled to display size)
   const displayScale = displaySize / FRAME_HEIGHT;
@@ -181,11 +185,19 @@ const ScrollingLayer = ({
 };
 
 // Orbiting Sky Component (used in resting mode) - very subtle drift animation
-const OrbitingSky = ({ source }: { source: ImageSourcePropType }) => {
+const OrbitingSky = ({ source, reduceMotion = false }: { source: ImageSourcePropType; reduceMotion?: boolean }) => {
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
 
   useEffect(() => {
+    if (reduceMotion) {
+      // No drift — completely still sky
+      cancelAnimation(translateX);
+      cancelAnimation(translateY);
+      translateX.value = 0;
+      translateY.value = 0;
+      return;
+    }
     // Very slow, gentle drift - peaceful resting mood
     translateX.value = withRepeat(
       withTiming(10, { duration: 30000, easing: Easing.inOut(Easing.sin) }),
@@ -202,7 +214,7 @@ const OrbitingSky = ({ source }: { source: ImageSourcePropType }) => {
       cancelAnimation(translateX);
       cancelAnimation(translateY);
     };
-  }, []);
+  }, [reduceMotion]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
@@ -230,6 +242,7 @@ export const ParallaxForestBackground: React.FC<ParallaxForestBackgroundProps> =
   treeScrollDuration = TREES_SCROLL_DURATION,
   animationMode = 'walking',
   trailType = 'forest',
+  reduceMotion = false,
 }) => {
   const layers = useMemo(
     () => getTrailAssets(trailType, animationMode),
@@ -247,7 +260,7 @@ export const ParallaxForestBackground: React.FC<ParallaxForestBackgroundProps> =
     return (
       <View style={styles.container}>
         {/* Layer 0: Sky - full screen with subtle orbit drift */}
-        <OrbitingSky source={layers.sky} />
+        <OrbitingSky source={layers.sky} reduceMotion={reduceMotion} />
 
         {/* Layer 1: Mountain/mid-ground scenery - static, full screen */}
         <View style={[styles.restLayerFull, { zIndex: 1 }]}>
@@ -279,7 +292,7 @@ export const ParallaxForestBackground: React.FC<ParallaxForestBackgroundProps> =
         {/* Layer 4: Trail Buddy resting - center-right on the ground */}
         {showTrailBuddy && (
           <View style={[styles.restBuddyLayer, { zIndex: 6 }]}>
-            <TrailBuddySprite buddyType={trailBuddyType} mode="resting" />
+            <TrailBuddySprite buddyType={trailBuddyType} mode="resting" reduceMotion={reduceMotion} />
           </View>
         )}
       </View>
@@ -309,28 +322,28 @@ export const ParallaxForestBackground: React.FC<ParallaxForestBackgroundProps> =
         />
       </View>
 
-      {/* Layer 2: Mid Layer - Trees/foliage (slow scroll) */}
+      {/* Layer 2: Mid Layer - Trees/foliage (slow scroll, static when reduce motion) */}
       <ScrollingLayer
         source={layers.tree}
-        duration={treeScrollDuration}
+        duration={reduceMotion ? 0 : treeScrollDuration}
         zIndex={2}
         style={styles.treesLayer}
       />
 
-      {/* Layer 3: Foreground - Path (fastest scroll) - behind the buddy */}
+      {/* Layer 3: Foreground - Path (fastest scroll, static when reduce motion) */}
       {showPath && (
         <ScrollingLayer
           source={layers.path}
-          duration={PATH_SCROLL_DURATION}
+          duration={reduceMotion ? 0 : PATH_SCROLL_DURATION}
           zIndex={3}
           style={styles.pathLayer}
         />
       )}
 
-      {/* Layer 4: Trail Buddy (walking animation) - in front of trees and on top of path */}
+      {/* Layer 4: Trail Buddy (walking animation, slower when reduce motion) */}
       {showTrailBuddy && (
         <View style={[styles.buddyLayer, { zIndex: 4 }]}>
-          <TrailBuddySprite buddyType={trailBuddyType} mode={animationMode} />
+          <TrailBuddySprite buddyType={trailBuddyType} mode={animationMode} reduceMotion={reduceMotion} />
         </View>
       )}
     </View>

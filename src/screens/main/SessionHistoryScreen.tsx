@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Modal, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -39,6 +39,7 @@ const SessionHistoryScreen = () => {
   const navigation = useNavigation();
 
   const [timeFilter, setTimeFilter] = useState<'all' | 'week' | 'month'>('all');
+  const [selectedSession, setSelectedSession] = useState<SessionHistoryItem | null>(null);
 
   // Force animations to replay on every screen focus
   const focusKey = useFocusAnimationKey();
@@ -206,7 +207,7 @@ const SessionHistoryScreen = () => {
           ]}
           onPress={() => {
             triggerHaptic('buttonPress');
-            console.log('Session tapped:', session.id);
+            setSelectedSession(session);
           }}
           onPressIn={onPressIn}
           onPressOut={onPressOut}
@@ -284,14 +285,12 @@ const SessionHistoryScreen = () => {
                 })}
               </Text>
             </View>
-            {session.end_time && (
-              <View style={styles.footerItem}>
-                <Ionicons name="checkmark-circle-outline" size={14} color={theme.primary} />
-                <Text style={[styles.footerText, { color: theme.textSecondary ?? theme.text }]}>
-                  Completed
-                </Text>
-              </View>
-            )}
+            <View style={styles.footerItem}>
+              <Text style={[styles.footerText, { color: theme.textSecondary ?? theme.text }]}>
+                Tap for details
+              </Text>
+              <Ionicons name="chevron-forward" size={14} color={theme.textSecondary ?? theme.text} style={{ marginLeft: 4 }} />
+            </View>
           </View>
         </AnimatedTouchable>
       </StaggeredItem>
@@ -427,28 +426,6 @@ const SessionHistoryScreen = () => {
                   <Text style={[styles.summaryLabel, { color: theme.textSecondary ?? theme.text }]}>Completed</Text>
                 </Animated.View>
               </View>
-
-              {/* Session Type Breakdown */}
-              <View style={[styles.summaryStats, { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border }]}>
-                <Animated.View entering={FadeIn.delay(700).duration(400)} style={styles.summaryItem}>
-                  <Text style={[styles.summaryValue, { color: '#E91E63' }]}>
-                    {sessions.filter(s => s.session_type === 'deep_work').length}
-                  </Text>
-                  <Text style={[styles.summaryLabel, { color: theme.textSecondary ?? theme.text }]}>Deep Work</Text>
-                </Animated.View>
-                <Animated.View entering={FadeIn.delay(800).duration(400)} style={styles.summaryItem}>
-                  <Text style={[styles.summaryValue, { color: '#4CAF50' }]}>
-                    {sessions.filter(s => s.session_type === 'balanced').length}
-                  </Text>
-                  <Text style={[styles.summaryLabel, { color: theme.textSecondary ?? theme.text }]}>Balance</Text>
-                </Animated.View>
-                <Animated.View entering={FadeIn.delay(900).duration(400)} style={styles.summaryItem}>
-                  <Text style={[styles.summaryValue, { color: '#FF9800' }]}>
-                    {sessions.filter(s => s.session_type === 'sprint').length}
-                  </Text>
-                  <Text style={[styles.summaryLabel, { color: theme.textSecondary ?? theme.text }]}>Sprint</Text>
-                </Animated.View>
-              </View>
             </Animated.View>
 
             {/* Sessions List */}
@@ -458,6 +435,109 @@ const SessionHistoryScreen = () => {
           </>
         )}
       </ScrollView>
+
+      {/* Session Detail Modal */}
+      <Modal
+        visible={!!selectedSession}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setSelectedSession(null)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setSelectedSession(null)}>
+          <Pressable style={[styles.modalContent, { backgroundColor: theme.card }]} onPress={(e) => e.stopPropagation()}>
+            {selectedSession && (
+              <>
+                {/* Modal Header */}
+                <View style={styles.modalHeader}>
+                  <Text style={[styles.modalTitle, { color: theme.text }]}>
+                    {selectedSession.task_title || 'Focus Session'}
+                  </Text>
+                  <TouchableOpacity onPress={() => setSelectedSession(null)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+                    <Ionicons name="close" size={24} color={theme.textSecondary ?? theme.text} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Status Badge */}
+                <View style={[styles.modalStatusBadge, { backgroundColor: getStatusColor(selectedSession.status) }]}>
+                  <Ionicons name={getStatusIcon(selectedSession.status) as any} size={14} color="#FFF" style={{ marginRight: 6 }} />
+                  <Text style={styles.modalStatusText}>{selectedSession.status}</Text>
+                </View>
+
+                {/* Detail Rows */}
+                <View style={[styles.modalDivider, { borderBottomColor: theme.border }]} />
+
+                <View style={styles.modalDetailRow}>
+                  <Ionicons name="time-outline" size={18} color={theme.primary} />
+                  <Text style={[styles.modalDetailLabel, { color: theme.textSecondary ?? theme.text }]}>Duration</Text>
+                  <Text style={[styles.modalDetailValue, { color: theme.text }]}>
+                    {formatDuration(selectedSession.duration_minutes || 0)}
+                  </Text>
+                </View>
+
+                <View style={styles.modalDetailRow}>
+                  <Ionicons name="fitness-outline" size={18} color={theme.primary} />
+                  <Text style={[styles.modalDetailLabel, { color: theme.textSecondary ?? theme.text }]}>Session Type</Text>
+                  <Text style={[styles.modalDetailValue, { color: theme.text }]}>
+                    {selectedSession.subject || 'Focus Session'}
+                  </Text>
+                </View>
+
+                <View style={styles.modalDetailRow}>
+                  <Ionicons name="calendar-outline" size={18} color={theme.primary} />
+                  <Text style={[styles.modalDetailLabel, { color: theme.textSecondary ?? theme.text }]}>Date</Text>
+                  <Text style={[styles.modalDetailValue, { color: theme.text }]}>
+                    {new Date(selectedSession.start_time).toLocaleDateString('en-US', {
+                      weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
+                    })}
+                  </Text>
+                </View>
+
+                <View style={styles.modalDetailRow}>
+                  <Ionicons name="play-outline" size={18} color={theme.primary} />
+                  <Text style={[styles.modalDetailLabel, { color: theme.textSecondary ?? theme.text }]}>Started</Text>
+                  <Text style={[styles.modalDetailValue, { color: theme.text }]}>
+                    {new Date(selectedSession.start_time).toLocaleTimeString('en-US', {
+                      hour: '2-digit', minute: '2-digit', hour12: true
+                    })}
+                  </Text>
+                </View>
+
+                {selectedSession.end_time ? (
+                  <View style={styles.modalDetailRow}>
+                    <Ionicons name="stop-outline" size={18} color={theme.primary} />
+                    <Text style={[styles.modalDetailLabel, { color: theme.textSecondary ?? theme.text }]}>Ended</Text>
+                    <Text style={[styles.modalDetailValue, { color: theme.text }]}>
+                      {new Date(selectedSession.end_time).toLocaleTimeString('en-US', {
+                        hour: '2-digit', minute: '2-digit', hour12: true
+                      })}
+                    </Text>
+                  </View>
+                ) : null}
+
+                {/* Notes Section */}
+                <View style={[styles.modalDivider, { borderBottomColor: theme.border }]} />
+                <View style={styles.modalNotesSection}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                    <Ionicons name="document-text-outline" size={18} color={theme.primary} />
+                    <Text style={[styles.modalDetailLabel, { color: theme.textSecondary ?? theme.text, marginLeft: 8 }]}>Notes</Text>
+                  </View>
+                  <Text style={[styles.modalNotesText, { color: theme.textSecondary ?? theme.text }]}>
+                    {selectedSession.notes || 'No notes recorded for this session.'}
+                  </Text>
+                </View>
+
+                {/* Close Button */}
+                <TouchableOpacity
+                  style={[styles.modalCloseButton, { backgroundColor: theme.primary }]}
+                  onPress={() => setSelectedSession(null)}
+                >
+                  <Text style={styles.modalCloseButtonText}>Close</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Bottom Tab Bar */}
       <BottomTabBar currentRoute="SessionHistory" />
@@ -693,6 +773,83 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   startSessionButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // ─── Detail Modal ────────────────────────────
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 24,
+    paddingBottom: 40,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    flex: 1,
+    marginRight: 12,
+  },
+  modalStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  modalStatusText: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  modalDivider: {
+    borderBottomWidth: 1,
+    marginVertical: 12,
+  },
+  modalDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  modalDetailLabel: {
+    fontSize: 14,
+    marginLeft: 8,
+    flex: 1,
+  },
+  modalDetailValue: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modalNotesSection: {
+    marginTop: 4,
+  },
+  modalNotesText: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontStyle: 'italic',
+  },
+  modalCloseButton: {
+    marginTop: 20,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  modalCloseButtonText: {
     color: '#FFF',
     fontSize: 16,
     fontWeight: '600',

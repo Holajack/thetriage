@@ -714,6 +714,9 @@ export const useConvexUserAppData = () => {
         break_length: settings.breakLength,
         auto_start_breaks: settings.autoStartBreaks,
         show_motivational_quotes: settings.showMotivationalQuotes,
+        tts_enabled: settings.ttsEnabled,
+        high_contrast: settings.highContrast,
+        reduce_motion: settings.reduceMotion,
       }
     : null;
 

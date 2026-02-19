@@ -417,6 +417,7 @@ export const BreakTimerScreen = () => {
         trailBuddyType={profile?.trail_buddy_type || 'bear'}
         showTrailBuddy={true}
         animationMode="resting"
+        reduceMotion={!!userData?.settings?.reduce_motion}
       />
 
       {/* Dark overlay removed for full color visibility */}

@@ -32,6 +32,10 @@ export interface UserSettings {
   workStyle?: string;
   focus_duration?: number;
   break_duration?: number;
+  // Accessibility
+  tts_enabled?: boolean;
+  high_contrast?: boolean;
+  reduce_motion?: boolean;
   // Ambient sound toggles
   ambientEnvironmentEnabled?: boolean;
   ambientWhiteNoiseEnabled?: boolean;
@@ -69,6 +73,9 @@ export async function getUserSettings(userId?: string): Promise<UserSettings | n
       daily_goal_minutes: settings.dailyGoalMinutes,
       preferred_session_length: settings.preferredSessionLength,
       preferred_break_length: settings.breakLength,
+      tts_enabled: settings.ttsEnabled,
+      high_contrast: settings.highContrast,
+      reduce_motion: settings.reduceMotion,
     };
   } catch (error) {
     console.error('Error in getUserSettings:', error);
@@ -105,6 +112,10 @@ export async function updateUserSettings(userId: string, settings: UserSettings)
     if (settings.preferredMusicService !== undefined) convexSettings.preferredMusicService = settings.preferredMusicService;
     if (settings.spotifyConnected !== undefined) convexSettings.spotifyConnected = settings.spotifyConnected;
     if (settings.appleMusicConnected !== undefined) convexSettings.appleMusicConnected = settings.appleMusicConnected;
+    // Accessibility
+    if (settings.tts_enabled !== undefined) convexSettings.ttsEnabled = settings.tts_enabled;
+    if (settings.high_contrast !== undefined) convexSettings.highContrast = settings.high_contrast;
+    if (settings.reduce_motion !== undefined) convexSettings.reduceMotion = settings.reduce_motion;
 
     await client.mutation(api.settings.update, convexSettings);
 

@@ -697,6 +697,7 @@ export default function FocusPreparationScreen() {
           showTrailBuddy={false}
           showPath={false}
           treeScrollDuration={20000}
+          reduceMotion={!!userSettings?.reduce_motion}
         />
         {/* Layer 1: Aurora mist blobs */}
         <AmbientMistBackground isDark={theme.isDark} />

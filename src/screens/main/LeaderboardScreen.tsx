@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, RefreshControl, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useConvexLeaderboardWithFriends, Leaderboard, useConvexTasks, useConvexProfile } from '../../hooks/useConvex';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
-import Animated, { FadeInUp, FadeIn, useAnimatedStyle, withSpring, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { FadeInUp, FadeIn, useAnimatedStyle, withSpring, useSharedValue, withSequence, withTiming, useAnimatedProps } from 'react-native-reanimated';
+import Svg, { Circle as SvgCircle } from 'react-native-svg';
 import { AnimatedButton } from '../../components/premium/AnimatedButton';
 import { HolographicBadge } from '../../components/premium/HolographicBadge';
 import { useCounterAnimation, usePulseAnimation, useButtonPressAnimation, useFocusAnimationKey } from '../../utils/animationUtils';
@@ -17,6 +18,8 @@ import { ShimmerLoader } from '../../components/premium/ShimmerLoader';
 import { ProductivityScoreRing } from '../../components/premium/ProductivityScoreRing';
 import { StatOrb } from '../../components/premium/StatOrb';
 import { LiquidGlassCard } from '../../components/premium/LiquidGlass';
+import { useQuery } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 
 // Import useAuth FIRST, before userAppData
 import { useAuth } from '../../context/AuthContext';
@@ -68,6 +71,43 @@ const LeaderboardScreen = () => {
   const currentUserEntry = convexLeaderboard?.friendsLeaderboard?.find((entry: Leaderboard) => entry.is_current_user)
     || convexLeaderboard?.globalLeaderboard?.find((entry: Leaderboard) => entry.is_current_user);
   const currentUserStats = currentUserEntry || userData?.leaderboard || userData?.stats;
+
+  // Session type counts for Deep Work / Balance / Sprint cards
+  const allSessions = useQuery(api.focusSessions.list, {});
+  const sessionTypeCounts = React.useMemo(() => {
+    if (!allSessions) return { deep_work: 0, balanced: 0, sprint: 0 };
+    return {
+      deep_work: allSessions.filter(s => s.sessionType === 'deep_work').length,
+      balanced: allSessions.filter(s => s.sessionType === 'balanced').length,
+      sprint: allSessions.filter(s => s.sessionType === 'sprint').length,
+    };
+  }, [allSessions]);
+
+  // Aggregate time by subject for the donut chart
+  const subjectTimeData = React.useMemo(() => {
+    const SUBJECT_COLORS = ['#4CAF50', '#2196F3', '#FF9800', '#E91E63', '#9C27B0', '#00BCD4'];
+    if (!allSessions || allSessions.length === 0) {
+      // Mock data when no sessions exist yet
+      return [
+        { name: 'Math', minutes: 45, color: SUBJECT_COLORS[0] },
+        { name: 'Biology', minutes: 30, color: SUBJECT_COLORS[1] },
+        { name: 'Chemistry', minutes: 25, color: SUBJECT_COLORS[2] },
+        { name: 'English', minutes: 20, color: SUBJECT_COLORS[3] },
+        { name: 'History', minutes: 15, color: SUBJECT_COLORS[4] },
+      ];
+    }
+    // Aggregate real data by subject
+    const bySubject: Record<string, number> = {};
+    allSessions.forEach(s => {
+      const subj = s.subject || 'General';
+      const mins = s.durationSeconds ? Math.round(s.durationSeconds / 60) : 0;
+      bySubject[subj] = (bySubject[subj] || 0) + mins;
+    });
+    return Object.entries(bySubject)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([name, minutes], i) => ({ name, minutes, color: SUBJECT_COLORS[i % SUBJECT_COLORS.length] }));
+  }, [allSessions]);
 
   // Use Convex data directly - Friends tab shows only friends, Global shows everyone
   const currentLeaderboard = tab === 'Friends'
@@ -457,8 +497,90 @@ const LeaderboardScreen = () => {
             />
           </View>
 
+          {/* Session Type Cards - Deep Work / Balance / Sprint */}
+          <StaggeredItem index={4} delay="normal" direction="up">
+            <View style={styles.sessionTypeRow}>
+              <View style={[styles.sessionTypeCard, { backgroundColor: isDark ? 'rgba(233, 30, 99, 0.12)' : 'rgba(233, 30, 99, 0.08)' }]}>
+                <Ionicons name="flame" size={20} color="#E91E63" />
+                <Text style={[styles.sessionTypeCount, { color: '#E91E63' }]}>{sessionTypeCounts.deep_work}</Text>
+                <Text style={[styles.sessionTypeLabel, { color: theme.textSecondary }]}>Deep Work</Text>
+              </View>
+              <View style={[styles.sessionTypeCard, { backgroundColor: isDark ? 'rgba(76, 175, 80, 0.12)' : 'rgba(76, 175, 80, 0.08)' }]}>
+                <Ionicons name="leaf" size={20} color="#4CAF50" />
+                <Text style={[styles.sessionTypeCount, { color: '#4CAF50' }]}>{sessionTypeCounts.balanced}</Text>
+                <Text style={[styles.sessionTypeLabel, { color: theme.textSecondary }]}>Balance</Text>
+              </View>
+              <View style={[styles.sessionTypeCard, { backgroundColor: isDark ? 'rgba(255, 152, 0, 0.12)' : 'rgba(255, 152, 0, 0.08)' }]}>
+                <Ionicons name="flash" size={20} color="#FF9800" />
+                <Text style={[styles.sessionTypeCount, { color: '#FF9800' }]}>{sessionTypeCounts.sprint}</Text>
+                <Text style={[styles.sessionTypeLabel, { color: theme.textSecondary }]}>Sprint</Text>
+              </View>
+            </View>
+          </StaggeredItem>
+
+          {/* Time by Subject Donut Chart */}
+          {subjectTimeData.length > 0 && (
+            <StaggeredItem index={5} delay="normal" direction="up">
+              <View style={[styles.subjectChartContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <Text style={[styles.subjectChartTitle, { color: theme.text }]}>Time by Subject</Text>
+                <View style={styles.subjectChartContent}>
+                  {/* Donut Chart */}
+                  <View style={styles.donutContainer}>
+                    <Svg width={120} height={120} viewBox="0 0 120 120">
+                      {(() => {
+                        const totalMinutes = subjectTimeData.reduce((sum, d) => sum + d.minutes, 0);
+                        const radius = 45;
+                        const circumference = 2 * Math.PI * radius;
+                        let cumulativeOffset = 0;
+                        return subjectTimeData.map((item, i) => {
+                          const fraction = item.minutes / totalMinutes;
+                          const dashLength = fraction * circumference;
+                          const dashOffset = -cumulativeOffset;
+                          cumulativeOffset += dashLength;
+                          return (
+                            <SvgCircle
+                              key={i}
+                              cx={60}
+                              cy={60}
+                              r={radius}
+                              fill="none"
+                              stroke={item.color}
+                              strokeWidth={16}
+                              strokeDasharray={`${dashLength} ${circumference - dashLength}`}
+                              strokeDashoffset={dashOffset}
+                              strokeLinecap="butt"
+                              rotation={-90}
+                              origin="60,60"
+                            />
+                          );
+                        });
+                      })()}
+                    </Svg>
+                    <View style={styles.donutCenter}>
+                      <Text style={[styles.donutTotal, { color: theme.text }]}>
+                        {Math.round(subjectTimeData.reduce((sum, d) => sum + d.minutes, 0) / 60 * 10) / 10}h
+                      </Text>
+                      <Text style={[styles.donutTotalLabel, { color: theme.textSecondary }]}>total</Text>
+                    </View>
+                  </View>
+
+                  {/* Legend */}
+                  <View style={styles.subjectLegend}>
+                    {subjectTimeData.map((item, i) => (
+                      <View key={i} style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: item.color }]} />
+                        <Text style={[styles.legendText, { color: theme.text }]} numberOfLines={1}>{item.name}</Text>
+                        <Text style={[styles.legendTime, { color: theme.textSecondary }]}>{item.minutes}m</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              </View>
+            </StaggeredItem>
+          )}
+
           {/* Enhanced Weekly Focus Goal */}
-          <StaggeredItem index={5} delay="normal" direction="up">
+          <StaggeredItem index={6} delay="normal" direction="up">
             <LiquidGlassCard
               intensity="subtle"
               showGlow={getWeeklyGoalPercentage().percentage >= 100}
@@ -1170,6 +1292,90 @@ const styles = StyleSheet.create({
   },
   activityTagText: {
     fontSize: 11,
+    fontWeight: '500',
+  },
+  // ─── Session Type Cards ──────────────────────
+  sessionTypeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    gap: 10,
+  },
+  sessionTypeCard: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    borderRadius: 14,
+  },
+  sessionTypeCount: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginTop: 6,
+  },
+  sessionTypeLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  // ─── Subject Donut Chart ─────────────────────
+  subjectChartContainer: {
+    padding: 16,
+    borderRadius: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+  },
+  subjectChartTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 12,
+  },
+  subjectChartContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  donutContainer: {
+    width: 120,
+    height: 120,
+    position: 'relative',
+  },
+  donutCenter: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  donutTotal: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  donutTotalLabel: {
+    fontSize: 10,
+  },
+  subjectLegend: {
+    flex: 1,
+    marginLeft: 16,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  legendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 8,
+  },
+  legendText: {
+    fontSize: 13,
+    flex: 1,
+  },
+  legendTime: {
+    fontSize: 12,
     fontWeight: '500',
   },
 });

@@ -143,7 +143,7 @@ const ProfileScreen = () => {
     'buddy-section': buddyRef,
   };
   const { visible: walkthroughVisible, measurements: walkthroughMeasurements, complete: walkthroughComplete, remeasure } =
-    useScreenWalkthrough('profile', walkthroughRefs, { forceShow: true }); // TODO: remove forceShow after testing
+    useScreenWalkthrough('profile', walkthroughRefs);
 
   // Track y-offsets for scroll-to-section in walkthrough
   const sectionOffsets = useRef<Record<string, number>>({});

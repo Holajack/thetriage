@@ -76,9 +76,9 @@ const SettingsScreen = () => {
         if (clerkUserId) {
           const settings = await getUserSettings(clerkUserId);
           if (settings) {
-            setTts((settings as any).tts_enabled || false);
-            setHighContrast((settings as any).high_contrast || false);
-            setReduceMotion((settings as any).reduce_motion || false);
+            setTts(settings.tts_enabled || false);
+            setHighContrast(settings.high_contrast || false);
+            setReduceMotion(settings.reduce_motion || false);
           }
         }
       } catch (error) {
@@ -172,7 +172,7 @@ const SettingsScreen = () => {
     try {
       if (clerkUserId) {
         const key = type === 'tts' ? 'tts_enabled' : type === 'highContrast' ? 'high_contrast' : 'reduce_motion';
-        await updateUserSettings(clerkUserId, { [key]: value } as any);
+        await updateUserSettings(clerkUserId, { [key]: value });
       }
     } catch (error) {
       console.error(`Error updating ${type}:`, error);
@@ -277,7 +277,7 @@ const SettingsScreen = () => {
   };
 
   const handleAppInfo = () => {
-    Alert.alert('App Information', 'HikeWise Study Tracker\nVersion: 1.7.0\nBuild: 2025.001\n\nMade for students everywhere', [
+    Alert.alert('App Information', 'HikeWise Study Tracker\nVersion: 2.0.0\nBuild: 2025.001\n\nMade for students everywhere', [
       { text: 'Check for Updates', onPress: () => Alert.alert('Up to Date!', 'You have the latest version.') },
       { text: 'Close' },
     ]);
@@ -517,7 +517,7 @@ const SettingsScreen = () => {
           <SettingsGroup>
             <SettingsRow icon="help-circle-outline" label="Help Center" onPress={handleHelpCenter} />
             <SettingsRow icon="headset-outline" label="Contact Support" onPress={handleContactSupport} />
-            <SettingsRow icon="information-circle-outline" label="App Info" value="v1.7.0" onPress={handleAppInfo} />
+            <SettingsRow icon="information-circle-outline" label="App Info" value="v2.0.0" onPress={handleAppInfo} />
             <SettingsRow icon="document-text-outline" label="Terms of Service" onPress={handleTermsOfService} />
             <SettingsRow icon="shield-checkmark-outline" label="Privacy Policy" onPress={handlePrivacyPolicy} isLast />
           </SettingsGroup>
@@ -533,7 +533,7 @@ const SettingsScreen = () => {
         </StaggeredItem>
 
         {/* Version */}
-        <Text style={[styles.version, { color: `${theme.text}66` }]}>v1.7.0 (517)</Text>
+        <Text style={[styles.version, { color: `${theme.text}66` }]}>v2.0.0 (517)</Text>
       </Animated.ScrollView>
 
       {/* Main Goal Modal */}

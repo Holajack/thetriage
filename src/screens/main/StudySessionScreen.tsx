@@ -266,6 +266,7 @@ export const StudySessionScreen = () => {
   const [productivityRating, setProductivityRating] = useState(0);
   const [sessionNotes, setSessionNotes] = useState('');
   const [completedSessionData, setCompletedSessionData] = useState<any>(null);
+  const [showRatingDetails, setShowRatingDetails] = useState(false);
 
   // Base Camp rest mode toggle (double-tap pause)
   const [isInRestMode, setIsInRestMode] = useState(false);
@@ -1378,6 +1379,7 @@ export const StudySessionScreen = () => {
             isActive={true}
             showTrailBuddy={true}
             animationMode={isInRestMode ? 'resting' : 'walking'}
+            reduceMotion={!!userData?.settings?.reduce_motion}
           />
           <GestureDetector gesture={doubleTapGesture}>
           <View style={styles.newContainer}>
@@ -1972,90 +1974,100 @@ export const StudySessionScreen = () => {
             </View>
           </Modal>
 
-          {/* Session Complete Modal - Compact layout without scrolling */}
+          {/* Session Complete Modal - Simplified with expandable details */}
           <Modal visible={showSessionCompleteModal} transparent animationType="fade">
             <View style={modalStyles.overlay}>
               <View style={[modalStyles.modalBox, { paddingVertical: 20, paddingHorizontal: 16 }]}>
-                {/* Compact header */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                  <View style={[modalStyles.iconCircle, { width: 44, height: 44, marginRight: 12, marginBottom: 0 }]}>
-                    <MaterialIcons name="emoji-events" size={28} color="#4CAF50" />
+                {/* Success Header */}
+                <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                  <View style={[modalStyles.iconCircle, { width: 56, height: 56, marginBottom: 8 }]}>
+                    <MaterialIcons name="emoji-events" size={32} color="#4CAF50" />
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[modalStyles.modalTitle, { marginBottom: 2, fontSize: 18 }]}>Session Complete!</Text>
-                    <Text style={[modalStyles.modalDesc, { marginBottom: 0, fontSize: 12 }]}>
-                      Rate your session
-                    </Text>
-                  </View>
+                  <Text style={[modalStyles.modalTitle, { fontSize: 20, marginBottom: 4 }]}>Session Complete!</Text>
+                  <Text style={{ fontSize: 14, color: '#888' }}>
+                    {completedSessionData?.duration_seconds
+                      ? `${Math.floor(completedSessionData.duration_seconds / 60)}m focused`
+                      : `${Math.floor((initialDuration - timer) / 60)}m focused`}
+                    {completedSessionData?.task_focused_on ? ` on ${completedSessionData.task_focused_on}` : ''}
+                  </Text>
                 </View>
 
-                {/* Compact ratings - side by side */}
-                <View style={{ flexDirection: 'row', marginBottom: 12 }}>
-                  {/* Focus Rating */}
-                  <View style={{ flex: 1, marginRight: 8 }}>
-                    <Text style={[modalStyles.ratingLabel, { fontSize: 11, marginBottom: 6 }]}>Focus</Text>
-                    <View style={[modalStyles.ratingRow, { justifyContent: 'space-between' }]}>
-                      {[1, 2, 3, 4, 5].map((rating) => (
-                        <TouchableOpacity
-                          key={rating}
-                          style={[
-                            modalStyles.ratingButton,
-                            { width: 32, height: 32, marginHorizontal: 1 },
-                            focusRating === rating && modalStyles.ratingButtonSelected
-                          ]}
-                          onPress={() => setFocusRating(rating)}
-                        >
-                          <Text style={[
-                            modalStyles.ratingButtonText,
-                            { fontSize: 12 },
-                            focusRating === rating && modalStyles.ratingButtonTextSelected
-                          ]}>{rating}</Text>
-                        </TouchableOpacity>
-                      ))}
+                {/* Expandable Ratings & Notes */}
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, marginBottom: 4 }}
+                  onPress={() => setShowRatingDetails(!showRatingDetails)}
+                >
+                  <Ionicons name={showRatingDetails ? 'chevron-up' : 'chevron-down'} size={18} color="#4CAF50" />
+                  <Text style={{ fontSize: 13, color: '#4CAF50', fontWeight: '600', marginLeft: 4 }}>
+                    {showRatingDetails ? 'Hide Details' : 'Rate & Add Notes'}
+                  </Text>
+                </TouchableOpacity>
+
+                {showRatingDetails && (
+                  <View style={{ marginBottom: 12 }}>
+                    {/* Ratings side by side */}
+                    <View style={{ flexDirection: 'row', marginBottom: 12 }}>
+                      <View style={{ flex: 1, marginRight: 8 }}>
+                        <Text style={[modalStyles.ratingLabel, { fontSize: 11, marginBottom: 6 }]}>Focus</Text>
+                        <View style={[modalStyles.ratingRow, { justifyContent: 'space-between' }]}>
+                          {[1, 2, 3, 4, 5].map((rating) => (
+                            <TouchableOpacity
+                              key={rating}
+                              style={[
+                                modalStyles.ratingButton,
+                                { width: 32, height: 32, marginHorizontal: 1 },
+                                focusRating === rating && modalStyles.ratingButtonSelected
+                              ]}
+                              onPress={() => setFocusRating(rating)}
+                            >
+                              <Text style={[
+                                modalStyles.ratingButtonText,
+                                { fontSize: 12 },
+                                focusRating === rating && modalStyles.ratingButtonTextSelected
+                              ]}>{rating}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+                      <View style={{ flex: 1, marginLeft: 8 }}>
+                        <Text style={[modalStyles.ratingLabel, { fontSize: 11, marginBottom: 6 }]}>Productivity</Text>
+                        <View style={[modalStyles.ratingRow, { justifyContent: 'space-between' }]}>
+                          {[1, 2, 3, 4, 5].map((rating) => (
+                            <TouchableOpacity
+                              key={rating}
+                              style={[
+                                modalStyles.ratingButton,
+                                { width: 32, height: 32, marginHorizontal: 1 },
+                                productivityRating === rating && modalStyles.ratingButtonSelected
+                              ]}
+                              onPress={() => setProductivityRating(rating)}
+                            >
+                              <Text style={[
+                                modalStyles.ratingButtonText,
+                                { fontSize: 12 },
+                                productivityRating === rating && modalStyles.ratingButtonTextSelected
+                              ]}>{rating}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
                     </View>
+                    {/* Notes */}
+                    <Text style={[modalStyles.ratingLabel, { fontSize: 11, marginBottom: 4 }]}>Quick Notes (optional)</Text>
+                    <TextInput
+                      style={[modalStyles.notesInput, { height: 50, fontSize: 13 }]}
+                      placeholder="What did you accomplish? What to return to?"
+                      multiline
+                      numberOfLines={2}
+                      value={sessionNotes}
+                      onChangeText={setSessionNotes}
+                      placeholderTextColor="#888"
+                    />
                   </View>
+                )}
 
-                  {/* Productivity Rating */}
-                  <View style={{ flex: 1, marginLeft: 8 }}>
-                    <Text style={[modalStyles.ratingLabel, { fontSize: 11, marginBottom: 6 }]}>Productivity</Text>
-                    <View style={[modalStyles.ratingRow, { justifyContent: 'space-between' }]}>
-                      {[1, 2, 3, 4, 5].map((rating) => (
-                        <TouchableOpacity
-                          key={rating}
-                          style={[
-                            modalStyles.ratingButton,
-                            { width: 32, height: 32, marginHorizontal: 1 },
-                            productivityRating === rating && modalStyles.ratingButtonSelected
-                          ]}
-                          onPress={() => setProductivityRating(rating)}
-                        >
-                          <Text style={[
-                            modalStyles.ratingButtonText,
-                            { fontSize: 12 },
-                            productivityRating === rating && modalStyles.ratingButtonTextSelected
-                          ]}>{rating}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-                </View>
-
-                {/* Compact Notes */}
-                <View style={{ marginBottom: 12 }}>
-                  <Text style={[modalStyles.ratingLabel, { fontSize: 11, marginBottom: 4 }]}>Quick Notes (optional)</Text>
-                  <TextInput
-                    style={[modalStyles.notesInput, { height: 50, fontSize: 13 }]}
-                    placeholder="Brief notes..."
-                    multiline
-                    numberOfLines={2}
-                    value={sessionNotes}
-                    onChangeText={setSessionNotes}
-                    placeholderTextColor="#888"
-                  />
-                </View>
-
-                {/* Compact Action Buttons - side by side */}
-                <View style={{ flexDirection: 'row', gap: 10 }}>
+                {/* Action Buttons */}
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
                   <TouchableOpacity
                     style={[modalStyles.skipBtn, { flex: 1, paddingVertical: 10 }]}
                     onPress={handleSkipSessionReport}
@@ -2069,6 +2081,17 @@ export const StudySessionScreen = () => {
                     <Text style={[modalStyles.submitBtnText, { fontSize: 13 }]}>{params?.focusMode === 'basecamp' ? 'View Report' : 'Continue to Break'}</Text>
                   </TouchableOpacity>
                 </View>
+
+                {/* Analytics Link */}
+                <TouchableOpacity
+                  style={{ alignItems: 'center', marginTop: 12, paddingVertical: 6 }}
+                  onPress={() => {
+                    setShowSessionCompleteModal(false);
+                    navigation.navigate('SessionHistory' as never);
+                  }}
+                >
+                  <Text style={{ fontSize: 12, color: '#4CAF50', fontWeight: '500' }}>View Session History & Analytics</Text>
+                </TouchableOpacity>
               </View>
             </View>
           </Modal>
