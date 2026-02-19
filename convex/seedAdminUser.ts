@@ -22,6 +22,7 @@ export const seedAdminData = mutation({
     // 1. Update user to Elite with demo profile data
     await ctx.db.patch(user._id, {
       subscriptionTier: "elite",
+      subscriptionOverride: true, // Prevents RevenueCat from downgrading this account
       flintCurrency: 2840,
       university: "Stanford University",
       major: "Pre-Med Biology",
@@ -79,6 +80,28 @@ export const seedAdminData = mutation({
 
     // 5. Create demo tasks
     await seedTasks(ctx, user._id);
+
+    // 6. Ensure Nora onboarding/policy acceptance is complete
+    const noraStatus = await ctx.db
+      .query("noraOnboardingStatus")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .unique();
+
+    const now = new Date().toISOString();
+    if (noraStatus) {
+      await ctx.db.patch(noraStatus._id, {
+        completedAt: now,
+        acceptedPoliciesAt: now,
+        version: 1,
+      });
+    } else {
+      await ctx.db.insert("noraOnboardingStatus", {
+        userId: user._id,
+        completedAt: now,
+        acceptedPoliciesAt: now,
+        version: 1,
+      });
+    }
 
     return {
       success: true,

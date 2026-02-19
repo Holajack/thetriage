@@ -12,15 +12,15 @@ tags:
   - verify
   - onboarding
   - first-run
+env:
+  EXPO_PUBLIC_TEST_MODE: "true"
+  EXPO_PUBLIC_RESET_ONBOARDING: "true"
 
 ---
 # Launch WITHOUT test mode to see onboarding
 # Or with a flag that resets onboarding
 - launchApp:
     clearState: true
-    env:
-      EXPO_PUBLIC_TEST_MODE: "true"
-      EXPO_PUBLIC_RESET_ONBOARDING: "true"
 
 # ==========================================
 # WELCOME SCREEN

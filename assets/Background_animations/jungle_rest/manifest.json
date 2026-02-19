@@ -1,0 +1,63 @@
+{
+  "runId": "441b9abb-4939-428e-bd9e-a6e156062eaa",
+  "themeInput": "Jungle_rest",
+  "themeResolved": "Jungle_rest",
+  "runMode": "all",
+  "quality": "high",
+  "providerMode": "api",
+  "providerPreference": "auto",
+  "apiProvider": "replicate_nano_banana",
+  "generationMode": "preset",
+  "sceneDescription": "A peaceful jungle clearing with dense canopy, tropical flowers, and soft mist",
+  "artStyle": "pixel",
+  "status": "completed",
+  "startedAt": "2026-02-12T22:22:23.745Z",
+  "progress": {
+    "total": 4,
+    "completed": 4,
+    "failed": 0
+  },
+  "artifacts": {
+    "runDirectory": "/Users/jackenholland/App Development/parallax-theme-studio/output/runs/441b9abb-4939-428e-bd9e-a6e156062eaa",
+    "generatedDirectory": "/Users/jackenholland/App Development/parallax-theme-studio/output/runs/441b9abb-4939-428e-bd9e-a6e156062eaa/generated"
+  },
+  "layers": {
+    "sky": {
+      "layer": "sky",
+      "fileName": "sunset_colors.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparentRequired": false,
+      "outputPath": "/Users/jackenholland/App Development/parallax-theme-studio/output/runs/441b9abb-4939-428e-bd9e-a6e156062eaa/generated/sunset_colors.png"
+    },
+    "mountain": {
+      "layer": "mountain",
+      "fileName": "rocky_mountain.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparentRequired": true,
+      "transparencyBorderOpaqueRatio": 0,
+      "outputPath": "/Users/jackenholland/App Development/parallax-theme-studio/output/runs/441b9abb-4939-428e-bd9e-a6e156062eaa/generated/rocky_mountain.png"
+    },
+    "tree": {
+      "layer": "tree",
+      "fileName": "evergreen_tree.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparentRequired": true,
+      "transparencyBorderOpaqueRatio": 0,
+      "outputPath": "/Users/jackenholland/App Development/parallax-theme-studio/output/runs/441b9abb-4939-428e-bd9e-a6e156062eaa/generated/evergreen_tree.png"
+    },
+    "ground": {
+      "layer": "ground",
+      "fileName": "path_animation.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparentRequired": true,
+      "transparencyBorderOpaqueRatio": 0,
+      "outputPath": "/Users/jackenholland/App Development/parallax-theme-studio/output/runs/441b9abb-4939-428e-bd9e-a6e156062eaa/generated/path_animation.png"
+    }
+  },
+  "errors": [],
+  "completedAt": "2026-02-12T22:23:20.870Z"
+}

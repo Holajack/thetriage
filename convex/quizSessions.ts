@@ -87,6 +87,37 @@ export const getCurrentSession = query({
   },
 });
 
+/** Get all in-progress sessions for the current user */
+export const getAllInProgressSessions = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getCurrentUserOrNull(ctx);
+    if (!user) return [];
+
+    const sessions = await ctx.db
+      .query("quizSessions")
+      .withIndex("by_userId_status", (q) =>
+        q.eq("userId", user._id).eq("status", "in_progress")
+      )
+      .collect();
+
+    return Promise.all(
+      sessions.map(async (session) => {
+        const category = await ctx.db.get(session.categoryId);
+        const responses = await ctx.db
+          .query("quizResponses")
+          .withIndex("by_sessionId", (q) => q.eq("sessionId", session._id))
+          .collect();
+        return {
+          ...session,
+          category,
+          answeredCount: responses.length,
+        };
+      })
+    );
+  },
+});
+
 /** Get session by ID with questions */
 export const getSessionWithQuestions = query({
   args: { sessionId: v.id("quizSessions") },
@@ -448,7 +479,7 @@ export const getLatestResultPerCategory = query({
           .collect();
 
         if (results.length === 0) {
-          return { category, result: null, completionCount: 0 };
+          return { category, result: null, completionCount: 0, hasResult: false };
         }
 
         // Sort and get latest
@@ -462,6 +493,7 @@ export const getLatestResultPerCategory = query({
           category,
           result: results[0],
           completionCount: results.length,
+          hasResult: true,
         };
       })
     );
@@ -499,7 +531,7 @@ async function calculateSubDimensionScores(
         name: subDim.name,
         rawScore: 0,
         normalizedScore: 50, // Default to middle
-        percentileRank: null,
+        // percentileRank omitted - v.optional() requires undefined, not null
       });
       continue;
     }
@@ -526,7 +558,7 @@ async function calculateSubDimensionScores(
       name: subDim.name,
       rawScore: Math.round(rawScore * 100) / 100,
       normalizedScore: Math.round(normalizedScore * 100) / 100,
-      percentileRank: null, // Calculated later if benchmarks exist
+      // percentileRank omitted - calculated later if benchmarks exist
     });
   }
 

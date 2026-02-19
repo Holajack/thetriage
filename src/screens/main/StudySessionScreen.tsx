@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView, Alert, AppState, BackHandler, ImageBackground, Animated, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView, Alert, AppState, BackHandler, ImageBackground, Animated, Image, Dimensions } from 'react-native';
 import { ThemedImage, ThemedImageBackground } from '../../components/ThemedImage';
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 import Svg, { Rect, G, LinearGradient, Stop, Defs, Filter, FeOffset, FeGaussianBlur, FeColorMatrix, FeBlend, Ellipse, Circle, Line, Polygon, Text as SvgText, TSpan, Pattern, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
-import { Gesture } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
@@ -31,6 +33,13 @@ import ReAnimated, {
 import { Typography, AnimationConfig, TimingConfig } from '../../theme/premiumTheme';
 import { useSuccessAnimation, triggerHaptic } from '../../utils/animationUtils';
 import { ParallaxForestBackground } from '../../components/ParallaxForestBackground';
+import { useEquippedTrail } from '../../hooks/useEquippedTrail';
+import { useAmbientSounds } from '../../hooks/useAmbientSounds';
+import { spotifyService } from '../../services/spotify/SpotifyService';
+import { appleMusicService } from '../../services/appleMusic/AppleMusicService';
+import InteractiveWalkthrough from '../../components/InteractiveWalkthrough';
+import { useScreenWalkthrough } from '../../hooks/useScreenWalkthrough';
+import { STUDY_SESSION_STEPS } from '../../config/walkthroughSteps';
 import { useConvexProfile } from '../../hooks/useConvex';
 const { useUserAppData } = require('../../utils/userAppData');
 
@@ -83,6 +92,7 @@ export const StudySessionScreen = () => {
   const { data: userData } = useUserAppData();
   const { user } = useUser();
   const { profile } = useConvexProfile();
+  const equippedTrail = useEquippedTrail();
   const {
     startPlaylist,
     stopPlayback,
@@ -98,7 +108,16 @@ export const StudySessionScreen = () => {
     enableAutoAdvance,
     disableAutoAdvance,
   } = useBackgroundMusic();
-  
+
+  const {
+    environmentEnabled,
+    whiteNoiseEnabled,
+    crittersEnabled,
+    toggleEnvironment,
+    toggleWhiteNoise,
+    toggleCritters,
+  } = useAmbientSounds();
+
   // Navigation and route params - must be defined early
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute();
@@ -123,6 +142,9 @@ export const StudySessionScreen = () => {
   // State variables - must be defined before any useEffect that uses them
   const [showBackConfirmModal, setShowBackConfirmModal] = useState(false);
   const [musicEnabled, setMusicEnabled] = useState(true);
+  const [activeMusicSource, setActiveMusicSource] = useState<'local' | 'spotify' | 'apple-music'>('local');
+  const [spotifyConnected, setSpotifyConnected] = useState(spotifyService.isConnected());
+  const [appleMusicConnected, setAppleMusicConnected] = useState(appleMusicService.isConnected());
   const [sessionStarted, setSessionStarted] = useState(false);
   const [showHoldTooltip, setShowHoldTooltip] = useState(false);
 
@@ -132,6 +154,14 @@ export const StudySessionScreen = () => {
   const backgroundTimeRef = useRef<number | null>(null);
   const appStateRef = useRef(AppState.currentState);
   const musicStartAttemptedRef = useRef<boolean>(false);
+
+  // Walkthrough refs
+  const timerDisplayRef = useRef<View>(null);
+  const musicButtonRef = useRef<View>(null);
+  const endButtonRef = useRef<View>(null);
+  const walkthroughRefs = { 'timer-display': timerDisplayRef, 'music-button': musicButtonRef, 'end-button': endButtonRef };
+  const { visible: walkthroughVisible, measurements: walkthroughMeasurements, complete: walkthroughComplete } =
+    useScreenWalkthrough('study_session', walkthroughRefs, { delay: 1500 });
 
   // Define callback AFTER all refs are created
   const stopSessionMusic = useCallback(async () => {
@@ -236,6 +266,9 @@ export const StudySessionScreen = () => {
   const [productivityRating, setProductivityRating] = useState(0);
   const [sessionNotes, setSessionNotes] = useState('');
   const [completedSessionData, setCompletedSessionData] = useState<any>(null);
+
+  // Base Camp rest mode toggle (double-tap pause)
+  const [isInRestMode, setIsInRestMode] = useState(false);
 
   // Summit mode multi-task state
   const [currentTaskIndex, setCurrentTaskIndex] = useState(params?.currentTaskIndex || 0);
@@ -682,6 +715,12 @@ export const StudySessionScreen = () => {
 
   const handleTimerComplete = async () => {
     try {
+      // Exit rest mode if active (timer expired while resting)
+      if (isInRestMode) {
+        setIsInRestMode(false);
+        setIsPaused(false);
+      }
+
       console.log('🎵 Timer complete - disabling auto-advance FIRST');
 
       // Trigger success celebration animation
@@ -772,6 +811,32 @@ export const StudySessionScreen = () => {
   //     return newPaused;
   //   });
   // };
+
+  // Base Camp rest toggle: double-tap pauses timer and shows resting scene
+  const handleRestToggle = useCallback(() => {
+    if (params?.focusMode !== 'basecamp') return;
+
+    triggerHaptic('light');
+
+    setIsInRestMode(prev => {
+      const entering = !prev;
+      if (entering) {
+        updateTimerFromBackground(); // save timer position
+        setIsPaused(true);
+      } else {
+        startTimeRef.current = Date.now();
+        setIsPaused(false);
+      }
+      return entering;
+    });
+  }, [params?.focusMode]);
+
+  const doubleTapGesture = useMemo(() => {
+    if (params?.focusMode !== 'basecamp') return Gesture.Tap();
+    return Gesture.Tap()
+      .numberOfTaps(2)
+      .onEnd(() => { runOnJS(handleRestToggle)(); });
+  }, [params?.focusMode, handleRestToggle]);
 
   const handleEndSession = async () => {
     console.log('🎵 User attempting to end session - disabling auto-advance FIRST');
@@ -932,8 +997,21 @@ export const StudySessionScreen = () => {
           plannedDuration: updatedCompletedTasks.reduce((sum, task) => sum + task.plannedDuration, 0)
         });
       }
+    } else if (params?.focusMode === 'basecamp') {
+      // Base Camp: skip break, go directly to session report
+      navigation.navigate('SessionReportScreen', {
+        sessionDuration: currentTaskSessionData.duration,
+        breakDuration: 0,
+        taskCompleted: currentTaskSessionData.completedFullSession,
+        focusRating: currentTaskSessionData.focusRating,
+        productivity: currentTaskSessionData.productivityRating,
+        notes: currentTaskSessionData.notes || '',
+        sessionType: currentTaskSessionData.sessionType,
+        subject: currentTaskSessionData.subject,
+        plannedDuration: currentTaskSessionData.plannedDuration,
+      });
     } else {
-      // Basecamp mode or single task - normal flow
+      // Other modes - normal break flow
       navigation.navigate('BreakTimerScreen', {
         sessionData: currentTaskSessionData,
         breakDuration: params?.breakDuration
@@ -1295,82 +1373,154 @@ export const StudySessionScreen = () => {
       {(sessionStarted || params?.autoStart) && (
         <>
           <ParallaxForestBackground
+            trailType={equippedTrail}
             trailBuddyType={profile?.trail_buddy_type || 'bear'}
             isActive={true}
             showTrailBuddy={true}
+            animationMode={isInRestMode ? 'resting' : 'walking'}
           />
+          <GestureDetector gesture={doubleTapGesture}>
           <View style={styles.newContainer}>
 
-          {/* Top Controls Bar - Matches IMG_0022.PNG */}
-          <View style={styles.topControlsBar}>
-            {/* Music Button (Top Left) */}
-            <TouchableOpacity 
-              style={[styles.musicButton, { backgroundColor: environmentColors.primary }]}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                openMusicModal();
-              }}
-            >
-              <Ionicons name="musical-notes" size={24} color={environmentColors.card} />
-            </TouchableOpacity>
+          {/* ─── BASE CAMP REST MODE UI ─── */}
+          {isInRestMode && params?.focusMode === 'basecamp' ? (
+            <>
+              {/* Top Controls Bar - Rest mode (no timer) */}
+              <View style={styles.topControlsBar}>
+                {/* Music Button (Top Left) */}
+                <TouchableOpacity
+                  style={[styles.musicButton, { backgroundColor: environmentColors.primary }]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    openMusicModal();
+                  }}
+                >
+                  <Ionicons name="musical-notes" size={24} color={environmentColors.card} />
+                </TouchableOpacity>
 
-            {/* Small Discrete Timer (Top Center) - Matches IMG_0022.PNG */}
-            <ReAnimated.View style={[styles.discreteTimerContainer, timerAnimatedStyle]}>
-              <Text style={styles.discreteTimerText}>{formatTime(timer)}</Text>
-            </ReAnimated.View>
+                {/* Empty spacer - no timer in rest mode */}
+                <View style={{ flex: 1 }} />
 
-            {/* Long-press End Session Button (Top Right) - X icon with hold instruction */}
-            <View style={styles.endSessionButtonContainer}>
+                {/* Long-press End Session Button (Top Right) */}
+                <View style={styles.endSessionButtonContainer}>
+                  <TouchableOpacity
+                    style={[styles.endSessionButton, { backgroundColor: environmentColors.primary }]}
+                    onPressIn={handleLongPressStart}
+                    onPressOut={handleLongPressEnd}
+                    onPress={() => {
+                      setShowHoldTooltip(true);
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setTimeout(() => setShowHoldTooltip(false), 2000);
+                    }}
+                  >
+                    <Ionicons name="close" size={24} color={environmentColors.card} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Task Info Icon (Left Side) */}
               <TouchableOpacity
-                style={[styles.endSessionButton, { backgroundColor: environmentColors.primary }]}
-                onPressIn={handleLongPressStart}
-                onPressOut={handleLongPressEnd}
+                style={[styles.taskInfoIcon, { backgroundColor: environmentColors.primary }]}
                 onPress={() => {
-                  // Show centered liquid glass popup
-                  setShowHoldTooltip(true);
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  // Auto-hide after 2 seconds
-                  setTimeout(() => setShowHoldTooltip(false), 2000);
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  setShowTaskInfo(true);
                 }}
               >
-                <Ionicons name="close" size={24} color={environmentColors.card} />
+                <Ionicons name="information-circle-outline" size={28} color={environmentColors.card} />
               </TouchableOpacity>
-            </View>
-          </View>
 
-          {/* Task Info Icon (Left Side, Further Down) */}
-          <TouchableOpacity 
-            style={[styles.taskInfoIcon, { backgroundColor: environmentColors.primary }]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              setShowTaskInfo(true);
-            }}
-          >
-            <Ionicons name="information-circle-outline" size={28} color={environmentColors.card} />
-          </TouchableOpacity>
-
-          {/* Mode Notification for Full Screen - Enlarged to show subject info */}
-          <View style={styles.modeNotificationFullScreen}>
-            <Text style={styles.modeNotificationFullScreenText}>
-              {selectionMode === 'manual' ? 'Manual Mode' : 'Auto Mode'}
-            </Text>
-            <Text style={styles.modeNotificationSubjectText}>
-              {currentTask?.subject || currentTask?.category || selectedSubject || 'General Study'}
-            </Text>
-            {selectionMode === 'auto' && currentTask && (
-              <Text style={styles.modeNotificationTaskText}>
-                {currentTask.title || 'Current Task'}
-              </Text>
-            )}
-          </View>
-
-          {/* Centered Liquid Glass Popup - Long press instruction */}
-          {showHoldTooltip && (
-            <View style={styles.liquidGlassOverlay}>
-              <View style={styles.liquidGlassPopup}>
-                <Text style={styles.liquidGlassPopupText}>Long press to end session</Text>
+              {/* Rest Mode Indicator */}
+              <View style={styles.restModeIndicator}>
+                <Text style={styles.restModeText}>Resting</Text>
+                <Text style={styles.restModeSubtext}>Double-tap to resume focus</Text>
               </View>
-            </View>
+
+              {/* Hold Tooltip */}
+              {showHoldTooltip && (
+                <View style={styles.liquidGlassOverlay}>
+                  <View style={styles.liquidGlassPopup}>
+                    <Text style={styles.liquidGlassPopupText}>Long press to end session</Text>
+                  </View>
+                </View>
+              )}
+            </>
+          ) : (
+            <>
+              {/* ─── NORMAL FOCUS MODE UI ─── */}
+              {/* Top Controls Bar - Matches IMG_0022.PNG */}
+              <View style={styles.topControlsBar}>
+                {/* Music Button (Top Left) */}
+                <View ref={musicButtonRef} collapsable={false}>
+                <TouchableOpacity
+                  style={[styles.musicButton, { backgroundColor: environmentColors.primary }]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    openMusicModal();
+                  }}
+                >
+                  <Ionicons name="musical-notes" size={24} color={environmentColors.card} />
+                </TouchableOpacity>
+                </View>
+
+                {/* Small Discrete Timer (Top Center) */}
+                <View ref={timerDisplayRef} collapsable={false}>
+                <ReAnimated.View style={[styles.discreteTimerContainer, timerAnimatedStyle]}>
+                  <Text style={styles.discreteTimerText}>{formatTime(timer)}</Text>
+                </ReAnimated.View>
+                </View>
+
+                {/* Long-press End Session Button (Top Right) */}
+                <View ref={endButtonRef} collapsable={false} style={styles.endSessionButtonContainer}>
+                  <TouchableOpacity
+                    style={[styles.endSessionButton, { backgroundColor: environmentColors.primary }]}
+                    onPressIn={handleLongPressStart}
+                    onPressOut={handleLongPressEnd}
+                    onPress={() => {
+                      setShowHoldTooltip(true);
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setTimeout(() => setShowHoldTooltip(false), 2000);
+                    }}
+                  >
+                    <Ionicons name="close" size={24} color={environmentColors.card} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Task Info Icon (Left Side, Further Down) */}
+              <TouchableOpacity
+                style={[styles.taskInfoIcon, { backgroundColor: environmentColors.primary }]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  setShowTaskInfo(true);
+                }}
+              >
+                <Ionicons name="information-circle-outline" size={28} color={environmentColors.card} />
+              </TouchableOpacity>
+
+              {/* Mode Notification for Full Screen */}
+              <View style={styles.modeNotificationFullScreen}>
+                <Text style={styles.modeNotificationFullScreenText}>
+                  {selectionMode === 'manual' ? 'Manual Mode' : 'Auto Mode'}
+                </Text>
+                <Text style={styles.modeNotificationSubjectText}>
+                  {currentTask?.subject || currentTask?.category || selectedSubject || 'General Study'}
+                </Text>
+                {selectionMode === 'auto' && currentTask && (
+                  <Text style={styles.modeNotificationTaskText}>
+                    {currentTask.title || 'Current Task'}
+                  </Text>
+                )}
+              </View>
+
+              {/* Centered Liquid Glass Popup - Long press instruction */}
+              {showHoldTooltip && (
+                <View style={styles.liquidGlassOverlay}>
+                  <View style={styles.liquidGlassPopup}>
+                    <Text style={styles.liquidGlassPopupText}>Long press to end session</Text>
+                  </View>
+                </View>
+              )}
+            </>
           )}
 
           {/* Music Bottom Sheet Modal - Matches IMG_0025.PNG */}
@@ -1590,51 +1740,100 @@ export const StudySessionScreen = () => {
                         </Svg>
                       </View>
 
-                      {/* Compact Music Services - Condensed */}
+                      {/* Music Source Selector */}
                       <View style={[modalStyles.musicServicesSection, { marginBottom: 8 }]}>
-                        <TouchableOpacity style={[modalStyles.musicServiceOption, { paddingVertical: 8 }]}>
+                        <TouchableOpacity
+                          style={[modalStyles.musicServiceOption, { paddingVertical: 8 }]}
+                          onPress={() => setActiveMusicSource('local')}
+                        >
                           <Ionicons name="musical-notes" size={18} color={environmentColors.text} />
                           <Text style={[modalStyles.serviceOptionText, { color: environmentColors.text, fontSize: 12 }]}>Default Music</Text>
-                          <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
+                          {activeMusicSource === 'local' && <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />}
                         </TouchableOpacity>
-                        
-                        <TouchableOpacity style={[modalStyles.musicServiceOption, { paddingVertical: 8 }]}>
-                          <Ionicons name="logo-apple" size={18} color={environmentColors.text} />
+
+                        <TouchableOpacity
+                          style={[modalStyles.musicServiceOption, { paddingVertical: 8 }]}
+                          onPress={async () => {
+                            if (appleMusicConnected) {
+                              setActiveMusicSource('apple-music');
+                            } else {
+                              const connected = await appleMusicService.connect();
+                              setAppleMusicConnected(connected);
+                              if (connected) setActiveMusicSource('apple-music');
+                            }
+                          }}
+                        >
+                          <Ionicons name="logo-apple" size={18} color={appleMusicConnected ? '#007AFF' : environmentColors.text} />
                           <Text style={[modalStyles.serviceOptionText, { color: environmentColors.text, fontSize: 12 }]}>Apple Music</Text>
-                          <TouchableOpacity style={[modalStyles.connectButton, { backgroundColor: '#007AFF', paddingHorizontal: 8, paddingVertical: 4 }]}>
-                            <Text style={[modalStyles.connectButtonText, { color: '#FFFFFF', fontSize: 10 }]}>Connect</Text>
-                          </TouchableOpacity>
+                          {activeMusicSource === 'apple-music' ? (
+                            <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
+                          ) : appleMusicConnected ? (
+                            <Ionicons name="ellipse" size={8} color="#007AFF" />
+                          ) : (
+                            <Text style={{ color: '#007AFF', fontSize: 10, fontWeight: '600' }}>Connect</Text>
+                          )}
                         </TouchableOpacity>
-                        
-                        <TouchableOpacity style={[modalStyles.musicServiceOption, { paddingVertical: 8 }]}>
-                          <Text style={{ fontSize: 18, color: '#1DB954' }}>♪</Text>
+
+                        <TouchableOpacity
+                          style={[modalStyles.musicServiceOption, { paddingVertical: 8 }]}
+                          onPress={async () => {
+                            if (spotifyConnected) {
+                              setActiveMusicSource('spotify');
+                            } else {
+                              const connected = await spotifyService.connect();
+                              setSpotifyConnected(connected);
+                              if (connected) setActiveMusicSource('spotify');
+                            }
+                          }}
+                        >
+                          <Ionicons name="musical-notes-outline" size={18} color={spotifyConnected ? '#1DB954' : environmentColors.text} />
                           <Text style={[modalStyles.serviceOptionText, { color: environmentColors.text, fontSize: 12 }]}>Spotify</Text>
-                          <TouchableOpacity style={[modalStyles.installButton, { backgroundColor: '#1DB954', paddingHorizontal: 8, paddingVertical: 4 }]}>
-                            <Text style={[modalStyles.installButtonText, { color: '#FFFFFF', fontSize: 10 }]}>Install</Text>
-                          </TouchableOpacity>
+                          {activeMusicSource === 'spotify' ? (
+                            <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
+                          ) : spotifyConnected ? (
+                            <Ionicons name="ellipse" size={8} color="#1DB954" />
+                          ) : (
+                            <Text style={{ color: '#1DB954', fontSize: 10, fontWeight: '600' }}>Connect</Text>
+                          )}
                         </TouchableOpacity>
                       </View>
 
-                      {/* Compact Environment Sounds - Condensed */}
+                      {/* Ambient Sound Layers - toggleable on top of music */}
                       <View style={[modalStyles.environmentSoundsContainer, { gap: 6 }]}>
-                        <TouchableOpacity style={[modalStyles.environmentSoundBtn, { alignItems: 'center', padding: 6 }]}>
-                          <Ionicons name="leaf" size={20} color="#4CAF50" />
-                          <Text style={[modalStyles.environmentSoundLabel, { color: environmentColors.textSecondary, fontSize: 9 }]}>Forest</Text>
+                        <TouchableOpacity
+                          style={[
+                            modalStyles.environmentSoundBtn,
+                            { alignItems: 'center', padding: 6 },
+                            environmentEnabled && { backgroundColor: '#4CAF5022', borderColor: '#4CAF50', borderWidth: 1 },
+                          ]}
+                          onPress={toggleEnvironment}
+                        >
+                          <Ionicons name="leaf" size={20} color={environmentEnabled ? '#4CAF50' : environmentColors.textSecondary} />
+                          <Text style={[modalStyles.environmentSoundLabel, { color: environmentEnabled ? '#4CAF50' : environmentColors.textSecondary, fontSize: 9 }]}>Environment</Text>
                         </TouchableOpacity>
-                        
-                        <TouchableOpacity style={[modalStyles.environmentSoundBtn, { alignItems: 'center', padding: 6 }]}>
-                          <Ionicons name="rainy" size={20} color="#2196F3" />
-                          <Text style={[modalStyles.environmentSoundLabel, { color: environmentColors.textSecondary, fontSize: 9 }]}>Rain</Text>
+
+                        <TouchableOpacity
+                          style={[
+                            modalStyles.environmentSoundBtn,
+                            { alignItems: 'center', padding: 6 },
+                            whiteNoiseEnabled && { backgroundColor: '#9E9E9E22', borderColor: '#9E9E9E', borderWidth: 1 },
+                          ]}
+                          onPress={toggleWhiteNoise}
+                        >
+                          <Ionicons name="radio" size={20} color={whiteNoiseEnabled ? '#9E9E9E' : environmentColors.textSecondary} />
+                          <Text style={[modalStyles.environmentSoundLabel, { color: whiteNoiseEnabled ? '#9E9E9E' : environmentColors.textSecondary, fontSize: 9 }]}>White Noise</Text>
                         </TouchableOpacity>
-                        
-                        <TouchableOpacity style={[modalStyles.environmentSoundBtn, { alignItems: 'center', padding: 6 }]}>
-                          <Ionicons name="radio" size={20} color="#9E9E9E" />
-                          <Text style={[modalStyles.environmentSoundLabel, { color: environmentColors.textSecondary, fontSize: 9 }]}>Noise</Text>
-                        </TouchableOpacity>
-                        
-                        <TouchableOpacity style={[modalStyles.environmentSoundBtn, { alignItems: 'center', padding: 6 }]}>
-                          <Ionicons name="flower" size={20} color="#9C27B0" />
-                          <Text style={[modalStyles.environmentSoundLabel, { color: environmentColors.textSecondary, fontSize: 9 }]}>Zen</Text>
+
+                        <TouchableOpacity
+                          style={[
+                            modalStyles.environmentSoundBtn,
+                            { alignItems: 'center', padding: 6 },
+                            crittersEnabled && { backgroundColor: '#9C27B022', borderColor: '#9C27B0', borderWidth: 1 },
+                          ]}
+                          onPress={toggleCritters}
+                        >
+                          <Ionicons name="bug" size={20} color={crittersEnabled ? '#9C27B0' : environmentColors.textSecondary} />
+                          <Text style={[modalStyles.environmentSoundLabel, { color: crittersEnabled ? '#9C27B0' : environmentColors.textSecondary, fontSize: 9 }]}>Critters</Text>
                         </TouchableOpacity>
                       </View>
                 </View>
@@ -1867,7 +2066,7 @@ export const StudySessionScreen = () => {
                     style={[modalStyles.submitBtn, { flex: 2, paddingVertical: 10 }]}
                     onPress={handleSessionReportSubmit}
                   >
-                    <Text style={[modalStyles.submitBtnText, { fontSize: 13 }]}>Continue to Break</Text>
+                    <Text style={[modalStyles.submitBtnText, { fontSize: 13 }]}>{params?.focusMode === 'basecamp' ? 'View Report' : 'Continue to Break'}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1906,8 +2105,16 @@ export const StudySessionScreen = () => {
             </View>
           </Modal>
         </View>
+        </GestureDetector>
         </>
       )}
+      {/* Walkthrough */}
+      <InteractiveWalkthrough
+        visible={walkthroughVisible}
+        onComplete={walkthroughComplete}
+        measurements={walkthroughMeasurements}
+        steps={STUDY_SESSION_STEPS}
+      />
     </SafeAreaView>
   );
 };
@@ -2248,6 +2455,27 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
     textAlign: 'center',
+  },
+  // Base Camp rest mode indicator
+  restModeIndicator: {
+    position: 'absolute',
+    bottom: SCREEN_HEIGHT * 0.25,
+    alignSelf: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderRadius: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  restModeText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  restModeSubtext: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.7)',
+    marginTop: 4,
   },
   discreteTimerContainer: {
     backgroundColor: 'rgba(0, 0, 0, 0.3)',

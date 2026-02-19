@@ -46,6 +46,7 @@ const BUDDY_SPRITESHEETS: Record<string, ImageSourcePropType> = {
   wolf: require('../../../assets/trail-buddies/wolf_walking_optimized.png'),
   nora: require('../../../assets/trail-buddies/nora_walking_optimized.png'),
   bear: require('../../../assets/trail-buddies/bear_walking_optimized.png'),
+  lion: require('../../../assets/trail-buddies/lion_walking_optimized.png'),
 };
 
 const DEFAULT_NAMES: Record<string, string> = {
@@ -54,6 +55,7 @@ const DEFAULT_NAMES: Record<string, string> = {
   deer: 'Willow',
   nora: 'Nora',
   wolf: 'Shadow',
+  lion: 'Leo',
 };
 
 interface TrailBuddy {
@@ -100,6 +102,13 @@ const TRAIL_BUDDIES: TrailBuddy[] = [
     description: 'Loyal and determined',
     hasAnimation: true,
   },
+  {
+    id: 'lion',
+    name: 'Lion',
+    color: '#FFD700',
+    description: 'Regal and powerful',
+    hasAnimation: true,
+  },
 ];
 
 const BUDDY_EMOJIS: Record<string, string> = {
@@ -108,6 +117,7 @@ const BUDDY_EMOJIS: Record<string, string> = {
   deer: '🦌',
   nora: '🔮',
   wolf: '🐺',
+  lion: '🦁',
 };
 
 // Animated Sprite Component using spritesheet - cycles through frames by offsetting the image

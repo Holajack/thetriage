@@ -11,8 +11,7 @@ import { setConvexClient as setUserSettingsClient } from '../utils/userSettings'
 import { setConvexClient as setMusicPrefsClient } from '../utils/musicPreferences';
 import { setConvexClient as setDoNotDisturbClient } from '../utils/doNotDisturb';
 import { setConvexClient as setWeeklyGoalClient } from '../utils/weeklyGoalNotifications';
-// RevenueCat import deferred — react-native-purchases not yet installed
-// import { setConvexClient as setRevenueCatClient } from '../services/revenuecat';
+import { setConvexClient as setRevenueCatClient } from '../services/revenuecat';
 import { setConvexClient as setCreateUserDataClient } from '../utils/createUserData';
 import { setConvexClient as setUserAppDataClient } from '../utils/userAppDataWrapper';
 import { setConvexClient as setQrAcceptanceClient } from '../utils/qrAcceptanceService';
@@ -63,7 +62,7 @@ export function ConvexClientProvider({ children }: ConvexClientProviderProps) {
       setMusicPrefsClient(convex);
       setDoNotDisturbClient(convex);
       setWeeklyGoalClient(convex);
-      // setRevenueCatClient(convex); // Deferred — react-native-purchases not yet installed
+      setRevenueCatClient(convex);
       setCreateUserDataClient(convex);
       setUserAppDataClient(convex);
       setQrAcceptanceClient(convex);

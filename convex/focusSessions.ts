@@ -137,8 +137,10 @@ export const end = mutation({
       );
 
       // Update existing stats
+      const newTotalFocusTime = (existingStats.totalFocusTime ?? 0) + durationMinutes;
+      const newLevel = Math.floor(newTotalFocusTime / 180) + 1;
       await ctx.db.patch(existingStats._id, {
-        totalFocusTime: (existingStats.totalFocusTime ?? 0) + durationMinutes,
+        totalFocusTime: newTotalFocusTime,
         weeklyFocusTime: (existingStats.weeklyFocusTime ?? 0) + durationMinutes,
         monthlyFocusTime:
           (existingStats.monthlyFocusTime ?? 0) + durationMinutes,
@@ -148,9 +150,11 @@ export const end = mutation({
         longestStreak: Math.max(existingStats.longestStreak ?? 0, newStreak),
         lastSessionDate: today,
         points: (existingStats.points ?? 0) + durationMinutes,
+        level: newLevel,
       });
     } else {
-      // Create new stats record
+      // Create new stats record - every 3 hours (180 min) = 1 level
+      const newLevel = Math.floor(durationMinutes / 180) + 1;
       await ctx.db.insert("leaderboardStats", {
         userId: session.userId,
         totalFocusTime: durationMinutes,
@@ -162,7 +166,7 @@ export const end = mutation({
         longestStreak: 1,
         lastSessionDate: today,
         points: durationMinutes,
-        level: 1,
+        level: newLevel,
         achievementsEarned: 0,
       });
     }

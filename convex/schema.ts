@@ -36,6 +36,7 @@ export default defineSchema({
     classesVisibility: v.optional(v.string()),
     // Subscription
     subscriptionTier: v.optional(v.string()), // 'free' | 'premium' | 'elite'
+    subscriptionOverride: v.optional(v.boolean()), // true = manual override, skip RevenueCat sync
     subscriptionStatus: v.optional(v.string()),
     trialStartedAt: v.optional(v.string()),
     trialEndsAt: v.optional(v.string()),
@@ -124,6 +125,15 @@ export default defineSchema({
     privacyMode: v.optional(v.boolean()),
     autoStartBreaks: v.optional(v.boolean()),
     showMotivationalQuotes: v.optional(v.boolean()),
+    // Ambient sound layer toggles
+    ambientEnvironmentEnabled: v.optional(v.boolean()),
+    ambientWhiteNoiseEnabled: v.optional(v.boolean()),
+    ambientCrittersEnabled: v.optional(v.boolean()),
+    ambientVolume: v.optional(v.number()),
+    // Music service preferences
+    preferredMusicService: v.optional(v.string()), // 'local' | 'spotify' | 'apple-music'
+    spotifyConnected: v.optional(v.boolean()),
+    appleMusicConnected: v.optional(v.boolean()),
   }).index("by_userId", ["userId"]),
 
   // ============================================================

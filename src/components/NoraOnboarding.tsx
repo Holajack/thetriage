@@ -1,111 +1,209 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
-  Modal,
-  Animated,
+  Pressable,
   ScrollView,
-  Platform,
-  Dimensions,
+  Linking,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+import { LiquidGlassCard } from './premium/LiquidGlass';
+import { StaggeredItem } from './premium/StaggeredList';
+import { Typography, Spacing, BorderRadius, AnimationConfig, TimingConfig } from '../theme/premiumTheme';
+import * as Haptics from 'expo-haptics';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withSpring,
+  withDelay,
+  runOnJS,
+} from 'react-native-reanimated';
 
 interface NoraOnboardingProps {
   visible: boolean;
   onComplete: () => void;
   onSkip: () => void;
-  isFirstTime?: boolean; // Track if this is the user's first time
+  isFirstTime?: boolean;
 }
 
-interface OnboardingStep {
-  id: string;
-  title: string;
-  content: string;
-  type: 'intro' | 'capabilities' | 'limitations' | 'policies' | 'welcome';
-  icon?: keyof typeof Ionicons.glyphMap;
-  features?: string[];
-  warnings?: string[];
-  requiresAcceptance?: boolean;
+// ── Grouped Card (multiple items in one LiquidGlassCard with dividers) ──
+interface CardItem {
+  icon: string;
+  iconColor: string;
+  iconBgColor: string;
+  text: string;
 }
 
-const ONBOARDING_STEPS: OnboardingStep[] = [
+function GroupedCard({
+  title,
+  titleIcon,
+  onTitlePress,
+  items,
+}: {
+  title?: string;
+  titleIcon?: string;
+  onTitlePress?: () => void;
+  items: CardItem[];
+}) {
+  const { theme } = useTheme();
+  return (
+    <LiquidGlassCard intensity="subtle" borderRadius={BorderRadius.lg} padding={0}>
+      {title && (
+        <>
+          <Pressable
+            onPress={onTitlePress}
+            disabled={!onTitlePress}
+            style={groupStyles.titleRow}
+          >
+            <Text style={[groupStyles.titleText, { color: onTitlePress ? theme.primary : theme.text }]}>
+              {title}
+            </Text>
+            {titleIcon && (
+              <Ionicons name={titleIcon as any} size={16} color={theme.primary} />
+            )}
+          </Pressable>
+          <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.border ?? 'rgba(0,0,0,0.08)' }} />
+        </>
+      )}
+      {items.map((item, index) => (
+        <React.Fragment key={index}>
+          {index > 0 && (
+            <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.border ?? 'rgba(0,0,0,0.08)' }} />
+          )}
+          <View style={groupStyles.itemRow}>
+            <View style={[groupStyles.iconCircle, { backgroundColor: item.iconBgColor }]}>
+              <Ionicons name={item.icon as any} size={20} color={item.iconColor} />
+            </View>
+            <Text style={[groupStyles.itemText, { color: theme.text }]}>{item.text}</Text>
+          </View>
+        </React.Fragment>
+      ))}
+    </LiquidGlassCard>
+  );
+}
+
+const groupStyles = StyleSheet.create({
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm + 2,
+  },
+  titleText: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    letterSpacing: -0.1,
+  },
+  itemRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+  },
+  iconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+  itemText: {
+    fontSize: 16,
+    fontWeight: '500' as const,
+    lineHeight: 24,
+    letterSpacing: -0.1,
+    flex: 1,
+    paddingTop: 2,
+  },
+});
+
+// ── Acknowledged Badge (inline) ──
+function AcknowledgedBadge() {
+  const { theme } = useTheme();
+  const scale = useSharedValue(0);
+
+  useEffect(() => {
+    scale.value = withSpring(1, AnimationConfig.bouncy);
+  }, []);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: scale.value,
+  }));
+
+  return (
+    <Animated.View style={[badgeStyles.container, { backgroundColor: theme.primary + '20' }, animStyle]}>
+      <Ionicons name="checkmark-circle" size={16} color={theme.primary} />
+      <Text style={[badgeStyles.text, { color: theme.primary }]}>Acknowledged</Text>
+    </Animated.View>
+  );
+}
+
+const badgeStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
+    borderRadius: BorderRadius.full,
+    gap: 6,
+    marginVertical: Spacing.lg,
+  },
+  text: {
+    ...Typography.caption,
+    fontWeight: '600',
+  },
+});
+
+// ── Policy items ──
+const POLICY_ITEMS: CardItem[] = [
   {
-    id: 'intro',
-    type: 'intro',
-    title: 'Meet Nora',
-    content: 'Hi! I\'m Nora, your AI study assistant. I\'m here to help you succeed in your academic journey.',
-    icon: 'chatbubbles-outline',
-    features: [
-      'Answer questions about your study topics',
-      'Help you create study plans and schedules',
-      'Provide explanations and clarifications',
-      'Assist with research and learning strategies',
-      'Give motivational support and study tips'
-    ]
+    icon: 'shield-checkmark',
+    iconColor: '#3B82F6',
+    iconBgColor: 'rgba(96,165,250,0.19)',
+    text: 'Your conversations may be reviewed to keep things safe and improve Nora. Avoid sharing sensitive info like passwords or SSNs.',
   },
   {
-    id: 'capabilities',
-    type: 'capabilities',
-    title: 'What I can help with',
-    content: 'I\'m designed to be your comprehensive study companion. Here\'s how I can assist you:',
-    icon: 'bulb-outline',
-    features: [
-      'Subject-specific questions and explanations',
-      'Study technique recommendations',
-      'Time management and planning advice',
-      'Motivation and accountability support',
-      'Research assistance and source suggestions',
-      'Note-taking and summary strategies'
-    ]
+    icon: 'eye-outline',
+    iconColor: '#F59E0B',
+    iconBgColor: 'rgba(252,211,77,0.19)',
+    text: 'Flagged conversations may be reviewed by our team. We use these interactions to make Nora better over time.',
   },
-  {
-    id: 'limitations',
-    type: 'limitations',
-    title: 'Important limitations',
-    content: 'While I\'m here to help, there are important things to keep in mind:',
-    icon: 'warning-outline',
-    warnings: [
-      'I can make mistakes - always verify important information',
-      'I can search the web for current information, but may occasionally find outdated sources',
-      'I shouldn\'t be your only source for critical decisions',
-      'I can\'t complete assignments for you or help with cheating',
-      'My knowledge has limitations and may not be current',
-      'I can\'t provide professional medical, legal, or financial advice'
-    ]
-  },
-  {
-    id: 'policies',
-    type: 'policies',
-    title: 'Privacy & Safety',
-    content: 'Your safety and privacy are important. Please understand:',
-    icon: 'shield-checkmark-outline',
-    warnings: [
-      'Our conversations are regularly reviewed for safety and quality',
-      'Don\'t share personal information like passwords or SSN',
-      'Flagged conversations may be reviewed by our team',
-      'We use conversations to improve our AI systems',
-      'Our AI policies and capabilities may change over time',
-      'Report any concerning responses to our support team'
-    ],
-    requiresAcceptance: true
-  },
-  {
-    id: 'welcome',
-    type: 'welcome',
-    title: 'Ready to start!',
-    content: 'I\'m excited to help you on your learning journey. What would you like to study today?',
-    icon: 'rocket-outline'
-  }
 ];
 
+const DISCLAIMER_ITEMS: CardItem[] = [
+  {
+    icon: 'alert-circle',
+    iconColor: '#F59E0B',
+    iconBgColor: 'rgba(252,211,77,0.19)',
+    text: 'I can make mistakes — always double-check important information.',
+  },
+  {
+    icon: 'school-outline',
+    iconColor: '#3B82F6',
+    iconBgColor: 'rgba(96,165,250,0.19)',
+    text: "I'm a study tool, not a replacement for professional academic, medical, or legal advice. Don't rely on me alone without doing your own research.",
+  },
+  {
+    icon: 'construct-outline',
+    iconColor: '#D97706',
+    iconBgColor: '#FEF3C7',
+    text: 'My features and capabilities may change as I\'m updated and improved.',
+  },
+];
+
+// ── Main Component ──
 export default function NoraOnboarding({
   visible,
   onComplete,
@@ -113,557 +211,298 @@ export default function NoraOnboarding({
   isFirstTime = true,
 }: NoraOnboardingProps) {
   const { user } = useAuth();
+  const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
+  const scrollRef = useRef<ScrollView>(null);
   const completeOnboarding = useMutation(api.noraOnboarding.complete);
-  const [currentStep, setCurrentStep] = useState(0);
-  const [hasAcceptedPolicies, setHasAcceptedPolicies] = useState(false);
-  const [isVisible, setIsVisible] = useState(false);
 
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
-  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const [currentStep, setCurrentStep] = useState(0); // 0 = intro, 1 = policies+disclaimers
+  const [hasAcknowledged, setHasAcknowledged] = useState(false);
+  const [isRendered, setIsRendered] = useState(false);
 
-  // Track timeouts for cleanup
-  const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Animations
+  const containerOpacity = useSharedValue(0);
+  const stepOpacity = useSharedValue(1);
+  const stepTranslateX = useSharedValue(0);
+  const buttonScale = useSharedValue(1);
+  const disclaimerOpacity = useSharedValue(0);
+  const disclaimerTranslateY = useSharedValue(30);
 
+  const getFirstName = useCallback(() => {
+    if (!user?.full_name) return 'there';
+    return user.full_name.split(/[_\s]/)[0] || 'there';
+  }, [user?.full_name]);
+
+  // Entrance / exit
   useEffect(() => {
-    console.log('NoraOnboarding: visible prop changed to:', visible);
-
-    // Clear any pending timeout from previous render
-    if (animationTimeoutRef.current) {
-      clearTimeout(animationTimeoutRef.current);
-      animationTimeoutRef.current = null;
-    }
-
-    // Stop all running animations to prevent stale callbacks from firing
-    fadeAnim.stopAnimation();
-    slideAnim.stopAnimation();
-    scaleAnim.stopAnimation();
-
     if (visible) {
-      setIsVisible(true);
-      // Reset animations to ensure they start from the right values
-      fadeAnim.setValue(0);
-      slideAnim.setValue(50);
-      scaleAnim.setValue(0.9);
-
-      console.log('NoraOnboarding: Setting isVisible to true, starting animations');
-      // Add a small delay to ensure modal is rendered before animations start
-      animationTimeoutRef.current = setTimeout(() => {
-        Animated.parallel([
-          Animated.timing(fadeAnim, {
-            toValue: 1,
-            duration: 400,
-            useNativeDriver: true,
-          }),
-          Animated.timing(slideAnim, {
-            toValue: 0,
-            duration: 400,
-            useNativeDriver: true,
-          }),
-          Animated.spring(scaleAnim, {
-            toValue: 1,
-            tension: 100,
-            friction: 8,
-            useNativeDriver: true,
-          }),
-        ]).start(() => {
-          console.log('NoraOnboarding: Animations completed');
-        });
-      }, 50);
-    } else {
-      console.log('NoraOnboarding: visible false, hiding modal');
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(scaleAnim, {
-          toValue: 0.9,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        setIsVisible(false);
-        setCurrentStep(0);
-        setHasAcceptedPolicies(false);
-        console.log('NoraOnboarding: Modal completely hidden');
+      setIsRendered(true);
+      setCurrentStep(0);
+      setHasAcknowledged(false);
+      stepOpacity.value = 1;
+      stepTranslateX.value = 0;
+      disclaimerOpacity.value = 0;
+      disclaimerTranslateY.value = 30;
+      containerOpacity.value = withTiming(1, { duration: TimingConfig.entrance });
+    } else if (isRendered) {
+      containerOpacity.value = withTiming(0, { duration: TimingConfig.fast }, () => {
+        runOnJS(setIsRendered)(false);
       });
     }
-
-    // Cleanup timeout on unmount or when visible changes
-    return () => {
-      if (animationTimeoutRef.current) {
-        clearTimeout(animationTimeoutRef.current);
-      }
-    };
   }, [visible]);
 
-  const getCurrentStep = () => ONBOARDING_STEPS[currentStep];
-  const isLastStep = () => currentStep === ONBOARDING_STEPS.length - 1;
-  const isPolicyStep = () => getCurrentStep().type === 'policies';
+  const containerStyle = useAnimatedStyle(() => ({
+    opacity: containerOpacity.value,
+  }));
 
-  const getFirstName = () => {
-    if (!user?.full_name) return 'there';
-    
-    // Extract first name (everything before underscore or space)
-    const fullName = user.full_name;
-    const firstName = fullName.split(/[_\s]/)[0];
-    return firstName || 'there';
-  };
+  const stepStyle = useAnimatedStyle(() => ({
+    opacity: stepOpacity.value,
+    transform: [{ translateX: stepTranslateX.value }],
+  }));
 
-  const handleNext = async () => {
-    if (isPolicyStep() && !hasAcceptedPolicies) {
-      return; // Can't proceed without accepting policies
-    }
+  const buttonAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: buttonScale.value }],
+  }));
 
-    if (isLastStep()) {
+  const disclaimerStyle = useAnimatedStyle(() => ({
+    opacity: disclaimerOpacity.value,
+    transform: [{ translateY: disclaimerTranslateY.value }],
+  }));
+
+  // Step transition (intro → policies)
+  const animateToStep = useCallback((nextStep: number) => {
+    stepOpacity.value = withTiming(0, { duration: 150 });
+    stepTranslateX.value = withTiming(-20, { duration: 150 });
+
+    setTimeout(() => {
+      setCurrentStep(nextStep);
+      stepTranslateX.value = 30;
+      stepOpacity.value = withTiming(1, { duration: 250 });
+      stepTranslateX.value = withSpring(0, AnimationConfig.gentle);
+    }, 160);
+  }, []);
+
+  // Handlers
+  const handleContinue = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    if (currentStep === 0) {
+      // Intro → policies page
+      animateToStep(1);
+    } else if (currentStep === 1 && !hasAcknowledged) {
+      // Acknowledge → reveal disclaimers below
+      setHasAcknowledged(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      // Animate disclaimers in
+      disclaimerOpacity.value = withDelay(200, withTiming(1, { duration: 400 }));
+      disclaimerTranslateY.value = withDelay(200, withSpring(0, AnimationConfig.gentle));
+
+      // Auto-scroll down to show disclaimers
+      setTimeout(() => {
+        scrollRef.current?.scrollToEnd({ animated: true });
+      }, 400);
+    } else if (currentStep === 1 && hasAcknowledged) {
+      // Final — complete onboarding
       try {
-        console.log('[NoraOnboarding] Completing onboarding...');
         await completeOnboarding();
-        console.log('[NoraOnboarding] Onboarding completed successfully');
       } catch (e) {
-        console.error('[NoraOnboarding] Failed to complete onboarding:', e);
+        console.error('[NoraOnboarding] Failed to complete:', e);
       }
       onComplete();
-    } else {
-      // Stop any previous slide animation before starting new one
-      slideAnim.stopAnimation();
-
-      // Animate transition
-      Animated.sequence([
-        Animated.timing(slideAnim, {
-          toValue: -20,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 50,
-          duration: 0,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start();
-
-      setCurrentStep(currentStep + 1);
     }
+  }, [currentStep, hasAcknowledged, animateToStep, completeOnboarding, onComplete]);
+
+  const handleButtonPressIn = useCallback(() => {
+    buttonScale.value = withSpring(0.97, AnimationConfig.snappy);
+  }, []);
+
+  const handleButtonPressOut = useCallback(() => {
+    buttonScale.value = withSpring(1, AnimationConfig.bouncy);
+  }, []);
+
+  if (!isRendered) return null;
+
+  // ── Button text & state ──
+  const getButtonText = () => {
+    if (currentStep === 0) return 'Continue';
+    if (!hasAcknowledged) return 'Acknowledge & Continue';
+    return "Sounds Good, Let's Begin";
   };
 
-  const handleSkip = () => {
-    onSkip();
-  };
+  // ── Step content ──
+  const renderStep = () => {
+    if (currentStep === 0) {
+      return (
+        <>
+          <Text style={[styles.heading, { color: theme.text }]}>
+            Hi {getFirstName()}, I'm Nora.
+          </Text>
+          <Text style={[styles.body, { color: theme.text }]}>
+            I'm your AI study companion — here to help you understand tricky topics, build study plans, and stay on track with your goals.
+          </Text>
+          <Text style={[styles.body, { color: theme.textSecondary ?? '#888', marginTop: Spacing.lg }]}>
+            Let's get a couple things out of the way first.
+          </Text>
+        </>
+      );
+    }
 
-  const handleAcceptPolicies = () => {
-    setHasAcceptedPolicies(true);
-  };
-
-  const renderStepContent = () => {
-    const step = getCurrentStep();
-    console.log('NoraOnboarding: Rendering step:', step.title, 'User:', user?.full_name);
-    
+    // Step 1: Combined policies + disclaimers (scrollable reveal)
     return (
-      <ScrollView 
-        style={styles.contentScroll}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.contentContainer}
-      >
-        {step.icon && (
-          <View style={styles.iconContainer}>
-            <View style={[styles.iconBackground, { backgroundColor: getStepColor(step.type) + '20' }]}>
-              <Ionicons 
-                name={step.icon} 
-                size={32} 
-                color={getStepColor(step.type)} 
-              />
-            </View>
-          </View>
-        )}
-        
-        <Text style={styles.stepTitle}>
-          {step.type === 'welcome' ? `Welcome, ${getFirstName()}!` : step.title}
+      <>
+        <Text style={[styles.heading, { color: theme.text }]}>
+          A few things to know
         </Text>
-        
-        <Text style={styles.stepContent}>
-          {step.content}
+        <Text style={[styles.body, { color: theme.textSecondary ?? '#888', marginBottom: Spacing.lg }]}>
+          Your privacy matters. Here's how we handle your data when you chat with Nora.
         </Text>
-        
-        {step.features && (
-          <View style={styles.featuresContainer}>
-            {step.features.map((feature, index) => (
-              <View key={index} style={styles.featureItem}>
-                <View style={styles.featureBullet}>
-                  <Ionicons name="checkmark" size={16} color="#4CAF50" />
-                </View>
-                <Text style={styles.featureText}>{feature}</Text>
-              </View>
-            ))}
-          </View>
+
+        {/* Policies grouped card */}
+        <StaggeredItem index={0} delay="fast" direction="up">
+          <GroupedCard
+            title="Privacy & Acceptable Use"
+            titleIcon="open-outline"
+            onTitlePress={() => Linking.openURL('https://hikewise.app/privacy')}
+            items={POLICY_ITEMS}
+          />
+        </StaggeredItem>
+
+        {/* Acknowledged badge (shows after acknowledge) */}
+        {hasAcknowledged && <AcknowledgedBadge />}
+
+        {/* Disclaimers section — revealed on acknowledge */}
+        {hasAcknowledged && (
+          <Animated.View style={disclaimerStyle}>
+            <Text style={[styles.subheading, { color: theme.text }]}>
+              Almost there
+            </Text>
+            <GroupedCard items={DISCLAIMER_ITEMS} />
+          </Animated.View>
         )}
-        
-        {step.warnings && (
-          <View style={styles.warningsContainer}>
-            {step.warnings.map((warning, index) => (
-              <View key={index} style={styles.warningItem}>
-                <View style={styles.warningBullet}>
-                  <Ionicons 
-                    name={step.type === 'policies' ? "information-circle" : "alert-circle"} 
-                    size={16} 
-                    color={step.type === 'policies' ? "#2196F3" : "#FF9800"} 
-                  />
-                </View>
-                <Text style={styles.warningText}>{warning}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-        
-        {step.requiresAcceptance && (
-          <TouchableOpacity 
-            style={[
-              styles.acceptanceButton,
-              hasAcceptedPolicies && styles.acceptanceButtonAccepted
-            ]}
-            onPress={handleAcceptPolicies}
-            activeOpacity={0.8}
-          >
-            <View style={styles.acceptanceContent}>
-              <View style={[
-                styles.checkbox,
-                hasAcceptedPolicies && styles.checkboxChecked
-              ]}>
-                {hasAcceptedPolicies && (
-                  <Ionicons name="checkmark" size={16} color="#FFFFFF" />
-                )}
-              </View>
-              <Text style={[
-                styles.acceptanceText,
-                hasAcceptedPolicies && styles.acceptanceTextAccepted
-              ]}>
-                I understand and accept these terms
-              </Text>
-            </View>
-          </TouchableOpacity>
-        )}
-      </ScrollView>
+      </>
     );
   };
 
-  const getStepColor = (type: string) => {
-    switch (type) {
-      case 'intro': return '#4CAF50';
-      case 'capabilities': return '#2196F3';
-      case 'limitations': return '#FF9800';
-      case 'policies': return '#9C27B0';
-      case 'welcome': return '#4CAF50';
-      default: return '#4CAF50';
-    }
-  };
-
-  const getButtonText = () => {
-    if (isPolicyStep() && !hasAcceptedPolicies) {
-      return 'Accept to Continue';
-    }
-    if (isLastStep()) {
-      return 'Start Chatting';
-    }
-    return 'Continue';
-  };
-
-  const canProceed = () => {
-    if (isPolicyStep()) {
-      return hasAcceptedPolicies;
-    }
-    return true;
-  };
-
-  if (!isVisible) return null;
-
   return (
-    <Modal
-      visible={isVisible}
-      transparent={true}
-      animationType="none"
-      onRequestClose={isFirstTime ? undefined : handleSkip}
+    <Animated.View
+      style={[
+        StyleSheet.absoluteFill,
+        { backgroundColor: theme.background, zIndex: 999 },
+        containerStyle,
+      ]}
     >
-      <View style={styles.modalOverlay}>
-        <Animated.View
-          style={[
-            styles.modalContainer,
-            {
-              opacity: fadeAnim,
-              transform: [
-                { translateY: slideAnim },
-                { scale: scaleAnim },
-              ],
-              // Ensure minimum visibility to prevent grey overlay issue
-              minHeight: 400,
-            },
-          ]}
-        >
-          <LinearGradient
-            colors={['#1B4A3A', '#2E5D4F', '#1B4A3A']}
-            style={styles.modalGradient}
+      {/* Progress dots (2 steps) */}
+      <View style={[styles.progressRow, { marginTop: insets.top + Spacing.md }]}>
+        {[0, 1].map((i) => (
+          <View
+            key={i}
+            style={[
+              styles.dot,
+              { backgroundColor: theme.border ?? '#E0E0E0' },
+              i === currentStep && { width: 20, backgroundColor: theme.primary },
+              i < currentStep && { backgroundColor: theme.primary + '99' },
+            ]}
+          />
+        ))}
+      </View>
+
+      {/* Skip button (only when not first time) */}
+      {!isFirstTime && (
+        <Pressable onPress={onSkip} style={[styles.skipButton, { top: insets.top + Spacing.sm }]}>
+          <Text style={[styles.skipText, { color: theme.textSecondary ?? '#888' }]}>Skip</Text>
+        </Pressable>
+      )}
+
+      {/* Step content */}
+      <ScrollView
+        ref={scrollRef}
+        style={styles.scrollView}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 140 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        <Animated.View style={stepStyle}>
+          {renderStep()}
+        </Animated.View>
+      </ScrollView>
+
+      {/* Footer button */}
+      <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.lg }]}>
+        <Animated.View style={buttonAnimStyle}>
+          <Pressable
+            onPress={handleContinue}
+            onPressIn={handleButtonPressIn}
+            onPressOut={handleButtonPressOut}
+            style={[styles.button, { backgroundColor: theme.primary }]}
           >
-            <View style={styles.header}>
-              {!isFirstTime ? (
-                <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
-                  <Text style={styles.skipText}>Skip</Text>
-                </TouchableOpacity>
-              ) : (
-                <View style={styles.skipButton} />
-              )}
-
-              <View style={styles.progressContainer}>
-                {ONBOARDING_STEPS.map((_, index) => (
-                  <View
-                    key={index}
-                    style={[
-                      styles.progressDot,
-                      index === currentStep && styles.progressDotActive,
-                      index < currentStep && styles.progressDotCompleted,
-                    ]}
-                  />
-                ))}
-              </View>
-
-              <View style={styles.skipButton} />
-            </View>
-            
-            {renderStepContent()}
-            
-            <View style={styles.footer}>
-              <TouchableOpacity
-                style={[
-                  styles.continueButton,
-                  !canProceed() && styles.continueButtonDisabled,
-                ]}
-                onPress={handleNext}
-                disabled={!canProceed()}
-                activeOpacity={0.8}
-              >
-                <LinearGradient
-                  colors={
-                    canProceed() 
-                      ? [getStepColor(getCurrentStep().type), getStepColor(getCurrentStep().type) + 'CC']
-                      : ['#666666', '#555555']
-                  }
-                  style={styles.continueButtonGradient}
-                >
-                  <Text style={styles.continueButtonText}>
-                    {getButtonText()}
-                  </Text>
-                  <Ionicons 
-                    name={isLastStep() ? 'rocket' : 'arrow-forward'} 
-                    size={16} 
-                    color="#FFFFFF" 
-                    style={{ marginLeft: 8 }} 
-                  />
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
-          </LinearGradient>
+            <Text style={styles.buttonText}>{getButtonText()}</Text>
+            {hasAcknowledged && currentStep === 1 && (
+              <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={{ marginLeft: 8 }} />
+            )}
+          </Pressable>
         </Animated.View>
       </View>
-    </Modal>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+  progressRow: {
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  modalContainer: {
-    width: '100%',
-    maxWidth: 500,
-    maxHeight: screenHeight * 0.92,
-    height: screenHeight * 0.92,
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
-  modalGradient: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 10,
-  },
-  skipButton: {
-    width: 50,
-  },
-  skipText: {
-    color: '#B8E6C1',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  progressContainer: {
-    flexDirection: 'row',
     gap: 8,
+    marginBottom: Spacing.sm,
   },
-  progressDot: {
+  dot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: 'rgba(232, 245, 233, 0.3)',
   },
-  progressDotActive: {
-    backgroundColor: '#4CAF50',
-    width: 20,
+  skipButton: {
+    position: 'absolute',
+    right: Spacing.lg,
+    zIndex: 10,
   },
-  progressDotCompleted: {
-    backgroundColor: 'rgba(76, 175, 80, 0.6)',
-  },
-  contentScroll: {
-    flex: 1,
-  },
-  contentContainer: {
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-  },
-  iconContainer: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  iconBackground: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  stepTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#E8F5E9',
-    textAlign: 'center',
-    marginBottom: 18,
-  },
-  stepContent: {
-    fontSize: 18,
-    color: '#B8E6C1',
-    textAlign: 'center',
-    lineHeight: 26,
-    marginBottom: 24,
-  },
-  featuresContainer: {
-    gap: 12,
-    marginBottom: 20,
-  },
-  featureItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  featureBullet: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(76, 175, 80, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-    marginTop: 2,
-  },
-  featureText: {
-    flex: 1,
-    fontSize: 16,
-    color: '#B8E6C1',
-    lineHeight: 24,
-  },
-  warningsContainer: {
-    gap: 12,
-    marginBottom: 20,
-  },
-  warningItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  warningBullet: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 152, 0, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-    marginTop: 2,
-  },
-  warningText: {
-    flex: 1,
-    fontSize: 16,
-    color: '#B8E6C1',
-    lineHeight: 24,
-  },
-  acceptanceButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 2,
-    borderColor: 'rgba(232, 245, 233, 0.2)',
-    marginTop: 10,
-  },
-  acceptanceButtonAccepted: {
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
-    borderColor: 'rgba(76, 175, 80, 0.4)',
-  },
-  acceptanceContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#B8E6C1',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  checkboxChecked: {
-    backgroundColor: '#4CAF50',
-    borderColor: '#4CAF50',
-  },
-  acceptanceText: {
-    fontSize: 16,
-    color: '#B8E6C1',
+  skipText: {
+    ...Typography.body,
     fontWeight: '500',
   },
-  acceptanceTextAccepted: {
-    color: '#E8F5E9',
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.xxl,
+  },
+  heading: {
+    ...Typography.display,
+    marginBottom: Spacing.lg,
+  },
+  subheading: {
+    ...Typography.h2,
+    marginBottom: Spacing.md,
+  },
+  body: {
+    fontSize: 18,
+    fontWeight: '500' as const,
+    lineHeight: 28,
+    letterSpacing: -0.1,
   },
   footer: {
-    paddingHorizontal: 24,
-    paddingBottom: 24,
-    paddingTop: 10,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
   },
-  continueButton: {
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  continueButtonDisabled: {
-    opacity: 0.5,
-  },
-  continueButtonGradient: {
+  button: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.lg,
   },
-  continueButtonText: {
+  buttonText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
   },
 });

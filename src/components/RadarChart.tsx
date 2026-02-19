@@ -5,9 +5,17 @@
  * Shows sub-dimension scores in a visually appealing format.
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import Svg, { Polygon, Circle, Line, Text as SvgText, G } from 'react-native-svg';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withDelay,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
 import { useTheme } from '../context/ThemeContext';
 
 interface RadarDataPoint {
@@ -51,8 +59,8 @@ const RadarChart: React.FC<RadarChartProps> = ({
 
   const centerX = size / 2;
   const centerY = size / 2;
-  const maxRadius = (size / 2) * 0.7; // Leave room for labels
-  const labelRadius = (size / 2) * 0.9;
+  const maxRadius = (size / 2) * 0.78; // Big polygon — fills the chart
+  const labelRadius = (size / 2) * 0.88; // Initials outside polygon, within SVG bounds
 
   const numAxes = sortedData.length;
   const angleStep = (Math.PI * 2) / numAxes;
@@ -104,154 +112,156 @@ const RadarChart: React.FC<RadarChartProps> = ({
     return x > 0 ? 'start' : 'end';
   };
 
-  // Truncate label text for display
-  const truncateLabel = (text: string, maxLength: number = 12) => {
-    if (text.length <= maxLength) return text;
-    return text.substring(0, maxLength - 2) + '...';
+  // Initials only — full names shown in Dimension Scores legend below
+  const abbreviateLabel = (text: string) => {
+    const words = text.split(/[\s_]+/);
+    if (words.length >= 2) {
+      return words.map(w => w.charAt(0).toUpperCase()).join('');
+    }
+    // Single word: first 4 chars
+    return text.length <= 4 ? text.toUpperCase() : text.substring(0, 4).toUpperCase();
   };
+
+  // Entry animation — scale up from center with spring
+  const chartScale = useSharedValue(0.3);
+  const chartOpacity = useSharedValue(0);
+  const labelOpacity = useSharedValue(0);
+
+  useEffect(() => {
+    chartScale.value = withSpring(1, { damping: 12, stiffness: 100 });
+    chartOpacity.value = withTiming(1, { duration: 400, easing: Easing.out(Easing.cubic) });
+    labelOpacity.value = withDelay(300, withTiming(1, { duration: 400 }));
+  }, []);
+
+  const animatedChartStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: chartScale.value }],
+    opacity: chartOpacity.value,
+  }));
+
+  const animatedLabelStyle = useAnimatedStyle(() => ({
+    opacity: labelOpacity.value,
+  }));
 
   return (
     <View style={[styles.container, { width: size, height: size }]}>
-      <Svg width={size} height={size}>
-        {/* Grid */}
-        {showGrid && (
-          <G>
-            {/* Grid circles */}
-            {gridLevels.map((level, i) => (
-              <Circle
-                key={`grid-circle-${i}`}
-                cx={centerX}
-                cy={centerY}
-                r={maxRadius * level}
-                fill="none"
-                stroke={theme.text + '20'}
-                strokeWidth={1}
-                strokeDasharray={level === 1.0 ? undefined : '4,4'}
-              />
-            ))}
-
-            {/* Grid lines (axes) */}
-            {sortedData.map((_, i) => {
-              const endPoint = getPoint(i, 1);
-              return (
-                <Line
-                  key={`axis-${i}`}
-                  x1={centerX}
-                  y1={centerY}
-                  x2={endPoint.x}
-                  y2={endPoint.y}
-                  stroke={theme.text + '30'}
+      {/* Animated chart — springs in from center */}
+      <Animated.View style={[{ width: size, height: size }, animatedChartStyle]}>
+        <Svg width={size} height={size}>
+          {/* Grid */}
+          {showGrid && (
+            <G>
+              {gridLevels.map((level, i) => (
+                <Circle
+                  key={`grid-circle-${i}`}
+                  cx={centerX}
+                  cy={centerY}
+                  r={maxRadius * level}
+                  fill="none"
+                  stroke={theme.text + '20'}
                   strokeWidth={1}
+                  strokeDasharray={level === 1.0 ? undefined : '4,4'}
                 />
-              );
-            })}
-          </G>
-        )}
+              ))}
+              {sortedData.map((_, i) => {
+                const endPoint = getPoint(i, 1);
+                return (
+                  <Line
+                    key={`axis-${i}`}
+                    x1={centerX}
+                    y1={centerY}
+                    x2={endPoint.x}
+                    y2={endPoint.y}
+                    stroke={theme.text + '30'}
+                    strokeWidth={1}
+                  />
+                );
+              })}
+            </G>
+          )}
 
-        {/* Comparison polygon (if provided) */}
-        {comparisonPolygonPoints && (
-          <Polygon
-            points={comparisonPolygonPoints}
-            fill={theme.textSecondary + '15'}
-            stroke={theme.textSecondary}
-            strokeWidth={2}
-            strokeDasharray="4,4"
-          />
-        )}
-
-        {/* Main data polygon */}
-        <Polygon
-          points={polygonPoints}
-          fill={chartColor + '30'}
-          stroke={chartColor}
-          strokeWidth={2.5}
-        />
-
-        {/* Data points */}
-        {sortedData.map((d, i) => {
-          const point = getPoint(i, d.value);
-          return (
-            <Circle
-              key={`point-${i}`}
-              cx={point.x}
-              cy={point.y}
-              r={5}
-              fill={chartColor}
-              stroke="#FFF"
+          {/* Comparison polygon */}
+          {comparisonPolygonPoints && (
+            <Polygon
+              points={comparisonPolygonPoints}
+              fill={theme.textSecondary + '15'}
+              stroke={theme.textSecondary}
               strokeWidth={2}
+              strokeDasharray="4,4"
             />
-          );
-        })}
+          )}
 
-        {/* Labels */}
-        {showLabels &&
-          sortedData.map((d, i) => {
-            const labelPos = getLabelPosition(i);
-            const textAnchor = getTextAnchor(i);
-            const displayLabel = truncateLabel(d.axis);
-            const valueText = showPercentiles && d.percentile
-              ? `${d.displayValue}% (${d.percentile}th)`
-              : `${d.displayValue}%`;
+          {/* Main data polygon */}
+          <Polygon
+            points={polygonPoints}
+            fill={chartColor + '30'}
+            stroke={chartColor}
+            strokeWidth={2.5}
+          />
 
-            // Adjust Y position based on position in chart
-            const angle = angleStep * i - Math.PI / 2;
-            const isTop = Math.sin(angle) < -0.5;
-            const isBottom = Math.sin(angle) > 0.5;
-            const yOffset = isTop ? -8 : isBottom ? 16 : 4;
-
+          {/* Data points */}
+          {sortedData.map((d, i) => {
+            const point = getPoint(i, d.value);
             return (
-              <G key={`label-${i}`}>
-                <SvgText
-                  x={labelPos.x}
-                  y={labelPos.y + yOffset - 10}
-                  fontSize={10}
-                  fontWeight="600"
-                  fill={theme.text}
-                  textAnchor={textAnchor}
-                >
-                  {displayLabel}
-                </SvgText>
-                <SvgText
-                  x={labelPos.x}
-                  y={labelPos.y + yOffset + 2}
-                  fontSize={9}
-                  fill={chartColor}
-                  fontWeight="bold"
-                  textAnchor={textAnchor}
-                >
-                  {valueText}
-                </SvgText>
-              </G>
+              <Circle
+                key={`point-${i}`}
+                cx={point.x}
+                cy={point.y}
+                r={5}
+                fill={chartColor}
+                stroke="#FFF"
+                strokeWidth={2}
+              />
             );
           })}
 
-        {/* Center value percentage (overall score) */}
-        {sortedData.length > 0 && (
-          <G>
-            <Circle
-              cx={centerX}
-              cy={centerY}
-              r={28}
-              fill={theme.card}
-              stroke={chartColor + '40'}
-              strokeWidth={2}
-            />
-            <SvgText
-              x={centerX}
-              y={centerY + 4}
-              fontSize={14}
-              fontWeight="bold"
-              fill={theme.text}
-              textAnchor="middle"
-            >
-              {Math.round(
-                sortedData.reduce((sum, d) => sum + d.displayValue, 0) /
-                  sortedData.length
-              )}%
-            </SvgText>
-          </G>
-        )}
-      </Svg>
+          {/* Center dot */}
+          <Circle cx={centerX} cy={centerY} r={3} fill={chartColor} />
+        </Svg>
+      </Animated.View>
+
+      {/* Labels overlay — fades in after chart expands */}
+      {showLabels && (
+        <Animated.View style={[styles.labelsOverlay, { width: size, height: size }, animatedLabelStyle]}>
+          <Svg width={size} height={size}>
+            {sortedData.map((d, i) => {
+              const labelPos = getLabelPosition(i);
+              const textAnchor = getTextAnchor(i);
+              const displayLabel = abbreviateLabel(d.axis);
+              const valueText = `${d.displayValue}%`;
+
+              const angle = angleStep * i - Math.PI / 2;
+              const isTop = Math.sin(angle) < -0.5;
+              const isBottom = Math.sin(angle) > 0.5;
+              const yOffset = isTop ? -4 : isBottom ? 8 : 3;
+
+              return (
+                <G key={`label-${i}`}>
+                  <SvgText
+                    x={labelPos.x}
+                    y={labelPos.y + yOffset - 6}
+                    fontSize={10}
+                    fontWeight="700"
+                    fill={theme.text}
+                    textAnchor={textAnchor}
+                  >
+                    {displayLabel}
+                  </SvgText>
+                  <SvgText
+                    x={labelPos.x}
+                    y={labelPos.y + yOffset + 6}
+                    fontSize={9}
+                    fontWeight="600"
+                    fill={chartColor}
+                    textAnchor={textAnchor}
+                  >
+                    {valueText}
+                  </SvgText>
+                </G>
+              );
+            })}
+          </Svg>
+        </Animated.View>
+      )}
     </View>
   );
 };
@@ -377,6 +387,12 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'visible',
+  },
+  labelsOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
   },
   legendContainer: {
     marginTop: 16,

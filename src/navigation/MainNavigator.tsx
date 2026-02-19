@@ -1,9 +1,63 @@
 import React from 'react';
 import { createDrawerNavigator, DrawerContentScrollView, DrawerItem } from '@react-navigation/drawer';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { createStackNavigator, CardStyleInterpolators, TransitionPresets, TransitionSpecs, StackCardStyleInterpolator } from '@react-navigation/stack';
+import { Animated, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
-import { useNavigation, CommonActions } from '@react-navigation/native';
+import { useNavigation, CommonActions, DrawerActions } from '@react-navigation/native';
+
+// ── Direction-aware navigation for tab transitions ──
+// Tab screens in left-to-right order as they appear in the bottom bar
+export const TAB_ORDER: Record<string, number> = {
+  Profile: 0,
+  SessionHistory: 1,
+  Results: 2,
+  Bonuses: 3,
+  Community: 4,
+};
+
+
+// Slide-from-left interpolator (mirror of forHorizontalIOS)
+const forSlideFromLeft: StackCardStyleInterpolator = ({
+  current,
+  next,
+  inverted,
+  layouts: { screen },
+}) => {
+  const translateFocused = Animated.multiply(
+    current.progress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [-screen.width, 0],
+      extrapolate: 'clamp',
+    }),
+    inverted,
+  );
+  const translateUnfocused = next
+    ? Animated.multiply(
+        next.progress.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, screen.width * 0.3],
+          extrapolate: 'clamp',
+        }),
+        inverted,
+      )
+    : 0;
+  const overlayOpacity = current.progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 0.07],
+    extrapolate: 'clamp',
+  });
+
+  return {
+    cardStyle: {
+      transform: [
+        { translateX: translateFocused },
+        ...(translateUnfocused !== 0 ? [{ translateX: translateUnfocused }] : []),
+      ],
+    },
+    overlayStyle: { opacity: overlayOpacity },
+  };
+};
 
 // Main screens
 import HomeScreen from '../screens/main/HomeScreen';
@@ -48,17 +102,126 @@ import ThemeSettingsScreen from '../screens/main/settings/ThemeSettingsScreen';
 import AISettingsScreen from '../screens/main/settings/AISettingsScreen';
 import NotificationSettingsScreen from '../screens/main/settings/NotificationSettingsScreen';
 
+
 const Drawer = createDrawerNavigator();
+const SettingsStackNav = createStackNavigator();
+const ContentStackNav = createStackNavigator();
+
+function SettingsStack() {
+  return (
+    <SettingsStackNav.Navigator
+      screenOptions={{
+        headerShown: false,
+        ...TransitionPresets.SlideFromRightIOS,
+        gestureEnabled: true,
+        gestureDirection: 'horizontal',
+      }}
+    >
+      <SettingsStackNav.Screen name="SettingsMain" component={SettingsScreen} />
+      <SettingsStackNav.Screen name="SoundSettings" component={SoundSettingsScreen} />
+      <SettingsStackNav.Screen name="ThemeSettings" component={ThemeSettingsScreen} />
+      <SettingsStackNav.Screen name="AISettings" component={AISettingsScreen} />
+      <SettingsStackNav.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
+      <SettingsStackNav.Screen name="Privacy" component={PrivacyScreen} />
+      <SettingsStackNav.Screen name="Subscription" component={SubscriptionScreen} />
+    </SettingsStackNav.Navigator>
+  );
+}
+
+function ContentStack() {
+  return (
+    <ContentStackNav.Navigator
+      initialRouteName="Home"
+      screenOptions={({ route }) => {
+        // Tab-to-tab navigations pass _slideLeft via route params
+        const slideLeft = (route.params as any)?._slideLeft === true;
+
+        return {
+          headerShown: false,
+          headerStyle: { backgroundColor: '#F8FCF8' },
+          headerTintColor: '#1B5E20',
+          headerTitleStyle: { fontWeight: 'bold' as const },
+          gestureEnabled: true,
+          gestureDirection: slideLeft ? 'horizontal-inverted' : 'horizontal',
+          cardStyleInterpolator: slideLeft
+            ? forSlideFromLeft
+            : CardStyleInterpolators.forHorizontalIOS,
+          transitionSpec: {
+            open: TransitionSpecs.TransitionIOSSpec,
+            close: TransitionSpecs.TransitionIOSSpec,
+          },
+          cardOverlayEnabled: true,
+        };
+      }}
+    >
+      {/* Main screens — all manage their own headers */}
+      <ContentStackNav.Screen name="Home" component={HomeScreen} />
+      <ContentStackNav.Screen name="Community" component={CommunityScreen} />
+      <ContentStackNav.Screen name="NoraScreen" component={NoraScreen} />
+      <ContentStackNav.Screen name="Bonuses" component={BonusesScreen} />
+      <ContentStackNav.Screen name="Results" component={ResultsScreen} />
+      <ContentStackNav.Screen name="Leaderboard" component={LeaderboardScreen} />
+      <ContentStackNav.Screen name="Profile" component={ProfileScreen} />
+      <ContentStackNav.Screen name="Shop" component={ShopScreen} />
+      <ContentStackNav.Screen name="Settings" component={SettingsStack} />
+      <ContentStackNav.Screen name="SessionHistory" component={SessionHistoryScreen} />
+      <ContentStackNav.Screen name="Subscription" component={SubscriptionScreen} />
+      <ContentStackNav.Screen name="QRScanner" component={QRScannerScreen} />
+      <ContentStackNav.Screen name="ProTrekker" component={ProTrekkerScreen} />
+      <ContentStackNav.Screen name="EBooks" component={EBooksScreen} />
+      <ContentStackNav.Screen name="Achievements" component={AchievementsScreen} />
+      <ContentStackNav.Screen name="SelfDiscoveryQuiz" component={SelfDiscoveryQuizScreen} />
+      <ContentStackNav.Screen name="BrainMapping" component={BrainMappingScreen} />
+      <ContentStackNav.Screen name="TrailBuddySelection" component={TrailBuddySelectionScreen} />
+      <ContentStackNav.Screen name="FocusPreparation" component={FocusPreparationScreen} />
+      <ContentStackNav.Screen name="StudySessionScreen" component={StudySessionScreen} />
+      <ContentStackNav.Screen name="AIIntegration" component={AIIntegrationScreen} />
+      <ContentStackNav.Screen name="Privacy" component={PrivacyScreen} />
+      <ContentStackNav.Screen name="PDFViewer" component={PDFViewerScreen} />
+
+      {/* Profile sub-screens — use navigator header with back button */}
+      <ContentStackNav.Screen
+        name="ProfileCustomization"
+        component={ProfileCustomizationScreen}
+        options={{ headerShown: true, title: 'Customize Profile' }}
+      />
+      <ContentStackNav.Screen
+        name="PersonalInformation"
+        component={PersonalInformationScreen}
+        options={{ headerShown: true, title: 'Personal Information' }}
+      />
+      <ContentStackNav.Screen
+        name="Education"
+        component={EducationScreen}
+        options={{ headerShown: true, title: 'Education' }}
+      />
+      <ContentStackNav.Screen
+        name="LocationAndTime"
+        component={LocationAndTimeScreen}
+        options={{ headerShown: true, title: 'Location and Time' }}
+      />
+      <ContentStackNav.Screen
+        name="Preferences"
+        component={PreferencesScreen}
+        options={{ headerShown: true, title: 'Preferences' }}
+      />
+    </ContentStackNav.Navigator>
+  );
+}
 
 function CustomDrawerContent(props: any) {
   const { signOut, user } = useAuth();
   const navigation = props.navigation;
 
+  // Navigate to a screen inside the ContentStack from the Drawer menu
+  const navigateTo = (screen: string, params?: any) => {
+    navigation.closeDrawer();
+    navigation.navigate('Content', { screen, params });
+  };
+
   const handleLogout = async () => {
     try {
       await signOut();
-      // Navigate to Landing page after successful logout
-      // We need to navigate to the root level, not just within the drawer
       const rootNavigation = navigation.getParent();
       if (rootNavigation) {
         rootNavigation.dispatch(
@@ -68,12 +231,10 @@ function CustomDrawerContent(props: any) {
           })
         );
       } else {
-        // Fallback if we can't get the parent navigator
         navigation.navigate('Landing' as never);
       }
     } catch (error) {
       console.error('Logout error:', error);
-      // Even if signOut fails, try to navigate to Landing
       const rootNavigation = navigation.getParent();
       if (rootNavigation) {
         rootNavigation.dispatch(
@@ -87,7 +248,7 @@ function CustomDrawerContent(props: any) {
       }
     }
   };
-  
+
   return (
     <DrawerContentScrollView {...props} contentContainerStyle={{ flex: 1, backgroundColor: '#FFF' }}>
       <View style={styles.profileSection}>
@@ -99,71 +260,71 @@ function CustomDrawerContent(props: any) {
           <Text style={styles.nameText}>{user?.full_name || user?.username || 'No Name'}</Text>
         </View>
       </View>
-      
+
       {/* Primary Navigation Items */}
       <DrawerItem
         label="Home"
         icon={({ color, size }) => <Ionicons name="home-outline" size={size} color="#1B5E20" />}
-        onPress={() => navigation.navigate('Home')}
+        onPress={() => navigateTo('Home')}
         labelStyle={{ color: '#1B5E20', fontWeight: 'bold' }}
       />
       <DrawerItem
         label="Community"
         icon={({ color, size }) => <Ionicons name="people-outline" size={size} color="#1B5E20" />}
-        onPress={() => navigation.navigate('Community')}
+        onPress={() => navigateTo('Community')}
         labelStyle={{ color: '#1B5E20', fontWeight: 'bold' }}
       />
       <DrawerItem
         label="Nora Assistant"
         icon={({ color, size }) => <Ionicons name="chatbubble-ellipses-outline" size={size} color="#1B5E20" />}
-        onPress={() => navigation.navigate('NoraScreen')}
+        onPress={() => navigateTo('NoraScreen')}
         labelStyle={{ color: '#1B5E20', fontWeight: 'bold' }}
       />
       <DrawerItem
         label="Bonuses"
         icon={({ color, size }) => <Ionicons name="gift-outline" size={size} color="#1B5E20" />}
-        onPress={() => navigation.navigate('Bonuses')}
+        onPress={() => navigateTo('Bonuses')}
         labelStyle={{ color: '#1B5E20', fontWeight: 'bold' }}
       />
       <DrawerItem
         label="Results"
         icon={({ color, size }) => <Ionicons name="bar-chart-outline" size={size} color="#1B5E20" />}
-        onPress={() => navigation.navigate('Results')}
+        onPress={() => navigateTo('Results')}
         labelStyle={{ color: '#1B5E20', fontWeight: 'bold' }}
       />
       <DrawerItem
         label="Session History"
         icon={({ color, size }) => <Ionicons name="time-outline" size={size} color="#1B5E20" />}
-        onPress={() => navigation.navigate('SessionHistory')}
+        onPress={() => navigateTo('SessionHistory')}
         labelStyle={{ color: '#1B5E20', fontWeight: 'bold' }}
       />
       <DrawerItem
         label="Leaderboard"
         icon={({ color, size }) => <Ionicons name="trophy-outline" size={size} color="#4CAF50" />}
-        onPress={() => navigation.navigate('Leaderboard')}
+        onPress={() => navigateTo('Leaderboard')}
         labelStyle={{ color: '#1B5E20', fontWeight: 'bold' }}
       />
       <DrawerItem
         label="Profile"
         icon={({ color, size }) => <Ionicons name="person-outline" size={size} color="#4CAF50" />}
-        onPress={() => navigation.navigate('Profile')}
+        onPress={() => navigateTo('Profile')}
         labelStyle={{ color: '#1B5E20', fontWeight: 'bold' }}
       />
       <DrawerItem
         label="Settings"
         icon={({ color, size }) => <Ionicons name="settings-outline" size={size} color="#4CAF50" />}
-        onPress={() => navigation.navigate('Settings')}
+        onPress={() => navigateTo('Settings')}
         labelStyle={{ color: '#1B5E20', fontWeight: 'bold' }}
       />
       <DrawerItem
         label="Subscription"
         icon={({ color, size }) => <Ionicons name="card-outline" size={size} color="#7B61FF" />}
-        onPress={() => navigation.navigate('Subscription')}
+        onPress={() => navigateTo('Subscription')}
         labelStyle={{ color: '#7B61FF', fontWeight: 'bold' }}
       />
-      
+
       <View style={{ flex: 1 }} />
-      
+
       {/* Logout at bottom */}
       <DrawerItem
         label="Logout"
@@ -179,269 +340,22 @@ function CustomDrawerContent(props: any) {
 export const MainNavigator = () => {
   return (
     <Drawer.Navigator
-      initialRouteName="Home"
-      screenOptions={({ navigation }) => ({
-        headerShown: true,
+      screenOptions={{
+        headerShown: false,
         drawerStyle: {
           backgroundColor: '#FFF',
           width: 300,
         },
-        headerStyle: {
-          backgroundColor: '#F8FCF8',
-        },
-        headerTintColor: '#1B5E20',
-        headerTitleStyle: {
-          fontWeight: 'bold',
-        },
         drawerPosition: 'right',
-        headerLeft: () => null, // Remove default left toggle
-        headerRight: () => (
-          <TouchableOpacity
-            onPress={() => navigation.openDrawer()}
-            style={{ marginRight: 16 }}
-          >
-            <Ionicons name="menu" size={24} color="#1B5E20" />
-          </TouchableOpacity>
-        ),
-        // Premium drawer animation
         drawerType: 'slide',
         overlayColor: 'rgba(0, 0, 0, 0.4)',
-        // DISABLE swipe gestures to open drawer - users must tap the menu button
         swipeEnabled: false,
         swipeEdgeWidth: 0,
-        // Smooth drawer animation
         drawerHideStatusBarOnOpen: false,
-      })}
+      }}
       drawerContent={props => <CustomDrawerContent {...props} />}
     >
-      {/* Main screens - use the existing header with drawer toggle */}
-      <Drawer.Screen 
-        name="Home" 
-        component={HomeScreen} 
-        options={{ 
-          headerShown: false // Hide header for full screen design
-        }} 
-      />
-      <Drawer.Screen
-        name="Community"
-        component={CommunityScreen}
-        options={{ headerShown: false }}
-      />
-      <Drawer.Screen 
-        name="NoraScreen" 
-        component={NoraScreen} 
-        options={{ 
-          headerTitle: 'Nora Assistant',
-          headerShown: false // Let NoraScreen handle its own header with custom buttons
-        }} 
-      />
-      <Drawer.Screen
-        name="Bonuses"
-        component={BonusesScreen}
-        options={{ headerShown: false }}
-      />
-      <Drawer.Screen
-        name="Results"
-        component={ResultsScreen}
-        options={{ headerShown: false }}
-      />
-      <Drawer.Screen
-        name="Leaderboard"
-        component={LeaderboardScreen}
-        options={{ headerShown: false }}
-      />
-      <Drawer.Screen
-        name="Profile"
-        component={ProfileScreen}
-        options={{ headerShown: false }}
-      />
-      <Drawer.Screen
-        name="Shop"
-        component={ShopScreen}
-        options={{ headerShown: false, drawerItemStyle: { display: 'none' } }}
-      />
-      <Drawer.Screen
-        name="ProfileCustomization"
-        component={ProfileCustomizationScreen}
-        options={{
-          headerTitle: 'Customize Profile',
-          drawerItemStyle: { display: 'none' },
-        }}
-      />
-      <Drawer.Screen
-        name="Settings"
-        component={SettingsScreen}
-        options={{ headerShown: false }}
-      />
-      <Drawer.Screen
-        name="SessionHistory"
-        component={SessionHistoryScreen}
-        options={{
-          title: 'Session History',
-          headerShown: false
-        }}
-      />
-      <Drawer.Screen name="Subscription" component={SubscriptionScreen} options={{ headerShown: false }} />
-      <Drawer.Screen
-        name="QRScanner"
-        component={QRScannerScreen}
-        options={{
-          drawerItemStyle: { display: 'none' },
-          headerShown: false,
-          title: 'Scan QR Code'
-        }}
-      />
-      <Drawer.Screen
-        name="ProTrekker"
-        component={ProTrekkerScreen}
-        options={{
-          drawerItemStyle: { display: 'none' },
-          headerShown: false,
-          title: 'Become Pro Trekker'
-        }}
-      />
-      <Drawer.Screen
-        name="PDFViewer"
-        component={PDFViewerScreen}
-        options={({ route }) => ({
-          title: route.params?.title || 'PDF Viewer',
-          drawerItemStyle: { display: 'none' } // Hide from drawer
-        })}
-      />
-      
-      {/* Hidden screens - accessible through Bonuses but not in drawer */}
-      <Drawer.Screen
-        name="EBooks"
-        component={EBooksScreen}
-        options={{
-          headerShown: false,
-          drawerItemStyle: { display: 'none' } // Hide from drawer
-        }}
-      />
-      <Drawer.Screen
-        name="Achievements"
-        component={AchievementsScreen}
-        options={{
-          headerShown: false,
-          drawerItemStyle: { display: 'none' } // Hide from drawer
-        }}
-      />
-      <Drawer.Screen
-        name="SelfDiscoveryQuiz"
-        component={SelfDiscoveryQuizScreen}
-        options={{
-          headerShown: false,
-          drawerItemStyle: { display: 'none' }, // Hide from drawer
-          title: 'Self-Discovery Quiz'
-        }}
-      />
-      <Drawer.Screen
-        name="BrainMapping"
-        component={BrainMappingScreen}
-        options={{
-          drawerItemStyle: { display: 'none' }, // Hide from drawer
-          title: 'Brain Activity Mapping'
-        }}
-      />
-      <Drawer.Screen
-        name="TrailBuddySelection"
-        component={TrailBuddySelectionScreen}
-        options={{
-          drawerItemStyle: { display: 'none' }, // Hide from drawer
-          headerShown: false,
-          title: 'Choose Trail Buddy'
-        }}
-      />
-
-      {/* Profile sub-screens - hidden from drawer */}
-      <Drawer.Screen
-        name="PersonalInformation"
-        component={PersonalInformationScreen}
-        options={{
-          drawerItemStyle: { display: 'none' }, // Hide from drawer
-          title: 'Personal Information'
-        }}
-      />
-      <Drawer.Screen
-        name="Education"
-        component={EducationScreen}
-        options={{
-          drawerItemStyle: { display: 'none' }, // Hide from drawer
-          title: 'Education'
-        }}
-      />
-      <Drawer.Screen
-        name="LocationAndTime"
-        component={LocationAndTimeScreen}
-        options={{
-          drawerItemStyle: { display: 'none' }, // Hide from drawer
-          title: 'Location and Time'
-        }}
-      />
-      <Drawer.Screen
-        name="Privacy"
-        component={PrivacyScreen}
-        options={{
-          drawerItemStyle: { display: 'none' }, // Hide from drawer
-          title: 'Privacy'
-        }}
-      />
-      <Drawer.Screen
-        name="Preferences"
-        component={PreferencesScreen}
-        options={{
-          drawerItemStyle: { display: 'none' }, // Hide from drawer
-          title: 'Preferences'
-        }}
-      />
-
-      {/* Focus and Session screens - hidden from drawer */}
-      <Drawer.Screen
-        name="FocusPreparation"
-        component={FocusPreparationScreen}
-        options={{
-          drawerItemStyle: { display: 'none' }, // Hide from drawer
-          headerShown: false // Let screen handle its own header
-        }}
-      />
-      <Drawer.Screen
-        name="StudySessionScreen"
-        component={StudySessionScreen}
-        options={{
-          drawerItemStyle: { display: 'none' }, // Hide from drawer
-          headerShown: false // Let screen handle its own header
-        }}
-      />
-
-      {/* Settings sub-screens - hidden from drawer */}
-      <Drawer.Screen
-        name="AIIntegration"
-        component={AIIntegrationScreen}
-        options={{
-          drawerItemStyle: { display: 'none' },
-          title: 'AI Integration'
-        }}
-      />
-      <Drawer.Screen
-        name="SoundSettings"
-        component={SoundSettingsScreen}
-        options={{ drawerItemStyle: { display: 'none' }, headerShown: false }}
-      />
-      <Drawer.Screen
-        name="ThemeSettings"
-        component={ThemeSettingsScreen}
-        options={{ drawerItemStyle: { display: 'none' }, headerShown: false }}
-      />
-      <Drawer.Screen
-        name="AISettings"
-        component={AISettingsScreen}
-        options={{ drawerItemStyle: { display: 'none' }, headerShown: false }}
-      />
-      <Drawer.Screen
-        name="NotificationSettings"
-        component={NotificationSettingsScreen}
-        options={{ drawerItemStyle: { display: 'none' }, headerShown: false }}
-      />
+      <Drawer.Screen name="Content" component={ContentStack} />
     </Drawer.Navigator>
   );
 };

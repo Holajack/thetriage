@@ -8,12 +8,12 @@ tags:
   - verify
   - settings
   - persistence
+env:
+  EXPO_PUBLIC_TEST_MODE: "true"
 
 ---
 - launchApp:
     clearState: true
-    env:
-      EXPO_PUBLIC_TEST_MODE: "true"
 
 - extendedWaitUntil:
     visible: "Home"
@@ -67,9 +67,7 @@ tags:
 
 # Force app restart
 - stopApp
-- launchApp:
-    env:
-      EXPO_PUBLIC_TEST_MODE: "true"
+- launchApp
 
 - extendedWaitUntil:
     visible: "Home"
@@ -126,9 +124,7 @@ tags:
 
 # Restart app
 - stopApp
-- launchApp:
-    env:
-      EXPO_PUBLIC_TEST_MODE: "true"
+- launchApp
 
 - extendedWaitUntil:
     visible: "Home"
@@ -183,9 +179,7 @@ tags:
 
 # Restart app
 - stopApp
-- launchApp:
-    env:
-      EXPO_PUBLIC_TEST_MODE: "true"
+- launchApp
 
 - extendedWaitUntil:
     visible: "Home"

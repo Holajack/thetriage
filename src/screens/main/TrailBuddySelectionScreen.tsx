@@ -44,6 +44,7 @@ const BUDDY_SPRITESHEETS: Record<string, ImageSourcePropType> = {
   wolf: require('../../../assets/trail-buddies/wolf_walking_optimized.png'),
   nora: require('../../../assets/trail-buddies/nora_walking_optimized.png'),
   bear: require('../../../assets/trail-buddies/bear_walking_optimized.png'),
+  lion: require('../../../assets/trail-buddies/lion_walking_optimized.png'),
 };
 
 interface TrailBuddy {
@@ -90,6 +91,13 @@ const TRAIL_BUDDIES: TrailBuddy[] = [
     description: 'Loyal and determined',
     hasAnimation: true,
   },
+  {
+    id: 'lion',
+    name: 'Lion',
+    color: '#FFD700',
+    description: 'Regal and powerful',
+    hasAnimation: true,
+  },
 ];
 
 const BUDDY_EMOJIS: Record<string, string> = {
@@ -98,6 +106,7 @@ const BUDDY_EMOJIS: Record<string, string> = {
   deer: '🦌',
   nora: '🔮',
   wolf: '🐺',
+  lion: '🦁',
 };
 
 // Animated Sprite Component using spritesheet - cycles through frames by offsetting the image
@@ -309,14 +318,22 @@ const TrailBuddySelectionScreen = () => {
     },
   });
 
+  const isElite = profile?.subscription_tier === 'elite';
+
   const handleBuddySelect = useCallback((index: number) => {
+    const buddy = TRAIL_BUDDIES[index];
+    if (buddy.id === 'lion' && !isElite) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      Alert.alert('Elite Only', 'The Lion is an exclusive trail buddy available only to Elite members. Upgrade to unlock this majestic companion!');
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedIndex(index);
     flatListRef.current?.scrollToOffset({
       offset: index * ITEM_WIDTH,
       animated: true,
     });
-  }, []);
+  }, [isElite]);
 
   const handleStart = async () => {
     if (!buddyName.trim()) {
@@ -324,11 +341,16 @@ const TrailBuddySelectionScreen = () => {
       return;
     }
 
+    const selectedBuddy = TRAIL_BUDDIES[selectedIndex];
+    if (selectedBuddy.id === 'lion' && !isElite) {
+      Alert.alert('Elite Only', 'The Lion is available only to Elite members.');
+      return;
+    }
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSaving(true);
 
     try {
-      const selectedBuddy = TRAIL_BUDDIES[selectedIndex];
       await updateProfile({
         trail_buddy_type: selectedBuddy.id,
         trail_buddy_name: buddyName.trim(),
@@ -408,6 +430,22 @@ const TrailBuddySelectionScreen = () => {
           getItemLayout={getItemLayout}
           initialScrollIndex={1}
         />
+      </View>
+
+      {/* Selected Buddy Info */}
+      <View style={styles.buddyInfoSection}>
+        <Text style={[styles.buddyInfoName, { color: TRAIL_BUDDIES[selectedIndex]?.color || theme.text }]}>
+          {TRAIL_BUDDIES[selectedIndex]?.name}
+        </Text>
+        <Text style={[styles.buddyInfoDesc, { color: theme.textSecondary }]}>
+          {TRAIL_BUDDIES[selectedIndex]?.description}
+        </Text>
+        {TRAIL_BUDDIES[selectedIndex]?.id === 'lion' && !isElite && (
+          <View style={styles.eliteBadge}>
+            <Ionicons name="star" size={14} color="#FFD700" />
+            <Text style={styles.eliteBadgeText}>ELITE ONLY</Text>
+          </View>
+        )}
       </View>
 
       {/* Name Input */}
@@ -494,6 +532,36 @@ const styles = StyleSheet.create({
   shadowEllipse: {
     borderRadius: 50,
     marginTop: -5,
+  },
+  buddyInfoSection: {
+    alignItems: 'center',
+    marginTop: 4,
+    marginBottom: 0,
+  },
+  buddyInfoName: {
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  buddyInfoDesc: {
+    fontSize: 14,
+    marginTop: 2,
+  },
+  eliteBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFD70020',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#FFD700',
+  },
+  eliteBadgeText: {
+    color: '#FFD700',
+    fontSize: 12,
+    fontWeight: '700',
+    marginLeft: 4,
   },
   inputSection: {
     paddingHorizontal: 50,

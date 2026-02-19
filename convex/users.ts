@@ -162,6 +162,17 @@ export const updateMySubscription = mutation({
   },
   handler: async (ctx, args) => {
     const user = await getCurrentUser(ctx);
+
+    // Don't let RevenueCat downgrade manually overridden tiers (dev/test elite accounts)
+    if (user.subscriptionOverride) {
+      const tierRank: Record<string, number> = { free: 0, trial: 1, premium: 2, pro: 3, elite: 4 };
+      const currentRank = tierRank[user.subscriptionTier || "free"] ?? 0;
+      const newRank = tierRank[args.subscriptionTier] ?? 0;
+      if (newRank < currentRank) {
+        return;
+      }
+    }
+
     await ctx.db.patch(user._id, { subscriptionTier: args.subscriptionTier });
   },
 });

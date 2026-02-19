@@ -19,6 +19,7 @@ import { LogBox, Text, View } from 'react-native';
 import { StartupErrorBoundary } from './src/components/StartupErrorBoundary';
 import { ClerkProvider } from '@clerk/clerk-expo';
 import * as SecureStore from 'expo-secure-store';
+import { initRevenueCat } from './src/services/revenuecat';
 
 // DEBUG flag no longer needed - OBJLoader URL error was fixed with React.lazy()
 // const DEBUG_SKIP_NAVIGATOR = false;
@@ -81,7 +82,11 @@ export default function App() {
     // Prepare app and hide splash screen
     const prepare = async () => {
       try {
-        // Add any initialization logic here
+        // Initialize RevenueCat SDK (no userId yet — will be identified after Clerk sign-in)
+        await initRevenueCat().catch((e) =>
+          console.warn('App: RevenueCat init skipped:', e)
+        );
+
         await new Promise(resolve => setTimeout(resolve, 500)); // Shorter delay for mobile
         // Hide the native splash screen to reveal our LandingPage
         await SplashScreen.hideAsync();

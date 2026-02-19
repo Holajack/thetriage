@@ -21,6 +21,7 @@ import Animated, {
 import { Typography, AnimationConfig, TimingConfig } from '../../theme/premiumTheme';
 import { useEntranceAnimation, useFloatingAnimation, useProgressAnimation, triggerHaptic } from '../../utils/animationUtils';
 import { ParallaxForestBackground } from '../../components/ParallaxForestBackground';
+import { useEquippedTrail } from '../../hooks/useEquippedTrail';
 import * as Haptics from 'expo-haptics';
 const { useUserAppData } = require('../../utils/userAppData');
 
@@ -74,6 +75,7 @@ export const BreakTimerScreen = () => {
   const route = useRoute();
   const { theme } = useTheme();
   const { profile } = useAuth();
+  const equippedTrail = useEquippedTrail();
   const insets = useSafeAreaInsets();
   const [showSessionInfo, setShowSessionInfo] = useState(false);
 
@@ -382,46 +384,26 @@ export const BreakTimerScreen = () => {
     ));
   };
 
-  // Add music hook
+  // Add music hook - music continues playing through breaks
   const {
-    stopPlayback,
     audioSupported,
+    isPlaying,
+    currentTrack,
   } = useBackgroundMusic();
-
-  // Stop music immediately on mount - CRITICAL for break screen
-  useEffect(() => {
-    let isMounted = true;
-
-    const stopMusicImmediately = async () => {
-      try {
-        console.log('🎵 BreakTimerScreen: Stopping music on entry...');
-        await stopPlayback();
-        if (isMounted) {
-          console.log('🎵 BreakTimerScreen: Music stopped successfully');
-        }
-      } catch (error) {
-        if (isMounted) {
-          console.error('🎵 BreakTimerScreen: Failed to stop music on break entry:', error);
-        }
-      }
-    };
-
-    stopMusicImmediately();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [stopPlayback]);
 
   const renderMusicStatus = () => {
     if (!audioSupported) return null;
 
     return (
       <View style={[styles.musicStatusCard, { backgroundColor: theme.cardBackground, borderColor: theme.border }]}>
-        <MaterialIcons name="music-off" size={24} color={theme.primary} />
+        <MaterialIcons name={isPlaying ? "music-note" : "music-off"} size={24} color={theme.primary} />
         <View style={{ flex: 1, marginLeft: 12 }}>
-          <Text style={[styles.musicStatusText, { color: theme.text }]}>Focus music is paused during breaks</Text>
-          <Text style={[styles.musicSubText, { color: theme.textSecondary }]}>Music will resume when your next focus session starts.</Text>
+          <Text style={[styles.musicStatusText, { color: theme.text }]}>
+            {isPlaying ? `Now playing: ${currentTrack?.displayName || 'Music'}` : 'No music playing'}
+          </Text>
+          <Text style={[styles.musicSubText, { color: theme.textSecondary }]}>
+            {isPlaying ? 'Music continues during your break' : 'Open music controls to start playing'}
+          </Text>
         </View>
       </View>
     );
@@ -431,13 +413,13 @@ export const BreakTimerScreen = () => {
     <View style={styles.fullScreenContainer}>
       {/* Full Screen Background - Show trail buddy resting during break */}
       <ParallaxForestBackground
+        trailType={'jungle'} // TODO: revert to {equippedTrail} after jungle rest scene is finalized
         trailBuddyType={profile?.trail_buddy_type || 'bear'}
         showTrailBuddy={true}
         animationMode="resting"
       />
 
-      {/* Dark overlay for better text visibility */}
-      <View style={styles.darkOverlay} />
+      {/* Dark overlay removed for full color visibility */}
 
       {/* Top Controls Bar */}
       <View style={[styles.topControlsBar, { paddingTop: insets.top + 8 }]}>
@@ -473,21 +455,11 @@ export const BreakTimerScreen = () => {
         <Ionicons name="information-circle-outline" size={28} color="#fff" />
       </TouchableOpacity>
 
-      {/* Relaxation Message (Center - overlays the background with trail buddy) */}
-      <View style={styles.characterContainer}>
-        <Animated.View style={[styles.relaxMessageContainer, floatingStyle]}>
-          <Animated.Text style={[styles.relaxMessage, headerAnimStyle]}>
-            Take a moment to relax...
-          </Animated.Text>
-          <Text style={styles.breakTip}>
-            {['Stretch your body', 'Hydrate with water', 'Rest your eyes', 'Take deep breaths'][Math.floor(timer / 15) % 4]}
-          </Text>
-        </Animated.View>
-      </View>
+      {/* Relaxation message removed for cleaner rest scene */}
 
-      {/* End Break Button (Bottom Center) */}
+      {/* End Break Button (Bottom Left - away from resting buddy on the right) */}
       <TouchableOpacity
-        style={[styles.endBreakButton, { backgroundColor: theme.primary, bottom: 40 + insets.bottom }]}
+        style={[styles.endBreakButton, { backgroundColor: theme.primary, bottom: 20 + insets.bottom }]}
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           handleEndBreak();

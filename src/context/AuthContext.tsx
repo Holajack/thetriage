@@ -5,6 +5,7 @@ import { scheduleWeeklyGoalChecks } from '../utils/weeklyGoalNotifications';
 import { useAuth as useClerkAuth } from '@clerk/clerk-expo';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
+import { identifyUser as rcIdentifyUser, logOutRevenueCat } from '../services/revenuecat';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -308,6 +309,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
     try {
+      await logOutRevenueCat().catch(() => {});
       await clerkSignOut();
       setJustLoggedIn(false);
       console.log('User signed out successfully');
@@ -454,6 +456,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           } catch (error) {
             console.error('Failed to initialize weekly goal notifications:', error);
           }
+          // Identify user with RevenueCat for cross-platform purchase sync
+          rcIdentifyUser(String(convexUser._id)).catch((e) =>
+            console.warn('RevenueCat identify skipped:', e)
+          );
         }
       }
     };

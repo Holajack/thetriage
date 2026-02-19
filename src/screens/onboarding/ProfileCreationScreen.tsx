@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Alert, ScrollView, Image } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Alert, ScrollView, Image, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, RouteProp } from '@react-navigation/native';
@@ -41,6 +41,7 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
   const [imageLoading, setImageLoading] = useState(false);
 
   const [permissionsGranted, setPermissionsGranted] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     (async () => {
@@ -168,7 +169,11 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
       style={styles.container}
     >
       <SafeAreaView style={styles.safeArea}>
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+        <ScrollView ref={scrollRef} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           <Animated.View style={[styles.header, headerAnimation]}>
             <TouchableOpacity
               onPress={() => navigation.goBack()}
@@ -177,13 +182,9 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
               <Ionicons name="arrow-back" size={24} color={theme.isDark ? theme.text : '#E8F5E9'} />
               <Text style={[styles.backButtonText, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>Back</Text>
             </TouchableOpacity>
-            <Text style={[styles.headerTitle, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>Personalize Your Profile</Text>
-            <Text style={[styles.headerSubtitle, { color: theme.isDark ? theme.textSecondary : '#B8E6C1' }]}>
-              Step 2 of 5 • Optional: Add a photo and bio to personalize your profile.
-            </Text>
           </Animated.View>
 
-          <NoraSpeechBubble message="Tell us a bit about yourself! You can always update this later." />
+          <NoraSpeechBubble message="Let's set up your profile! Add a photo and tell us a bit about yourself — you can always change this later." />
 
           <View style={styles.formContainer}>
             <StaggeredItem index={0} delay="normal">
@@ -201,7 +202,7 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
               </TouchableOpacity>
             </StaggeredItem>
 
-            <StaggeredItem index={1} delay="fast">
+            <StaggeredItem index={1} delay="fast" style={{ width: '100%' }}>
               <View>
                 <Text style={[styles.inputLabel, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>Bio (Optional)</Text>
                 <TextInput
@@ -222,7 +223,7 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
               </View>
             </StaggeredItem>
 
-            <StaggeredItem index={2} delay="fast">
+            <StaggeredItem index={2} delay="fast" style={{ width: '100%' }}>
               <View>
                 <Text style={[styles.inputLabel, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>University / School (Optional)</Text>
                 <TextInput
@@ -235,7 +236,7 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
               </View>
             </StaggeredItem>
 
-            <StaggeredItem index={3} delay="fast">
+            <StaggeredItem index={3} delay="fast" style={{ width: '100%' }}>
               <View>
                 <Text style={[styles.inputLabel, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>Location (Optional)</Text>
                 <TextInput
@@ -248,7 +249,7 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
               </View>
             </StaggeredItem>
 
-            <StaggeredItem index={4} delay="fast">
+            <StaggeredItem index={4} delay="fast" style={{ width: '100%' }}>
               <View>
                 <Text style={[styles.inputLabel, { color: theme.isDark ? theme.text : '#E8F5E9' }]}>Current Classes (Optional)</Text>
                 <TextInput
@@ -265,7 +266,7 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
           </View>
         </ScrollView>
 
-        <View style={[styles.bottomContainer, { backgroundColor: theme.isDark ? theme.background + 'CC' : 'rgba(15, 36, 25, 0.8)', borderTopColor: theme.isDark ? theme.border : 'rgba(232, 245, 233, 0.1)' }]}>
+        <View style={styles.bottomContainer}>
           <AnimatedButton
             title="Save Profile & Continue"
             onPress={handleContinue}
@@ -286,6 +287,7 @@ export default function ProfileCreationScreen({ route }: { route: ProfileCreatio
             <View style={styles.progressDot} />
           </View>
         </View>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </LinearGradient>
   );
@@ -302,37 +304,23 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: 120, 
+    paddingBottom: 20,
   },
   header: {
-    marginBottom: 30,
-    alignItems: 'center',
+    marginBottom: 10,
+    height: 44,
+    justifyContent: 'center',
   },
   backButton: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'flex-start',
     paddingVertical: 10,
   },
   backButtonText: {
     fontSize: 16,
     marginLeft: 6,
     fontWeight: '500',
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginTop: 40, 
-    marginBottom: 8,
-  },
-  headerSubtitle: {
-    fontSize: 16,
-    textAlign: 'center',
-    lineHeight: 22,
-    paddingHorizontal: 10,
   },
   formContainer: {
     width: '100%',
@@ -402,15 +390,10 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   bottomContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 25,
-    borderTopWidth: 1,
-    gap: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
+    gap: 16,
   },
   progressIndicator: {
     flexDirection: 'row',

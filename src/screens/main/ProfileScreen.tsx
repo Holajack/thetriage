@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Alert, TextInput, Modal, Pressable, ImageSourcePropType } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -19,6 +19,11 @@ import QRCode from 'react-native-qrcode-svg';
 import Animated, {
   FadeIn,
   FadeInUp,
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  Easing,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { Typography } from '../../theme/premiumTheme';
@@ -26,6 +31,9 @@ import { useNavigationSlideAnimation, useFocusAnimationKey, useCounterAnimation 
 import { ShimmerLoader } from '../../components/premium/ShimmerLoader';
 import { glassStyles } from '../../components/premium/LiquidGlass';
 import { AnimatedButton } from '../../components/premium/AnimatedButton';
+import InteractiveWalkthrough from '../../components/InteractiveWalkthrough';
+import { useScreenWalkthrough } from '../../hooks/useScreenWalkthrough';
+import { PROFILE_STEPS } from '../../config/walkthroughSteps';
 
 // Trail buddy portrait images (first frame of each animation)
 const TRAIL_BUDDY_IMAGES: Record<string, ImageSourcePropType> = {
@@ -34,6 +42,7 @@ const TRAIL_BUDDY_IMAGES: Record<string, ImageSourcePropType> = {
   deer: require('../../../assets/trail-buddies/deer-frames/deer_frame_00.png'),
   nora: require('../../../assets/trail-buddies/nora-frames/nora_frame_00.png'),
   wolf: require('../../../assets/trail-buddies/wolf-frames/wolf_frame_00.png'),
+  lion: require('../../../assets/trail-buddies/lion-frames/lion_frame_00.png'),
 };
 
 // Spritesheet configuration for walking animation
@@ -43,6 +52,7 @@ const BUDDY_SPRITESHEETS: Record<string, ImageSourcePropType> = {
   wolf: require('../../../assets/trail-buddies/wolf_walking_optimized.png'),
   nora: require('../../../assets/trail-buddies/nora_walking_optimized.png'),
   bear: require('../../../assets/trail-buddies/bear_walking_optimized.png'),
+  lion: require('../../../assets/trail-buddies/lion_walking_optimized.png'),
 };
 const SPRITE_FRAME_WIDTH = 200;
 const SPRITE_FRAME_HEIGHT = 200;
@@ -54,33 +64,50 @@ const BUDDY_COLORS: Record<string, string> = {
   deer: '#C4A484',
   nora: '#9B59B6',
   wolf: '#708090',
+  lion: '#FFD700',
 };
 
-// Walking animation sprite component
+// Walking animation sprite component - uses reanimated for smooth UI-thread animation
 const BuddyWalkingSprite = ({ buddyId, size = 90 }: { buddyId: string; size?: number }) => {
-  const [currentFrame, setCurrentFrame] = useState(0);
   const spritesheet = BUDDY_SPRITESHEETS[buddyId] || BUDDY_SPRITESHEETS.bear;
+  const displayScale = size / SPRITE_FRAME_HEIGHT;
+  const totalWidth = SPRITE_FRAME_WIDTH * SPRITE_TOTAL_FRAMES * displayScale;
+  const frameWidth = SPRITE_FRAME_WIDTH * displayScale;
+
+  // Animate from 0 to SPRITE_TOTAL_FRAMES continuously on UI thread
+  const frameProgress = useSharedValue(0);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentFrame(prev => (prev + 1) % SPRITE_TOTAL_FRAMES);
-    }, 50);
-    return () => clearInterval(interval);
+    frameProgress.value = 0;
+    frameProgress.value = withRepeat(
+      withTiming(SPRITE_TOTAL_FRAMES, {
+        duration: SPRITE_TOTAL_FRAMES * 80, // 80ms per frame for smooth walking
+        easing: Easing.linear,
+      }),
+      -1, // infinite repeat
+      false, // don't reverse
+    );
   }, []);
 
-  const displayScale = size / SPRITE_FRAME_HEIGHT;
-  const frameOffset = -currentFrame * SPRITE_FRAME_WIDTH * displayScale;
-  const spritesheetWidth = SPRITE_FRAME_WIDTH * SPRITE_TOTAL_FRAMES * displayScale;
+  const animatedStyle = useAnimatedStyle(() => {
+    // Snap to discrete frames for spritesheet stepping
+    const frame = Math.floor(frameProgress.value) % SPRITE_TOTAL_FRAMES;
+    return {
+      transform: [{ translateX: -frame * frameWidth }],
+    };
+  });
 
   return (
     <View style={{ width: size, height: size, overflow: 'hidden' }}>
-      <Image
+      <Animated.Image
         source={spritesheet}
-        style={{
-          width: spritesheetWidth,
-          height: size,
-          transform: [{ translateX: frameOffset }],
-        }}
+        style={[
+          {
+            width: totalWidth,
+            height: size,
+          },
+          animatedStyle,
+        ]}
         resizeMode="cover"
       />
     </View>
@@ -106,6 +133,34 @@ const ProfileScreen = () => {
   const [userBadges, setUserBadges] = useState<Badge[]>([]);
 
   const focusKey = useFocusAnimationKey();
+
+  // Walkthrough refs and hook
+  const scrollViewRef = useRef<ScrollView>(null);
+  const statsRef = useRef<View>(null);
+  const buddyRef = useRef<View>(null);
+  const walkthroughRefs = {
+    'stats-section': statsRef,
+    'buddy-section': buddyRef,
+  };
+  const { visible: walkthroughVisible, measurements: walkthroughMeasurements, complete: walkthroughComplete, remeasure } =
+    useScreenWalkthrough('profile', walkthroughRefs, { forceShow: true }); // TODO: remove forceShow after testing
+
+  // Track y-offsets for scroll-to-section in walkthrough
+  const sectionOffsets = useRef<Record<string, number>>({});
+
+  const handleWalkthroughStepChange = useCallback((stepIndex: number, step: any) => {
+    const scrollTargets: Record<string, string> = {
+      'trail-buddy': 'buddy',
+      'stats-and-flint': 'stats',
+    };
+    const offsetKey = scrollTargets[step.id];
+    const yOffset = offsetKey ? sectionOffsets.current[offsetKey] : undefined;
+    if (yOffset !== undefined && scrollViewRef.current) {
+      scrollViewRef.current.scrollTo({ y: Math.max(0, yOffset - 80), animated: true });
+      // Remeasure after scroll animation settles
+      setTimeout(() => remeasure(), 450);
+    }
+  }, [remeasure]);
 
   useFocusEffect(
     useCallback(() => {
@@ -239,7 +294,7 @@ const ProfileScreen = () => {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <UnifiedHeader title="Profile" onClose={() => navigation.navigate('Home')} />
 
-      <ScrollView key={focusKey} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }}>
+      <ScrollView ref={scrollViewRef} key={focusKey} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }}>
 
         {/* ===== HERO SECTION ===== */}
         <Animated.View entering={FadeIn.duration(400)} style={styles.heroSection}>
@@ -368,7 +423,7 @@ const ProfileScreen = () => {
         </Animated.View>
 
         {/* Trail Buddy Feature Card */}
-        <Animated.View entering={FadeInUp.delay(200).duration(400)}>
+        <Animated.View ref={buddyRef} collapsable={false} entering={FadeInUp.delay(200).duration(400)} onLayout={(e) => { sectionOffsets.current['buddy'] = e.nativeEvent.layout.y; }}>
           <Pressable
             style={[styles.buddyCard, glassStyles.mediumCard(isDark), { backgroundColor: theme.card }]}
             onPress={() => {
@@ -438,8 +493,48 @@ const ProfileScreen = () => {
           <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>YOUR STATS</Text>
         </Animated.View>
 
+        {/* Level Progress Card */}
+        <Animated.View entering={FadeInUp.delay(320).duration(400)}>
+          <Pressable
+            style={[styles.levelCard, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              Alert.alert(
+                `Level ${userLevel}`,
+                `Every 3 hours of focus time earns you a new level.\n\nTotal focus: ${totalHours}h ${remainingMinutes}m\nNext level in: ${180 - (totalMinutes % 180)} minutes`
+              );
+            }}
+          >
+            <View style={styles.levelHeader}>
+              <View style={[styles.levelBadge, { backgroundColor: theme.primary + '20' }]}>
+                <Ionicons name="shield-outline" size={20} color={theme.primary} />
+              </View>
+              <View style={styles.levelInfo}>
+                <Text style={[styles.levelTitle, { color: theme.text }]}>Level {userLevel}</Text>
+                <Text style={[styles.levelSubtitle, { color: theme.textSecondary }]}>
+                  {180 - (totalMinutes % 180)} min to Level {userLevel + 1}
+                </Text>
+              </View>
+              <Text style={[styles.levelXp, { color: theme.primary }]}>
+                {totalMinutes % 180}/180 XP
+              </Text>
+            </View>
+            <View style={[styles.levelProgressBg, { backgroundColor: theme.text + '10' }]}>
+              <View
+                style={[
+                  styles.levelProgressFill,
+                  {
+                    width: `${((totalMinutes % 180) / 180) * 100}%`,
+                    backgroundColor: theme.primary,
+                  },
+                ]}
+              />
+            </View>
+          </Pressable>
+        </Animated.View>
+
         {/* Stats Row 1 - Featured (2 wide cards) */}
-        <Animated.View entering={FadeInUp.delay(350).duration(400)} style={styles.statsRowFeatured}>
+        <Animated.View ref={statsRef} collapsable={false} entering={FadeInUp.delay(350).duration(400)} style={styles.statsRowFeatured} onLayout={(e) => { sectionOffsets.current['stats'] = e.nativeEvent.layout.y; }}>
           <Pressable
             style={[styles.statCardFeatured, glassStyles.subtleCard(isDark), { backgroundColor: theme.card }]}
             onPress={() => {
@@ -659,6 +754,15 @@ const ProfileScreen = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Walkthrough Overlay */}
+      <InteractiveWalkthrough
+        visible={walkthroughVisible}
+        onComplete={walkthroughComplete}
+        measurements={walkthroughMeasurements}
+        steps={PROFILE_STEPS}
+        onStepChange={handleWalkthroughStepChange}
+      />
 
       <BottomTabBar currentRoute="Profile" />
     </SafeAreaView>
@@ -892,6 +996,52 @@ const styles = StyleSheet.create({
   shopButtonSubtitle: {
     fontSize: 12,
     lineHeight: 16,
+  },
+
+  // ===== LEVEL CARD =====
+  levelCard: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 14,
+    padding: 16,
+  },
+  levelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  levelBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  levelInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  levelTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  levelSubtitle: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 1,
+  },
+  levelXp: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  levelProgressBg: {
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  levelProgressFill: {
+    height: '100%',
+    borderRadius: 3,
   },
 
   // ===== STATS =====

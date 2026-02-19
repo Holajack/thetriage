@@ -1,368 +1,448 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   Modal,
-  Animated,
   Dimensions,
-  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import Svg, { Defs, Mask, Rect, Circle } from 'react-native-svg';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withDelay,
+  withSequence,
+  withRepeat,
+  Easing,
+  runOnJS,
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
-interface WalkthroughStep {
+// ── Types ──
+
+export interface LayoutRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface WalkthroughStep {
   id: string;
   title: string;
   description: string;
-  targetComponent?: string;
-  highlightArea?: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  };
-  position: 'top' | 'bottom' | 'center';
-  action?: 'tap' | 'navigate' | 'observe';
-  actionText?: string;
+  /** Measurement keys to spotlight. Empty = no spotlight (centered card). */
+  spotlightKeys: string[];
+  /** Shape of the cutout */
+  spotlightShape: 'circle' | 'roundedRect';
+  /** Extra padding around the measured area */
+  spotlightPadding: number;
+  /** Where to place the tooltip relative to the spotlight */
+  tooltipPosition: 'above' | 'below' | 'center';
+  /** Icon shown in tooltip header */
+  icon?: keyof typeof Ionicons.glyphMap;
+  iconColor?: string;
 }
 
-const WALKTHROUGH_STEPS: WalkthroughStep[] = [
-  {
-    id: 'home-tab',
-    title: 'Welcome to Your Dashboard',
-    description: 'This is your Home screen where you can start focus sessions, view your progress, and access quick actions.',
-    targetComponent: 'home-tab',
-    position: 'top',
-    action: 'observe',
-  },
-  {
-    id: 'start-session',
-    title: 'Start Your First Focus Session',
-    description: 'Tap this button to begin a focused study session. You can choose your study method and set goals.',
-    targetComponent: 'start-session-button',
-    position: 'bottom',
-    action: 'tap',
-    actionText: 'Try tapping the Start Session button',
-  },
-  {
-    id: 'community-tab',
-    title: 'Connect with the Community',
-    description: 'Join study groups, connect with other students, and share your progress with the community.',
-    targetComponent: 'community-tab',
-    position: 'top',
-    action: 'tap',
-    actionText: 'Tap to explore the Community',
-  },
-  {
-    id: 'patrick-tab',
-    title: 'Meet Patrick, Your AI Assistant',
-    description: 'Ask Patrick questions about studying, get personalized tips, and receive AI-powered insights.',
-    targetComponent: 'patrick-tab',
-    position: 'top',
-    action: 'tap',
-    actionText: 'Tap to chat with Patrick',
-  },
-  {
-    id: 'bonuses-tab',
-    title: 'Track Your Achievements',
-    description: 'View your study streaks, unlock achievements, and see your progress towards goals.',
-    targetComponent: 'bonuses-tab',
-    position: 'top',
-    action: 'tap',
-    actionText: 'Check out your achievements',
-  },
-  {
-    id: 'profile-tab',
-    title: 'Manage Your Profile',
-    description: 'Update your settings, view your study history, and customize your experience.',
-    targetComponent: 'profile-tab',
-    position: 'top',
-    action: 'tap',
-    actionText: 'Visit your profile',
-  },
-  {
-    id: 'complete',
-    title: 'You\'re Ready to Go!',
-    description: 'You now know the basics of HikeWise. Start with a focus session and explore at your own pace. Happy studying!',
-    position: 'center',
-    action: 'observe',
-  },
-];
+// ── Component ──
 
 interface InteractiveWalkthroughProps {
   visible: boolean;
   onComplete: () => void;
-  onSkip: () => void;
+  measurements: Record<string, LayoutRect>;
+  steps: WalkthroughStep[];
+  /** Called when the active step changes — use to scroll the parent to the relevant element */
+  onStepChange?: (stepIndex: number, step: WalkthroughStep) => void;
 }
 
 export default function InteractiveWalkthrough({
   visible,
   onComplete,
-  onSkip,
+  measurements,
+  steps,
+  onStepChange,
 }: InteractiveWalkthroughProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+
+  // Animation values
+  const overlayOpacity = useSharedValue(0);
+  const tooltipOpacity = useSharedValue(0);
+  const tooltipScale = useSharedValue(0.85);
+  const ringScale = useSharedValue(1);
+
+  const step = steps[currentStep];
+  const isLastStep = currentStep === steps.length - 1;
+
+  // ── Show/hide ──
 
   useEffect(() => {
     if (visible) {
       setIsVisible(true);
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          tension: 100,
-          friction: 8,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(scaleAnim, {
-          toValue: 0.8,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        setIsVisible(false);
-        setCurrentStep(0);
+      setCurrentStep(0);
+      overlayOpacity.value = withTiming(1, { duration: 400 });
+      tooltipOpacity.value = withDelay(300, withTiming(1, { duration: 300 }));
+      tooltipScale.value = withDelay(300, withSpring(1, { damping: 14, stiffness: 120 }));
+      // Start ring pulse
+      ringScale.value = withRepeat(
+        withSequence(
+          withTiming(1.12, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) })
+        ),
+        -1,
+        true
+      );
+    } else if (isVisible) {
+      overlayOpacity.value = withTiming(0, { duration: 250 });
+      tooltipOpacity.value = withTiming(0, { duration: 200 }, (finished) => {
+        if (finished) {
+          runOnJS(setIsVisible)(false);
+          runOnJS(setCurrentStep)(0);
+        }
       });
+      tooltipScale.value = withTiming(0.85, { duration: 200 });
     }
   }, [visible]);
 
-  const getCurrentStep = () => WALKTHROUGH_STEPS[currentStep];
-  const isLastStep = () => currentStep === WALKTHROUGH_STEPS.length - 1;
+  // ── Step transitions ──
 
-  const handleNext = () => {
-    if (isLastStep()) {
+  const animateToStep = useCallback((nextStep: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    // Fade out tooltip
+    tooltipOpacity.value = withTiming(0, { duration: 150 });
+    tooltipScale.value = withTiming(0.9, { duration: 150 });
+
+    // After fade out, update step and fade in
+    setTimeout(() => {
+      setCurrentStep(nextStep);
+      onStepChange?.(nextStep, steps[nextStep]);
+      tooltipOpacity.value = withDelay(100, withTiming(1, { duration: 250 }));
+      tooltipScale.value = withDelay(100, withSpring(1, { damping: 14, stiffness: 120 }));
+    }, 180);
+  }, [onStepChange, steps]);
+
+  const handleNext = useCallback(() => {
+    if (isLastStep) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onComplete();
     } else {
-      setCurrentStep(currentStep + 1);
+      animateToStep(currentStep + 1);
     }
+  }, [currentStep, isLastStep, onComplete, animateToStep]);
+
+  const handleSkip = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onComplete();
+  }, [onComplete]);
+
+  // ── Spotlight geometry ──
+
+  const getSpotlightRect = (): LayoutRect | null => {
+    if (step.spotlightKeys.length === 0) return null;
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+    for (const key of step.spotlightKeys) {
+      const m = measurements[key];
+      if (!m) return null;
+      minX = Math.min(minX, m.x);
+      minY = Math.min(minY, m.y);
+      maxX = Math.max(maxX, m.x + m.width);
+      maxY = Math.max(maxY, m.y + m.height);
+    }
+
+    const pad = step.spotlightPadding;
+    return {
+      x: minX - pad,
+      y: minY - pad,
+      width: (maxX - minX) + pad * 2,
+      height: (maxY - minY) + pad * 2,
+    };
   };
 
-  const handleSkip = () => {
-    onSkip();
+  const spotlightRect = getSpotlightRect();
+
+  // ── Tooltip positioning ──
+
+  const getTooltipStyle = () => {
+    const base = { left: 20, right: 20 };
+
+    if (step.tooltipPosition === 'center' || !spotlightRect) {
+      return { ...base, top: SCREEN_H / 2 - 100 };
+    }
+
+    if (step.tooltipPosition === 'above') {
+      // Place tooltip above the spotlight, with 20px gap
+      const tooltipBottom = spotlightRect.y - 20;
+      // Estimate tooltip height ~160px, position from top
+      const tooltipTop = Math.max(60, tooltipBottom - 180);
+      return { ...base, top: tooltipTop };
+    }
+
+    // below
+    const tooltipTop = spotlightRect.y + spotlightRect.height + 20;
+    return { ...base, top: Math.min(tooltipTop, SCREEN_H - 220) };
   };
 
-  const renderTooltip = () => {
-    const step = getCurrentStep();
-    const tooltipStyle = getTooltipStyle(step.position);
+  // ── Animated styles ──
 
+  const overlayStyle = useAnimatedStyle(() => ({
+    opacity: overlayOpacity.value,
+  }));
+
+  const tooltipAnimStyle = useAnimatedStyle(() => ({
+    opacity: tooltipOpacity.value,
+    transform: [{ scale: tooltipScale.value }],
+  }));
+
+  const ringAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: ringScale.value }],
+  }));
+
+  // ── Render ──
+
+  if (!isVisible) return null;
+
+  const renderSvgOverlay = () => {
+    if (!spotlightRect) {
+      // No spotlight — just a dark overlay
+      return (
+        <Svg width={SCREEN_W} height={SCREEN_H} style={StyleSheet.absoluteFill}>
+          <Rect width={SCREEN_W} height={SCREEN_H} fill="rgba(0,0,0,0.78)" />
+        </Svg>
+      );
+    }
+
+    const { x, y, width, height } = spotlightRect;
+
+    if (step.spotlightShape === 'circle') {
+      const cx = x + width / 2;
+      const cy = y + height / 2;
+      const r = Math.max(width, height) / 2;
+
+      return (
+        <Svg width={SCREEN_W} height={SCREEN_H} style={StyleSheet.absoluteFill}>
+          <Defs>
+            <Mask id="spotlight-mask" maskUnits="userSpaceOnUse" x="0" y="0" width={SCREEN_W} height={SCREEN_H}>
+              <Rect width={SCREEN_W} height={SCREEN_H} fill="white" />
+              <Circle cx={cx} cy={cy} r={r} fill="black" />
+            </Mask>
+          </Defs>
+          <Rect
+            width={SCREEN_W}
+            height={SCREEN_H}
+            fill="rgba(0,0,0,0.78)"
+            mask="url(#spotlight-mask)"
+          />
+        </Svg>
+      );
+    }
+
+    // roundedRect
+    const rx = 20;
     return (
-      <Animated.View
-        style={[
-          styles.tooltip,
-          tooltipStyle,
-          {
-            opacity: fadeAnim,
-            transform: [{ scale: scaleAnim }],
-          },
-        ]}
-      >
-        <LinearGradient
-          colors={['#1B4A3A', '#2E5D4F', '#1B4A3A']}
-          style={styles.tooltipGradient}
-        >
-          <View style={styles.tooltipHeader}>
-            <Text style={styles.tooltipTitle}>{step.title}</Text>
-            <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
-              <Ionicons name="close" size={20} color="#B8E6C1" />
-            </TouchableOpacity>
-          </View>
-          
-          <Text style={styles.tooltipDescription}>{step.description}</Text>
-          
-          {step.actionText && (
-            <View style={styles.actionContainer}>
-              <Ionicons name="hand-left-outline" size={16} color="#4CAF50" />
-              <Text style={styles.actionText}>{step.actionText}</Text>
-            </View>
-          )}
-          
-          <View style={styles.tooltipFooter}>
-            <View style={styles.progressDots}>
-              {WALKTHROUGH_STEPS.map((_, index) => (
-                <View
-                  key={index}
-                  style={[
-                    styles.progressDot,
-                    index === currentStep && styles.progressDotActive,
-                  ]}
-                />
-              ))}
-            </View>
-            
-            <TouchableOpacity onPress={handleNext} style={styles.nextButton}>
-              <LinearGradient
-                colors={['#4CAF50', '#66BB6A']}
-                style={styles.nextButtonGradient}
-              >
-                <Text style={styles.nextButtonText}>
-                  {isLastStep() ? 'Finish' : 'Next'}
-                </Text>
-                <Ionicons
-                  name={isLastStep() ? 'checkmark' : 'arrow-forward'}
-                  size={16}
-                  color="#FFFFFF"
-                  style={{ marginLeft: 6 }}
-                />
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        </LinearGradient>
-      </Animated.View>
+      <Svg width={SCREEN_W} height={SCREEN_H} style={StyleSheet.absoluteFill}>
+        <Defs>
+          <Mask id="spotlight-mask" maskUnits="userSpaceOnUse" x="0" y="0" width={SCREEN_W} height={SCREEN_H}>
+            <Rect width={SCREEN_W} height={SCREEN_H} fill="white" />
+            <Rect x={x} y={y} width={width} height={height} rx={rx} ry={rx} fill="black" />
+          </Mask>
+        </Defs>
+        <Rect
+          width={SCREEN_W}
+          height={SCREEN_H}
+          fill="rgba(0,0,0,0.78)"
+          mask="url(#spotlight-mask)"
+        />
+      </Svg>
     );
   };
 
-  const getTooltipStyle = (position: 'top' | 'bottom' | 'center') => {
-    const baseStyle = {
-      position: 'absolute' as const,
-      left: 20,
-      right: 20,
-      maxWidth: screenWidth - 40,
-    };
+  const renderHighlightRing = () => {
+    if (!spotlightRect) return null;
 
-    switch (position) {
-      case 'top':
-        return {
-          ...baseStyle,
-          top: 100,
-        };
-      case 'bottom':
-        return {
-          ...baseStyle,
-          bottom: 120,
-        };
-      case 'center':
-        return {
-          ...baseStyle,
-          top: screenHeight / 2 - 100,
-        };
-      default:
-        return {
-          ...baseStyle,
-          top: screenHeight / 2 - 100,
-        };
+    const { x, y, width, height } = spotlightRect;
+
+    if (step.spotlightShape === 'circle') {
+      const size = Math.max(width, height);
+      const cx = x + width / 2 - size / 2;
+      const cy = y + height / 2 - size / 2;
+
+      return (
+        <Animated.View
+          style={[
+            styles.highlightRing,
+            ringAnimStyle,
+            {
+              left: cx - 3,
+              top: cy - 3,
+              width: size + 6,
+              height: size + 6,
+              borderRadius: (size + 6) / 2,
+            },
+          ]}
+        />
+      );
     }
-  };
 
-  const renderHighlight = () => {
-    const step = getCurrentStep();
-    if (!step.highlightArea) return null;
-
+    // roundedRect
     return (
-      <View
+      <Animated.View
         style={[
-          styles.highlight,
+          styles.highlightRing,
+          ringAnimStyle,
           {
-            left: step.highlightArea.x - 10,
-            top: step.highlightArea.y - 10,
-            width: step.highlightArea.width + 20,
-            height: step.highlightArea.height + 20,
+            left: x - 3,
+            top: y - 3,
+            width: width + 6,
+            height: height + 6,
+            borderRadius: 23,
           },
         ]}
       />
     );
   };
 
-  if (!isVisible) return null;
+  const tooltipPos = getTooltipStyle();
 
   return (
-    <Modal
-      visible={isVisible}
-      transparent={true}
-      animationType="none"
-      onRequestClose={handleSkip}
-    >
-      <View style={styles.overlay}>
-        <View style={styles.backdrop} />
-        {renderHighlight()}
-        {renderTooltip()}
-      </View>
+    <Modal visible={isVisible} transparent animationType="none" statusBarTranslucent>
+      <Animated.View style={[StyleSheet.absoluteFill, overlayStyle]}>
+        {/* SVG dark overlay with spotlight cutout */}
+        {renderSvgOverlay()}
+
+        {/* Pulsing highlight ring */}
+        {renderHighlightRing()}
+
+        {/* Skip button */}
+        <TouchableOpacity style={styles.skipButton} onPress={handleSkip} activeOpacity={0.7}>
+          <Text style={styles.skipText}>Skip</Text>
+        </TouchableOpacity>
+
+        {/* Tooltip card */}
+        <Animated.View style={[styles.tooltip, tooltipPos, tooltipAnimStyle]}>
+          <LinearGradient
+            colors={['#1B4A3A', '#2E5D4F', '#1B4A3A']}
+            locations={[0, 0.5, 1]}
+            style={styles.tooltipGradient}
+          >
+            {/* Header with icon */}
+            <View style={styles.tooltipHeader}>
+              {step.icon && (
+                <View style={[styles.tooltipIconCircle, { backgroundColor: (step.iconColor || '#4CAF50') + '20' }]}>
+                  <Ionicons name={step.icon} size={22} color={step.iconColor || '#4CAF50'} />
+                </View>
+              )}
+              <Text style={styles.tooltipTitle}>{step.title}</Text>
+            </View>
+
+            <Text style={styles.tooltipDescription}>{step.description}</Text>
+
+            {/* Footer: progress dots + next button */}
+            <View style={styles.tooltipFooter}>
+              <View style={styles.progressDots}>
+                {steps.map((_, index) => (
+                  <View
+                    key={index}
+                    style={[
+                      styles.progressDot,
+                      index === currentStep && styles.progressDotActive,
+                      index < currentStep && styles.progressDotCompleted,
+                    ]}
+                  />
+                ))}
+              </View>
+
+              <TouchableOpacity onPress={handleNext} activeOpacity={0.8}>
+                <LinearGradient
+                  colors={['#4CAF50', '#66BB6A']}
+                  style={styles.nextButtonGradient}
+                >
+                  <Text style={styles.nextButtonText}>
+                    {isLastStep ? "Let's Go!" : 'Next'}
+                  </Text>
+                  <Ionicons
+                    name={isLastStep ? 'rocket-outline' : 'arrow-forward'}
+                    size={16}
+                    color="#FFFFFF"
+                    style={{ marginLeft: 6 }}
+                  />
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
+        </Animated.View>
+      </Animated.View>
     </Modal>
   );
 }
 
+// ── Styles ──
+
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-  },
-  backdrop: {
+  skipButton: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    top: 60,
+    right: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    zIndex: 10,
   },
-  highlight: {
+  skipText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  highlightRing: {
     position: 'absolute',
-    borderRadius: 12,
-    borderWidth: 3,
-    borderColor: '#4CAF50',
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    borderWidth: 2.5,
+    borderColor: 'rgba(76, 175, 80, 0.6)',
   },
   tooltip: {
-    borderRadius: 16,
+    position: 'absolute',
+    borderRadius: 18,
     overflow: 'hidden',
     elevation: 10,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
   },
   tooltipGradient: {
     padding: 20,
   },
   tooltipHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
+    gap: 12,
+  },
+  tooltipIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   tooltipTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 20,
+    fontWeight: '700',
     color: '#E8F5E9',
     flex: 1,
-  },
-  skipButton: {
-    padding: 4,
   },
   tooltipDescription: {
     fontSize: 15,
     color: '#B8E6C1',
     lineHeight: 22,
-    marginBottom: 16,
-  },
-  actionContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  actionText: {
-    fontSize: 14,
-    color: '#4CAF50',
-    fontWeight: '600',
-    marginLeft: 8,
+    marginBottom: 18,
   },
   tooltipFooter: {
     flexDirection: 'row',
@@ -371,30 +451,33 @@ const styles = StyleSheet.create({
   },
   progressDots: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 7,
   },
   progressDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: 'rgba(232, 245, 233, 0.3)',
+    backgroundColor: 'rgba(232, 245, 233, 0.25)',
   },
   progressDotActive: {
     backgroundColor: '#4CAF50',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
-  nextButton: {
-    borderRadius: 8,
-    overflow: 'hidden',
+  progressDotCompleted: {
+    backgroundColor: 'rgba(76, 175, 80, 0.5)',
   },
   nextButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 10,
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
+    borderRadius: 10,
   },
   nextButtonText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
   },
 });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -6,7 +6,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { OnboardingStackParamList } from '../../navigation/types';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, {
+  FadeInDown,
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withSpring,
+  withDelay,
+} from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '../../context/AuthContext';
 import { useConvexProfile } from '../../hooks/useConvex';
@@ -14,6 +21,7 @@ import { useTheme, ThemeName, lightThemePalettes } from '../../context/ThemeCont
 import { useBackgroundMusic } from '../../hooks/useBackgroundMusic';
 import NoraSpeechBubble from '../../components/onboarding/NoraSpeechBubble';
 import { AnimatedButton } from '../../components/premium/AnimatedButton';
+import { AnimationConfig } from '../../theme/premiumTheme';
 
 type OnboardingFocusSoundNavigationProp = NativeStackNavigationProp<OnboardingStackParamList, 'OnboardingFocusSound'>;
 
@@ -67,6 +75,40 @@ const THEME_ICONS: Record<ThemeName, keyof typeof Ionicons.glyphMap> = {
   park: 'leaf-outline',
 };
 
+const NORA_MESSAGES = [
+  "Let's set up your perfect study session!",
+  "Great choice! Now pick your study sounds.",
+  "Almost there! Choose your environment.",
+];
+
+// ── Collapsed Summary Row ──
+function CollapsedSummary({
+  icon,
+  iconColor,
+  label,
+  value,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  iconColor: string;
+  label: string;
+  value: string;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity onPress={onPress} style={styles.collapsedSummary} activeOpacity={0.7}>
+      <View style={[styles.summaryIcon, { backgroundColor: iconColor + '20' }]}>
+        <Ionicons name={icon} size={20} color={iconColor} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.summaryLabel}>{label}</Text>
+        <Text style={styles.summaryValue}>{value}</Text>
+      </View>
+      <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+    </TouchableOpacity>
+  );
+}
+
 export default function OnboardingFocusSoundScreen() {
   const navigation = useNavigation<OnboardingFocusSoundNavigationProp>();
   const { updateOnboarding } = useAuth();
@@ -77,62 +119,130 @@ export default function OnboardingFocusSoundScreen() {
   const [selectedMethod, setSelectedMethod] = useState<string>('balanced');
   const [selectedSound, setSelectedSound] = useState<string>('Ambient');
   const [selectedEnv, setSelectedEnv] = useState<ThemeName>(themeName);
+  const [currentStep, setCurrentStep] = useState(0);
 
-  // Stop sound preview on unmount
+  const scrollViewRef = useRef<ScrollView>(null);
+  const advanceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Animation shared values for section reveals
+  const soundSectionOpacity = useSharedValue(0);
+  const soundSectionTranslateY = useSharedValue(20);
+  const envSectionOpacity = useSharedValue(0);
+  const envSectionTranslateY = useSharedValue(20);
+
+  const soundSectionStyle = useAnimatedStyle(() => ({
+    opacity: soundSectionOpacity.value,
+    transform: [{ translateY: soundSectionTranslateY.value }],
+  }));
+
+  const envSectionStyle = useAnimatedStyle(() => ({
+    opacity: envSectionOpacity.value,
+    transform: [{ translateY: envSectionTranslateY.value }],
+  }));
+
+  // Stop sound preview on unmount + cleanup timeouts
   useEffect(() => {
     return () => {
       stopPreview();
+      if (advanceTimeoutRef.current) clearTimeout(advanceTimeoutRef.current);
     };
   }, []);
 
-  const handleMethodSelect = (methodId: string) => {
+  // ── Step advancement with animation ──
+  const advanceToStep = useCallback((nextStep: number) => {
+    setCurrentStep(nextStep);
+
+    if (nextStep === 1) {
+      soundSectionOpacity.value = withDelay(150, withTiming(1, { duration: 350 }));
+      soundSectionTranslateY.value = withDelay(150, withSpring(0, AnimationConfig.gentle));
+    } else if (nextStep === 2) {
+      envSectionOpacity.value = withDelay(150, withTiming(1, { duration: 350 }));
+      envSectionTranslateY.value = withDelay(150, withSpring(0, AnimationConfig.gentle));
+    }
+
+    // Auto-scroll after animation starts
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 300);
+  }, []);
+
+  // ── Go back to a previous step (re-expand) ──
+  const goBackToStep = useCallback((step: number) => {
+    Haptics.selectionAsync();
+    setCurrentStep(step);
+
+    // Reset animation values for sections that will need to re-animate
+    if (step <= 0) {
+      soundSectionOpacity.value = 0;
+      soundSectionTranslateY.value = 20;
+      envSectionOpacity.value = 0;
+      envSectionTranslateY.value = 20;
+    } else if (step <= 1) {
+      envSectionOpacity.value = 0;
+      envSectionTranslateY.value = 20;
+    }
+
+    // Scroll to top to show re-expanded section
+    setTimeout(() => {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+    }, 100);
+  }, []);
+
+  // ── Selection handlers ──
+  const handleMethodSelect = useCallback((methodId: string) => {
     Haptics.selectionAsync();
     setSelectedMethod(methodId);
-  };
 
-  const handleSoundSelect = (sound: string) => {
+    // Only auto-advance if we're on step 0
+    if (currentStep === 0) {
+      if (advanceTimeoutRef.current) clearTimeout(advanceTimeoutRef.current);
+      advanceTimeoutRef.current = setTimeout(() => advanceToStep(1), 400);
+    }
+  }, [currentStep, advanceToStep]);
+
+  const handleSoundSelect = useCallback((sound: string) => {
     Haptics.selectionAsync();
     setSelectedSound(sound);
-  };
 
-  const handleEnvSelect = (env: ThemeName) => {
+    // Only auto-advance if we're on step 1
+    if (currentStep === 1) {
+      if (advanceTimeoutRef.current) clearTimeout(advanceTimeoutRef.current);
+      advanceTimeoutRef.current = setTimeout(() => advanceToStep(2), 400);
+    }
+  }, [currentStep, advanceToStep]);
+
+  const handleEnvSelect = useCallback((env: ThemeName) => {
     Haptics.selectionAsync();
     setSelectedEnv(env);
-  };
+    setThemeName(env); // Apply theme immediately
+  }, [setThemeName]);
 
-  const handleSoundPreview = (sound: string) => {
+  const handleSoundPreview = useCallback((sound: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    // If this sound is currently playing, stop it
     if (isPreviewMode && currentTrack?.category === sound) {
       stopPreview();
     } else {
-      // Play preview for this sound
       playPreview(sound);
     }
-  };
+  }, [isPreviewMode, currentTrack, stopPreview, playPreview]);
 
   const handleContinue = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      // Save focus method to onboarding
       await updateOnboarding({ focus_method: selectedMethod });
       console.log('✅ Focus method saved:', selectedMethod);
 
-      // Save sound preference to profile
       await updateProfile({ soundPreference: selectedSound });
       console.log('✅ Sound preference saved:', selectedSound);
 
-      // Save environment theme to profile AND apply it
       await updateProfile({ environmentTheme: selectedEnv });
-      setThemeName(selectedEnv);
-      console.log('✅ Environment theme saved and applied:', selectedEnv);
+      console.log('✅ Environment theme saved:', selectedEnv);
 
       navigation.navigate('AppTutorial' as any);
     } catch (error) {
       console.error('⚠️ Failed to save preferences:', error);
-      // Still navigate - preferences can be updated later in settings
       navigation.navigate('AppTutorial' as any);
     }
   };
@@ -141,6 +251,10 @@ export default function OnboardingFocusSoundScreen() {
     navigation.goBack();
   };
 
+  // ── Lookup helpers ──
+  const selectedMethodData = FOCUS_METHODS.find(m => m.id === selectedMethod) || FOCUS_METHODS[0];
+
+  // ── Render: Method Card ──
   const renderMethodCard = (method: FocusMethod, index: number) => {
     const isSelected = selectedMethod === method.id;
 
@@ -154,7 +268,6 @@ export default function OnboardingFocusSoundScreen() {
             styles.methodCard,
             isSelected && styles.selectedMethodCard,
             { borderColor: isSelected ? method.color : 'rgba(232, 245, 233, 0.2)' },
-            isSelected && { transform: [{ scale: 1.02 }] },
           ]}
           onPress={() => handleMethodSelect(method.id)}
           activeOpacity={0.8}
@@ -192,6 +305,7 @@ export default function OnboardingFocusSoundScreen() {
     );
   };
 
+  // ── Render: Sound Option ──
   const renderSoundOption = (option: string, index: number) => {
     const isSelected = selectedSound === option;
     const isSoundPlaying = isPreviewMode && currentTrack?.category === option;
@@ -199,7 +313,7 @@ export default function OnboardingFocusSoundScreen() {
     return (
       <Animated.View
         key={option}
-        entering={FadeInDown.delay(300 + index * 80).duration(400)}
+        entering={FadeInDown.delay(index * 80).duration(400)}
       >
         <TouchableOpacity
           style={[
@@ -247,6 +361,7 @@ export default function OnboardingFocusSoundScreen() {
     );
   };
 
+  // ── Render: Environment Card ──
   const renderEnvironmentCard = (env: ThemeName, index: number) => {
     const isSelected = selectedEnv === env;
     const palette = lightThemePalettes[env];
@@ -255,7 +370,7 @@ export default function OnboardingFocusSoundScreen() {
     return (
       <Animated.View
         key={env}
-        entering={FadeInDown.delay(600 + index * 80).duration(400)}
+        entering={FadeInDown.delay(index * 80).duration(400)}
         style={styles.envCardWrapper}
       >
         <TouchableOpacity
@@ -308,42 +423,68 @@ export default function OnboardingFocusSoundScreen() {
             <Ionicons name="arrow-back" size={24} color="#E8F5E9" />
           </TouchableOpacity>
 
-          {/* Nora Speech Bubble */}
-          <NoraSpeechBubble message="Let's set up your perfect study session!" />
-
-          {/* Step indicator */}
-          <Text style={styles.stepIndicator}>Step 4 of 5</Text>
+          {/* Nora Speech Bubble — message updates with each step */}
+          <NoraSpeechBubble message={NORA_MESSAGES[currentStep]} />
 
           {/* Scrollable content */}
           <ScrollView
+            ref={scrollViewRef}
             style={styles.scrollView}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContent}
           >
-            {/* Focus Method Section */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Choose Your Focus Style</Text>
-              {FOCUS_METHODS.map((method, index) => renderMethodCard(method, index))}
-            </View>
-
-            {/* Sound Preference Section */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Pick Your Study Sounds</Text>
-              <View style={styles.soundGrid}>
-                {SOUND_OPTIONS.map((option, index) => renderSoundOption(option, index))}
+            {/* ── Section 1: Focus Method ── */}
+            {currentStep === 0 ? (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Choose Your Focus Style</Text>
+                {FOCUS_METHODS.map((method, index) => renderMethodCard(method, index))}
               </View>
-            </View>
+            ) : (
+              <CollapsedSummary
+                icon={selectedMethodData.icon}
+                iconColor={selectedMethodData.color}
+                label="Focus Style"
+                value={selectedMethodData.title}
+                onPress={() => goBackToStep(0)}
+              />
+            )}
 
-            {/* Environment Theme Section */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Choose Your Environment</Text>
-              <Text style={styles.sectionDescription}>This changes the look and feel of the entire app</Text>
-              <View style={styles.envGrid}>
-                {(['home', 'office', 'library', 'coffee', 'park'] as ThemeName[]).map((env, index) =>
-                  renderEnvironmentCard(env, index)
+            {/* ── Section 2: Study Sounds ── */}
+            {currentStep >= 1 && (
+              <Animated.View style={soundSectionStyle}>
+                {currentStep === 1 ? (
+                  <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Pick Your Study Sounds</Text>
+                    <View style={styles.soundGrid}>
+                      {SOUND_OPTIONS.map((option, index) => renderSoundOption(option, index))}
+                    </View>
+                  </View>
+                ) : (
+                  <CollapsedSummary
+                    icon="musical-notes-outline"
+                    iconColor="#4CAF50"
+                    label="Study Sound"
+                    value={selectedSound}
+                    onPress={() => goBackToStep(1)}
+                  />
                 )}
-              </View>
-            </View>
+              </Animated.View>
+            )}
+
+            {/* ── Section 3: Environment Theme ── */}
+            {currentStep >= 2 && (
+              <Animated.View style={envSectionStyle}>
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Choose Your Environment</Text>
+                  <Text style={styles.sectionDescription}>This changes the look and feel of the entire app</Text>
+                  <View style={styles.envGrid}>
+                    {(['home', 'office', 'library', 'coffee', 'park'] as ThemeName[]).map((env, index) =>
+                      renderEnvironmentCard(env, index)
+                    )}
+                  </View>
+                </View>
+              </Animated.View>
+            )}
           </ScrollView>
 
           {/* Continue button */}
@@ -382,12 +523,6 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     alignSelf: 'flex-start',
   },
-  stepIndicator: {
-    fontSize: 14,
-    color: '#B8E6C1',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
   scrollView: {
     flex: 1,
   },
@@ -408,6 +543,38 @@ const styles = StyleSheet.create({
     color: '#B8E6C1',
     marginBottom: 16,
   },
+
+  // ── Collapsed Summary ──
+  collapsedSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(76, 175, 80, 0.08)',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(76, 175, 80, 0.25)',
+    gap: 12,
+  },
+  summaryIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  summaryLabel: {
+    fontSize: 12,
+    color: '#B8E6C1',
+    marginBottom: 2,
+  },
+  summaryValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#E8F5E9',
+  },
+
+  // ── Method Cards ──
   methodCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 16,
@@ -469,6 +636,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
+
+  // ── Sound Cards ──
   soundGrid: {
     gap: 10,
   },
@@ -506,6 +675,8 @@ const styles = StyleSheet.create({
     padding: 4,
     marginRight: 8,
   },
+
+  // ── Environment Cards ──
   envGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -541,6 +712,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+
+  // ── Bottom ──
   bottomContainer: {
     paddingTop: 16,
     paddingBottom: 10,

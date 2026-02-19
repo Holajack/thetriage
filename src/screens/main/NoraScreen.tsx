@@ -152,7 +152,7 @@ const NoraScreen = () => {
     });
     fetchChatHistory();
     fetchUploadedPdfs();
-  }, [navigation, theme, handleNewChat, activeNavItem, navItems, handleNavItemSelect]);
+  }, [navigation, handleNewChat, activeNavItem, navItems, handleNavItemSelect]);
   
   const [input, setInput] = useState('');
   const [chat, setChat] = useState<NoraMessage[]>([]);

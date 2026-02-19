@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput,
 import * as Haptics from 'expo-haptics';
 import { ThemedImageBackground } from '../../components/ThemedImage';
 import { ParallaxForestBackground } from '../../components/ParallaxForestBackground';
+import { useEquippedTrail } from '../../hooks/useEquippedTrail';
 import { AmbientMistBackground } from '../../components/AmbientMistBackground';
 import { FloatingParticles } from '../../components/FloatingParticles';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -30,6 +31,9 @@ import ReAnimated, {
 } from 'react-native-reanimated';
 import { Typography, Spacing, BorderRadius, Shadows, AnimationConfig, TimingConfig } from '../../theme/premiumTheme';
 import { useEntranceAnimation, useButtonPressAnimation, usePulseAnimation, triggerHaptic } from '../../utils/animationUtils';
+import InteractiveWalkthrough from '../../components/InteractiveWalkthrough';
+import { useScreenWalkthrough } from '../../hooks/useScreenWalkthrough';
+import { FOCUS_PREP_STEPS } from '../../config/walkthroughSteps';
 
 const { width, height } = Dimensions.get('window');
 
@@ -209,6 +213,7 @@ export default function FocusPreparationScreen() {
   const { theme } = useTheme();
   const { tasks, addTask, refetch: refetchTasks } = useConvexTasks();
   const { user } = useAuth();
+  const equippedTrail = useEquippedTrail();
   const insets = useSafeAreaInsets();
 
   // Track rendered task IDs to prevent re-animation of existing tasks
@@ -313,6 +318,16 @@ export default function FocusPreparationScreen() {
     );
     handleStartFocus();
   };
+
+  // Walkthrough refs and hook
+  const modeSelectorRef = useRef<View>(null);
+  const timerOptionsRef = useRef<View>(null);
+  const walkthroughRefs = {
+    'mode-selector': modeSelectorRef,
+    'timer-options': timerOptionsRef,
+  };
+  const { visible: walkthroughVisible, measurements: walkthroughMeasurements, complete: walkthroughComplete } =
+    useScreenWalkthrough('focus_prep', walkthroughRefs);
 
   // Mode button press animations
   const basecampButton = useButtonPressAnimation();
@@ -677,6 +692,7 @@ export default function FocusPreparationScreen() {
       <View style={styles.backgroundContainer}>
         {/* Layer 0: Parallax forest scene */}
         <ParallaxForestBackground
+          trailType={equippedTrail}
           isActive={true}
           showTrailBuddy={false}
           showPath={false}
@@ -754,7 +770,7 @@ export default function FocusPreparationScreen() {
                   Choose your focus approach
                 </Text>
 
-                <View style={styles.modeButtons}>
+                <View ref={modeSelectorRef} collapsable={false} style={styles.modeButtons}>
                   <ReAnimated.View style={[mode1AnimStyle, basecampButton.animatedStyle, basecampBorderStyle]}>
                     <Pressable
                       style={[styles.modeButton, { backgroundColor: theme.card, borderColor: theme.primary, shadowColor: theme.primary }]}
@@ -968,7 +984,7 @@ export default function FocusPreparationScreen() {
             </View>
           ) : (
             /* Control Tabs at Bottom - Positioned like IMG_0021.PNG */
-            <View style={styles.controlTabs}>
+            <View ref={timerOptionsRef} collapsable={false} style={styles.controlTabs}>
               {/* Time Tab - Move further left */}
               <TouchableOpacity
                 style={[styles.controlTab, styles.leftTab]}
@@ -1342,6 +1358,14 @@ export default function FocusPreparationScreen() {
           },
         ]}
         pointerEvents="none"
+      />
+
+      {/* Walkthrough Overlay */}
+      <InteractiveWalkthrough
+        visible={walkthroughVisible}
+        onComplete={walkthroughComplete}
+        measurements={walkthroughMeasurements}
+        steps={FOCUS_PREP_STEPS}
       />
     </View>
   );

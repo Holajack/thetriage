@@ -32,6 +32,15 @@ export interface UserSettings {
   workStyle?: string;
   focus_duration?: number;
   break_duration?: number;
+  // Ambient sound toggles
+  ambientEnvironmentEnabled?: boolean;
+  ambientWhiteNoiseEnabled?: boolean;
+  ambientCrittersEnabled?: boolean;
+  ambientVolume?: number;
+  // Music service preferences
+  preferredMusicService?: string;
+  spotifyConnected?: boolean;
+  appleMusicConnected?: boolean;
 }
 
 /**
@@ -88,6 +97,14 @@ export async function updateUserSettings(userId: string, settings: UserSettings)
     if (settings.daily_goal_minutes !== undefined) convexSettings.dailyGoalMinutes = settings.daily_goal_minutes;
     if (settings.preferred_session_length !== undefined) convexSettings.preferredSessionLength = settings.preferred_session_length;
     if (settings.preferred_break_length !== undefined) convexSettings.breakLength = settings.preferred_break_length;
+    // Ambient sound and music service settings (already camelCase)
+    if (settings.ambientEnvironmentEnabled !== undefined) convexSettings.ambientEnvironmentEnabled = settings.ambientEnvironmentEnabled;
+    if (settings.ambientWhiteNoiseEnabled !== undefined) convexSettings.ambientWhiteNoiseEnabled = settings.ambientWhiteNoiseEnabled;
+    if (settings.ambientCrittersEnabled !== undefined) convexSettings.ambientCrittersEnabled = settings.ambientCrittersEnabled;
+    if (settings.ambientVolume !== undefined) convexSettings.ambientVolume = settings.ambientVolume;
+    if (settings.preferredMusicService !== undefined) convexSettings.preferredMusicService = settings.preferredMusicService;
+    if (settings.spotifyConnected !== undefined) convexSettings.spotifyConnected = settings.spotifyConnected;
+    if (settings.appleMusicConnected !== undefined) convexSettings.appleMusicConnected = settings.appleMusicConnected;
 
     await client.mutation(api.settings.update, convexSettings);
 

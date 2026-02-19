@@ -25,7 +25,7 @@ export type OnboardingStackParamList = {
 export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
-  Main: undefined;
+  Main: { showWalkthrough?: boolean } | undefined;
   BreakTimerScreen: {
     sessionData?: {
       duration: number;

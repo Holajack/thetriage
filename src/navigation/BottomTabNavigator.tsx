@@ -213,7 +213,7 @@ function ProfileStack() {
       <Stack.Screen
         name="Privacy"
         component={PrivacyScreen}
-        options={{ title: 'Privacy' }}
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="Preferences"

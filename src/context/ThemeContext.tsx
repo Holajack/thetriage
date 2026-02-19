@@ -76,14 +76,14 @@ export const darkThemePalette: ThemePalette = {
   name: 'Dark',
   primary: '#4CAF50',
   background: '#121212',
-  card: '#1E1E1E',
+  card: '#242424',
   text: '#FFFFFF',
-  surface: '#1E1E1E',
-  surface2: '#2C2C2C',
+  surface: '#242424',
+  surface2: '#2E2E2E',
   accent: '#4CAF50',
   secondary: '#66BB6A',
-  border: '#333333',
-  textSecondary: '#AAAAAA',
+  border: '#404040',
+  textSecondary: '#E8E8E8',
 };
 
 // Color blind friendly palettes (avoiding red-green, using blue-orange-yellow palette)
@@ -156,14 +156,14 @@ export const colorBlindDarkPalette: ThemePalette = {
   name: 'Dark',
   primary: '#2196F3', // Blue instead of green (color blind safe)
   background: '#121212',
-  card: '#1E1E1E',
+  card: '#242424',
   text: '#FFFFFF',
-  surface: '#1E1E1E',
-  surface2: '#2C2C2C',
+  surface: '#242424',
+  surface2: '#2E2E2E',
   accent: '#2196F3',
   secondary: '#64B5F6',
-  border: '#333333',
-  textSecondary: '#AAAAAA',
+  border: '#404040',
+  textSecondary: '#E8E8E8',
 };
 
 // For backwards compatibility

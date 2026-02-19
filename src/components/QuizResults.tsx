@@ -1,9 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Dimensions } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { QuizResult, STUDY_HABITS_RESULTS, LEARNING_STYLE_RESULTS } from '../data/quizData';
 import RadarChart, { RadarLegend } from './RadarChart';
+import CollapsibleSection from './CollapsibleSection';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -12,6 +14,57 @@ interface QuizResultsProps {
   onRetake: () => void;
   onClose: () => void;
 }
+
+// Unified icon map for all quiz types and sub-dimensions
+const CATEGORY_ICONS: Record<string, string> = {
+  // Study habits sub-dimensions
+  time_management: 'time-outline',
+  environment: 'home-outline',
+  information_processing: 'reader-outline',
+  motivation: 'heart-outline',
+  technology: 'laptop-outline',
+  technology_use: 'laptop-outline',
+  learning_strategies: 'bulb-outline',
+  self_assessment: 'eye-outline',
+  note_taking: 'create-outline',
+  // Learning style sub-dimensions
+  visual: 'eye-outline',
+  auditory: 'volume-high-outline',
+  kinesthetic: 'hand-left-outline',
+  reading_writing: 'pencil-outline',
+  social: 'people-outline',
+  // Motivation sub-dimensions
+  intrinsic: 'sparkles-outline',
+  extrinsic: 'trophy-outline',
+  achievement: 'ribbon-outline',
+  future_goals: 'flag-outline',
+  autonomy: 'compass-outline',
+  competence: 'shield-checkmark-outline',
+  // Focus/attention
+  focus: 'radio-button-on-outline',
+  attention: 'scan-outline',
+  concentration: 'radio-button-on-outline',
+  distraction: 'notifications-off-outline',
+  // Goal setting
+  goal_setting: 'flag-outline',
+  planning: 'calendar-outline',
+  tracking: 'analytics-outline',
+  // Stress/anxiety
+  stress: 'fitness-outline',
+  anxiety: 'pulse-outline',
+  coping: 'shield-outline',
+  resilience: 'barbell-outline',
+};
+
+// Quiz type display names
+const QUIZ_TYPE_NAMES: Record<string, string> = {
+  study_habits: 'Study Habits Assessment',
+  learning_style: 'Learning Style Assessment',
+  motivation: 'Motivation Profile',
+  focus_attention: 'Focus & Attention Assessment',
+  goal_setting: 'Goal Setting & Planning',
+  stress_anxiety: 'Stress & Anxiety Assessment',
+};
 
 const QuizResults: React.FC<QuizResultsProps> = ({ result, onRetake, onClose }) => {
   const { theme } = useTheme();
@@ -50,37 +103,40 @@ const QuizResults: React.FC<QuizResultsProps> = ({ result, onRetake, onClose }) 
   };
 
   const getCategoryInfo = () => {
-    const categories = result.quizId === 'study_habits' ? STUDY_HABITS_RESULTS.categories : LEARNING_STYLE_RESULTS.categories;
-    return categories[result.category as keyof typeof categories];
+    if (result.quizId === 'study_habits') {
+      return STUDY_HABITS_RESULTS.categories[result.category as keyof typeof STUDY_HABITS_RESULTS.categories];
+    }
+    if (result.quizId === 'learning_style') {
+      return LEARNING_STYLE_RESULTS.categories[result.category as keyof typeof LEARNING_STYLE_RESULTS.categories];
+    }
+    return undefined;
+  };
+
+  const getIconForResult = () => {
+    // Try the dominant trait/category slug first
+    const slug = result.traitProfile?.primaryTrait || result.category;
+    if (slug && CATEGORY_ICONS[slug]) {
+      return CATEGORY_ICONS[slug];
+    }
+    // Try the quiz type itself
+    if (CATEGORY_ICONS[result.quizId]) {
+      return CATEGORY_ICONS[result.quizId];
+    }
+    // Fallback by quiz type
+    const quizFallbacks: Record<string, string> = {
+      study_habits: 'book-outline',
+      learning_style: 'bulb-outline',
+      motivation: 'heart-outline',
+      focus_attention: 'radio-button-on-outline',
+      goal_setting: 'flag-outline',
+      stress_anxiety: 'fitness-outline',
+    };
+    return quizFallbacks[result.quizId] || 'school-outline';
   };
 
   const categoryInfo = getCategoryInfo();
   const scoreColor = getScoreColor(result.score);
   const scoreLabel = getScoreLabel(result.score);
-
-  const getIconForCategory = (category: string, quizType: string) => {
-    if (quizType === 'study_habits') {
-      const icons = {
-        time_management: 'clock-outline',
-        environment: 'home-outline',
-        information_processing: 'brain-outline',
-        motivation: 'heart-outline',
-        technology: 'laptop-outline',
-        learning_strategies: 'lightbulb-outline',
-        self_assessment: 'eye-outline'
-      };
-      return icons[category as keyof typeof icons] || 'help-circle-outline';
-    } else {
-      const icons = {
-        visual: 'eye-outline',
-        auditory: 'volume-high-outline',
-        kinesthetic: 'hand-left-outline',
-        reading_writing: 'pencil-outline',
-        social: 'people-outline'
-      };
-      return icons[category as keyof typeof icons] || 'help-circle-outline';
-    }
-  };
 
   const showRecommendationDetail = (recommendation: string) => {
     setSelectedRecommendation(recommendation);
@@ -88,32 +144,57 @@ const QuizResults: React.FC<QuizResultsProps> = ({ result, onRetake, onClose }) 
   };
 
   const getDetailedRecommendation = (recommendation: string) => {
-    // This could be expanded to provide more detailed explanations
-    const details = {
-      "Use time-blocking techniques to schedule specific study periods": 
+    const details: Record<string, string> = {
+      "Use time-blocking techniques to schedule specific study periods":
         "Time-blocking involves scheduling specific time slots for different activities. For studying, this means setting aside dedicated blocks of time for each subject or task. This helps reduce decision fatigue and ensures you allocate enough time to each area.",
-      
       "Try the Balanced Technique: 25 minutes focused study + 5 minute breaks":
         "The Balanced Technique is a time management method that breaks work into intervals (traditionally 25 minutes) separated by short breaks. This helps maintain focus and prevents mental fatigue. After 4 balanced sessions, take a longer 15-30 minute break.",
-        
       "Use mind maps, charts, and diagrams to organize information":
         "Visual learners process information better when it's presented graphically. Mind maps help you see connections between concepts, while charts and diagrams can simplify complex information. Try using colors and symbols to make your visual aids even more effective.",
-        
       "Read your notes aloud when reviewing":
         "Auditory learners benefit from hearing information. Reading aloud engages your auditory processing and can help with retention. You can also record yourself reading key concepts and listen back during commutes or while exercising.",
-        
       "Take frequent movement breaks during study sessions":
         "Kinesthetic learners need physical activity to optimize learning. Every 20-30 minutes, stand up, stretch, or take a short walk. You can also try studying while standing, using a standing desk, or incorporating fidget tools."
     };
-    
-    return details[recommendation as keyof typeof details] || "This recommendation can help improve your study effectiveness. Consider implementing it gradually into your routine.";
+    return details[recommendation] || "This recommendation can help improve your study effectiveness. Consider implementing it gradually into your routine.";
   };
 
+  const formatTraitName = (slug: string) =>
+    slug.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+
+  // Generate user-specific summaries for collapsed sections
+  const strengthsSummary = result.strengths && result.strengths.length > 0
+    ? `Top: ${formatTraitName(result.strengths[0].subDimensionSlug)} (${Math.round(result.strengths[0].score)}%)` +
+      (result.strengths.length > 1 ? ` + ${result.strengths.length - 1} more` : '')
+    : '';
+
+  const growthSummary = result.areasForGrowth && result.areasForGrowth.length > 0
+    ? result.areasForGrowth.slice(0, 2).map(a => formatTraitName(a.subDimensionSlug)).join(', ') +
+      (result.areasForGrowth.length > 2 ? ` + ${result.areasForGrowth.length - 2} more` : '')
+    : '';
+
+  const descriptionSummary = result.traitProfile?.primaryTrait
+    ? `Primary: ${formatTraitName(result.traitProfile.primaryTrait)}`
+    : result.description
+      ? result.description.substring(0, 80) + (result.description.length > 80 ? '...' : '')
+      : '';
+
+  const recommendationsSummary = result.recommendations.length > 0
+    ? result.recommendations[0].substring(0, 70) + (result.recommendations[0].length > 70 ? '...' : '')
+    : '';
+
+  const topDimension = radarData.length > 0
+    ? radarData.reduce((a, b) => a.displayValue > b.displayValue ? a : b)
+    : null;
+  const dimensionSummary = topDimension
+    ? `Highest: ${topDimension.axis} (${topDimension.displayValue}%)`
+    : '';
+
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+        <TouchableOpacity onPress={onClose} style={[styles.closeButton, { backgroundColor: theme.text + '15' }]}>
           <Ionicons name="close-outline" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.text }]}>Quiz Results</Text>
@@ -125,7 +206,7 @@ const QuizResults: React.FC<QuizResultsProps> = ({ result, onRetake, onClose }) 
         <View style={[styles.scoreCard, { backgroundColor: theme.card }]}>
           <View style={styles.scoreHeader}>
             <Ionicons
-              name={getIconForCategory(result.category, result.quizId) as any}
+              name={getIconForResult() as any}
               size={48}
               color={scoreColor}
             />
@@ -142,16 +223,16 @@ const QuizResults: React.FC<QuizResultsProps> = ({ result, onRetake, onClose }) 
           <View style={styles.categoryInfo}>
             <Text style={[styles.categoryName, { color: theme.text }]}>
               {result.traitProfile?.primaryTrait
-                ? result.traitProfile.primaryTrait.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
-                : categoryInfo?.name}
+                ? formatTraitName(result.traitProfile.primaryTrait)
+                : categoryInfo?.name || formatTraitName(result.category)}
             </Text>
             <Text style={[styles.categoryDescription, { color: theme.text + '99' }]}>
-              {result.traitProfile?.profileDescription || categoryInfo?.description}
+              {result.traitProfile?.profileDescription || categoryInfo?.description || result.description}
             </Text>
           </View>
 
           {/* Percentile Rank (if available) */}
-          {result.percentileRank && (
+          {result.percentileRank != null && result.percentileRank > 0 && (
             <View style={[styles.percentileContainer, { borderTopColor: theme.text + '20' }]}>
               <Text style={[styles.percentileLabel, { color: theme.text + '99' }]}>
                 Percentile Rank
@@ -175,30 +256,41 @@ const QuizResults: React.FC<QuizResultsProps> = ({ result, onRetake, onClose }) 
             <View style={styles.radarContainer}>
               <RadarChart
                 data={radarData}
-                size={Math.min(SCREEN_WIDTH - 80, 280)}
+                size={Math.min(SCREEN_WIDTH - 16, 380)}
                 color={scoreColor}
                 showLabels={true}
-                showPercentiles={!!result.percentileRank}
+                showPercentiles={false}
               />
             </View>
           </View>
         )}
 
-        {/* Strengths Section (if available) */}
+        {/* Radar Legend (collapsible) */}
+        {hasRadarData && (
+          <CollapsibleSection
+            title="Dimension Scores"
+            icon="list-outline"
+            summary={dimensionSummary}
+          >
+            <RadarLegend data={radarData} color={scoreColor} />
+          </CollapsibleSection>
+        )}
+
+        {/* Strengths Section (collapsible with summary) */}
         {result.strengths && result.strengths.length > 0 && (
-          <View style={[styles.strengthsCard, { backgroundColor: theme.card }]}>
-            <View style={styles.strengthsHeader}>
-              <Ionicons name="trophy-outline" size={24} color="#4CAF50" />
-              <Text style={[styles.strengthsTitle, { color: theme.text }]}>
-                Your Strengths
-              </Text>
-            </View>
+          <CollapsibleSection
+            title="Your Strengths"
+            icon="trophy-outline"
+            iconColor="#4CAF50"
+            summary={strengthsSummary}
+            defaultExpanded={false}
+          >
             {result.strengths.map((strength, index) => (
               <View key={index} style={styles.strengthItem}>
                 <View style={[styles.strengthDot, { backgroundColor: '#4CAF50' }]} />
                 <View style={styles.strengthContent}>
                   <Text style={[styles.strengthName, { color: theme.text }]}>
-                    {strength.subDimensionSlug.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
+                    {formatTraitName(strength.subDimensionSlug)}
                   </Text>
                   <Text style={[styles.strengthScore, { color: '#4CAF50' }]}>
                     {Math.round(strength.score)}%
@@ -209,23 +301,22 @@ const QuizResults: React.FC<QuizResultsProps> = ({ result, onRetake, onClose }) 
                 </Text>
               </View>
             ))}
-          </View>
+          </CollapsibleSection>
         )}
 
-        {/* Areas for Growth (if available) */}
+        {/* Areas for Growth (collapsible with summary) */}
         {result.areasForGrowth && result.areasForGrowth.length > 0 && (
-          <View style={[styles.growthCard, { backgroundColor: theme.card }]}>
-            <View style={styles.growthHeader}>
-              <Ionicons name="trending-up-outline" size={24} color="#FF9800" />
-              <Text style={[styles.growthTitle, { color: theme.text }]}>
-                Areas for Growth
-              </Text>
-            </View>
+          <CollapsibleSection
+            title="Areas for Growth"
+            icon="trending-up-outline"
+            iconColor="#FF9800"
+            summary={growthSummary}
+          >
             {result.areasForGrowth.map((area, index) => (
               <View key={index} style={styles.growthItem}>
                 <View style={styles.growthItemHeader}>
                   <Text style={[styles.growthName, { color: theme.text }]}>
-                    {area.subDimensionSlug.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
+                    {formatTraitName(area.subDimensionSlug)}
                   </Text>
                   <Text style={[styles.growthScore, { color: '#FF9800' }]}>
                     {Math.round(area.score)}%
@@ -248,49 +339,84 @@ const QuizResults: React.FC<QuizResultsProps> = ({ result, onRetake, onClose }) 
                 )}
               </View>
             ))}
-          </View>
+          </CollapsibleSection>
         )}
 
-        {/* Results Description */}
-        <View style={[styles.descriptionCard, { backgroundColor: theme.card }]}>
-          <Text style={[styles.descriptionTitle, { color: theme.text }]}>
-            What This Means
-          </Text>
-          <Text style={[styles.descriptionText, { color: theme.text }]}>
-            {result.description}
-          </Text>
-        </View>
+        {/* Results Description (collapsible with summary) */}
+        {result.description ? (
+          <CollapsibleSection
+            title="What This Means"
+            icon="information-circle-outline"
+            iconColor={theme.primary}
+            summary={descriptionSummary}
+          >
+            <Text style={[styles.descriptionText, { color: theme.text }]}>
+              {result.description}
+            </Text>
+          </CollapsibleSection>
+        ) : null}
 
-        {/* Recommendations */}
-        <View style={[styles.recommendationsCard, { backgroundColor: theme.card }]}>
-          <Text style={[styles.recommendationsTitle, { color: theme.text }]}>
-            Personalized Recommendations
-          </Text>
-          <Text style={[styles.recommendationsSubtitle, { color: theme.text + '99' }]}>
-            Based on your results, here are specific strategies to improve your {result.quizId === 'study_habits' ? 'study habits' : 'learning approach'}:
-          </Text>
-          
-          {result.recommendations.map((recommendation, index) => (
-            <TouchableOpacity
-              key={index}
-              style={[styles.recommendationItem, { borderColor: theme.primary + '20' }]}
-              onPress={() => showRecommendationDetail(recommendation)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.recommendationContent}>
-                <View style={[styles.recommendationNumber, { backgroundColor: theme.primary }]}>
-                  <Text style={styles.recommendationNumberText}>{index + 1}</Text>
+        {/* Recommendations (collapsible with summary) */}
+        {result.recommendations.length > 0 && (
+          <CollapsibleSection
+            title="Personalized Recommendations"
+            icon="bulb-outline"
+            iconColor="#4ECDC4"
+            summary={recommendationsSummary}
+          >
+            {result.recommendations.map((recommendation, index) => (
+              <TouchableOpacity
+                key={index}
+                style={[styles.recommendationItem, { borderColor: theme.primary + '20' }]}
+                onPress={() => showRecommendationDetail(recommendation)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.recommendationContent}>
+                  <View style={[styles.recommendationNumber, { backgroundColor: theme.primary }]}>
+                    <Text style={styles.recommendationNumberText}>{index + 1}</Text>
+                  </View>
+                  <Text style={[styles.recommendationText, { color: theme.text }]}>
+                    {recommendation}
+                  </Text>
+                  <Ionicons name="chevron-forward-outline" size={20} color={theme.text + '66'} />
                 </View>
-                <Text style={[styles.recommendationText, { color: theme.text }]}>
-                  {recommendation}
-                </Text>
-                <Ionicons name="chevron-forward-outline" size={20} color={theme.text + '66'} />
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
+              </TouchableOpacity>
+            ))}
+          </CollapsibleSection>
+        )}
 
-        {/* Action Buttons */}
+        {/* Quiz Details (above buttons) */}
+        <CollapsibleSection
+          title="Quiz Details"
+          icon="document-text-outline"
+          iconColor={theme.textSecondary}
+          summary={(result.completedAt instanceof Date
+            ? result.completedAt
+            : new Date(result.completedAt)
+          ).toLocaleDateString()}
+        >
+          <View style={styles.quizInfoRow}>
+            <Text style={[styles.quizInfoLabel, { color: theme.text + '99' }]}>
+              Completed:
+            </Text>
+            <Text style={[styles.quizInfoValue, { color: theme.text }]}>
+              {(result.completedAt instanceof Date
+                ? result.completedAt
+                : new Date(result.completedAt)
+              ).toLocaleDateString()}
+            </Text>
+          </View>
+          <View style={styles.quizInfoRow}>
+            <Text style={[styles.quizInfoLabel, { color: theme.text + '99' }]}>
+              Type:
+            </Text>
+            <Text style={[styles.quizInfoValue, { color: theme.text }]}>
+              {QUIZ_TYPE_NAMES[result.quizId] || formatTraitName(result.quizId)}
+            </Text>
+          </View>
+        </CollapsibleSection>
+
+        {/* Action Buttons (at the very bottom) */}
         <View style={styles.actionsContainer}>
           <TouchableOpacity
             style={[styles.actionButton, styles.retakeButton, { borderColor: theme.primary }]}
@@ -308,43 +434,9 @@ const QuizResults: React.FC<QuizResultsProps> = ({ result, onRetake, onClose }) 
           >
             <Ionicons name="checkmark-outline" size={20} color="#FFF" />
             <Text style={styles.saveButtonText}>
-              Save Results
+              Done
             </Text>
           </TouchableOpacity>
-        </View>
-
-        {/* Quiz Info */}
-        <View style={[styles.quizInfo, { backgroundColor: theme.card }]}>
-          <Text style={[styles.quizInfoTitle, { color: theme.text }]}>
-            Quiz Details
-          </Text>
-          <View style={styles.quizInfoRow}>
-            <Text style={[styles.quizInfoLabel, { color: theme.text + '99' }]}>
-              Completed:
-            </Text>
-            <Text style={[styles.quizInfoValue, { color: theme.text }]}>
-              {(result.completedAt instanceof Date
-                ? result.completedAt
-                : new Date(result.completedAt)
-              ).toLocaleDateString()}
-            </Text>
-          </View>
-          <View style={styles.quizInfoRow}>
-            <Text style={[styles.quizInfoLabel, { color: theme.text + '99' }]}>
-              Questions:
-            </Text>
-            <Text style={[styles.quizInfoValue, { color: theme.text }]}>
-              15 randomly selected
-            </Text>
-          </View>
-          <View style={styles.quizInfoRow}>
-            <Text style={[styles.quizInfoLabel, { color: theme.text + '99' }]}>
-              Type:
-            </Text>
-            <Text style={[styles.quizInfoValue, { color: theme.text }]}>
-              {result.quizId === 'study_habits' ? 'Study Habits Assessment' : 'Learning Style Assessment'}
-            </Text>
-          </View>
         </View>
       </ScrollView>
 
@@ -368,7 +460,7 @@ const QuizResults: React.FC<QuizResultsProps> = ({ result, onRetake, onClose }) 
                 <Ionicons name="close-outline" size={24} color={theme.text} />
               </TouchableOpacity>
             </View>
-            
+
             {selectedRecommendation && (
               <>
                 <Text style={[styles.modalRecommendation, { color: theme.primary }]}>
@@ -379,7 +471,7 @@ const QuizResults: React.FC<QuizResultsProps> = ({ result, onRetake, onClose }) 
                 </Text>
               </>
             )}
-            
+
             <TouchableOpacity
               style={[styles.modalButton, { backgroundColor: theme.primary }]}
               onPress={() => setShowDetailModal(false)}
@@ -389,7 +481,7 @@ const QuizResults: React.FC<QuizResultsProps> = ({ result, onRetake, onClose }) 
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -402,7 +494,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
   },
@@ -410,7 +502,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#F5F5F5',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -465,44 +556,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
-  descriptionCard: {
-    padding: 20,
-    borderRadius: 16,
-    marginBottom: 20,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-  },
-  descriptionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 12,
-  },
   descriptionText: {
     fontSize: 16,
     lineHeight: 22,
-  },
-  recommendationsCard: {
-    padding: 20,
-    borderRadius: 16,
-    marginBottom: 20,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-  },
-  recommendationsTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  recommendationsSubtitle: {
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 16,
   },
   recommendationItem: {
     borderWidth: 1,
@@ -535,7 +591,8 @@ const styles = StyleSheet.create({
   },
   actionsContainer: {
     flexDirection: 'row',
-    marginBottom: 20,
+    marginTop: 8,
+    marginBottom: 40,
     gap: 12,
   },
   actionButton: {
@@ -562,21 +619,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFF',
     marginLeft: 8,
-  },
-  quizInfo: {
-    padding: 20,
-    borderRadius: 16,
-    marginBottom: 40,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-  },
-  quizInfoTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 12,
   },
   quizInfoRow: {
     flexDirection: 'row',
@@ -683,28 +725,10 @@ const styles = StyleSheet.create({
   radarContainer: {
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'visible',
+    marginVertical: 8,
   },
   // Strengths styles
-  strengthsCard: {
-    padding: 20,
-    borderRadius: 16,
-    marginBottom: 20,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-  },
-  strengthsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  strengthsTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginLeft: 10,
-  },
   strengthItem: {
     marginBottom: 14,
   },
@@ -738,26 +762,6 @@ const styles = StyleSheet.create({
     paddingLeft: 16,
   },
   // Growth areas styles
-  growthCard: {
-    padding: 20,
-    borderRadius: 16,
-    marginBottom: 20,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-  },
-  growthHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  growthTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginLeft: 10,
-  },
   growthItem: {
     marginBottom: 16,
     paddingBottom: 16,

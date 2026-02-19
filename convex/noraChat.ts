@@ -9,7 +9,7 @@
  * Conversation continuity via `previous_response_id` chaining.
  */
 import { v } from "convex/values";
-import { action, internalMutation, internalQuery } from "./_generated/server";
+import { action, query, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 
@@ -49,6 +49,45 @@ export const _getUserContext = internalQuery({
       .order("desc")
       .take(10);
     return { user, onboarding, leaderboard, sessions };
+  },
+});
+
+/** DEV: Debug rate limit check by clerkId (remove before production) */
+export const debugRateLimit = query({
+  args: { clerkId: v.string() },
+  handler: async (ctx, { clerkId }) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerkId", (q) => q.eq("clerkId", clerkId))
+      .unique();
+    if (!user) return { error: "User not found" };
+
+    const tier = user.subscriptionTier || "free";
+    const today = new Date().toISOString().slice(0, 10);
+    const usage = await ctx.db
+      .query("aiUsageTracking")
+      .withIndex("by_userId_aiType_date", (q) =>
+        q.eq("userId", user._id).eq("aiType", "nora").eq("date", today)
+      )
+      .unique();
+
+    const noraStatus = await ctx.db
+      .query("noraOnboardingStatus")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .unique();
+
+    return {
+      userId: user._id,
+      tier,
+      subscriptionTier: user.subscriptionTier,
+      messagesSentToday: usage?.messagesSent ?? 0,
+      date: today,
+      noraOnboarding: noraStatus ? {
+        completedAt: noraStatus.completedAt,
+        acceptedPoliciesAt: noraStatus.acceptedPoliciesAt,
+        version: noraStatus.version,
+      } : null,
+    };
   },
 });
 
@@ -237,6 +276,65 @@ function sanitizeInput(input: string): string {
     .trim();
 }
 
+/**
+ * Resolve "auto" thinking mode to a concrete mode based on message content.
+ * Simple keyword heuristic — no LLM call, zero latency overhead.
+ */
+function resolveAutoMode(message: string): "quick" | "deep" | "research" {
+  const lower = message.toLowerCase().trim();
+
+  // Quick signals: very short greetings and simple conversational messages
+  const quickSignals = [
+    "hi", "hey", "hello", "thanks", "thank you", "ok", "okay",
+    "yes", "no", "sure", "got it", "cool", "nice", "good",
+    "bye", "goodbye", "see you", "gm", "gn", "sup", "yo",
+  ];
+  // If the entire message (trimmed) is just a greeting/conversational phrase
+  if (lower.length < 30 && quickSignals.some(kw => lower === kw || lower === kw + "!" || lower === kw + ".")) {
+    return "quick";
+  }
+
+  // Research signals: user wants web info, current events, sources, resources
+  const researchSignals = [
+    "research", "find", "search", "look up", "what is", "who is",
+    "sources", "latest", "news", "recent", "current", "trending",
+    "statistics", "data on", "studies show", "according to",
+    "website", "resource", "tutorial", "guide", "course",
+    "recommend", "suggestion", "where can i", "best way to learn",
+    "link", "url", "article", "blog", "video", "youtube",
+    "study material", "practice problem", "cheat sheet",
+    "show me", "give me", "list", "top", "best",
+    "help me find", "help me study", "how to", "what are",
+  ];
+  for (const kw of researchSignals) {
+    if (lower.includes(kw)) return "research";
+  }
+
+  // Deep analysis signals: user wants thorough reasoning or code
+  const deepSignals = [
+    "analyze", "explain in detail", "compare", "contrast",
+    "calculate", "step by step", "break down", "why does",
+    "how does", "code", "implement", "debug", "solve",
+    "in depth", "thoroughly", "comprehensive", "explain",
+    "understand", "elaborate", "teach me", "walk me through",
+  ];
+  for (const kw of deepSignals) {
+    if (lower.includes(kw)) return "deep";
+  }
+
+  // Long messages are likely detailed questions
+  if (lower.length > 150) return "deep";
+
+  // Medium-length messages with a question mark → research (search for answers)
+  if (lower.includes("?") && lower.length > 15) return "research";
+
+  // Default for non-trivial messages: research (provides sourced answers)
+  if (lower.length > 40) return "research";
+
+  // Very short non-greeting messages: quick
+  return "quick";
+}
+
 function buildInstructions(userCtx: any, pdfContext: any, memories?: any[], thinkingMode?: string, quizInsights?: any[]): string {
   const userName = userCtx?.user?.fullName?.split(" ")[0] || "there";
   const focusMethod = userCtx?.onboarding?.focusMethod || "Balanced Focus";
@@ -267,10 +365,10 @@ function buildInstructions(userCtx: any, pdfContext: any, memories?: any[], thin
 - University: ${university}
 - Major: ${major}${statsBlock}${sessionBlock}
 
-**Your Capabilities (use these tools when relevant):**
-1. **Web Search** — Search the internet for current information, research papers, study resources, facts, and up-to-date data. Use this proactively when the student asks about topics that benefit from current information.
-2. **File Search** — When the student has uploaded PDFs or documents, search through the ENTIRE document to find specific information, generate study questions, create summaries, and extract key concepts. Always use file_search when a document is attached.
-3. **Code Interpreter** — Run Python code to solve math problems, create charts, analyze data, or work through science/engineering calculations step-by-step. Use this for any STEM homework that involves computation.
+**Your Capabilities (available based on mode):**
+1. **Web Search** (Research & Deep modes) — Search the internet for current information, research papers, study resources, and facts. When available, use it to cite real sources and provide up-to-date data.
+2. **File Search** — When the student has uploaded PDFs or documents, search through the ENTIRE document to find specific information, generate study questions, create summaries, and extract key concepts.
+3. **Code Interpreter** (Deep mode) — Run Python code to solve math problems, create charts, analyze data, or work through science/engineering calculations step-by-step.
 
 **Core Responsibilities:**
 - Study planning: craft schedules, break down assignments, plan revision cycles
@@ -292,6 +390,23 @@ function buildInstructions(userCtx: any, pdfContext: any, memories?: any[], thin
 - Quote retrieved snippets and cite sections (e.g., "[Chapter 3, p.12]")
 - If the document doesn't contain the answer, say so clearly
 - Never fabricate citations
+
+**Response Formatting:**
+- Use markdown for clear, structured responses
+- Use ## headings to organize sections when responses have multiple parts
+- Use **bold** for key terms, definitions, and important points
+- Use bullet points for lists and step-by-step breakdowns
+- For math and science: use code blocks (\`\`\`) with clear step-by-step work
+- For research/search responses, structure as:
+  ## Overview
+  [Brief summary of findings]
+  ## Key Findings
+  - Finding 1 with details
+  - Finding 2 with details
+  ## Summary
+  [Key takeaways]
+- For explanations: use headings to break down complex topics into digestible sections
+- Keep formatting clean, scannable, and easy to read on mobile
 
 **Safety:**
 - Follow OpenAI safety policies and academic integrity guidelines
@@ -350,14 +465,53 @@ Use this knowledge naturally in conversation. Don't repeat it back unless asked.
 When the student asks about this document, use file_search to retrieve specific information from it.`;
   }
 
-  // Research mode: add citation instructions
-  if (thinkingMode === "research") {
-    instructions += `\n\n**Research Mode Active:**
-- You are in research mode. Be thorough and cite your sources.
+  // ── Mode-specific instructions ──
+  // Each mode produces a DISTINCTLY different response style.
+  // Quick: fast, from Nora's knowledge, no web search
+  // Research: medium detail, web search, cited sources
+  // Deep: maximum detail, web search, cited sources, long comprehensive response
+
+  if (thinkingMode === "quick") {
+    instructions += `\n\n**Quick Mode — Nora's Knowledge Only:**
+- Respond directly from your own training knowledge. Do NOT search the web.
+- Be concise and direct. Get to the point fast.
+- Short paragraphs, no lengthy intros or sign-offs.
+- Use bullet points over long explanations.
+- Aim for responses under 150 words unless the topic truly requires more.
+- Match the student's energy — brief questions get brief answers.
+- If the topic would benefit from research or deeper analysis, mention they can switch to Research (globe) or Deep (glasses) mode.`;
+  } else if (thinkingMode === "research") {
+    instructions += `\n\n**Web Research Mode — MANDATORY WEB SEARCH:**
+- The student chose Research mode because they want REAL web sources — not just your training knowledge.
+- **CRITICAL: You MUST call the web_search tool BEFORE writing any response.** This is your #1 priority. Do NOT respond from memory alone — always search first.
+- Provide medium-length responses (200-400 words). More detailed than Quick but not as exhaustive as Deep.
 - Cross-reference multiple sources when possible.
-- Clearly distinguish between established facts and emerging information.
-- Include relevant URLs or paper references when citing web sources.
-- Organize findings with clear headings and structure.`;
+- Structure responses clearly:
+  ## Overview
+  [2-3 sentence summary of what you found]
+  ## Key Findings
+  - Finding with source attribution
+  ## Recommended Resources
+  - [Resource name](url) — brief description
+- Include the actual URLs from your web search results so they appear as url_citation annotations. The student sees these as clickable source pills.
+- If sources conflict, briefly note the disagreement.`;
+  } else if (thinkingMode === "deep") {
+    instructions += `\n\n**Deep Analysis Mode — MAXIMUM DEPTH + MANDATORY WEB SEARCH:**
+- The student chose Deep mode because they want the MOST thorough, comprehensive analysis possible.
+- **CRITICAL: You MUST call the web_search tool at least once (ideally multiple times) before responding.** Ground every claim in real, verifiable sources. This is non-negotiable.
+- **Your response MUST be long and detailed** — aim for 500-1000+ words. This is NOT a quick answer. Think of it as a 15-minute private tutoring session.
+- Break the topic into multiple sections with ## headings.
+- For EVERY section, explain:
+  - The "what" — define concepts clearly
+  - The "why" — explain underlying reasoning and principles
+  - The "how" — give concrete examples, analogies, and applications
+  - The "so what" — connect to the student's goals, major, or coursework
+- For STEM topics: show full step-by-step work, use code_interpreter for calculations.
+- For humanities: explore multiple perspectives, cite evidence, analyze arguments.
+- Use analogies and real-world examples to make abstract ideas concrete.
+- Reference your web search findings throughout — cite specific sources with URLs so they appear as url_citation annotations.
+- End with actionable next steps or study recommendations.
+- DO NOT give a short answer in Deep mode. If your response is under 400 words, you're not being thorough enough — expand further.`;
   }
 
   return instructions;
@@ -414,6 +568,7 @@ export const sendMessage = action({
     remaining_messages?: number;
     upgrade_required?: boolean;
     context?: any;
+    sources?: Array<{ title: string; url: string }>;
   }> => {
     // 1. Authenticate
     const currentUser: any = await ctx.runQuery(internal.noraChat._getCurrentUser);
@@ -491,7 +646,9 @@ export const sendMessage = action({
 
     // 8. Build the Responses API call
     const apiKey = process.env.OPENAI_API_KEY_NEW_NORA || process.env.OPENAI_API_KEY || "";
-    const thinkingMode = (args.thinkingMode || "quick") as "quick" | "deep" | "research";
+    const rawMode = args.thinkingMode || "quick";
+    const thinkingMode: "quick" | "deep" | "research" =
+      rawMode === "auto" ? resolveAutoMode(sanitized) : (rawMode as "quick" | "deep" | "research");
 
     if (!apiKey) {
       const responseText = fallbackResponse(sanitized, userCtx, args.pdfContext);
@@ -513,6 +670,7 @@ export const sendMessage = action({
     }
 
     let responseText: string;
+    let responseSources: Array<{ title: string; url: string }> = [];
 
     try {
       // Get last response ID for conversation continuity (per session)
@@ -522,21 +680,24 @@ export const sendMessage = action({
       );
 
       // Build tools array based on thinking mode
-      const tools: any[] = [{ type: "web_search" }];
+      // Quick: no web_search — Nora responds purely from her own knowledge
+      // Research: web_search with medium context — find sources, medium detail
+      // Deep: web_search with high context + code_interpreter — thorough analysis with sources
+      const tools: any[] = [];
 
-      // Add file_search if a vector store is configured OR in research mode
+      if (thinkingMode === "research") {
+        tools.push({ type: "web_search", search_context_size: "medium" });
+      } else if (thinkingMode === "deep") {
+        tools.push({ type: "web_search", search_context_size: "high" });
+        tools.push({ type: "code_interpreter", container: { type: "auto" } });
+      }
+      // Quick mode: no tools — fast response from Nora's own knowledge
+
+      // Add file_search if a vector store is configured (any mode)
       if (args.vectorStoreId) {
         tools.push({
           type: "file_search",
           vector_store_ids: [args.vectorStoreId],
-        });
-      }
-
-      // Add code_interpreter for deep and research modes
-      if (thinkingMode === "deep" || thinkingMode === "research") {
-        tools.push({
-          type: "code_interpreter",
-          container: { type: "auto" },
         });
       }
 
@@ -547,18 +708,28 @@ export const sendMessage = action({
       const modeConfig: Record<string, { model: string; temperature: number }> = {
         quick: { model: "gpt-4o-mini", temperature: 0.7 },
         deep: { model: "gpt-4o", temperature: 0.8 },
-        research: { model: "gpt-4o", temperature: 0.6 },
+        research: { model: "gpt-4o", temperature: 0.5 },
       };
       const { model, temperature } = modeConfig[thinkingMode] || modeConfig.quick;
 
-      // Build request body
+      // For research/deep modes, wrap the input to strongly signal search intent
+      let apiInput = sanitized;
+      if (thinkingMode === "research") {
+        apiInput = `[Search the web thoroughly for information about this topic, then provide a well-sourced response]\n\n${sanitized}`;
+      } else if (thinkingMode === "deep") {
+        apiInput = `[Perform a deep analysis with web research to support your response]\n\n${sanitized}`;
+      }
+
+      // Build request body — only include tools if we have any (quick mode has none)
       const requestBody: any = {
         model,
         instructions,
-        input: sanitized,
-        tools,
+        input: apiInput,
         temperature,
       };
+      if (tools.length > 0) {
+        requestBody.tools = tools;
+      }
 
       // Chain to previous conversation if we have a response ID
       if (previousResponseId) {
@@ -594,6 +765,7 @@ export const sendMessage = action({
           if (!retryRes.ok) throw new Error(`OpenAI error: ${retryRes.status}`);
           const retryData = await retryRes.json();
           responseText = extractResponseText(retryData);
+          responseSources = extractSources(retryData);
           if (retryData.id) {
             await ctx.runMutation(internal.noraChat._saveResponseId, {
               userId,
@@ -606,7 +778,18 @@ export const sendMessage = action({
         }
       } else {
         const data = await res.json();
+
+        // Debug: log output item types to verify web_search is being called
+        if (Array.isArray(data.output)) {
+          const itemTypes = data.output.map((item: any) => item.type);
+          console.log(`[Nora][${thinkingMode}] API output items:`, itemTypes);
+          const searchCalls = data.output.filter((item: any) => item.type === "web_search_call");
+          console.log(`[Nora][${thinkingMode}] Web search calls:`, searchCalls.length);
+        }
+
         responseText = extractResponseText(data);
+        responseSources = extractSources(data);
+        console.log(`[Nora][${thinkingMode}] Sources extracted:`, responseSources.length, responseSources.map((s: any) => s.url).slice(0, 3));
 
         // Save response ID for conversation continuity (per session)
         if (data.id) {
@@ -633,7 +816,12 @@ export const sendMessage = action({
     } catch (e: any) {
       console.error("Responses API call failed:", e?.message || e);
       console.error("Full error:", JSON.stringify(e, null, 2));
-      responseText = fallbackResponse(sanitized, userCtx, args.pdfContext);
+      const isQuota = e?.message?.includes("429") || e?.message?.includes("quota");
+      if (isQuota) {
+        responseText = "I'm temporarily unable to process your request due to API usage limits. Please try again in a few minutes, or switch to **Quick** mode which uses fewer resources. I apologize for the inconvenience!";
+      } else {
+        responseText = fallbackResponse(sanitized, userCtx, args.pdfContext);
+      }
     }
 
     // 9. Save Nora's response (tagged to session)
@@ -660,6 +848,7 @@ export const sendMessage = action({
       sessionId,
       tier: rateLimit.tier,
       remaining_messages: rateLimit.remaining - 1,
+      sources: responseSources.length > 0 ? responseSources : undefined,
       context: {
         pdfActive: !!args.pdfContext,
         focusMethod: userCtx?.onboarding?.focusMethod,
@@ -674,6 +863,18 @@ export const sendMessage = action({
 // ────────────────────────────────────────────────────
 
 /**
+ * Strip OpenAI citation markers like 【4:0†source】 from the response text.
+ * These markers are replaced by our own source UI.
+ */
+function cleanCitationMarkers(text: string): string {
+  return text
+    .replace(/【[^】]*】/g, "")
+    .replace(/\[\d+\]\s*/g, "") // Also strip [1] [2] style markers
+    .replace(/  +/g, " ")
+    .trim();
+}
+
+/**
  * Extract the text content from a Responses API response.
  *
  * The output array can contain multiple items:
@@ -684,24 +885,96 @@ export const sendMessage = action({
  * We also use the top-level `output_text` shortcut when available.
  */
 function extractResponseText(data: any): string {
+  let text = "";
+
   // Shortcut: output_text is a top-level convenience field
   if (data.output_text) {
-    return data.output_text;
-  }
-
-  // Manual extraction from output array
-  if (Array.isArray(data.output)) {
+    text = data.output_text;
+  } else if (Array.isArray(data.output)) {
+    // Manual extraction from output array
     for (const item of data.output) {
       if (item.type === "message" && Array.isArray(item.content)) {
         const textParts = item.content
           .filter((c: any) => c.type === "output_text" && c.text)
           .map((c: any) => c.text);
-        if (textParts.length) return textParts.join("\n\n");
+        if (textParts.length) {
+          text = textParts.join("\n\n");
+          break;
+        }
       }
     }
   }
 
-  return "I'm here to help! Could you rephrase your question?";
+  if (!text) {
+    return "I'm here to help! Could you rephrase your question?";
+  }
+
+  return cleanCitationMarkers(text);
+}
+
+/** Extract unique web search source citations from OpenAI Responses API output */
+function extractSources(data: any): Array<{ title: string; url: string }> {
+  const sources: Array<{ title: string; url: string }> = [];
+  const seenUrls = new Set<string>();
+
+  if (Array.isArray(data.output)) {
+    for (const item of data.output) {
+      console.log("[extractSources] output item type:", item.type);
+
+      if (item.type === "message" && Array.isArray(item.content)) {
+        for (const content of item.content) {
+          if (content.type === "output_text") {
+            const annotationCount = Array.isArray(content.annotations) ? content.annotations.length : 0;
+            console.log("[extractSources] output_text annotations:", annotationCount);
+
+            if (Array.isArray(content.annotations)) {
+              for (const ann of content.annotations) {
+                if (ann.type === "url_citation" && ann.url && !seenUrls.has(ann.url)) {
+                  seenUrls.add(ann.url);
+                  sources.push({ title: ann.title || ann.url, url: ann.url });
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Fallback: if no annotation-based sources found, parse markdown links from the response text
+  if (sources.length === 0) {
+    const responseText = data.output_text || "";
+    const fallbackSources = extractSourcesFromText(responseText);
+    for (const s of fallbackSources) {
+      if (!seenUrls.has(s.url)) {
+        seenUrls.add(s.url);
+        sources.push(s);
+      }
+    }
+  }
+
+  console.log("[extractSources] total sources found:", sources.length);
+  return sources;
+}
+
+/**
+ * Fallback: extract sources from markdown links [title](url) in response text.
+ * Filters out non-http links and deduplicates by URL.
+ */
+function extractSourcesFromText(text: string): Array<{ title: string; url: string }> {
+  const sources: Array<{ title: string; url: string }> = [];
+  const seenUrls = new Set<string>();
+  const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+  let match;
+  while ((match = linkRegex.exec(text)) !== null) {
+    const title = match[1];
+    const url = match[2];
+    if (!seenUrls.has(url)) {
+      seenUrls.add(url);
+      sources.push({ title, url });
+    }
+  }
+  return sources;
 }
 
 function estimateCost(inputTokens: number, outputTokens: number): number {

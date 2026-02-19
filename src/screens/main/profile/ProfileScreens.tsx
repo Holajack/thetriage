@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Platform, KeyboardAvoidingView, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Platform, KeyboardAvoidingView, Image, ActivityIndicator, ScrollView } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -11,6 +11,11 @@ import { useAuth } from '../../../context/AuthContext';
 import { useTheme } from '../../../context/ThemeContext';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Typography, Spacing } from '../../../theme/premiumTheme';
+import { StaggeredItem } from '../../../components/premium/StaggeredList';
+import SettingsSectionHeader from '../settings/components/SettingsSectionHeader';
+import SettingsGroup from '../settings/components/SettingsGroup';
+import SettingsRow from '../settings/components/SettingsRow';
 const { useUserAppData } = require('../../../utils/userAppData');
 
 const PRIVACY_OPTIONS = [
@@ -56,7 +61,7 @@ export const ProfileCustomizationScreen = () => {
         </TouchableOpacity>
       ),
     });
-  }, [navigation, theme]);
+  }, [navigation]);
 
   useEffect(() => {
     if (profile) {
@@ -465,7 +470,7 @@ export const PersonalInformationScreen = () => {
         </TouchableOpacity>
       ),
     });
-  }, [navigation, theme]);
+  }, [navigation]);
 
   useEffect(() => {
     if (profile) {
@@ -623,7 +628,7 @@ export const EducationScreen = () => {
         </TouchableOpacity>
       ),
     });
-  }, [navigation, theme]);
+  }, [navigation]);
 
   useEffect(() => {
     if (profile) {
@@ -800,7 +805,7 @@ export const LocationAndTimeScreen = () => {
         </TouchableOpacity>
       ),
     });
-  }, [navigation, theme]);
+  }, [navigation]);
 
   useEffect(() => {
     if (profile) {
@@ -930,28 +935,6 @@ export const PrivacyScreen = () => {
   const { profile, updateProfile } = useConvexProfile();
   const { theme } = useTheme();
   const navigation = useNavigation();
-  const [isEditing, setIsEditing] = useState(false);
-
-  // Configure header
-  useEffect(() => {
-    navigation.setOptions({
-      title: 'Privacy',
-      headerLeft: () => (
-        <TouchableOpacity 
-          onPress={() => navigation.goBack()} 
-          style={{ marginLeft: 8 }}
-        >
-          <Ionicons name="arrow-back" size={24} color={theme.primary} />
-        </TouchableOpacity>
-      ),
-    });
-  }, [navigation, theme]);
-
-  // Dropdown state for each field
-  const [fullNameOpen, setFullNameOpen] = useState(false);
-  const [universityOpen, setUniversityOpen] = useState(false);
-  const [locationOpen, setLocationOpen] = useState(false);
-  const [classesOpen, setClassesOpen] = useState(false);
 
   const [formData, setFormData] = useState({
     fullNameVisibility: 'none',
@@ -971,170 +954,121 @@ export const PrivacyScreen = () => {
     }
   }, [profile]);
 
-  // Only one dropdown open at a time
-  const onFullNameOpen = useCallback(() => {
-    setUniversityOpen(false);
-    setLocationOpen(false);
-    setClassesOpen(false);
-  }, []);
-  const onUniversityOpen = useCallback(() => {
-    setFullNameOpen(false);
-    setLocationOpen(false);
-    setClassesOpen(false);
-  }, []);
-  const onLocationOpen = useCallback(() => {
-    setFullNameOpen(false);
-    setUniversityOpen(false);
-    setClassesOpen(false);
-  }, []);
-  const onClassesOpen = useCallback(() => {
-    setFullNameOpen(false);
-    setUniversityOpen(false);
-    setLocationOpen(false);
-  }, []);
+  const VISIBILITY_LABELS: Record<string, string> = {
+    none: 'Do Not Show',
+    friends: 'Only Friends',
+    everyone: 'Everyone',
+  };
 
-  const handleSave = async () => {
+  const showVisibilityPicker = (field: keyof typeof formData, label: string) => {
+    Alert.alert(
+      `${label} Visibility`,
+      'Choose who can see this information',
+      [
+        { text: 'Do Not Show', onPress: () => handleUpdate(field, 'none') },
+        { text: 'Only Friends', onPress: () => handleUpdate(field, 'friends') },
+        { text: 'Everyone', onPress: () => handleUpdate(field, 'everyone') },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
+  const handleUpdate = async (field: keyof typeof formData, value: string) => {
+    const prev = formData[field];
+    setFormData(f => ({ ...f, [field]: value }));
     try {
-      await updateProfile(formData);
-      setIsEditing(false);
-      Alert.alert('Success', 'Your privacy settings have been updated.');
+      await updateProfile({ [field]: value });
     } catch (error) {
-      Alert.alert('Error', 'Failed to update your privacy settings.');
+      setFormData(f => ({ ...f, [field]: prev }));
+      Alert.alert('Error', 'Failed to update privacy setting.');
     }
   };
 
-  const handleCancel = () => {
-    setFormData({
-      fullNameVisibility: 'none',
-      universityVisibility: 'none',
-      locationVisibility: 'none',
-      classesVisibility: 'none',
-    });
-    setIsEditing(false);
-  };
-
-  const isDarkMode = theme.isDark;
-  const formBackground = isDarkMode ? (theme.surface ?? '#1E1E1E') : '#fff';
-  const disabledBackground = isDarkMode ? '#303030' : '#F5F5F5';
-  const fieldBorderColor = theme.border ?? '#E0E0E0';
-  const textColor = theme.text ?? '#333';
-  const secondaryText = theme.textSecondary ?? '#666';
-  const accentColor = theme.primary ?? '#4CAF50';
-
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.background }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <KeyboardAwareScrollView style={[styles.container, { backgroundColor: theme.background }]} contentContainerStyle={{ flexGrow: 1 }} enableOnAndroid={true} extraScrollHeight={80}>
-        <View style={[styles.header, { borderBottomColor: fieldBorderColor, backgroundColor: theme.background }]}>
-          <View style={{ flex: 1 }} />
-          {!isEditing ? (
-            <TouchableOpacity
-              style={styles.editButton}
-              onPress={() => setIsEditing(true)}
-            >
-              <Ionicons name="pencil" size={20} color={accentColor} />
-              <Text style={[styles.editButtonText, { color: accentColor }]}>Edit</Text>
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.editActions}>
-              <TouchableOpacity
-                style={[styles.actionButton, { backgroundColor: isDarkMode ? '#2C2C2C' : '#F5F5F5' }]}
-                onPress={handleCancel}
-              >
-                <Text style={[styles.actionButtonText, { color: secondaryText }]}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionButton, { backgroundColor: accentColor }]} 
-                onPress={handleSave}
-              >
-                <Text style={[styles.actionButtonText, styles.saveButtonText]}>
-                  Save
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-        <View style={[styles.content, { backgroundColor: theme.background }]}>
-          <View style={styles.fieldContainer}>
-            <Text style={[styles.labelBold, { color: textColor }]}>Full Name</Text>
-            <Text style={[styles.subtext, { color: secondaryText }]}>Control who can see your full name in the community.</Text>
-            <DropDownPicker
-              open={fullNameOpen}
-              setOpen={setFullNameOpen}
-              onOpen={onFullNameOpen}
-              value={formData.fullNameVisibility || ''}
-              setValue={cb => setFormData(f => ({ ...f, fullNameVisibility: typeof cb === 'function' ? cb(f.fullNameVisibility) : cb }))}
-              items={PRIVACY_OPTIONS}
-              disabled={!isEditing}
-              style={[styles.dropdown, { backgroundColor: formBackground, borderColor: fieldBorderColor }]}
-              dropDownContainerStyle={[styles.dropdownContainer, { backgroundColor: formBackground, borderColor: fieldBorderColor, zIndex: 4000, elevation: 4000 }]}
-              zIndex={4000}
-              zIndexInverse={1000}
-              listMode="SCROLLVIEW"
-              onChangeValue={val => setFormData(f => ({ ...f, fullNameVisibility: val || '' }))}
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+      <View style={privacyStyles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={privacyStyles.backButton}>
+          <Ionicons name="chevron-back" size={24} color={theme.primary} />
+        </TouchableOpacity>
+        <Text style={[privacyStyles.title, { color: theme.text }]}>Privacy</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={privacyStyles.content}>
+        <StaggeredItem index={0}>
+          <SettingsSectionHeader title="PROFILE VISIBILITY" />
+          <SettingsGroup>
+            <SettingsRow
+              icon="person-outline"
+              label="Full Name"
+              description="Control who can see your full name"
+              value={VISIBILITY_LABELS[formData.fullNameVisibility] || 'Do Not Show'}
+              onPress={() => showVisibilityPicker('fullNameVisibility', 'Full Name')}
             />
-          </View>
-          <View style={styles.fieldContainer}>
-            <Text style={[styles.labelBold, { color: textColor }]}>University</Text>
-            <Text style={[styles.subtext, { color: secondaryText }]}>Control who can see your university or school in the community.</Text>
-            <DropDownPicker
-              open={universityOpen}
-              setOpen={setUniversityOpen}
-              onOpen={onUniversityOpen}
-              value={formData.universityVisibility || ''}
-              setValue={cb => setFormData(f => ({ ...f, universityVisibility: typeof cb === 'function' ? cb(f.universityVisibility) : cb }))}
-              items={PRIVACY_OPTIONS}
-              disabled={!isEditing}
-              style={[styles.dropdown, { backgroundColor: formBackground, borderColor: fieldBorderColor }]}
-              dropDownContainerStyle={[styles.dropdownContainer, { backgroundColor: formBackground, borderColor: fieldBorderColor, zIndex: 3000, elevation: 3000 }]}
-              zIndex={3000}
-              zIndexInverse={2000}
-              listMode="SCROLLVIEW"
-              onChangeValue={val => setFormData(f => ({ ...f, universityVisibility: val || '' }))}
+            <SettingsRow
+              icon="school-outline"
+              label="University"
+              description="Control who can see your university"
+              value={VISIBILITY_LABELS[formData.universityVisibility] || 'Do Not Show'}
+              onPress={() => showVisibilityPicker('universityVisibility', 'University')}
             />
-          </View>
-          <View style={styles.fieldContainer}>
-            <Text style={[styles.labelBold, { color: textColor }]}>Location</Text>
-            <Text style={[styles.subtext, { color: secondaryText }]}>Control who can see your location in the community.</Text>
-            <DropDownPicker
-              open={locationOpen}
-              setOpen={setLocationOpen}
-              onOpen={onLocationOpen}
-              value={formData.locationVisibility || ''}
-              setValue={cb => setFormData(f => ({ ...f, locationVisibility: typeof cb === 'function' ? cb(f.locationVisibility) : cb }))}
-              items={PRIVACY_OPTIONS}
-              disabled={!isEditing}
-              style={[styles.dropdown, { backgroundColor: formBackground, borderColor: fieldBorderColor }]}
-              dropDownContainerStyle={[styles.dropdownContainer, { backgroundColor: formBackground, borderColor: fieldBorderColor, zIndex: 2000, elevation: 2000 }]}
-              zIndex={2000}
-              zIndexInverse={3000}
-              listMode="SCROLLVIEW"
-              onChangeValue={val => setFormData(f => ({ ...f, locationVisibility: val || '' }))}
+            <SettingsRow
+              icon="location-outline"
+              label="Location"
+              description="Control who can see your location"
+              value={VISIBILITY_LABELS[formData.locationVisibility] || 'Do Not Show'}
+              onPress={() => showVisibilityPicker('locationVisibility', 'Location')}
             />
-          </View>
-          <View style={styles.fieldContainer}>
-            <Text style={[styles.labelBold, { color: textColor }]}>Class</Text>
-            <Text style={[styles.subtext, { color: secondaryText }]}>Control who can see your current classes in the community.</Text>
-            <DropDownPicker
-              open={classesOpen}
-              setOpen={setClassesOpen}
-              onOpen={onClassesOpen}
-              value={formData.classesVisibility || ''}
-              setValue={cb => setFormData(f => ({ ...f, classesVisibility: typeof cb === 'function' ? cb(f.classesVisibility) : cb }))}
-              items={PRIVACY_OPTIONS}
-              disabled={!isEditing}
-              style={[styles.dropdown, { backgroundColor: formBackground, borderColor: fieldBorderColor }]}
-              dropDownContainerStyle={[styles.dropdownContainer, { backgroundColor: formBackground, borderColor: fieldBorderColor, zIndex: 1000, elevation: 1000 }]}
-              zIndex={1000}
-              zIndexInverse={4000}
-              listMode="SCROLLVIEW"
-              onChangeValue={val => setFormData(f => ({ ...f, classesVisibility: val || '' }))}
+            <SettingsRow
+              icon="book-outline"
+              label="Classes"
+              description="Control who can see your current classes"
+              value={VISIBILITY_LABELS[formData.classesVisibility] || 'Do Not Show'}
+              onPress={() => showVisibilityPicker('classesVisibility', 'Classes')}
+              isLast
             />
-          </View>
-        </View>
-      </KeyboardAwareScrollView>
-    </KeyboardAvoidingView>
+          </SettingsGroup>
+        </StaggeredItem>
+
+        <StaggeredItem index={1}>
+          <SettingsSectionHeader title="ABOUT" />
+          <SettingsGroup>
+            <SettingsRow
+              icon="shield-checkmark-outline"
+              label="Privacy Policy"
+              description="Read our privacy policy"
+              onPress={() => Alert.alert('Privacy Policy', 'This will open the privacy policy in a future update.')}
+              isLast
+            />
+          </SettingsGroup>
+        </StaggeredItem>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
+
+const privacyStyles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: {
+    ...Typography.h2,
+  },
+  content: {
+    paddingHorizontal: Spacing.sm,
+    paddingBottom: Spacing.xl,
+  },
+});
 
 const MAIN_GOAL_OPTIONS = [
   { label: 'Deep Work', value: 'Deep Work' },
@@ -1181,7 +1115,7 @@ export const PreferencesScreen = () => {
         </TouchableOpacity>
       ),
     });
-  }, [navigation, theme]);
+  }, [navigation]);
 
   // Dropdown state for each field
   const [mainGoalOpen, setMainGoalOpen] = useState(false);

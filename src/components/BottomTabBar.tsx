@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { View, StyleSheet, LayoutChangeEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, StackActions } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import { AnimatedTabIcon } from './premium/AnimatedTabIcon';
+import { TAB_ORDER } from '../navigation/MainNavigator';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -142,7 +143,18 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({ currentRoute }) => {
   };
 
   const handleTabPress = (route: string) => {
-    navigation.navigate(route as never);
+    // Determine slide direction based on tab order
+    const fromOrder = TAB_ORDER[currentRoute ?? ''] ?? -1;
+    const toOrder = TAB_ORDER[route] ?? -1;
+    const goingLeft = fromOrder >= 0 && toOrder >= 0 && toOrder < fromOrder;
+
+    if (fromOrder >= 0) {
+      // Tab-to-tab: use replace() so a fresh screen is created with correct animation
+      navigation.dispatch(StackActions.replace(route, { _slideLeft: goingLeft }));
+    } else {
+      // Non-tab to tab (e.g., from Home): push normally
+      navigation.dispatch(StackActions.push(route, { _slideLeft: goingLeft }));
+    }
   };
 
   return (

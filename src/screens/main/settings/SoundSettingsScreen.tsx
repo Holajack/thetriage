@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Switch, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, Switch, TouchableOpacity, StyleSheet, Alert, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -8,7 +8,9 @@ import { useConvexProfile } from '../../../hooks/useConvex';
 import { useAuth as useClerkAuth } from '@clerk/clerk-expo';
 import { useBackgroundMusic } from '../../../hooks/useBackgroundMusic';
 import { saveMusicPreferences } from '../../../utils/musicPreferences';
-import { updateUserSettings } from '../../../utils/userSettings';
+import { getUserSettings, updateUserSettings } from '../../../utils/userSettings';
+import { spotifyService } from '../../../services/spotify/SpotifyService';
+import { appleMusicService } from '../../../services/appleMusic/AppleMusicService';
 import { Typography, Spacing, BorderRadius } from '../../../theme/premiumTheme';
 import { StaggeredItem } from '../../../components/premium/StaggeredList';
 import SettingsGroup from './components/SettingsGroup';
@@ -24,7 +26,6 @@ const SoundSettingsScreen = () => {
   const { profile } = useConvexProfile();
   const { userId: clerkUserId } = useClerkAuth();
   const { playPreview, stopPreview, isPlaying, isPreviewMode, currentTrack } = useBackgroundMusic();
-
   const [selectedSound, setSelectedSound] = useState('Lo-Fi');
   const [autoPlaySound, setAutoPlaySound] = useState(false);
   const [appleMusicConnected, setAppleMusicConnected] = useState(false);
@@ -34,6 +35,12 @@ const SoundSettingsScreen = () => {
     if (profile) {
       setSelectedSound(profile.soundPreference || 'Lo-Fi');
     }
+    // Load auto-play setting from saved user settings
+    getUserSettings().then((settings) => {
+      if (settings?.auto_play_sound !== undefined) {
+        setAutoPlaySound(settings.auto_play_sound);
+      }
+    });
   }, [profile]);
 
   // Stop preview on unmount
@@ -88,33 +95,59 @@ const SoundSettingsScreen = () => {
     }
   };
 
-  const handleAppleMusicConnection = () => {
+  // Load connection states on mount
+  useEffect(() => {
+    setSpotifyConnected(spotifyService.isConnected());
+    setAppleMusicConnected(appleMusicService.isConnected());
+  }, []);
+
+  const handleAppleMusicConnection = async () => {
     if (appleMusicConnected) {
       Alert.alert('Disconnect Apple Music', 'Are you sure you want to disconnect Apple Music?', [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Disconnect', style: 'destructive', onPress: () => setAppleMusicConnected(false) },
+        {
+          text: 'Disconnect',
+          style: 'destructive',
+          onPress: async () => {
+            await appleMusicService.disconnect();
+            setAppleMusicConnected(false);
+            if (clerkUserId) {
+              await updateUserSettings(clerkUserId, { appleMusicConnected: false } as any);
+            }
+          },
+        },
       ]);
     } else {
-      Alert.alert(
-        'Apple Music Integration',
-        'Apple Music integration is coming soon! This will allow you to play your Apple Music library during focus sessions.',
-        [{ text: 'OK', onPress: () => setAppleMusicConnected(true) }]
-      );
+      const connected = await appleMusicService.connect();
+      setAppleMusicConnected(connected);
+      if (connected && clerkUserId) {
+        await updateUserSettings(clerkUserId, { appleMusicConnected: true } as any);
+      }
     }
   };
 
-  const handleSpotifyConnection = () => {
+  const handleSpotifyConnection = async () => {
     if (spotifyConnected) {
       Alert.alert('Disconnect Spotify', 'Are you sure you want to disconnect Spotify?', [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Disconnect', style: 'destructive', onPress: () => setSpotifyConnected(false) },
+        {
+          text: 'Disconnect',
+          style: 'destructive',
+          onPress: async () => {
+            await spotifyService.disconnect();
+            setSpotifyConnected(false);
+            if (clerkUserId) {
+              await updateUserSettings(clerkUserId, { spotifyConnected: false } as any);
+            }
+          },
+        },
       ]);
     } else {
-      Alert.alert(
-        'Spotify Integration',
-        'Spotify integration is coming soon! This will allow you to play your Spotify playlists during focus sessions.',
-        [{ text: 'OK', onPress: () => setSpotifyConnected(true) }]
-      );
+      const connected = await spotifyService.connect();
+      setSpotifyConnected(connected);
+      if (connected && clerkUserId) {
+        await updateUserSettings(clerkUserId, { spotifyConnected: true } as any);
+      }
     }
   };
 
@@ -131,7 +164,7 @@ const SoundSettingsScreen = () => {
         <View style={{ width: 40 }} />
       </View>
 
-      <View style={styles.content}>
+      <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Focus Sound */}
         <StaggeredItem index={0}>
           <SettingsSectionHeader title="FOCUS SOUND" />
@@ -266,7 +299,7 @@ const SoundSettingsScreen = () => {
             </View>
           </SettingsGroup>
         </StaggeredItem>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 };
@@ -291,6 +324,9 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: Spacing.sm,
+  },
+  scrollContent: {
+    paddingBottom: Spacing.xl,
   },
   soundRow: {
     flexDirection: 'row',

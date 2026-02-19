@@ -16,7 +16,9 @@ import { AnimatedButton } from '../../components/premium/AnimatedButton';
 import { StaggeredItem } from '../../components/premium/StaggeredList';
 import { glassStyles } from '../../components/premium/LiquidGlass';
 import { Typography, Spacing, PremiumColors } from '../../theme/premiumTheme';
-import { useQuizCategories, QuizCategory } from '../../hooks/useConvexQuiz';
+import { useQuizCategories, useQuizHistory, QuizCategory } from '../../hooks/useConvexQuiz';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 import { Id } from '../../../convex/_generated/dataModel';
 
 interface Quiz {
@@ -34,6 +36,10 @@ interface Quiz {
   latestScore: number | null;
   completionCount: number;
   categoryId?: Id<'quizCategories'>;
+  inProgressSessionId?: Id<'quizSessions'>;
+  inProgressAnswered?: number;
+  inProgressTotal?: number;
+  inProgressMode?: 'quick' | 'in_depth';
 }
 
 // Fallback data if Convex is not available
@@ -139,12 +145,17 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
 
   // Convex quiz data
   const { categories: convexCategories, isLoading: isLoadingConvex } = useQuizCategories();
+  const inProgressSessions = useQuery(api.quizSessions.getAllInProgressSessions);
+  const { history: quizHistory } = useQuizHistory(undefined, 10);
+  const abandonSessionMutation = useMutation(api.quizSessions.abandonSession);
 
   const [selectedQuiz, setSelectedQuiz] = useState<Quiz | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
   const [quizResult, setQuizResult] = useState<QuizResult | null>(null);
   const [showResults, setShowResults] = useState(false);
+  const [quizMode, setQuizMode] = useState<'quick' | 'in_depth'>('quick');
+  const [resumeSessionId, setResumeSessionId] = useState<Id<'quizSessions'> | null>(null);
 
   // Transform Convex categories to Quiz format
   const quizData = useMemo((): Quiz[] => {
@@ -183,29 +194,51 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
     return convexCategories
       .filter((cat) => cat.isActive)
       .sort((a, b) => a.order - b.order)
-      .map((cat) => ({
-        id: cat._id,
-        slug: cat.slug,
-        name: cat.name,
-        description: cat.description,
-        detail: categoryUIMap[cat.slug]?.detail || cat.description,
-        progress: cat.hasResult ? 1.0 : 0.0,
-        icon: cat.icon,
-        color: cat.color,
-        estimatedTime: categoryUIMap[cat.slug]?.estimatedTime || '5-7 min',
-        questions: cat.questionsCount || 15,
-        hasResult: cat.hasResult,
-        latestScore: cat.latestScore,
-        completionCount: cat.completionCount,
-        categoryId: cat._id,
-      }));
-  }, [convexCategories]);
+      .map((cat) => {
+        // Check for in-progress session for this category
+        const inProgress = inProgressSessions?.find(
+          (s) => s.categoryId === cat._id
+        );
+
+        let progress = cat.hasResult ? 1.0 : 0.0;
+        if (inProgress) {
+          progress = inProgress.answeredCount / inProgress.questionsCount;
+        }
+
+        return {
+          id: cat._id,
+          slug: cat.slug,
+          name: cat.name,
+          description: cat.description,
+          detail: categoryUIMap[cat.slug]?.detail || cat.description,
+          progress,
+          icon: cat.icon,
+          color: cat.color,
+          estimatedTime: categoryUIMap[cat.slug]?.estimatedTime || '5-7 min',
+          questions: inProgress ? inProgress.questionsCount : 15,
+          hasResult: cat.hasResult,
+          latestScore: cat.latestScore,
+          completionCount: cat.completionCount,
+          categoryId: cat._id,
+          inProgressSessionId: inProgress?._id,
+          inProgressAnswered: inProgress?.answeredCount,
+          inProgressTotal: inProgress?.questionsCount,
+          inProgressMode: inProgress
+            ? inProgress.questionsCount <= 15 ? 'quick' : 'in_depth'
+            : undefined,
+        };
+      });
+  }, [convexCategories, inProgressSessions]);
 
   const isLoading = isLoadingConvex;
 
   const openQuizDetail = (quiz: Quiz) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedQuiz(quiz);
+    // Auto-set mode if there's an in-progress session
+    if (quiz.inProgressMode) {
+      setQuizMode(quiz.inProgressMode);
+    }
     setModalVisible(true);
   };
 
@@ -217,7 +250,30 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
 
   const startQuiz = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    closeDetail();
+    if (selectedQuiz?.inProgressSessionId) {
+      setResumeSessionId(selectedQuiz.inProgressSessionId);
+      // Lock to original mode
+      if (selectedQuiz.inProgressMode) {
+        setQuizMode(selectedQuiz.inProgressMode);
+      }
+    } else {
+      setResumeSessionId(null);
+    }
+    // Don't call closeDetail() - it clears selectedQuiz which breaks the quiz render condition
+    setModalVisible(false);
+    setShowQuiz(true);
+  };
+
+  const handleStartOver = async () => {
+    if (selectedQuiz?.inProgressSessionId) {
+      try {
+        await abandonSessionMutation({ sessionId: selectedQuiz.inProgressSessionId });
+      } catch (error) {
+        console.error('Error abandoning session:', error);
+      }
+    }
+    setResumeSessionId(null);
+    setModalVisible(false);
     setShowQuiz(true);
   };
 
@@ -236,13 +292,34 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
     setShowResults(false);
     setQuizResult(null);
     setSelectedQuiz(null);
-    loadQuizProgress();
+    // Convex queries auto-refresh, no manual reload needed
   };
 
   const handleRetakeQuiz = () => {
     setShowResults(false);
     setQuizResult(null);
     setShowQuiz(true);
+  };
+
+  const handleViewHistoryResult = (historyItem: any) => {
+    // Transform Convex history item to QuizResult format for viewing
+    const categorySlug = historyItem.category?.slug || 'study_habits';
+    const result: QuizResult = {
+      quizId: categorySlug,
+      score: historyItem.overallScore ?? 0,
+      category: historyItem.traitProfile?.primaryTrait || historyItem.dominantTrait || '',
+      description: historyItem.traitProfile?.profileDescription || '',
+      recommendations: historyItem.areasForGrowth?.flatMap((a: any) => a.recommendations) || [],
+      completedAt: new Date(historyItem.completedAt || Date.now()),
+      convexResultId: historyItem._id,
+      subDimensionScores: historyItem.subDimensionScores,
+      strengths: historyItem.strengths,
+      areasForGrowth: historyItem.areasForGrowth,
+      traitProfile: historyItem.traitProfile,
+      percentileRank: historyItem.percentileRank,
+    };
+    setQuizResult(result);
+    setShowResults(true);
   };
 
   const getQuizType = (quiz: Quiz): string => {
@@ -275,8 +352,11 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
         quizType={getQuizType(selectedQuiz)}
         categorySlug={selectedQuiz.slug}
         categoryId={selectedQuiz.categoryId}
+        questionsCount={quizMode === 'quick' ? 15 : 25}
         onComplete={handleQuizComplete}
         onClose={handleCloseQuiz}
+        existingSessionId={resumeSessionId ?? undefined}
+        isResuming={!!resumeSessionId}
       />
     );
   }
@@ -356,6 +436,49 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
             </Animated.View>
           </>
         }
+        ListFooterComponent={
+          quizHistory && quizHistory.length > 0 ? (
+            <Animated.View entering={FadeInUp.delay(300).duration(400)}>
+              <Text style={[styles.sectionLabel, { color: theme.textSecondary, marginTop: 32 }]}>
+                QUIZ HISTORY
+              </Text>
+              {quizHistory.map((item: any, index: number) => {
+                const categoryIcon = quizData.find(q => q.slug === item.categorySlug)?.icon || 'document-outline';
+                const categoryColor = quizData.find(q => q.slug === item.categorySlug)?.color || theme.primary;
+                const categoryName = quizData.find(q => q.slug === item.categorySlug)?.name || item.categorySlug;
+                const completedDate = item.completedAt
+                  ? new Date(item.completedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                  : '';
+                const scorePercent = item.overallScore != null ? Math.round(item.overallScore) : null;
+
+                return (
+                  <TouchableOpacity
+                    key={item._id || index}
+                    style={[styles.historyItem, { backgroundColor: theme.card }]}
+                    onPress={() => handleViewHistoryResult(item)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.historyIcon, { backgroundColor: categoryColor + '15' }]}>
+                      <Ionicons name={categoryIcon as any} size={22} color={categoryColor} />
+                    </View>
+                    <View style={styles.historyContent}>
+                      <Text style={[styles.historyTitle, { color: theme.text }]}>{categoryName}</Text>
+                      <Text style={[styles.historyDate, { color: theme.textSecondary }]}>
+                        {completedDate}
+                      </Text>
+                    </View>
+                    {scorePercent != null && (
+                      <Text style={[styles.historyScore, { color: getProgressColor(scorePercent / 100) }]}>
+                        {scorePercent}%
+                      </Text>
+                    )}
+                    <Ionicons name="chevron-forward-outline" size={18} color={theme.textSecondary} />
+                  </TouchableOpacity>
+                );
+              })}
+            </Animated.View>
+          ) : null
+        }
         renderItem={({ item, index }) => (
           <StaggeredItem key={item.id} index={index} delay="normal" direction="up">
             <TouchableOpacity
@@ -388,12 +511,21 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
                       {item.estimatedTime}
                     </Text>
                   </View>
-                  <View style={styles.metaItem}>
-                    <Ionicons name="help-circle-outline" size={14} color={theme.textSecondary} />
-                    <Text style={[styles.metaText, { color: theme.textSecondary }]}>
-                      {item.questions} questions
-                    </Text>
-                  </View>
+                  {item.inProgressSessionId ? (
+                    <View style={styles.metaItem}>
+                      <Ionicons name="play-circle-outline" size={14} color={theme.primary} />
+                      <Text style={[styles.metaText, { color: theme.primary, fontWeight: '600' }]}>
+                        {item.inProgressAnswered}/{item.inProgressTotal} answered
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={styles.metaItem}>
+                      <Ionicons name="help-circle-outline" size={14} color={theme.textSecondary} />
+                      <Text style={[styles.metaText, { color: theme.textSecondary }]}>
+                        {item.questions} questions
+                      </Text>
+                    </View>
+                  )}
                 </View>
 
                 <View style={styles.progressContainer}>
@@ -451,44 +583,104 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
                   {selectedQuiz.detail}
                 </Text>
 
+                {/* Quiz Mode Selector */}
+                <View style={styles.modeSelector}>
+                  <Text style={[styles.modeSelectorLabel, { color: theme.text }]}>
+                    {selectedQuiz.inProgressSessionId ? 'Quiz Length (locked)' : 'Quiz Length'}
+                  </Text>
+                  <View style={styles.modeButtons}>
+                    <TouchableOpacity
+                      style={[
+                        styles.modeButton,
+                        quizMode === 'quick' && { backgroundColor: theme.primary + '20', borderColor: theme.primary },
+                        selectedQuiz.inProgressSessionId && { opacity: 0.6 },
+                      ]}
+                      onPress={() => !selectedQuiz.inProgressSessionId && setQuizMode('quick')}
+                      activeOpacity={selectedQuiz.inProgressSessionId ? 1 : 0.7}
+                    >
+                      <Ionicons
+                        name="flash-outline"
+                        size={20}
+                        color={quizMode === 'quick' ? theme.primary : theme.textSecondary}
+                      />
+                      <Text style={[
+                        styles.modeButtonTitle,
+                        { color: quizMode === 'quick' ? theme.primary : theme.text }
+                      ]}>Quick</Text>
+                      <Text style={[styles.modeButtonDetail, { color: theme.textSecondary }]}>
+                        15 questions
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.modeButton,
+                        quizMode === 'in_depth' && { backgroundColor: theme.primary + '20', borderColor: theme.primary },
+                        selectedQuiz.inProgressSessionId && { opacity: 0.6 },
+                      ]}
+                      onPress={() => !selectedQuiz.inProgressSessionId && setQuizMode('in_depth')}
+                      activeOpacity={selectedQuiz.inProgressSessionId ? 1 : 0.7}
+                    >
+                      <Ionicons
+                        name="analytics-outline"
+                        size={20}
+                        color={quizMode === 'in_depth' ? theme.primary : theme.textSecondary}
+                      />
+                      <Text style={[
+                        styles.modeButtonTitle,
+                        { color: quizMode === 'in_depth' ? theme.primary : theme.text }
+                      ]}>In-Depth</Text>
+                      <Text style={[styles.modeButtonDetail, { color: theme.textSecondary }]}>
+                        25 questions
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
                 <View style={styles.modalMeta}>
                   <View style={styles.modalMetaItem}>
                     <Ionicons name="time-outline" size={18} color={theme.textSecondary} />
                     <Text style={[styles.modalMetaText, { color: theme.textSecondary }]}>
-                      {selectedQuiz.estimatedTime}
+                      {quizMode === 'quick' ? '5-7 min' : '10-12 min'}
                     </Text>
                   </View>
                   <View style={styles.modalMetaItem}>
                     <Ionicons name="help-circle-outline" size={18} color={theme.textSecondary} />
                     <Text style={[styles.modalMetaText, { color: theme.textSecondary }]}>
-                      {selectedQuiz.questions} questions
+                      {quizMode === 'quick' ? 15 : 25} questions
                     </Text>
                   </View>
                 </View>
 
                 <View style={styles.modalProgress}>
                   <Text style={[styles.modalProgressLabel, { color: theme.textSecondary }]}>
-                    Current Progress: {Math.round(selectedQuiz.progress * 100)}%
+                    {selectedQuiz.inProgressSessionId
+                      ? `${selectedQuiz.inProgressAnswered} of ${selectedQuiz.inProgressTotal} questions answered`
+                      : selectedQuiz.hasResult
+                      ? `Completed ${selectedQuiz.completionCount} time${selectedQuiz.completionCount !== 1 ? 's' : ''}`
+                      : 'Not started yet'
+                    }
                   </Text>
-                  <View style={[styles.modalProgressBar, { backgroundColor: theme.text + '20' }]}>
-                    <View
-                      style={[
-                        styles.modalProgressFill,
-                        {
-                          width: `${selectedQuiz.progress * 100}%`,
-                          backgroundColor: getProgressColor(selectedQuiz.progress),
-                        },
-                      ]}
-                    />
-                  </View>
+                  {(selectedQuiz.inProgressSessionId || selectedQuiz.hasResult) && (
+                    <View style={[styles.modalProgressBar, { backgroundColor: theme.text + '20' }]}>
+                      <View
+                        style={[
+                          styles.modalProgressFill,
+                          {
+                            width: `${selectedQuiz.progress * 100}%`,
+                            backgroundColor: getProgressColor(selectedQuiz.progress),
+                          },
+                        ]}
+                      />
+                    </View>
+                  )}
                 </View>
 
                 <AnimatedButton
                   title={
-                    selectedQuiz.progress === 1.0
-                      ? 'Retake Quiz'
-                      : selectedQuiz.progress > 0
+                    selectedQuiz.inProgressSessionId
                       ? 'Continue Quiz'
+                      : selectedQuiz.hasResult
+                      ? 'Retake Quiz'
                       : 'Start Quiz'
                   }
                   onPress={startQuiz}
@@ -497,6 +689,17 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
                   gradient
                   gradientColors={PremiumColors.gradients.primary as [string, string, ...string[]]}
                 />
+
+                {selectedQuiz.inProgressSessionId && (
+                  <TouchableOpacity
+                    style={styles.startOverButton}
+                    onPress={handleStartOver}
+                  >
+                    <Text style={[styles.startOverText, { color: theme.textSecondary }]}>
+                      Start Over Instead
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </>
             )}
           </View>
@@ -677,6 +880,38 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 24,
   },
+  // Mode Selector
+  modeSelector: {
+    marginBottom: 20,
+  },
+  modeSelectorLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  modeButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modeButton: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.03)',
+  },
+  modeButtonTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    marginTop: 6,
+  },
+  modeButtonDetail: {
+    fontSize: 12,
+    marginTop: 2,
+  },
   modalMeta: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -707,6 +942,51 @@ const styles = StyleSheet.create({
   modalProgressFill: {
     height: '100%',
     borderRadius: 4,
+  },
+
+  // ===== START OVER =====
+  startOverButton: {
+    alignItems: 'center',
+    marginTop: 14,
+    paddingVertical: 8,
+  },
+  startOverText: {
+    fontSize: 14,
+    fontWeight: '500',
+    textDecorationLine: 'underline',
+  },
+
+  // ===== QUIZ HISTORY =====
+  historyItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  historyIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  historyContent: {
+    flex: 1,
+  },
+  historyTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  historyDate: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  historyScore: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginRight: 8,
   },
 });
 

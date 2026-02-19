@@ -50,38 +50,53 @@ interface ShopItem {
   cost: number; // in Flint
   category: ShopCategory;
   icon: string;
+  comingSoon?: boolean;
 }
 
 // Expanded shop items (prices in Flint = minutes of focus time required)
 const SHOP_ITEMS: ShopItem[] = [
-  // Trail Gear (for pets/animals) - 1-10 hours of focus
-  { id: 'bandana', name: 'Bandana', description: 'A colorful bandana (1 hour)', cost: 60, category: 'gear', icon: '🧣' },
-  { id: 'hat', name: 'Explorer Hat', description: 'Perfect for adventures (2 hours)', cost: 120, category: 'gear', icon: '🎩' },
-  { id: 'vest', name: 'Adventure Vest', description: 'Hiking vest (3 hours)', cost: 180, category: 'gear', icon: '🦺' },
-  { id: 'sunglasses', name: 'Sunglasses', description: 'Cool shades for sunny trails (4 hours)', cost: 240, category: 'gear', icon: '🕶️' },
-  { id: 'backpack', name: 'Mini Backpack', description: 'Carry essentials on the trail (5 hours)', cost: 300, category: 'gear', icon: '🎒' },
-  { id: 'scarf', name: 'Cozy Scarf', description: 'Warm scarf for cold trails (6 hours)', cost: 360, category: 'gear', icon: '🧵' },
-  { id: 'boots', name: 'Hiking Boots', description: 'Sturdy boots for any terrain (8 hours)', cost: 480, category: 'gear', icon: '🥾' },
-  { id: 'compass', name: 'Compass Necklace', description: 'Never lose your way (10 hours)', cost: 600, category: 'gear', icon: '🧭' },
+  // Trail Gear (for pets/animals) - 5-50 hours of focus
+  { id: 'bandana', name: 'Bandana', description: 'A colorful bandana (5 hours)', cost: 300, category: 'gear', icon: '🧣' },
+  { id: 'hat', name: 'Explorer Hat', description: 'Perfect for adventures (10 hours)', cost: 600, category: 'gear', icon: '🎩' },
+  { id: 'vest', name: 'Adventure Vest', description: 'Hiking vest (15 hours)', cost: 900, category: 'gear', icon: '🦺' },
+  { id: 'sunglasses', name: 'Sunglasses', description: 'Cool shades for sunny trails (20 hours)', cost: 1200, category: 'gear', icon: '🕶️' },
+  { id: 'backpack', name: 'Mini Backpack', description: 'Carry essentials on the trail (25 hours)', cost: 1500, category: 'gear', icon: '🎒' },
+  { id: 'scarf', name: 'Cozy Scarf', description: 'Warm scarf for cold trails (30 hours)', cost: 1800, category: 'gear', icon: '🧵' },
+  { id: 'boots', name: 'Hiking Boots', description: 'Sturdy boots for any terrain (40 hours)', cost: 2400, category: 'gear', icon: '🥾' },
+  { id: 'compass', name: 'Compass Necklace', description: 'Never lose your way (50 hours)', cost: 3000, category: 'gear', icon: '🧭' },
 
-  // Shelters - 5-60 hours of focus (progressive goals)
-  { id: 'tent', name: 'Camping Tent', description: 'Cozy tent for breaks (5 hours)', cost: 300, category: 'shelter', icon: '⛺' },
-  { id: 'cabin', name: 'Log Cabin', description: 'A warm cabin retreat (10 hours)', cost: 600, category: 'shelter', icon: '🛖' },
-  { id: 'treehouse', name: 'Tree House', description: 'A house in the trees (20 hours)', cost: 1200, category: 'shelter', icon: '🏠' },
-  { id: 'igloo', name: 'Ice Igloo', description: 'Cool shelter for arctic trails (30 hours)', cost: 1800, category: 'shelter', icon: '🏔️' },
-  { id: 'lighthouse', name: 'Lighthouse', description: 'Coastal shelter with a view (40 hours)', cost: 2400, category: 'shelter', icon: '🗼' },
-  { id: 'castle', name: 'Stone Castle', description: 'Royal mountain fortress (60 hours)', cost: 3600, category: 'shelter', icon: '🏰' },
+  // Shelters - 25-300 hours of focus (progressive goals)
+  { id: 'tent', name: 'Camping Tent', description: 'Cozy tent for breaks (25 hours)', cost: 1500, category: 'shelter', icon: '⛺' },
+  { id: 'cabin', name: 'Log Cabin', description: 'A warm cabin retreat (50 hours)', cost: 3000, category: 'shelter', icon: '🛖' },
+  { id: 'treehouse', name: 'Tree House', description: 'A house in the trees (100 hours)', cost: 6000, category: 'shelter', icon: '🏠' },
+  { id: 'igloo', name: 'Ice Igloo', description: 'Cool shelter for arctic trails (150 hours)', cost: 9000, category: 'shelter', icon: '🏔️' },
+  { id: 'lighthouse', name: 'Lighthouse', description: 'Coastal shelter with a view (200 hours)', cost: 12000, category: 'shelter', icon: '🗼' },
+  { id: 'castle', name: 'Stone Castle', description: 'Royal mountain fortress (300 hours)', cost: 18000, category: 'shelter', icon: '🏰' },
 
-  // Trails - 3-60 hours of focus (progressive goals)
-  { id: 'forest', name: 'Forest Path', description: 'Walk through tall trees (3 hours)', cost: 180, category: 'trail', icon: '🌲' },
-  { id: 'desert', name: 'Desert Trail', description: 'Explore sandy dunes (6 hours)', cost: 360, category: 'trail', icon: '🏜️' },
-  { id: 'beach', name: 'Beach Path', description: 'Walk along the shore (10 hours)', cost: 600, category: 'trail', icon: '🏖️' },
-  { id: 'jungle', name: 'Jungle Trek', description: 'Adventure through the jungle (15 hours)', cost: 900, category: 'trail', icon: '🌴' },
-  { id: 'snow', name: 'Snowy Path', description: 'Winter wonderland trail (20 hours)', cost: 1200, category: 'trail', icon: '❄️' },
-  { id: 'canyon', name: 'Grand Canyon', description: 'Majestic canyon views (30 hours)', cost: 1800, category: 'trail', icon: '🏞️' },
-  { id: 'volcano', name: 'Volcano Trail', description: 'Hike near active volcano (45 hours)', cost: 2700, category: 'trail', icon: '🌋' },
-  { id: 'northern', name: 'Northern Lights', description: 'Aurora borealis path (60 hours)', cost: 3600, category: 'trail', icon: '🌌' },
+  // Trails - 15-375 hours of focus (progressive goals)
+  { id: 'forest', name: 'Forest Path', description: 'Your starting trail — always free!', cost: 0, category: 'trail', icon: '🌲' },
+  { id: 'desert', name: 'Desert Trail', description: 'Explore sandy dunes (30 hours)', cost: 1800, category: 'trail', icon: '🏜️' },
+  { id: 'beach', name: 'Beach Path', description: 'Walk along the shore (50 hours)', cost: 3000, category: 'trail', icon: '🏖️' },
+  { id: 'jungle', name: 'Jungle Trek', description: 'Adventure through the jungle (75 hours)', cost: 4500, category: 'trail', icon: '🌴' },
+  { id: 'snow', name: 'Snowy Path', description: 'Winter wonderland trail (100 hours)', cost: 6000, category: 'trail', icon: '❄️', comingSoon: true },
+  { id: 'canyon', name: 'Grand Canyon', description: 'Majestic canyon views (150 hours)', cost: 9000, category: 'trail', icon: '🏞️', comingSoon: true },
+  { id: 'volcano', name: 'Volcano Trail', description: 'Hike near active volcano (225 hours)', cost: 13500, category: 'trail', icon: '🌋' },
+  { id: 'northern', name: 'Northern Lights', description: 'Aurora borealis path (300 hours)', cost: 18000, category: 'trail', icon: '🌌', comingSoon: true },
+  { id: 'galaxy', name: 'Galaxy Trail', description: 'Traverse the cosmos (375 hours)', cost: 22500, category: 'trail', icon: '🪐', comingSoon: true },
 ];
+
+// Per-trail accent colors (used for border + status tags when owned/equipped)
+const TRAIL_ACCENT_COLORS: Record<string, string> = {
+  forest: '#4CAF50',   // green
+  desert: '#E8913A',   // sandy orange
+  beach: '#3BA8D4',    // ocean blue
+  jungle: '#2E8B57',   // deep green
+  volcano: '#D4553A',  // lava red
+  snow: '#90CAF9',     // icy blue
+  canyon: '#C47A4A',   // canyon brown
+  northern: '#7B61FF', // aurora purple
+  galaxy: '#9C27B0',   // cosmic purple
+};
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
@@ -130,15 +145,20 @@ const ShopScreen = () => {
 
   // Check if item is owned
   const isOwned = (itemId: string) => {
-    return inventory.some(item => item.item_id === itemId);
+    return inventory.some(item => item.itemId === itemId);
   };
 
   // Check if item is equipped
   const isEquipped = (itemId: string) => {
-    return equippedItems.some(item => item.item_id === itemId);
+    return equippedItems.some(item => item.itemId === itemId);
   };
 
-  const handleItemPress = (item: ShopItem) => {
+  const handleItemPress = async (item: ShopItem) => {
+    if (item.comingSoon) {
+      Alert.alert('Coming Soon', `${item.name} is coming in a future update!`);
+      return;
+    }
+
     const owned = isOwned(item.id);
     const equipped = isEquipped(item.id);
 
@@ -150,6 +170,20 @@ const ShopScreen = () => {
     if (owned) {
       // Already owned, just equip it
       handleEquipFromInventory(item);
+      return;
+    }
+
+    // Free item — claim and equip directly
+    if (item.cost === 0) {
+      try {
+        await addToInventory(item.id, item.name, item.category, item.icon);
+        await equipItem(item.id, item.name, item.category, item.icon);
+        await loadInventoryData();
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert('Equipped!', `${item.name} is now equipped!`);
+      } catch {
+        Alert.alert('Error', 'Failed to claim item. Please try again.');
+      }
       return;
     }
 
@@ -363,6 +397,10 @@ const ShopScreen = () => {
             const canAfford = flintCurrency >= item.cost;
             const owned = isOwned(item.id);
             const equipped = isEquipped(item.id);
+            const isFree = item.cost === 0;
+            const isComingSoon = item.comingSoon === true;
+            // Trail-specific accent color (falls back to green for non-trails)
+            const accentColor = TRAIL_ACCENT_COLORS[item.id] || '#4CAF50';
 
             return (
               <StaggeredItem
@@ -377,9 +415,9 @@ const ShopScreen = () => {
                     styles.itemCard,
                     {
                       backgroundColor: theme.card,
-                      borderColor: equipped ? theme.primary : (owned ? '#4CAF50' : (canAfford ? '#FF5700' : theme.border))
+                      borderColor: isComingSoon ? theme.border : (equipped ? accentColor : (owned ? accentColor : (isFree ? accentColor : (canAfford ? '#FF5700' : theme.border))))
                     },
-                    !canAfford && !owned && styles.itemCardLocked
+                    (isComingSoon || (!canAfford && !owned && !isFree)) && styles.itemCardLocked
                   ]}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -390,17 +428,22 @@ const ShopScreen = () => {
                 {/* Icon */}
                 <View style={[styles.itemIconContainer, { backgroundColor: theme.surface }]}>
                   <Text style={styles.itemIcon}>{item.icon}</Text>
-                  {equipped && (
-                    <View style={[styles.statusBadge, { backgroundColor: theme.primary }]}>
+                  {isComingSoon && (
+                    <View style={[styles.statusBadge, { backgroundColor: '#888' }]}>
+                      <Ionicons name="time-outline" size={10} color="#FFF" />
+                    </View>
+                  )}
+                  {!isComingSoon && equipped && (
+                    <View style={[styles.statusBadge, { backgroundColor: accentColor }]}>
                       <Ionicons name="checkmark-outline" size={10} color="#FFF" />
                     </View>
                   )}
-                  {owned && !equipped && (
-                    <View style={[styles.statusBadge, { backgroundColor: '#4CAF50' }]}>
-                      <Ionicons name="cube-outline" size={10} color="#FFF" />
+                  {!isComingSoon && owned && !equipped && (
+                    <View style={[styles.statusBadge, { backgroundColor: accentColor }]}>
+                      <Ionicons name="swap-horizontal-outline" size={10} color="#FFF" />
                     </View>
                   )}
-                  {!canAfford && !owned && (
+                  {!isComingSoon && !canAfford && !owned && !isFree && (
                     <View style={[styles.statusBadge, { backgroundColor: '#666' }]}>
                       <Ionicons name="lock-closed-outline" size={10} color="#FFF" />
                     </View>
@@ -416,13 +459,21 @@ const ShopScreen = () => {
                 </Text>
 
                 {/* Status/Price */}
-                {equipped ? (
-                  <View style={[styles.statusTag, { backgroundColor: theme.primary + '20' }]}>
-                    <Text style={[styles.statusText, { color: theme.primary }]}>Equipped</Text>
+                {isComingSoon ? (
+                  <View style={[styles.statusTag, { backgroundColor: '#88888820' }]}>
+                    <Text style={[styles.statusText, { color: '#888' }]}>Coming Soon</Text>
+                  </View>
+                ) : equipped ? (
+                  <View style={[styles.statusTag, { backgroundColor: accentColor + '20' }]}>
+                    <Text style={[styles.statusText, { color: accentColor }]}>Equipped</Text>
                   </View>
                 ) : owned ? (
-                  <View style={[styles.statusTag, { backgroundColor: '#4CAF5020' }]}>
-                    <Text style={[styles.statusText, { color: '#4CAF50' }]}>Owned - Tap to Equip</Text>
+                  <View style={[styles.statusTag, { backgroundColor: accentColor + '20' }]}>
+                    <Text style={[styles.statusText, { color: accentColor }]}>Tap to Equip</Text>
+                  </View>
+                ) : isFree ? (
+                  <View style={[styles.statusTag, { backgroundColor: accentColor + '20' }]}>
+                    <Text style={[styles.statusText, { color: accentColor }]}>Free</Text>
                   </View>
                 ) : (
                   <View style={[styles.priceTag, { backgroundColor: canAfford ? '#FF570015' : theme.surface }]}>

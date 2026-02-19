@@ -4,7 +4,7 @@ import { ThemedImage } from '../../components/ThemedImage';
 import LottieView from 'lottie-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, DrawerActions } from '@react-navigation/native';
+import { useNavigation, useRoute, DrawerActions } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { getRandomQuote } from '../../data/motivationalQuotes';
@@ -22,6 +22,9 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { AnimationConfig, TimingConfig } from '../../theme/premiumTheme';
 import { useEntranceAnimation, useButtonPressAnimation } from '../../utils/animationUtils';
+import InteractiveWalkthrough from '../../components/InteractiveWalkthrough';
+import { useScreenWalkthrough } from '../../hooks/useScreenWalkthrough';
+import { HOME_STEPS } from '../../config/walkthroughSteps';
 
 // Import userAppData functions
 const userAppDataModule = require('../../utils/userAppData');
@@ -31,13 +34,29 @@ const { useUserAppData } = userAppDataModule;
 
 export default function HomeScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
   const { theme } = useTheme(); // Use theme context directly
   const { user } = useAuth(); // Get user data for profile
-  
+
   const [inspiration, setInspiration] = useState<{quote: string; author: string} | null>(null);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [taskTitle, setTaskTitle] = useState('');
   const [taskPriority, setTaskPriority] = useState('Medium');
+
+  // Walkthrough state — hook handles AsyncStorage persistence & measurement
+  const forceFromOnboarding = (route.params as any)?.showWalkthrough === true;
+  const focusButtonRef = useRef<View>(null);
+  const settingsButtonRef = useRef<View>(null);
+  const noraButtonRef = useRef<View>(null);
+  const leaderboardButtonRef = useRef<View>(null);
+  const walkthroughRefs = {
+    'focus-button': focusButtonRef,
+    'settings-button': settingsButtonRef,
+    'nora-button': noraButtonRef,
+    'leaderboard-button': leaderboardButtonRef,
+  };
+  const { visible: walkthroughVisible, measurements: walkthroughMeasurements, complete: walkthroughComplete } =
+    useScreenWalkthrough('home', walkthroughRefs, { forceShow: forceFromOnboarding });
 
   // Reanimated shared values for premium animations
   const pulseScale = useSharedValue(1);
@@ -103,6 +122,7 @@ export default function HomeScreen() {
       true
     );
   }, []);
+
 
   const handleStartFocusSession = () => {
     // Add haptic feedback
@@ -265,6 +285,8 @@ export default function HomeScreen() {
           {/* Large Focus Button - Positioned at Bottom with Premium Animation */}
           <Animated.View style={[buttonEntranceStyle, focusButtonAnimation.animatedStyle]}>
             <Pressable
+              ref={focusButtonRef}
+              collapsable={false}
               style={[styles.mainFocusButton, { backgroundColor: environmentColors.primary }]}
               onPress={handleStartFocusSession}
               onPressIn={focusButtonAnimation.onPressIn}
@@ -277,35 +299,41 @@ export default function HomeScreen() {
 
       {/* Bottom Navigation Bar - Positioned Up from Edge */}
       <View style={[styles.bottomNavContainer, { borderTopColor: environmentColors.border }]}>
-        <NavButton
-          onPress={() => handleNavigation('settings')}
-          style={[styles.navButton, styles.leftNavButton, { backgroundColor: environmentColors.card }]}
-        >
-          <Ionicons name="settings-outline" size={26} color={environmentColors.primary} />
-        </NavButton>
+        <View ref={settingsButtonRef} collapsable={false}>
+          <NavButton
+            onPress={() => handleNavigation('settings')}
+            style={[styles.navButton, styles.leftNavButton, { backgroundColor: environmentColors.card }]}
+          >
+            <Ionicons name="settings-outline" size={26} color={environmentColors.primary} />
+          </NavButton>
+        </View>
 
-        <NavButton
-          onPress={() => handleNavigation('nora')}
-          style={[styles.navButton, styles.centerNavButton, {
-            backgroundColor: theme.isDark ? '#2A2A2A' : environmentColors.card,
-            borderWidth: theme.isDark ? 2 : 0,
-            borderColor: theme.isDark ? environmentColors.primary : 'transparent'
-          }]}
-        >
-          <Text style={[styles.pawPrint, {
-            color: theme.isDark ? '#FFFFFF' : environmentColors.primary,
-            textShadowColor: theme.isDark ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.2)',
-            textShadowOffset: { width: 0, height: 1 },
-            textShadowRadius: theme.isDark ? 4 : 3
-          }]}>🐾</Text>
-        </NavButton>
+        <View ref={noraButtonRef} collapsable={false}>
+          <NavButton
+            onPress={() => handleNavigation('nora')}
+            style={[styles.navButton, styles.centerNavButton, {
+              backgroundColor: theme.isDark ? '#2A2A2A' : environmentColors.card,
+              borderWidth: theme.isDark ? 2 : 0,
+              borderColor: theme.isDark ? environmentColors.primary : 'transparent'
+            }]}
+          >
+            <Text style={[styles.pawPrint, {
+              color: theme.isDark ? '#FFFFFF' : environmentColors.primary,
+              textShadowColor: theme.isDark ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.2)',
+              textShadowOffset: { width: 0, height: 1 },
+              textShadowRadius: theme.isDark ? 4 : 3
+            }]}>🐾</Text>
+          </NavButton>
+        </View>
 
-        <NavButton
-          onPress={() => handleNavigation('leaderboard')}
-          style={[styles.navButton, styles.rightNavButton, { backgroundColor: environmentColors.card }]}
-        >
-          <Ionicons name="trophy-outline" size={26} color={environmentColors.primary} />
-        </NavButton>
+        <View ref={leaderboardButtonRef} collapsable={false}>
+          <NavButton
+            onPress={() => handleNavigation('leaderboard')}
+            style={[styles.navButton, styles.rightNavButton, { backgroundColor: environmentColors.card }]}
+          >
+            <Ionicons name="trophy-outline" size={26} color={environmentColors.primary} />
+          </NavButton>
+        </View>
       </View>
 
       {/* Task Creation Modal */}
@@ -384,6 +412,14 @@ export default function HomeScreen() {
           })),
         ]}
         pointerEvents="none"
+      />
+
+      {/* App Walkthrough Overlay */}
+      <InteractiveWalkthrough
+        visible={walkthroughVisible}
+        onComplete={walkthroughComplete}
+        measurements={walkthroughMeasurements}
+        steps={HOME_STEPS}
       />
     </SafeAreaView>
   );

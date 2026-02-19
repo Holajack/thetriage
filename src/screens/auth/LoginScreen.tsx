@@ -53,65 +53,113 @@ export default function LoginScreen() {
       return;
     }
 
+    if (!loginEmail.trim() || !loginPassword.trim()) {
+      setLoginError('Please enter both email and password.');
+      triggerErrorShake();
+      return;
+    }
+
     setLoading(true);
     setLoginError('');
 
-    try {
-      // Attempt to sign in with Clerk
-      const signInAttempt = await signIn.create({
-        identifier: loginEmail,
-        password: loginPassword,
-      });
-
-      // Check if sign in was successful
-      if (signInAttempt.status === 'complete') {
-        // Set the active session - handle RN compatibility errors
+    // Helper to activate session and navigate to Main
+    const activateAndNavigate = async (sessionId: string | null) => {
+      if (sessionId) {
         try {
-          await setActive({ session: signInAttempt.createdSessionId });
-          console.log('🔐 [Login] Session activated successfully');
+          await setActive({ session: sessionId });
+          console.log('🔐 [Login] Session activated');
         } catch (setActiveErr: any) {
           const errMsg = setActiveErr?.message || String(setActiveErr);
-          if (errMsg.includes('CustomEvent') || errMsg.includes('hasFocus') || errMsg.includes('document') || errMsg.includes('dispatchEvent') || errMsg.includes('window')) {
-            console.log('🔐 [Login] RN compatibility error (session likely active):', errMsg);
-          } else {
+          // Ignore React Native browser API compat errors (session likely still activated)
+          if (!errMsg.includes('CustomEvent') && !errMsg.includes('hasFocus') &&
+              !errMsg.includes('document') && !errMsg.includes('dispatchEvent') && !errMsg.includes('window')) {
             console.log('🔐 [Login] setActive error:', errMsg);
           }
         }
+      }
+      triggerHaptic('success');
+      console.log('🔐 [Login] Navigating to Main');
+      navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'Main' }] }));
+    };
 
-        triggerHaptic('success');
-        // Existing users signing in always go to Main
-        console.log('🔐 [Login] Navigating to Main');
-        navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'Main' }] }));
+    try {
+      console.log('🔐 [Login] Creating sign-in attempt...');
+      const signInAttempt = await signIn.create({
+        identifier: loginEmail.trim(),
+        password: loginPassword,
+      });
+
+      console.log('🔐 [Login] Sign-in status:', signInAttempt.status);
+
+      if (signInAttempt.status === 'complete') {
+        await activateAndNavigate(signInAttempt.createdSessionId);
+
       } else if (signInAttempt.status === 'needs_first_factor') {
-        // User needs to verify their identity via email code
-        console.log('[Login] needs_first_factor - preparing email verification...');
-        try {
-          // Send the verification code to user's email
-          await signIn.prepareFirstFactor({ strategy: 'email_code' });
-          console.log('[Login] Verification code sent, navigating to SignInVerification');
-          // Navigate to verification screen
-          navigation.navigate('SignInVerification', { email: loginEmail });
-        } catch (prepareErr: any) {
-          console.log('[Login] prepareFirstFactor error:', prepareErr);
-          const prepareErrorMsg = prepareErr?.errors?.[0]?.message || prepareErr?.message || 'Failed to send verification code.';
-          setLoginError(prepareErrorMsg);
+        // Password in create() may not auto-verify in all Clerk configurations.
+        // Check available strategies and attempt password explicitly first.
+        const firstFactors = signInAttempt.supportedFirstFactors;
+        const strategies = firstFactors?.map((f: any) => f.strategy) || [];
+        console.log('🔐 [Login] Available first factors:', strategies);
+
+        if (strategies.includes('password')) {
+          // Attempt password as explicit first factor
+          try {
+            const result = await signIn.attemptFirstFactor({
+              strategy: 'password',
+              password: loginPassword,
+            });
+            console.log('🔐 [Login] Password attempt result:', result.status);
+
+            if (result.status === 'complete') {
+              await activateAndNavigate(result.createdSessionId);
+            } else if (result.status === 'needs_second_factor') {
+              navigation.navigate('TwoFactorVerification', { email: loginEmail });
+            } else {
+              setLoginError('Additional verification required. Please try again.');
+              triggerErrorShake();
+            }
+          } catch (passwordErr: any) {
+            const msg = passwordErr?.errors?.[0]?.longMessage || passwordErr?.errors?.[0]?.message || passwordErr?.message || 'Incorrect password.';
+            setLoginError(msg);
+            triggerErrorShake();
+          }
+        } else if (strategies.includes('email_code')) {
+          // Fall back to email code verification
+          console.log('🔐 [Login] Preparing email code verification...');
+          try {
+            await signIn.prepareFirstFactor({ strategy: 'email_code' });
+            navigation.navigate('SignInVerification', { email: loginEmail });
+          } catch (prepareErr: any) {
+            const prepareErrorMsg = prepareErr?.errors?.[0]?.message || prepareErr?.message || 'Failed to send verification code.';
+            setLoginError(prepareErrorMsg);
+            triggerErrorShake();
+          }
+        } else {
+          console.log('🔐 [Login] No known first factor strategy. Available:', strategies);
+          setLoginError('Unable to verify your identity. Please contact support.');
           triggerErrorShake();
         }
+
       } else if (signInAttempt.status === 'needs_second_factor') {
-        // User has 2FA enabled - navigate to 2FA verification screen
-        console.log('[Login] needs_second_factor - navigating to 2FA verification');
+        console.log('🔐 [Login] 2FA required');
         navigation.navigate('TwoFactorVerification', { email: loginEmail });
+
+      } else if (signInAttempt.status === 'needs_new_password') {
+        console.log('🔐 [Login] Password reset required');
+        setLoginError('Your password needs to be reset. Use "Forgot Password" below.');
+        triggerErrorShake();
+
       } else {
-        // Handle other statuses
-        console.log('[Login] Unexpected sign in status:', signInAttempt.status);
+        // Unexpected status — log full response for debugging
+        console.log('🔐 [Login] Unexpected status:', signInAttempt.status);
+        console.log('🔐 [Login] Full response:', JSON.stringify(signInAttempt, null, 2));
         setLoginError('Unable to complete sign in. Please try again.');
         triggerErrorShake();
       }
     } catch (err: any) {
-      // Handle Clerk errors
-      const errorMessage = err?.errors?.[0]?.message || err?.message || 'Login failed. Please check your credentials.';
+      console.log('🔐 [Login] Error:', err?.errors || err?.message || err);
+      const errorMessage = err?.errors?.[0]?.longMessage || err?.errors?.[0]?.message || err?.message || 'Login failed. Please check your credentials.';
       setLoginError(errorMessage);
-      Alert.alert('Login Error', errorMessage);
       triggerErrorShake();
     } finally {
       setLoading(false);

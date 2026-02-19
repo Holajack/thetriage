@@ -1,0 +1,60 @@
+{
+  "runId": "178c04bf-e21e-4c07-96a4-4d0c7ac4e79d",
+  "themeInput": "Volcano_day",
+  "themeResolved": "Volcano_day",
+  "runMode": "all",
+  "quality": "high",
+  "providerMode": "api",
+  "providerPreference": "replicate_openai_gpt_image_1_5",
+  "apiProvider": "replicate_openai_gpt_image_1_5",
+  "status": "completed",
+  "startedAt": "2026-02-12T14:36:58.068Z",
+  "progress": {
+    "total": 4,
+    "completed": 4,
+    "failed": 0
+  },
+  "artifacts": {
+    "runDirectory": "/Users/jackenholland/App Development/parallax-theme-studio/output/runs/178c04bf-e21e-4c07-96a4-4d0c7ac4e79d",
+    "generatedDirectory": "/Users/jackenholland/App Development/parallax-theme-studio/output/runs/178c04bf-e21e-4c07-96a4-4d0c7ac4e79d/generated"
+  },
+  "layers": {
+    "sky": {
+      "layer": "sky",
+      "fileName": "sunset_colors.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparentRequired": false,
+      "outputPath": "/Users/jackenholland/App Development/parallax-theme-studio/output/runs/178c04bf-e21e-4c07-96a4-4d0c7ac4e79d/generated/sunset_colors.png"
+    },
+    "mountain": {
+      "layer": "mountain",
+      "fileName": "rocky_mountain.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparentRequired": true,
+      "transparencyBorderOpaqueRatio": 0,
+      "outputPath": "/Users/jackenholland/App Development/parallax-theme-studio/output/runs/178c04bf-e21e-4c07-96a4-4d0c7ac4e79d/generated/rocky_mountain.png"
+    },
+    "tree": {
+      "layer": "tree",
+      "fileName": "evergreen_tree.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparentRequired": true,
+      "transparencyBorderOpaqueRatio": 0,
+      "outputPath": "/Users/jackenholland/App Development/parallax-theme-studio/output/runs/178c04bf-e21e-4c07-96a4-4d0c7ac4e79d/generated/evergreen_tree.png"
+    },
+    "ground": {
+      "layer": "ground",
+      "fileName": "path_animation.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparentRequired": true,
+      "transparencyBorderOpaqueRatio": 0,
+      "outputPath": "/Users/jackenholland/App Development/parallax-theme-studio/output/runs/178c04bf-e21e-4c07-96a4-4d0c7ac4e79d/generated/path_animation.png"
+    }
+  },
+  "errors": [],
+  "completedAt": "2026-02-12T14:40:59.589Z"
+}

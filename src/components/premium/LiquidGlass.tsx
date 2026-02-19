@@ -48,11 +48,11 @@ export const LiquidGlassCard: React.FC<LiquidGlassCardProps> = ({
   // Background colors for the glass effect
   const glassColors = isDark
     ? {
-        background: 'rgba(255, 255, 255, 0.08)',
-        border: 'rgba(255, 255, 255, 0.15)',
-        gradientStart: 'rgba(255, 255, 255, 0.12)',
-        gradientEnd: 'rgba(255, 255, 255, 0.04)',
-        glow: 'rgba(255, 255, 255, 0.1)',
+        background: 'rgba(255, 255, 255, 0.12)',
+        border: 'rgba(255, 255, 255, 0.20)',
+        gradientStart: 'rgba(255, 255, 255, 0.16)',
+        gradientEnd: 'rgba(255, 255, 255, 0.06)',
+        glow: 'rgba(255, 255, 255, 0.15)',
       }
     : {
         background: 'rgba(255, 255, 255, 0.7)',

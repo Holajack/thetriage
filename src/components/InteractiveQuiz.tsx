@@ -33,11 +33,14 @@ interface InteractiveQuizProps {
   quizType: string;
   categorySlug?: string;
   categoryId?: Id<'quizCategories'>;
+  questionsCount?: number; // 15 for quick, 25 for in-depth
   onComplete: (result: QuizResult) => void;
   onClose: () => void;
+  existingSessionId?: Id<'quizSessions'>; // Pass to resume an in-progress session
+  isResuming?: boolean;
 }
 
-const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({ quizType, categorySlug, categoryId, onComplete, onClose }) => {
+const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({ quizType, categorySlug, categoryId, questionsCount = 15, onComplete, onClose, existingSessionId, isResuming }) => {
   const { theme } = useTheme();
   const { user } = useAuth();
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -57,24 +60,61 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({ quizType, categorySlu
   const completeSessionMutation = useMutation(api.quizSessions.completeSession);
   const abandonSessionMutation = useMutation(api.quizSessions.abandonSession);
 
-  // Query for random questions from Convex
+  // Query for existing session data (only when resuming)
+  const existingSessionData = useQuery(
+    api.quizSessions.getSessionWithQuestions,
+    existingSessionId ? { sessionId: existingSessionId } : 'skip'
+  );
+
+  // Query for random questions from Convex (skip when resuming — use stored questions instead)
   const convexQuestions = useQuery(
     api.quizQuestions.getRandomQuestionsForSession,
-    categorySlug
+    categorySlug && !existingSessionId
       ? {
           categorySlug,
-          educationLevel: 'college', // Default, could be user preference
-          questionsCount: 15,
+          educationLevel: 'college',
+          questionsCount,
           sessionType: 'full',
         }
       : 'skip'
   );
 
-  // Initialize quiz
+  // Initialize quiz — resume path or fresh path
   useEffect(() => {
-    // Don't initialize until Convex query is resolved (or if not using Convex)
-    if (categorySlug && convexQuestions === undefined) {
-      return; // Still loading Convex questions - wait
+    // RESUME PATH: Restore from existing session
+    if (existingSessionId && existingSessionData) {
+      setUseConvex(true);
+      setSessionId(existingSessionId);
+      setQuizQuestions(existingSessionData.questions);
+      setStartTime(new Date(existingSessionData.session.startedAt));
+      setQuestionStartTime(new Date());
+
+      // Restore answers from existing responses
+      const restoredAnswers: { [key: string]: number } = {};
+      let firstUnansweredIndex = existingSessionData.questions.length;
+
+      existingSessionData.questions.forEach((q: any, index: number) => {
+        if (q.response) {
+          restoredAnswers[q._id] = q.response.selectedValue;
+        } else if (index < firstUnansweredIndex) {
+          firstUnansweredIndex = index;
+        }
+      });
+
+      setAnswers(restoredAnswers);
+      setCurrentQuestionIndex(firstUnansweredIndex);
+      setIsInitializing(false);
+      return;
+    }
+
+    // Still waiting for resume data to load
+    if (existingSessionId && existingSessionData === undefined) {
+      return;
+    }
+
+    // FRESH PATH: Don't initialize until Convex query is resolved
+    if (categorySlug && !existingSessionId && convexQuestions === undefined) {
+      return;
     }
 
     const initializeLegacyQuiz = () => {
@@ -98,7 +138,7 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({ quizType, categorySlu
           allQuestions = STUDY_HABITS_QUESTIONS;
       }
       const shuffled = [...allQuestions].sort(() => 0.5 - Math.random());
-      const selected = shuffled.slice(0, 15);
+      const selected = shuffled.slice(0, questionsCount);
       setQuizQuestions(selected);
     };
 
@@ -138,10 +178,11 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({ quizType, categorySlu
     };
 
     initializeQuiz();
-  }, [quizType, categorySlug, convexQuestions]);
+  }, [quizType, categorySlug, convexQuestions, existingSessionId, existingSessionData]);
 
   const currentQuestion = quizQuestions[currentQuestionIndex];
-  const progress = quizQuestions.length > 0 ? ((currentQuestionIndex + 1) / quizQuestions.length) * 100 : 0;
+  // Progress based on ANSWERED questions, not current index
+  const progress = quizQuestions.length > 0 ? (Object.keys(answers).length / quizQuestions.length) * 100 : 0;
 
   // Get question ID (works for both legacy and Convex questions)
   const getQuestionId = (question: LegacyQuizQuestion | ConvexQuizQuestion): string => {
@@ -167,7 +208,7 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({ quizType, categorySlu
     return (question as LegacyQuizQuestion).options;
   };
 
-  const handleAnswer = async (optionIndex: number) => {
+  const handleAnswer = (optionIndex: number) => {
     if (!currentQuestion) return;
 
     const questionId = getQuestionId(currentQuestion);
@@ -178,22 +219,19 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({ quizType, categorySlu
       [questionId]: optionIndex,
     }));
 
-    // Submit to Convex if using Convex mode
+    // Submit to Convex in the background — don't block UI advancement
     if (useConvex && sessionId && '_id' in currentQuestion) {
-      try {
-        await submitAnswerMutation({
-          sessionId,
-          questionId: currentQuestion._id,
-          selectedValue: optionIndex,
-          responseTimeMs,
-        });
-      } catch (error) {
+      submitAnswerMutation({
+        sessionId,
+        questionId: currentQuestion._id,
+        selectedValue: optionIndex,
+        responseTimeMs,
+      }).catch((error) => {
         console.error('Error submitting answer to Convex:', error);
-        // Continue anyway - don't block the user
-      }
+      });
     }
 
-    // Auto-advance after selection
+    // Auto-advance after brief selection feedback
     setTimeout(() => {
       if (currentQuestionIndex < quizQuestions.length - 1) {
         setCurrentQuestionIndex((prev) => prev + 1);
@@ -479,14 +517,8 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({ quizType, categorySlu
   };
 
   const confirmExit = async () => {
-    // Abandon Convex session if active
-    if (useConvex && sessionId) {
-      try {
-        await abandonSessionMutation({ sessionId });
-      } catch (error) {
-        console.error('Error abandoning session:', error);
-      }
-    }
+    // Keep session in_progress so user can resume later
+    // Session will stay in Convex as in_progress — no abandon call
     setShowExitModal(false);
     onClose();
   };
@@ -638,9 +670,14 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({ quizType, categorySlu
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
             <Ionicons name="alert-circle-outline" size={48} color="#FF9800" />
-            <Text style={[styles.modalTitle, { color: theme.text }]}>Exit Quiz?</Text>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>
+              {useConvex ? 'Save & Exit?' : 'Exit Quiz?'}
+            </Text>
             <Text style={[styles.modalDescription, { color: theme.text }]}>
-              You've answered {Object.keys(answers).length} questions. Your progress will be lost if you exit now.
+              {useConvex
+                ? `You've answered ${Object.keys(answers).length} of ${quizQuestions.length} questions. Your progress will be saved and you can continue later.`
+                : `You've answered ${Object.keys(answers).length} questions. Your progress will be lost if you exit now.`
+              }
             </Text>
             <View style={styles.modalButtons}>
               <TouchableOpacity

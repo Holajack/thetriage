@@ -1,5 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList, Image, Modal, KeyboardAvoidingView, Platform, ActivityIndicator, Alert, ScrollView } from 'react-native';
+import InteractiveWalkthrough from '../../components/InteractiveWalkthrough';
+import { useScreenWalkthrough } from '../../hooks/useScreenWalkthrough';
+import { COMMUNITY_STEPS } from '../../config/walkthroughSteps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -272,6 +275,13 @@ const CommunityScreen = () => {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [messageText, setMessageText] = useState('');
   const [studyRooms, setStudyRooms] = useState<any[]>([]);
+
+  // Walkthrough refs & hook
+  const tabBarRef = useRef<View>(null);
+  const studyRoomsRef = useRef<View>(null);
+  const walkthroughRefs = { 'tab-bar': tabBarRef, 'study-rooms': studyRoomsRef };
+  const { visible: walkthroughVisible, measurements: walkthroughMeasurements, complete: walkthroughComplete } =
+    useScreenWalkthrough('community', walkthroughRefs);
   const [userConversations, setUserConversations] = useState<any[]>([]);
   const { theme } = useTheme();
   const [networkStatus, setNetworkStatus] = useState<'online' | 'offline' | 'slow'>('online');
@@ -1185,7 +1195,7 @@ const CommunityScreen = () => {
 
           {/* Tab Navigation */}
           {!search.trim() && (
-            <View style={[styles.tabRow, { backgroundColor: theme.card }]}>
+            <View ref={tabBarRef} collapsable={false} style={[styles.tabRow, { backgroundColor: theme.card }]}>
               {TABS.map(tab => (
                 <TouchableOpacity
                   key={tab}
@@ -1361,7 +1371,7 @@ const CommunityScreen = () => {
 
           {/* Study Rooms Tab */}
           {!search.trim() && activeTab === 'Study Rooms' && (
-            <ScrollView key={`studyrooms-${focusKey}`} contentContainerStyle={{ paddingBottom: 24 }}>
+            <ScrollView ref={studyRoomsRef} collapsable={false} key={`studyrooms-${focusKey}`} contentContainerStyle={{ paddingBottom: 24 }}>
               <TouchableOpacity style={[styles.createRoomBtn, { backgroundColor: theme.card, borderColor: theme.primary }]} onPress={() => setShowCreateModal(true)}>
                 <Ionicons name="add" size={20} color={theme.primary} />
                 <Text style={[styles.createRoomBtnText, { color: theme.text }]}>Create Study Room</Text>
@@ -1577,6 +1587,14 @@ const CommunityScreen = () => {
         visible={showStudyRoomInvitations}
         onClose={() => setShowStudyRoomInvitations(false)}
         onUpdate={loadFriendsData}
+      />
+
+      {/* Walkthrough */}
+      <InteractiveWalkthrough
+        visible={walkthroughVisible}
+        onComplete={walkthroughComplete}
+        measurements={walkthroughMeasurements}
+        steps={COMMUNITY_STEPS}
       />
 
       {/* Bottom Tab Bar */}

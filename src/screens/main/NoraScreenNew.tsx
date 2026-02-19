@@ -26,11 +26,14 @@ import {
   StatusBar,
   Modal,
   FlatList,
+  Image,
+  Linking,
+  Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { sendNoraChatMessage, transcribeAudio } from '../../utils/convexAIChatService';
+import { sendNoraChatMessage, transcribeAudio as convexTranscribeAudio } from '../../utils/convexAIChatService';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import * as Haptics from 'expo-haptics';
@@ -61,7 +64,8 @@ import { api } from '../../../convex/_generated/api';
 import { Id } from '../../../convex/_generated/dataModel';
 import { useNoraSessions, useNoraSessionMessages } from '../../hooks/useNoraSessions';
 import NoraOnboarding from '../../components/NoraOnboarding';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
+import Markdown from 'react-native-markdown-display';
 
 const { width, height } = Dimensions.get('window');
 
@@ -74,6 +78,8 @@ interface Message {
   sources?: Source[];
   isSearching?: boolean;
   searchSteps?: string[];
+  isNew?: boolean;
+  mode?: 'auto' | 'quick' | 'deep' | 'research';
 }
 
 interface Source {
@@ -92,25 +98,7 @@ const QUICK_ACTIONS = [
   { id: '4', text: 'Quiz me on what I learned', icon: 'help-circle-outline' },
 ];
 
-// Helper to strip markdown formatting
-const stripMarkdown = (text: string): string => {
-  return text
-    .replace(/#{1,6}\s?/g, '')
-    .replace(/\*\*([^*]+)\*\*/g, '$1')
-    .replace(/\*([^*]+)\*/g, '$1')
-    .replace(/__([^_]+)__/g, '$1')
-    .replace(/_([^_]+)_/g, '$1')
-    .replace(/~~([^~]+)~~/g, '$1')
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/```[\s\S]*?```/g, '')
-    .replace(/^\s*[-*+]\s/gm, '• ')
-    .replace(/^\s*\d+\.\s/gm, '')
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '')
-    .replace(/>\s?/g, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-};
+// Markdown styles are created per-theme in the component below
 
 // ============================================
 // APPLE-STYLE DYNAMIC WAVE BAR
@@ -253,58 +241,255 @@ const InlineVoiceBar: React.FC<{
 };
 
 // ============================================
-// SOURCE CITATION - Simple Style (No Reanimated)
+// STREAMING MARKDOWN - Typing animation for AI responses
 // ============================================
-const SimpleSourceBubble: React.FC<{
-  source: Source;
-  theme: any;
-  isDark: boolean;
-}> = ({ source, theme, isDark }) => {
-  const iconColor = isDark ? '#A0C8E8' : '#5A7B9A';
-  const bgColor = isDark ? 'rgba(160, 200, 232, 0.15)' : 'rgba(90, 123, 154, 0.1)';
+const StreamingMarkdown: React.FC<{
+  content: string;
+  isNew: boolean;
+  markdownStyle: any;
+  onComplete?: () => void;
+}> = ({ content, isNew, markdownStyle, onComplete }) => {
+  const [displayedContent, setDisplayedContent] = useState(isNew ? '' : content);
+  const indexRef = useRef(isNew ? 0 : content.length);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (!isNew || !content) {
+      setDisplayedContent(content);
+      return;
+    }
+
+    indexRef.current = 0;
+    setDisplayedContent('');
+
+    intervalRef.current = setInterval(() => {
+      indexRef.current += 3; // ~3 characters at a time for smooth feel
+      if (indexRef.current >= content.length) {
+        indexRef.current = content.length;
+        setDisplayedContent(content);
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        onComplete?.();
+      } else {
+        // Find the next word boundary to avoid splitting mid-word
+        let end = indexRef.current;
+        while (end < content.length && content[end] !== ' ' && content[end] !== '\n') {
+          end++;
+        }
+        indexRef.current = end;
+        setDisplayedContent(content.slice(0, end));
+      }
+    }, 12);
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [content, isNew]);
+
+  if (!displayedContent) return null;
 
   return (
-    <View style={styles.simpleSourceWrapper}>
-      <View style={[styles.simpleSourceBubble, { backgroundColor: bgColor }]}>
-        <Ionicons
-          name={
-            source.type === 'web'
-              ? 'globe-outline'
-              : source.type === 'document'
-              ? 'document-text-outline'
-              : 'sparkles-outline'
-          }
-          size={14}
-          color={iconColor}
-        />
-      </View>
-      <Text style={[styles.simpleSourceLabel, { color: theme.textSecondary }]} numberOfLines={1}>
-        {source.title}
-      </Text>
-    </View>
+    <Markdown style={markdownStyle}>
+      {displayedContent}
+    </Markdown>
   );
 };
 
+// ============================================
+// SOURCE CITATION - Modern AI-style with favicons
+// ============================================
+const getDomain = (url: string): string => {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname.replace('www.', '');
+  } catch {
+    return url;
+  }
+};
+
+// Individual source row inside the expanded panel
+const SourceRow: React.FC<{
+  source: Source;
+  index: number;
+  theme: any;
+  isDark: boolean;
+}> = ({ source, index, theme, isDark }) => {
+  const domain = source.url ? getDomain(source.url) : '';
+  const faviconUrl = source.url ? `https://www.google.com/s2/favicons?domain=${domain}&sz=64` : '';
+
+  const handlePress = () => {
+    if (source.url) {
+      Linking.openURL(source.url).catch(() => {});
+    }
+  };
+
+  return (
+    <TouchableOpacity
+      style={[
+        styles.sourceRow,
+        { borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' },
+      ]}
+      onPress={handlePress}
+      activeOpacity={0.7}
+    >
+      {source.url ? (
+        <Image
+          source={{ uri: faviconUrl }}
+          style={styles.sourceRowFavicon}
+          defaultSource={require('../../../assets/icon.png')}
+        />
+      ) : (
+        <View style={[styles.sourceRowFaviconFallback, { backgroundColor: theme.primary + '20' }]}>
+          <Ionicons
+            name={source.type === 'document' ? 'document-text' : 'sparkles'}
+            size={14}
+            color={theme.primary}
+          />
+        </View>
+      )}
+      <View style={styles.sourceRowText}>
+        <Text style={[styles.sourceRowTitle, { color: theme.text }]} numberOfLines={1}>
+          {source.title || domain}
+        </Text>
+        {source.url && (
+          <Text style={[styles.sourceRowDomain, { color: theme.textSecondary }]} numberOfLines={1}>
+            {domain}
+          </Text>
+        )}
+      </View>
+      {source.url && (
+        <Ionicons name="open-outline" size={14} color={theme.textSecondary} />
+      )}
+    </TouchableOpacity>
+  );
+};
+
+// Bottom-sheet sources popup (like Claude/ChatGPT)
 const SourceCitation: React.FC<{ sources: Source[]; theme: any; isDark?: boolean }> = ({
   sources,
   theme,
   isDark = true,
 }) => {
+  const [showSheet, setShowSheet] = useState(false);
+
   if (!sources || sources.length === 0) return null;
+
+  // Get up to 4 unique favicon URLs for the pill preview
+  const webSources = sources.filter(s => s.url);
+  const previewFavicons = webSources.slice(0, 4).map(s => ({
+    url: `https://www.google.com/s2/favicons?domain=${getDomain(s.url!)}&sz=64`,
+    domain: getDomain(s.url!),
+  }));
+
+  const glassBackground = isDark
+    ? 'rgba(255,255,255,0.06)'
+    : 'rgba(0,0,0,0.03)';
+  const glassBorder = isDark
+    ? 'rgba(255,255,255,0.12)'
+    : 'rgba(0,0,0,0.08)';
 
   return (
     <View style={styles.sourcesContainer}>
-      <Text style={[styles.sourcesTitle, { color: theme.textSecondary }]}>Sources</Text>
-      <View style={styles.simpleSourcesList}>
-        {sources.map((source, index) => (
-          <SimpleSourceBubble
-            key={index}
-            source={source}
-            theme={theme}
-            isDark={isDark}
-          />
-        ))}
-      </View>
+      {/* Pill: tap to open bottom sheet */}
+      <TouchableOpacity
+        style={[
+          styles.sourcesCollapsedBar,
+          {
+            backgroundColor: glassBackground,
+            borderColor: glassBorder,
+            shadowColor: '#7B61FF',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: isDark ? 0.15 : 0.08,
+            shadowRadius: 8,
+            elevation: 2,
+          },
+        ]}
+        onPress={() => setShowSheet(true)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.sourcesCollapsedLeft}>
+          {/* Stacked favicon circles or Nora icon fallback */}
+          <View style={styles.faviconStack}>
+            {previewFavicons.length > 0 ? (
+              previewFavicons.map((fav, i) => (
+                <Image
+                  key={fav.domain + i}
+                  source={{ uri: fav.url }}
+                  style={[
+                    styles.faviconStackIcon,
+                    { marginLeft: i === 0 ? 0 : -6, zIndex: previewFavicons.length - i, borderColor: isDark ? '#1a1a2e' : '#f5f5f5' },
+                  ]}
+                  defaultSource={require('../../../assets/icon.png')}
+                />
+              ))
+            ) : (
+              <View style={[styles.faviconStackIcon, { backgroundColor: '#7B61FF20', alignItems: 'center', justifyContent: 'center' }]}>
+                <Ionicons name="sparkles" size={14} color="#7B61FF" />
+              </View>
+            )}
+          </View>
+          <Text style={[styles.sourcesCollapsedLabel, { color: theme.text }]}>
+            {webSources.length > 0
+              ? `${sources.length} ${sources.length === 1 ? 'Source' : 'Sources'}`
+              : 'Sources'}
+          </Text>
+        </View>
+        <Ionicons
+          name="chevron-up"
+          size={16}
+          color={theme.textSecondary}
+        />
+      </TouchableOpacity>
+
+      {/* Bottom sheet modal */}
+      <Modal
+        visible={showSheet}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowSheet(false)}
+      >
+        <TouchableOpacity
+          style={styles.sourcesSheetOverlay}
+          activeOpacity={1}
+          onPress={() => setShowSheet(false)}
+        >
+          <View onStartShouldSetResponder={() => true}>
+            <View
+              style={[
+                styles.sourcesSheetContainer,
+                { backgroundColor: isDark ? '#1a1a2e' : '#FFFFFF' },
+              ]}
+            >
+              {/* Handle bar */}
+              <View style={styles.sourcesSheetHandle}>
+                <View style={[styles.sourcesSheetHandleBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)' }]} />
+              </View>
+
+              {/* Header */}
+              <View style={styles.sourcesSheetHeader}>
+                <Text style={[styles.sourcesSheetTitle, { color: theme.text }]}>
+                  {sources.length} {sources.length === 1 ? 'Source' : 'Sources'}
+                </Text>
+                <TouchableOpacity onPress={() => setShowSheet(false)}>
+                  <Ionicons name="close-circle" size={26} color={theme.textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Source list */}
+              <ScrollView style={styles.sourcesSheetList} bounces={false}>
+                {sources.map((source, index) => (
+                  <SourceRow
+                    key={index}
+                    source={source}
+                    index={index}
+                    theme={theme}
+                    isDark={isDark}
+                  />
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 };
@@ -315,10 +500,19 @@ const SourceCitation: React.FC<{ sources: Source[]; theme: any; isDark?: boolean
 const MessageBubble: React.FC<{
   message: Message;
   theme: any;
-  isDeepThink: boolean;
   isDark: boolean;
-}> = ({ message, theme, isDeepThink, isDark }) => {
+}> = ({ message, theme, isDark }) => {
   const isUser = message.sender === 'user';
+
+  // Mode-specific avatar: icon and gradient colors match the mode used
+  const mode = message.mode || 'auto';
+  const modeAvatarConfig: Record<string, { colors: [string, string]; icon: keyof typeof Ionicons.glyphMap }> = {
+    auto: { colors: ['#7B61FF', '#9D4EDD'], icon: 'sparkles' },
+    quick: { colors: ['#7B61FF', '#9D4EDD'], icon: 'flash' },
+    research: { colors: ['#4ECDC4', '#2AB7A9'], icon: 'globe-outline' },
+    deep: { colors: ['#FF6B6B', '#FF8E53'], icon: 'glasses-outline' },
+  };
+  const avatarConfig = modeAvatarConfig[mode] || modeAvatarConfig.auto;
 
   // Removed entering={FadeIn} to prevent animation conflicts with child components
   return (
@@ -331,41 +525,54 @@ const MessageBubble: React.FC<{
       {!isUser && (
         <View style={styles.noraAvatarSmall}>
           <LinearGradient
-            colors={isDeepThink ? ['#FF6B6B', '#FF8E53'] : ['#7B61FF', '#9D4EDD']}
+            colors={avatarConfig.colors}
             style={styles.noraAvatarGradient}
           >
-            <Ionicons name={isDeepThink ? 'flash' : 'sparkles'} size={14} color="#FFFFFF" />
+            <Ionicons name={avatarConfig.icon} size={14} color="#FFFFFF" />
           </LinearGradient>
         </View>
       )}
       {message.isSearching ? (
-        // Inline thinking animation - no bubble, just the text with shimmer
         <View style={styles.thinkingContainer}>
           <NoraThinkingAnimation
             steps={message.searchSteps || ['Thinking...', 'Analyzing...', 'Preparing response...']}
             isDark={isDark}
             textColor={theme.textSecondary}
-            shineColor={theme.text}
+            shineColor={isDark ? '#C0CDD8' : '#8A9DB0'}
           />
         </View>
-      ) : (
-        <View
-          style={[
-            styles.messageBubble,
-            isUser
-              ? [styles.userBubble, { backgroundColor: theme.primary }]
-              : [styles.noraBubble, { backgroundColor: theme.card }],
-          ]}
-        >
-          <Text
-            style={[
-              styles.messageText,
-              isUser ? styles.userMessageText : [styles.noraMessageText, { color: theme.text }],
-            ]}
-          >
-            {isUser ? message.content : stripMarkdown(message.content)}
+      ) : isUser ? (
+        <View style={[styles.messageBubble, styles.userBubble, { backgroundColor: theme.primary }]}>
+          <Text style={[styles.messageText, styles.userMessageText]}>
+            {message.content}
           </Text>
-          {message.sources && <SourceCitation sources={message.sources} theme={theme} isDark={isDark} />}
+        </View>
+      ) : (
+        <View style={styles.noraResponseContainer}>
+          <StreamingMarkdown
+            content={message.content}
+            isNew={!!message.isNew}
+            markdownStyle={{
+              body: { color: theme.text, fontSize: 16, lineHeight: 26 },
+              heading1: { color: theme.text, fontSize: 24, fontWeight: '700' as const, lineHeight: 32, marginBottom: 12, marginTop: 20 },
+              heading2: { color: theme.text, fontSize: 20, fontWeight: '700' as const, lineHeight: 28, marginBottom: 8, marginTop: 18 },
+              heading3: { color: theme.text, fontSize: 17, fontWeight: '600' as const, lineHeight: 24, marginBottom: 6, marginTop: 14 },
+              strong: { fontWeight: '700' as const, color: theme.text },
+              em: { fontStyle: 'italic' as const },
+              bullet_list: { marginBottom: 12, marginTop: 4 },
+              ordered_list: { marginBottom: 12, marginTop: 4 },
+              list_item: { marginBottom: 6 },
+              code_block: { backgroundColor: isDark ? '#1a1a2e' : '#f5f5f5', borderRadius: 10, padding: 14, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 14, lineHeight: 20, marginVertical: 10 },
+              code_inline: { backgroundColor: isDark ? '#1a1a2e' : '#f0f0f0', borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 14 },
+              blockquote: { borderLeftWidth: 3, borderLeftColor: theme.primary, paddingLeft: 14, marginVertical: 10 },
+              link: { color: theme.primary, textDecorationLine: 'underline' as const },
+              paragraph: { marginBottom: 12 },
+              hr: { backgroundColor: theme.text + '20', height: 1, marginVertical: 16 },
+            }}
+          />
+          {message.sources && message.sources.length > 0 && (
+            <SourceCitation sources={message.sources} theme={theme} isDark={isDark} />
+          )}
         </View>
       )}
     </View>
@@ -468,6 +675,7 @@ const NoraScreenNew: React.FC = () => {
   const { theme } = useTheme();
   const navigation = useNavigation<any>();
   const scrollViewRef = useRef<ScrollView>(null);
+  const insets = useSafeAreaInsets();
 
   // Force animations to replay on every screen focus
   const focusKey = useFocusAnimationKey();
@@ -479,7 +687,7 @@ const NoraScreenNew: React.FC = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [showWelcome, setShowWelcome] = useState(true);
-  const [thinkingMode, setThinkingMode] = useState<'quick' | 'deep' | 'research'>('quick');
+  const [thinkingMode, setThinkingMode] = useState<'auto' | 'quick' | 'deep' | 'research'>('quick');
   const [showPdfPicker, setShowPdfPicker] = useState(false);
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [uploadedPdfs, setUploadedPdfs] = useState<any[]>([]);
@@ -494,6 +702,7 @@ const NoraScreenNew: React.FC = () => {
 
   // Hooks
   const { sessions: noraSessions, groupedSessions, createSession, deleteSession: deleteNoraSess, requestTitleGeneration } = useNoraSessions();
+  const { messages: sessionMessages, isLoading: isLoadingSession } = useNoraSessionMessages(currentSessionId);
 
   // Onboarding status
   const onboardingStatus = useQuery(api.noraOnboarding.getStatus);
@@ -523,8 +732,9 @@ const NoraScreenNew: React.FC = () => {
 
   // Handle selecting a chat session from the side nav
   const handleSelectSession = (session: ChatSession) => {
+    isRestoringSession.current = true;
     setCurrentSessionId(session.id);
-    setMessages(session.messages);
+    setMessages([]); // Clear while loading
     setShowWelcome(false);
   };
 
@@ -594,6 +804,21 @@ const NoraScreenNew: React.FC = () => {
       }, 100);
     }
   }, [messages]);
+
+  // Load messages from Convex when a prior session is selected
+  const isRestoringSession = useRef(false);
+  useEffect(() => {
+    if (isRestoringSession.current && sessionMessages.length > 0) {
+      const loaded: Message[] = sessionMessages.map((m: any) => ({
+        id: m._id,
+        content: m.content,
+        sender: m.role === 'user' ? 'user' : 'nora',
+        timestamp: m._creationTime ? new Date(m._creationTime).toISOString() : new Date().toISOString(),
+      }));
+      setMessages(loaded);
+      isRestoringSession.current = false;
+    }
+  }, [sessionMessages]);
 
   // Enforce onboarding
   useEffect(() => {
@@ -981,10 +1206,10 @@ const NoraScreenNew: React.FC = () => {
       const fileExtension = audioUri.split('.').pop() || 'm4a';
       const mimeType = fileExtension === 'wav' ? 'audio/wav' : 'audio/m4a';
       const audioBase64 = await FileSystem.readAsStringAsync(audioUri, {
-        encoding: FileSystem.EncodingType.Base64,
+        encoding: 'base64',
       });
 
-      const result = await transcribeAudio({
+      const result = await convexTranscribeAudio({
         audioBase64,
         mimeType,
         fileName: `recording.${fileExtension}`,
@@ -999,10 +1224,12 @@ const NoraScreenNew: React.FC = () => {
         }
       } else {
         console.error('Transcription failed:', result.error);
+        Alert.alert('Voice Error', 'Could not transcribe your audio. Please type your message instead or try again.');
         setIsLoading(false);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Transcription error:', error);
+      Alert.alert('Voice Error', 'Something went wrong with voice input. Please type your message instead.');
       setIsLoading(false);
     }
   };
@@ -1044,9 +1271,10 @@ const NoraScreenNew: React.FC = () => {
     setMessages((prev) => [...prev, userMessage]);
 
     const thinkingSteps: Record<string, string[]> = {
-      quick: ['Understanding your question...', 'Finding relevant information...', 'Preparing response...'],
-      deep: ['Analyzing your question deeply...', 'Researching comprehensive sources...', 'Cross-referencing information...', 'Building detailed response...'],
-      research: ['Searching the web...', 'Reading sources...', 'Cross-referencing data...', 'Synthesizing findings...', 'Preparing cited response...'],
+      auto: ['Analyzing your request...', 'Choosing the best approach...', 'Searching for sources...', 'Working on it...'],
+      quick: ['Preparing response...'],
+      deep: ['Analyzing in depth...', 'Searching for authoritative sources...', 'Cross-referencing research...', 'Building comprehensive analysis...'],
+      research: ['Searching the web...', 'Reading multiple sources...', 'Cross-referencing data...', 'Synthesizing findings...', 'Preparing cited response...'],
     };
 
     const searchingMessage: Message = {
@@ -1056,6 +1284,7 @@ const NoraScreenNew: React.FC = () => {
       timestamp: new Date().toISOString(),
       isSearching: true,
       searchSteps: thinkingSteps[thinkingMode] || thinkingSteps.quick,
+      mode: thinkingMode,
     };
     setMessages((prev) => [...prev, searchingMessage]);
     setIsLoading(true);
@@ -1068,7 +1297,7 @@ const NoraScreenNew: React.FC = () => {
         sessionId: currentSessionId || undefined,
         pdfContext: selectedPdf ? { title: selectedPdf.title, file_path: selectedPdf.file_path } : null,
       });
-      console.log('[Nora] Response received:', { success: data.success, error: data.error, hasResponse: !!data.response, sessionId: data.sessionId });
+      console.log('[Nora] Response received:', { success: data.success, error: data.error, hasResponse: !!data.response, sessionId: data.sessionId, sourcesCount: data.sources?.length ?? 0, sources: data.sources });
 
       // Store the session ID returned from the backend
       if (data.sessionId && !currentSessionId) {
@@ -1079,14 +1308,27 @@ const NoraScreenNew: React.FC = () => {
 
       setMessages((prev) => {
         const filtered = prev.filter((m) => m.id !== 'searching');
+
+        // Build sources: prefer API-returned web sources, fall back to context-based, then Nora's knowledge
+        let messageSources: Source[] = [];
+        if (data.sources && data.sources.length > 0) {
+          messageSources = data.sources.map((s: any) => ({
+            title: s.title,
+            url: s.url,
+            type: 'web' as const,
+          }));
+        } else if (selectedPdf) {
+          messageSources = [{ title: selectedPdf.title, type: 'document' }];
+        }
+
         const noraMessage: Message = {
           id: Date.now().toString(),
           content: data.response || "I'm here to help! What would you like to know?",
           sender: 'nora',
           timestamp: new Date().toISOString(),
-          sources: selectedPdf
-            ? [{ title: selectedPdf.title, type: 'document' }]
-            : [{ title: 'Study Assistant', type: 'memory' }],
+          sources: messageSources.length > 0 ? messageSources : undefined,
+          isNew: true,
+          mode: thinkingMode,
         };
         return [...filtered, noraMessage];
       });
@@ -1114,6 +1356,7 @@ const NoraScreenNew: React.FC = () => {
 
   const handleNewChat = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    isRestoringSession.current = false;
     setMessages([]);
     setShowWelcome(true);
     setInput('');
@@ -1138,6 +1381,7 @@ const NoraScreenNew: React.FC = () => {
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.background }]}
+      edges={['top', 'left', 'right']}
     >
       <StatusBar barStyle={theme.background === '#FFFFFF' ? 'dark-content' : 'light-content'} />
 
@@ -1226,36 +1470,31 @@ const NoraScreenNew: React.FC = () => {
             </View>
           ) : (
             <View style={styles.messagesContainer}>
+              {isRestoringSession.current && messages.length === 0 && (
+                <View style={{ padding: 20, alignItems: 'center' }}>
+                  <Text style={{ color: theme.textSecondary, fontSize: 14 }}>Loading conversation...</Text>
+                </View>
+              )}
               {messages.map((message) => (
-                <MessageBubble key={message.id} message={message} theme={theme} isDeepThink={thinkingMode !== 'quick'} isDark={theme.isDark ?? false} />
+                <MessageBubble key={message.id} message={message} theme={theme} isDark={theme.isDark ?? false} />
               ))}
             </View>
           )}
         </ScrollView>
 
         {/* Input Area */}
-        <View style={[styles.inputArea, { backgroundColor: theme.background }]}>
+        <View style={[styles.inputArea, { backgroundColor: theme.background, paddingBottom: Math.max(insets.bottom, 4) }]}>
           <Animated.View style={[styles.inputContainer, { backgroundColor: theme.card, borderColor: theme.border }, inputContainerAnimatedStyle]}>
-            {/* Circular reveal recording overlay - positioned behind everything */}
-            <Animated.View
-              style={[
-                styles.recordingRevealOverlay,
-                { backgroundColor: theme.primary + '15' },
-                revealAnimatedStyle,
-              ]}
-              pointerEvents={isRecording ? 'auto' : 'none'}
-            >
-              {isRecording && (
+            {/* Show voice bar when recording, text input otherwise */}
+            {isRecording ? (
+              <View style={[styles.recordingInlineContainer, { backgroundColor: theme.primary + '10' }]}>
                 <InlineVoiceBar
                   amplitude={voiceAmplitude}
                   duration={recordingDuration}
                   themeColor={theme.primary}
                 />
-              )}
-            </Animated.View>
-
-            {/* Text input - hidden during recording */}
-            {!isRecording && (
+              </View>
+            ) : (
               <TextInput
                 style={[styles.textInput, { color: theme.text }]}
                 placeholder="Chat with Nora"
@@ -1271,11 +1510,12 @@ const NoraScreenNew: React.FC = () => {
             <View style={styles.inputIconsRow}>
               {isRecording ? (
                 <>
-                  {/* Cancel button - animated with scale/opacity instead of layout animation */}
+                  {/* Cancel button */}
                   <Animated.View style={cancelButtonAnimatedStyle}>
                     <TouchableOpacity
-                      style={styles.inputIconButton}
+                      style={[styles.inputIconButton, { backgroundColor: (theme.error || '#FF6B6B') + '15', borderRadius: 12, padding: 8 }]}
                       onPress={cancelRecording}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     >
                       <Ionicons name="close" size={22} color={theme.error || '#FF6B6B'} />
                     </TouchableOpacity>
@@ -1289,12 +1529,13 @@ const NoraScreenNew: React.FC = () => {
                     <Ionicons name="add" size={22} color={theme.textSecondary} />
                   </TouchableOpacity>
 
-                  {/* Mode selector pills */}
-                  {(['quick', 'deep', 'research'] as const).map((mode) => {
+                  {/* Mode selector pills — Quick (default), Auto, Research (web), Deep (thorough) */}
+                  {(['quick', 'auto', 'research', 'deep'] as const).map((mode) => {
                     const modeConfig = {
                       quick: { icon: 'flash-outline' as const, color: theme.textSecondary, label: 'Quick' },
-                      deep: { icon: 'flash' as const, color: '#FF6B6B', label: 'Deep' },
+                      auto: { icon: 'sparkles-outline' as const, color: '#7B61FF', label: 'Auto' },
                       research: { icon: 'globe-outline' as const, color: '#4ECDC4', label: 'Research' },
+                      deep: { icon: 'glasses-outline' as const, color: '#FF6B6B', label: 'Deep' },
                     };
                     const config = modeConfig[mode];
                     const isActive = thinkingMode === mode;
@@ -1322,8 +1563,27 @@ const NoraScreenNew: React.FC = () => {
                 </>
               )}
 
-              {/* Rotating Mic/Checkmark/Send button with animations */}
-              {input.trim() && !isRecording ? (
+              {/* Mic button - always visible */}
+              <TouchableOpacity
+                style={[styles.sendIconButton, { backgroundColor: theme.primary + '15', marginRight: 6 }]}
+                onPress={isRecording ? stopAndTranscribe : handleVoicePress}
+                activeOpacity={0.8}
+              >
+                {/* Rotating icon container */}
+                <View style={styles.rotatingIconContainer}>
+                  {/* Mic icon - rotates out when recording */}
+                  <Animated.View style={[styles.rotatingIcon, micRotationStyle]}>
+                    <Ionicons name="mic" size={18} color={theme.primary} />
+                  </Animated.View>
+                  {/* Checkmark icon - rotates in when recording */}
+                  <Animated.View style={[styles.rotatingIcon, styles.rotatingIconAbsolute, checkmarkRotationStyle]}>
+                    <Ionicons name="checkmark" size={20} color={theme.primary} />
+                  </Animated.View>
+                </View>
+              </TouchableOpacity>
+
+              {/* Send button - appears next to mic when text exists */}
+              {input.trim() && !isRecording && (
                 <View style={styles.sendButtonWrapper}>
                   {/* Glow layer behind send button */}
                   <Animated.View
@@ -1343,24 +1603,6 @@ const NoraScreenNew: React.FC = () => {
                     </TouchableOpacity>
                   </Animated.View>
                 </View>
-              ) : (
-                <TouchableOpacity
-                  style={[styles.sendIconButton, { backgroundColor: theme.primary }]}
-                  onPress={isRecording ? stopAndTranscribe : handleVoicePress}
-                  activeOpacity={0.8}
-                >
-                  {/* Rotating icon container */}
-                  <View style={styles.rotatingIconContainer}>
-                    {/* Mic icon - rotates out when recording */}
-                    <Animated.View style={[styles.rotatingIcon, micRotationStyle]}>
-                      <Ionicons name="mic" size={18} color="#FFFFFF" />
-                    </Animated.View>
-                    {/* Checkmark icon - rotates in when recording */}
-                    <Animated.View style={[styles.rotatingIcon, styles.rotatingIconAbsolute, checkmarkRotationStyle]}>
-                      <Ionicons name="checkmark" size={20} color="#FFFFFF" />
-                    </Animated.View>
-                  </View>
-                </TouchableOpacity>
               )}
             </View>
           </Animated.View>
@@ -1500,6 +1742,7 @@ const styles = StyleSheet.create({
   noraBubbleContainer: {
     justifyContent: 'flex-start',
     alignItems: 'flex-start',
+    flex: 1,
   },
   noraAvatarSmall: {
     marginRight: 8,
@@ -1522,6 +1765,10 @@ const styles = StyleSheet.create({
   },
   noraBubble: {
     borderBottomLeftRadius: 4,
+  },
+  noraResponseContainer: {
+    flex: 1,
+    paddingVertical: 4,
   },
   thinkingContainer: {
     // No bubble - just the text floating naturally
@@ -1558,98 +1805,106 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   sourcesContainer: {
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.06)',
+    marginTop: 12,
   },
-  sourcesTitle: {
-    fontSize: 10,
-    fontWeight: '600',
-    marginBottom: 6,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  sourcesList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  sourceChip: {
+  // Collapsed bar (tap to expand)
+  sourcesCollapsedBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 10,
-  },
-  sourceText: {
-    fontSize: 11,
-    marginLeft: 4,
-    fontWeight: '500',
-  },
-  // Liquid Glass Source Styles
-  liquidSourcesList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    justifyContent: 'flex-start',
-  },
-  liquidSourceWrapper: {
-    alignItems: 'center',
-    width: 52,
-  },
-  liquidSourceGlow: {
-    position: 'absolute',
-    top: -3,
-    left: -3,
-    right: -3,
-    bottom: 10,
-    borderRadius: 22,
-  },
-  liquidSourceOuter: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    overflow: 'hidden',
-  },
-  liquidSourceBlur: {
-    flex: 1,
-  },
-  liquidSourceGradient: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  liquidSourceLabel: {
-    fontSize: 9,
-    fontWeight: '500',
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  // Simple Source Styles (No Reanimated)
-  simpleSourcesList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    justifyContent: 'flex-start',
-  },
-  simpleSourceWrapper: {
-    alignItems: 'center',
-    width: 52,
-  },
-  simpleSourceBubble: {
-    width: 32,
-    height: 32,
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     borderRadius: 16,
-    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  sourcesCollapsedLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  sourcesCollapsedLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  // Stacked favicon circles (overlap effect)
+  faviconStack: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  simpleSourceLabel: {
-    fontSize: 9,
+  faviconStackIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  // Bottom sheet modal
+  sourcesSheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  sourcesSheetContainer: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: height * 0.6,
+    paddingBottom: 34, // safe area
+  },
+  sourcesSheetHandle: {
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  sourcesSheetHandleBar: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+  },
+  sourcesSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+  },
+  sourcesSheetTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  sourcesSheetList: {
+    paddingHorizontal: 6,
+  },
+  // Individual source row
+  sourceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    gap: 10,
+  },
+  sourceRowFavicon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+  },
+  sourceRowFaviconFallback: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sourceRowText: {
+    flex: 1,
+  },
+  sourceRowTitle: {
+    fontSize: 14,
     fontWeight: '500',
-    marginTop: 4,
-    textAlign: 'center',
-    maxWidth: 50,
+    lineHeight: 18,
+  },
+  sourceRowDomain: {
+    fontSize: 12,
+    marginTop: 2,
   },
   // Thinking Bubble Container
   thinkingBubbleContainer: {
@@ -1658,21 +1913,30 @@ const styles = StyleSheet.create({
   },
   inputArea: {
     paddingHorizontal: 12,
-    paddingTop: 4,
-    paddingBottom: 4,
+    paddingTop: 6,
+    paddingBottom: 8,
   },
   inputContainer: {
-    borderRadius: 24,
+    borderRadius: 28,
     paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 6,
+    paddingTop: 14,
+    paddingBottom: 10,
     borderWidth: 1,
   },
   textInput: {
     fontSize: 16,
-    minHeight: 20,
-    maxHeight: 100,
-    marginBottom: 6,
+    minHeight: 44,
+    maxHeight: 120,
+    marginBottom: 8,
+    lineHeight: 22,
+  },
+  recordingInlineContainer: {
+    minHeight: 44,
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    justifyContent: 'center',
+    marginBottom: 8,
   },
   inputIconsRow: {
     flexDirection: 'row',

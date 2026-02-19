@@ -8,12 +8,12 @@ tags:
   - verify
   - profile
   - convex
+env:
+  EXPO_PUBLIC_TEST_MODE: "true"
 
 ---
 - launchApp:
     clearState: true
-    env:
-      EXPO_PUBLIC_TEST_MODE: "true"
 
 - extendedWaitUntil:
     visible: "Home"
@@ -125,9 +125,7 @@ tags:
 
 # Force restart app
 - stopApp
-- launchApp:
-    env:
-      EXPO_PUBLIC_TEST_MODE: "true"
+- launchApp
 
 - extendedWaitUntil:
     visible: "Home"

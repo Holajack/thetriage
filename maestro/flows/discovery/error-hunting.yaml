@@ -8,12 +8,12 @@ tags:
   - discovery
   - errors
   - edge-cases
+env:
+  EXPO_PUBLIC_TEST_MODE: "true"
 
 ---
 - launchApp:
     clearState: true
-    env:
-      EXPO_PUBLIC_TEST_MODE: "true"
 
 - extendedWaitUntil:
     visible: "Home"

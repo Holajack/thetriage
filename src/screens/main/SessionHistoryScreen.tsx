@@ -131,7 +131,7 @@ const SessionHistoryScreen = () => {
         </TouchableOpacity>
       ),
     });
-  }, [navigation, theme]);
+  }, [navigation]);
 
   const formatDuration = (minutes: number) => {
     const hours = Math.floor(minutes / 60);
@@ -205,7 +205,7 @@ const SessionHistoryScreen = () => {
         <AnimatedTouchable
           style={[
             styles.sessionCard,
-            { backgroundColor: theme.card, borderColor: theme.primary },
+            { backgroundColor: theme.card, borderColor: theme.border },
             animatedStyle,
           ]}
           onPress={() => {
@@ -232,7 +232,7 @@ const SessionHistoryScreen = () => {
                 <Text style={styles.statusText}>{session.status}</Text>
               </View>
             </View>
-            <Text style={[styles.sessionDate, { color: theme.text }]}>
+            <Text style={[styles.sessionDate, { color: theme.textSecondary ?? theme.text }]}>
               {formatDate(session.created_at)}
             </Text>
           </View>
@@ -241,7 +241,7 @@ const SessionHistoryScreen = () => {
           <View style={styles.sessionStats}>
             <View style={styles.statItem}>
               <Ionicons name="time-outline" size={16} color={theme.primary} />
-              <Text style={[styles.statLabel, { color: theme.text }]}>Duration</Text>
+              <Text style={[styles.statLabel, { color: theme.textSecondary ?? theme.text }]}>Duration</Text>
               <Text style={[styles.statValue, { color: theme.text }]}>
                 {formatDuration(session.duration_minutes || 0)}
               </Text>
@@ -249,7 +249,7 @@ const SessionHistoryScreen = () => {
 
             <View style={styles.statItem}>
               <Ionicons name="calendar-outline" size={16} color={theme.primary} />
-              <Text style={[styles.statLabel, { color: theme.text }]}>Type</Text>
+              <Text style={[styles.statLabel, { color: theme.textSecondary ?? theme.text }]}>Type</Text>
               <Text style={[styles.statValue, { color: theme.text }]}>
                 {session.session_type === 'individual' ? 'Solo' : 'Group'}
               </Text>
@@ -258,7 +258,7 @@ const SessionHistoryScreen = () => {
             {session.focus_quality ? (
               <View style={styles.statItem}>
                 <Ionicons name="eye-outline" size={16} color={theme.primary} />
-                <Text style={[styles.statLabel, { color: theme.text }]}>Focus</Text>
+                <Text style={[styles.statLabel, { color: theme.textSecondary ?? theme.text }]}>Focus</Text>
                 <View style={styles.starsContainer}>
                   {renderStars(session.focus_quality)}
                 </View>
@@ -268,7 +268,7 @@ const SessionHistoryScreen = () => {
 
           {/* Notes Preview - only show if notes exist */}
           {session.notes ? (
-            <View style={styles.notesPreview}>
+            <View style={[styles.notesPreview, { borderTopColor: theme.border }]}>
               <Ionicons name="document-text-outline" size={14} color={theme.primary} />
               <Text style={[styles.notesText, { color: theme.text }]} numberOfLines={2}>
                 {session.notes}
@@ -277,10 +277,10 @@ const SessionHistoryScreen = () => {
           ) : null}
 
           {/* Session Footer */}
-          <View style={styles.sessionFooter}>
+          <View style={[styles.sessionFooter, { borderTopColor: theme.border }]}>
             <View style={styles.footerItem}>
               <Ionicons name="time-outline" size={14} color={theme.primary} />
-              <Text style={[styles.footerText, { color: theme.text }]}>
+              <Text style={[styles.footerText, { color: theme.textSecondary ?? theme.text }]}>
                 {new Date(session.start_time).toLocaleTimeString('en-US', {
                   hour: '2-digit',
                   minute: '2-digit',
@@ -291,7 +291,7 @@ const SessionHistoryScreen = () => {
             {session.end_time && (
               <View style={styles.footerItem}>
                 <Ionicons name="checkmark-circle-outline" size={14} color={theme.primary} />
-                <Text style={[styles.footerText, { color: theme.text }]}>
+                <Text style={[styles.footerText, { color: theme.textSecondary ?? theme.text }]}>
                   Completed
                 </Text>
               </View>
@@ -330,7 +330,7 @@ const SessionHistoryScreen = () => {
       <Animated.View
         key={`filter-${focusKey}`}
         entering={FadeInDown.delay(100).duration(400).duration(400)}
-        style={[styles.filterContainer, { backgroundColor: theme.card }]}
+        style={[styles.filterContainer, { backgroundColor: theme.card, borderBottomColor: theme.border }]}
       >
         {(['all', 'week', 'month'] as const).map((filter) => (
           <TouchableOpacity
@@ -381,7 +381,7 @@ const SessionHistoryScreen = () => {
           <View style={styles.emptyContainer}>
             <MaterialIcons name="history" size={64} color="#BDBDBD" />
             <Text style={[styles.emptyTitle, { color: theme.text }]}>No Sessions Yet</Text>
-            <Text style={[styles.emptySubtitle, { color: theme.text }]}>
+            <Text style={[styles.emptySubtitle, { color: theme.textSecondary ?? theme.text }]}>
               Complete your first focus session to see it here
             </Text>
             <TouchableOpacity
@@ -396,7 +396,7 @@ const SessionHistoryScreen = () => {
             {/* Summary Stats */}
             <Animated.View
               entering={FadeInUp.delay(300).duration(400)}
-              style={[styles.summaryContainer, { backgroundColor: theme.card }]}
+              style={[styles.summaryContainer, { backgroundColor: theme.card, borderColor: theme.border }]}
             >
               <Text style={[styles.summaryTitle, { color: theme.text }]}>
                 {timeFilter === 'all' ? 'All Time' :
@@ -410,7 +410,7 @@ const SessionHistoryScreen = () => {
                   <Text style={[styles.summaryValue, { color: theme.primary }]}>
                     {sessions.length}
                   </Text>
-                  <Text style={[styles.summaryLabel, { color: theme.text }]}>Sessions</Text>
+                  <Text style={[styles.summaryLabel, { color: theme.textSecondary ?? theme.text }]}>Sessions</Text>
                 </Animated.View>
                 <Animated.View
                   entering={FadeIn.delay(500).duration(400)}
@@ -419,7 +419,7 @@ const SessionHistoryScreen = () => {
                   <Text style={[styles.summaryValue, { color: theme.primary }]}>
                     {Math.round(sessions.reduce((total, session) => total + (session.duration_minutes || 0), 0) / 60 * 10) / 10}h
                   </Text>
-                  <Text style={[styles.summaryLabel, { color: theme.text }]}>Total Time</Text>
+                  <Text style={[styles.summaryLabel, { color: theme.textSecondary ?? theme.text }]}>Total Time</Text>
                 </Animated.View>
                 <Animated.View
                   entering={FadeIn.delay(600).duration(400)}
@@ -428,7 +428,7 @@ const SessionHistoryScreen = () => {
                   <Text style={[styles.summaryValue, { color: theme.primary }]}>
                     {sessions.filter(s => s.status === 'completed').length}
                   </Text>
-                  <Text style={[styles.summaryLabel, { color: theme.text }]}>Completed</Text>
+                  <Text style={[styles.summaryLabel, { color: theme.textSecondary ?? theme.text }]}>Completed</Text>
                 </Animated.View>
               </View>
             </Animated.View>
@@ -600,7 +600,6 @@ const styles = StyleSheet.create({
   },
   sessionDate: {
     fontSize: 14,
-    opacity: 0.7,
   },
   sessionStats: {
     flexDirection: 'row',
@@ -669,7 +668,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 24,
-    opacity: 0.7,
   },
   startSessionButton: {
     paddingHorizontal: 24,

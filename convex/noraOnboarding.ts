@@ -95,3 +95,18 @@ export const complete = mutation({
     }
   },
 });
+
+/** DEV ONLY: Reset onboarding so the flow can be re-tested */
+export const resetOnboarding = mutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    const existing = await ctx.db
+      .query("noraOnboardingStatus")
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .unique();
+
+    if (existing) {
+      await ctx.db.delete(existing._id);
+    }
+  },
+});

@@ -19,6 +19,8 @@ import { StaggeredItem } from '../../components/premium/StaggeredList';
 import SettingsRow from './settings/components/SettingsRow';
 import SettingsGroup from './settings/components/SettingsGroup';
 import SettingsSectionHeader from './settings/components/SettingsSectionHeader';
+import { resetWalkthrough, resetAllWalkthroughs } from '../../hooks/useScreenWalkthrough';
+import { WALKTHROUGH_SCREENS } from '../../config/walkthroughSteps';
 
 const { useUserAppData } = require('../../utils/userAppData');
 
@@ -257,30 +259,6 @@ const SettingsScreen = () => {
     ]);
   };
 
-  const handleDeleteAccount = () => {
-    Alert.alert(
-      'Delete Account',
-      'This is PERMANENT. All your data will be deleted.\n\nAre you absolutely sure?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete My Account', style: 'destructive', onPress: () => {
-          Alert.prompt('Final Confirmation', 'Type "DELETE" to confirm', async (text) => {
-            if (text !== 'DELETE') { Alert.alert('Cancelled'); return; }
-            try {
-              if (!clerkUser) { Alert.alert('Error', 'Please log in.'); return; }
-              await clerkUser.delete();
-              Alert.alert('Account Deleted', 'Your account and data have been deleted.', [
-                { text: 'OK', onPress: () => navigation.reset({ index: 0, routes: [{ name: 'Auth' } as any] }) },
-              ]);
-            } catch (error: any) {
-              Alert.alert('Error', error.message || 'Failed to delete account.');
-            }
-          }, 'plain-text', '', 'default');
-        }},
-      ]
-    );
-  };
-
   // --- Support Handlers ---
   const handleHelpCenter = () => {
     Alert.alert('Help Center', 'Choose how to get help:', [
@@ -308,16 +286,51 @@ const SettingsScreen = () => {
   };
 
   const handleTermsOfService = () => {
-    Alert.alert('Terms of Service', 'You must be 13+ to use this app.\nRespect other users.\nYour data belongs to you.\n\nFull terms: https://hikewise.app/terms', [
-      { text: 'View Online', onPress: () => Linking.openURL('https://hikewise.app/terms').catch(() => {}) },
-      { text: 'Close' },
-    ]);
+    Alert.alert(
+      'Terms of Service',
+      'You must be 13+ to use HikeWise. Don\'t misuse the app or harm other users. We may update these terms with notice.',
+      [
+        { text: 'Read Full Terms', onPress: () => Linking.openURL('https://hikewise.app/terms').catch(() => {}) },
+        { text: 'Close' },
+      ]
+    );
   };
 
   const handlePrivacyPolicy = () => {
-    Alert.alert('Privacy Policy', 'We collect study session data and account info.\nWe do NOT sell your data.\n\nFull policy: https://hikewise.app/privacy', [
-      { text: 'View Online', onPress: () => Linking.openURL('https://hikewise.app/privacy').catch(() => {}) },
-      { text: 'Close' },
+    Alert.alert(
+      'Privacy Policy',
+      'We collect account info and study data to power the app. We never sell your data. You can export or delete your data anytime.',
+      [
+        { text: 'Read Full Policy', onPress: () => Linking.openURL('https://hikewise.app/privacy').catch(() => {}) },
+        { text: 'Close' },
+      ]
+    );
+  };
+
+  // --- Walkthrough replay ---
+  const handleReplayWalkthrough = (screenId: string, navigateTo: string) => {
+    Alert.alert('Replay Walkthrough', `Replay the ${WALKTHROUGH_SCREENS.find(s => s.id === screenId)?.label ?? screenId} walkthrough?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Replay',
+        onPress: async () => {
+          await resetWalkthrough(screenId);
+          (navigation as any).navigate(navigateTo);
+        },
+      },
+    ]);
+  };
+
+  const handleReplayAll = () => {
+    Alert.alert('Replay All Walkthroughs', 'Reset all walkthroughs so they show again on each screen?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Reset All',
+        onPress: async () => {
+          await resetAllWalkthroughs();
+          Alert.alert('Done', 'All walkthroughs will replay on your next visit to each screen.');
+        },
+      },
     ]);
   };
 
@@ -357,7 +370,7 @@ const SettingsScreen = () => {
             activeOpacity={0.9}
           >
             <Image
-              source={require('../../assets/example/new professional.png')}
+              source={require('../../../assets/examples/settings_image.png')}
               style={styles.proBannerImage}
               resizeMode="cover"
             />
@@ -457,10 +470,10 @@ const SettingsScreen = () => {
           <SettingsSectionHeader title="ACCOUNT" />
           <SettingsGroup>
             <SettingsRow
-              icon="person-outline"
-              label="Edit Profile"
-              description="Name, username, bio, photo"
-              onPress={() => navigation.navigate('Tabs' as any, { screen: 'Profile', params: { screen: 'ProfileMain' } } as any)}
+              icon="card-outline"
+              label="Subscription"
+              description="Manage your plan"
+              onPress={() => navigation.navigate('Subscription' as any)}
             />
             <SettingsRow
               icon="mail-outline"
@@ -539,12 +552,33 @@ const SettingsScreen = () => {
           </SettingsGroup>
         </StaggeredItem>
 
-        {/* DANGER ZONE */}
+        {/* TUTORIALS */}
         <StaggeredItem index={8}>
+          <SettingsSectionHeader title="TUTORIALS" />
+          <SettingsGroup>
+            {WALKTHROUGH_SCREENS.map((screen, idx) => (
+              <SettingsRow
+                key={screen.id}
+                icon="play-circle-outline"
+                label={`${screen.label} Walkthrough`}
+                onPress={() => handleReplayWalkthrough(screen.id, screen.navigateTo)}
+                isLast={idx === WALKTHROUGH_SCREENS.length - 1}
+              />
+            ))}
+          </SettingsGroup>
+          <TouchableOpacity
+            style={{ alignItems: 'center', marginTop: 8, marginBottom: 4, paddingVertical: 8 }}
+            onPress={handleReplayAll}
+          >
+            <Text style={{ color: theme.primary, fontSize: 14, fontWeight: '600' }}>Reset All Walkthroughs</Text>
+          </TouchableOpacity>
+        </StaggeredItem>
+
+        {/* DANGER ZONE */}
+        <StaggeredItem index={9}>
           <View style={{ marginTop: Spacing.lg }}>
             <SettingsGroup>
-              <SettingsRow icon="log-out-outline" label="Sign Out" onPress={handleSignOut} />
-              <SettingsRow icon="trash-outline" label="Delete Account" danger onPress={handleDeleteAccount} isLast />
+              <SettingsRow icon="log-out-outline" label="Sign Out" onPress={handleSignOut} isLast />
             </SettingsGroup>
           </View>
         </StaggeredItem>

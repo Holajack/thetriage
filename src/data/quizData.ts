@@ -329,7 +329,7 @@ export const STUDY_HABITS_QUESTIONS: QuizQuestion[] = [
   {
     id: "sh_040",
     question: "How do you deal with perfectionism in your studies?",
-    options: ["I'm not perfectionist", "Set 'good enough' standards", "Focus on learning over perfection", "Struggle with perfectionism", "Perfectionism helps me excel"],
+    options: ["I'm not a perfectionist", "Set 'good enough' standards", "Focus on learning over perfection", "Struggle with perfectionism", "Perfectionism helps me excel"],
     category: "motivation",
     weight: 2
   },
@@ -927,7 +927,7 @@ export const LEARNING_STYLE_QUESTIONS: QuizQuestion[] = [
   {
     id: "ls_053",
     question: "When learning new terminology, you:",
-    options: ["Create visual associations", "Practice pronunciation", "Use in context", "Write definitions", "Teach others"],
+    options: ["Create visual associations", "Practice pronunciation", "Use terms in context", "Write definitions", "Teach others"],
     category: "reading_writing",
     weight: 3
   },
@@ -1268,7 +1268,7 @@ export const MOTIVATION_PROFILE_QUESTIONS: QuizQuestion[] = [
   {
     id: "mp_017",
     question: "What's your reaction to a lower-than-expected grade?",
-    options: ["Devastated and immediately plan improvement", "Disappointed but move forward", "Analyze what went wrong", "Frustrated temporarily", "Doesn't bother me much"],
+    options: ["Determined to improve immediately", "Disappointed but move forward", "Analyze what went wrong", "Frustrated temporarily", "Doesn't bother me much"],
     category: "achievement",
     weight: 3
   },
@@ -1432,7 +1432,7 @@ export const MOTIVATION_PROFILE_QUESTIONS: QuizQuestion[] = [
   },
   {
     id: "mp_040",
-    question: "How much do you see education as a means to an end?",
+    question: "How much do you view education primarily as a practical tool for your career?",
     options: ["Entirely - it's just a stepping stone", "Mostly practical purpose", "Mix of practical and personal", "More for personal growth", "Education is the goal itself"],
     category: "future_goals",
     weight: 3
@@ -1476,7 +1476,7 @@ export const MOTIVATION_PROFILE_QUESTIONS: QuizQuestion[] = [
   },
   {
     id: "mp_046",
-    question: "How do you feel when forced to study something you don't want to?",
+    question: "How do you feel when required to study something you're not interested in?",
     options: ["Very resistant and unmotivated", "Frustrated but compliant", "Accept it as necessary", "Don't mind much", "Equally motivated either way"],
     category: "autonomy",
     weight: 3
@@ -1491,7 +1491,7 @@ export const MOTIVATION_PROFILE_QUESTIONS: QuizQuestion[] = [
   {
     id: "mp_048",
     question: "How do you react to micromanagement of your studies?",
-    options: ["Strongly dislike - kills motivation", "Dislike it", "Tolerate it", "Don't mind", "Actually prefer it"],
+    options: ["Strongly dislike - significantly reduces motivation", "Dislike it", "Tolerate it", "Don't mind", "Actually prefer it"],
     category: "autonomy",
     weight: 2
   },

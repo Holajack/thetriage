@@ -35,6 +35,15 @@ export const update = mutation({
     privacyMode: v.optional(v.boolean()),
     autoStartBreaks: v.optional(v.boolean()),
     showMotivationalQuotes: v.optional(v.boolean()),
+    // Ambient sound layer toggles
+    ambientEnvironmentEnabled: v.optional(v.boolean()),
+    ambientWhiteNoiseEnabled: v.optional(v.boolean()),
+    ambientCrittersEnabled: v.optional(v.boolean()),
+    ambientVolume: v.optional(v.number()),
+    // Music service preferences
+    preferredMusicService: v.optional(v.string()),
+    spotifyConnected: v.optional(v.boolean()),
+    appleMusicConnected: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const user = await getCurrentUser(ctx);

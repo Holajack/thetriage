@@ -26,7 +26,7 @@ function getClient(): ConvexReactClient {
 
 export interface NoraChatArgs {
   message: string;
-  thinkingMode?: "quick" | "deep" | "research";
+  thinkingMode?: "auto" | "quick" | "deep" | "research";
   sessionId?: string;
   conversationHistory?: { role: string; content: string }[];
   userSettings?: any;
@@ -43,6 +43,7 @@ export interface AIChatResponse {
   remaining_messages?: number;
   upgrade_required?: boolean;
   context?: any;
+  sources?: Array<{ title: string; url: string }>;
 }
 
 export async function sendNoraChatMessage(args: NoraChatArgs): Promise<AIChatResponse> {

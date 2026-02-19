@@ -609,8 +609,8 @@ export const useConvexProfile = () => {
     return await updateProfile({ status });
   };
 
-  // Adapt to match profile shape
-  const profile = user
+  // Adapt to match profile shape (memoized to prevent infinite re-render loops)
+  const profile = useMemo(() => user
     ? {
         ...user,
         id: user._id,
@@ -626,7 +626,7 @@ export const useConvexProfile = () => {
         created_at: user._creationTime ? new Date(user._creationTime).toISOString() : "",
         updated_at: user._creationTime ? new Date(user._creationTime).toISOString() : "",
       }
-    : null;
+    : null, [user]);
 
   return {
     profile,

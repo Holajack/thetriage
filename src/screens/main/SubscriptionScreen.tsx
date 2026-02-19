@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInUp, FadeIn } from 'react-native-reanimated';
@@ -18,15 +18,17 @@ import FeatureComparisonTable from './subscription/FeatureComparisonTable';
 import SocialProofBar from './subscription/SocialProofBar';
 import EliteCelebrationView from './subscription/EliteCelebrationView';
 
-// RevenueCat temporarily disabled for demo purposes
-// When ready to enable, uncomment the import below and remove mock functions
-// import {
-//   getAvailablePackages,
-//   purchasePackage,
-//   restorePurchases,
-//   getCurrentTier,
-//   getManagementURL,
-// } from '../../services/revenuecat';
+import {
+  getAvailablePackages,
+  purchasePackage,
+  restorePurchases,
+  getCurrentTier,
+  getManagementURL,
+  presentPaywall,
+  presentCustomerCenter,
+  isRevenueCatInitialized,
+  PurchasesPackage,
+} from '../../services/revenuecat';
 
 // ============================================
 // PLAN DATA
@@ -35,9 +37,9 @@ import EliteCelebrationView from './subscription/EliteCelebrationView';
 const PREMIUM_PLAN: PlanTier = {
   name: 'Premium',
   tier: 'premium',
-  monthlyPrice: 7.99,
-  annualPrice: 57.99,
-  annualMonthlyEquivalent: 4.83,
+  monthlyPrice: 14.99,
+  annualPrice: 107.99,
+  annualMonthlyEquivalent: 8.99,
   badge: 'Most Popular',
   tagline: 'Supercharge your study sessions',
   features: [
@@ -54,9 +56,9 @@ const PREMIUM_PLAN: PlanTier = {
 const ELITE_PLAN: PlanTier = {
   name: 'Elite',
   tier: 'elite',
-  monthlyPrice: 19.99,
-  annualPrice: 143.99,
-  annualMonthlyEquivalent: 12.00,
+  monthlyPrice: 29.99,
+  annualPrice: 215.99,
+  annualMonthlyEquivalent: 17.99,
   badge: 'Best Value',
   tagline: 'The ultimate study companion with Nora AI',
   features: [
@@ -75,35 +77,27 @@ const ELITE_PLAN: PlanTier = {
   gradient: PremiumColors.gradients.premium,
 };
 
-// Map plan tiers to RevenueCat product identifiers
+// RevenueCat product identifiers — match these in App Store Connect
 const PLAN_PRODUCTS: Record<string, Record<BillingPeriod, string>> = {
   premium: {
-    monthly: 'hikewise_premium_monthly',
-    annual: 'hikewise_premium_yearly',
+    monthly: 'hikewise_premium_monthly',   // $14.99/mo
+    annual: 'hikewise_premium_yearly',     // $107.99/yr
   },
   elite: {
-    monthly: 'hikewise_elite_monthly',
-    annual: 'hikewise_elite_yearly',
+    monthly: 'hikewise_elite_monthly',     // $29.99/mo
+    annual: 'hikewise_elite_yearly',       // $215.99/yr
   },
 };
 
-// ============================================
-// MOCK FUNCTIONS (Demo Mode)
-// ============================================
-
-const mockGetCurrentTier = async (): Promise<'free' | 'premium' | 'elite'> => {
-  return 'free';
-};
-
-const mockPurchasePackage = async (planName: string): Promise<{ success: boolean; error?: string }> => {
-  console.log('[Demo Mode] Purchase simulated for:', planName);
-  return { success: true };
-};
-
-const mockRestorePurchases = async (): Promise<{ success: boolean; tier: 'free' | 'premium' | 'elite'; error?: string }> => {
-  console.log('[Demo Mode] Restore purchases simulated');
-  return { success: true, tier: 'free' };
-};
+// Map plan tier + billing period to the correct RevenueCat package
+function findPackageForPlan(
+  packages: PurchasesPackage[],
+  tier: string,
+  period: BillingPeriod
+): PurchasesPackage | undefined {
+  const productId = PLAN_PRODUCTS[tier]?.[period === 'monthly' ? 'monthly' : 'annual'];
+  return packages.find((pkg) => pkg.product.identifier === productId);
+}
 
 // ============================================
 // SUBSCRIPTION SCREEN
@@ -118,21 +112,44 @@ const SubscriptionScreen = () => {
   const [processingTier, setProcessingTier] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
   const [loadingPackages, setLoadingPackages] = useState(false);
+  const [packages, setPackages] = useState<PurchasesPackage[]>([]);
 
-  // Load current subscription tier
+  // Load current subscription tier and available packages
   useEffect(() => {
     const loadSubscriptionData = async () => {
       try {
         setLoadingPackages(true);
-        const tier = await mockGetCurrentTier();
-        setCurrentTier(tier);
+
+        if (isRevenueCatInitialized()) {
+          const [tier, availablePackages] = await Promise.all([
+            getCurrentTier(),
+            getAvailablePackages(),
+          ]);
+          setCurrentTier(tier);
+          setPackages(availablePackages);
+        } else {
+          // SDK not initialized yet — default to free
+          setCurrentTier('free');
+        }
       } catch (error) {
         console.error('Error loading subscription data:', error);
+        setCurrentTier('free');
       } finally {
         setLoadingPackages(false);
       }
     };
     loadSubscriptionData();
+  }, []);
+
+  // Present RevenueCat Paywall (recommended approach)
+  const handlePresentPaywall = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const purchased = await presentPaywall();
+    if (purchased) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const tier = await getCurrentTier();
+      setCurrentTier(tier);
+    }
   }, []);
 
   const handleUpgrade = useCallback(async (plan: PlanTier) => {
@@ -141,33 +158,32 @@ const SubscriptionScreen = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      const productId = PLAN_PRODUCTS[plan.tier]?.[billingPeriod];
-      Alert.alert(
-        'Demo Mode',
-        `RevenueCat is not configured yet. In production, this would upgrade you to ${plan.name} (${productId}).`,
-        [
-          {
-            text: 'Simulate Success',
-            onPress: async () => {
-              const result = await mockPurchasePackage(plan.name);
-              if (result.success) {
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                Alert.alert(
-                  'Welcome to ' + plan.name + '!',
-                  `You now have full ${plan.name} access. (Demo — no actual purchase made)`,
-                  [{ text: 'OK' }],
-                );
-                setCurrentTier(plan.tier);
-              }
-            },
-          },
-          {
-            text: 'Cancel',
-            style: 'cancel',
-            onPress: () => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning),
-          },
-        ],
-      );
+      // Try to find the matching RevenueCat package
+      const pkg = findPackageForPlan(packages, plan.tier, billingPeriod);
+
+      if (pkg) {
+        // Use RevenueCat native purchase flow
+        const result = await purchasePackage(pkg);
+        if (result.success) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          Alert.alert(
+            'Welcome to ' + plan.name + '!',
+            `You now have full ${plan.name} access.`,
+            [{ text: 'OK' }],
+          );
+          setCurrentTier(plan.tier);
+        } else if (result.error !== 'cancelled') {
+          Alert.alert('Purchase Failed', result.error || 'Please try again.');
+        }
+      } else {
+        // No packages available yet — present RevenueCat Paywall instead
+        const purchased = await presentPaywall();
+        if (purchased) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          const tier = await getCurrentTier();
+          setCurrentTier(tier);
+        }
+      }
     } catch (error) {
       console.error('Purchase error:', error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -176,19 +192,19 @@ const SubscriptionScreen = () => {
       setIsProcessing(false);
       setProcessingTier(null);
     }
-  }, [billingPeriod]);
+  }, [billingPeriod, packages]);
 
   const handleRestorePurchases = useCallback(async () => {
     setIsRestoring(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
-      const result = await mockRestorePurchases();
+      const result = await restorePurchases();
       if (result.success && result.tier !== 'free') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert(
           'Purchases Restored',
-          `Your ${result.tier} subscription has been restored. (Demo mode)`,
+          `Your ${result.tier} subscription has been restored.`,
           [{ text: 'OK' }],
         );
         setCurrentTier(result.tier);
@@ -206,12 +222,25 @@ const SubscriptionScreen = () => {
   }, []);
 
   const handleManageSubscription = useCallback(async () => {
-    // In production, use getManagementURL() from RevenueCat
-    Alert.alert(
-      'Manage Subscription',
-      'This would open your device subscription settings. (Demo mode)',
-      [{ text: 'OK' }],
-    );
+    // Try RevenueCat Customer Center first (self-service UI)
+    try {
+      await presentCustomerCenter();
+      // Refresh tier after customer center interaction
+      const tier = await getCurrentTier();
+      setCurrentTier(tier);
+    } catch {
+      // Fallback: open native management URL
+      const url = await getManagementURL();
+      if (url) {
+        const { Linking } = require('react-native');
+        Linking.openURL(url);
+      } else {
+        Alert.alert(
+          'Manage Subscription',
+          'Please manage your subscription in your device Settings > Subscriptions.',
+        );
+      }
+    }
   }, []);
 
   const isEliteUser = currentTier === 'elite';
@@ -234,27 +263,35 @@ const SubscriptionScreen = () => {
         showsVerticalScrollIndicator={false}
       >
         {/* ============================================ */}
-        {/* HERO HEADER */}
+        {/* HERO HEADER WITH IMAGE */}
         {/* ============================================ */}
         <Animated.View entering={FadeInUp.delay(100).duration(500)}>
-          <LinearGradient
-            colors={PremiumColors.gradients.premium as [string, string, ...string[]]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.heroGradient}
-          >
-            <Ionicons name="diamond-outline" size={40} color="rgba(255,255,255,0.9)" />
-            <Text style={styles.heroTitle}>
-              {isEliteUser ? 'Elite Member' : 'Unlock Your Full Potential'}
-            </Text>
-            <Text style={styles.heroSubtitle}>
-              {isEliteUser
-                ? 'You have access to everything'
-                : isPremiumUser
-                  ? 'Upgrade to Elite for Nora AI and more'
-                  : 'Choose the plan that fits your study goals'}
-            </Text>
-          </LinearGradient>
+          <View style={styles.heroContainer}>
+            <Image
+              source={require('../../../assets/examples/settings_image.png')}
+              style={styles.heroImage}
+              resizeMode="cover"
+            />
+            <LinearGradient
+              colors={['rgba(0,0,0,0.1)', 'rgba(0,0,0,0.55)', 'rgba(0,0,0,0.85)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={styles.heroOverlay}
+            />
+            <View style={styles.heroContent}>
+              <Ionicons name="diamond-outline" size={36} color="rgba(255,255,255,0.9)" />
+              <Text style={styles.heroTitle}>
+                {isEliteUser ? 'Elite Member' : 'Unlock Your\nFull Potential'}
+              </Text>
+              <Text style={styles.heroSubtitle}>
+                {isEliteUser
+                  ? 'You have access to everything'
+                  : isPremiumUser
+                    ? 'Upgrade to Elite for Nora AI and more'
+                    : 'Choose the plan that fits your study goals'}
+              </Text>
+            </View>
+          </View>
         </Animated.View>
 
         {/* ============================================ */}
@@ -411,26 +448,59 @@ const styles = StyleSheet.create({
     paddingBottom: 60,
   },
 
-  // Hero
-  heroGradient: {
-    paddingTop: Spacing.xl,
-    paddingBottom: Spacing.xxl,
-    paddingHorizontal: Spacing.lg,
-    alignItems: 'center',
+  // Hero with image
+  heroContainer: {
+    height: 260,
+    position: 'relative',
+    overflow: 'hidden',
     marginBottom: Spacing.lg,
   },
+  heroImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+  },
+  heroOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  heroContent: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.xl,
+    alignItems: 'center',
+  },
   heroTitle: {
-    ...Typography.display,
+    fontSize: 34,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+    lineHeight: 40,
     color: '#FFFFFF',
     textAlign: 'center',
     marginTop: Spacing.sm,
     marginBottom: Spacing.xs,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
   },
   heroSubtitle: {
     ...Typography.body,
-    color: 'rgba(255,255,255,0.85)',
+    color: 'rgba(255,255,255,0.9)',
     textAlign: 'center',
     maxWidth: 300,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
 
   // Card containers
