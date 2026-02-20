@@ -1,10 +1,71 @@
-# Exclude example/demo images (not used in app)
+# =============================================
+# .easignore — Reduce EAS build upload size
+# =============================================
+# EAS already ignores: node_modules, .git
+# This file targets everything else that isn't
+# needed for the native iOS/Android build.
+
+# ─── DOCUMENTATION & MARKDOWN ────────────────
+*.md
+*.sql
+
+# ─── ROOT-LEVEL DEV/DEBUG SCRIPTS ────────────
+test-*.js
+debug-*.js
+verify-*.js
+fix-*.js
+comprehensive-*.js
+check-*.js
+storage-diagnostic.js
+optimize-*.js
+quick-*.js
+final-*.js
+*.exp
+
+# ─── BUILD ARTIFACTS & CACHES ────────────────
+dist/**
+.codebuddy/**
+.expo/**
+.tmp/**
+ios/Pods/**
+ios/build/**
+android/.gradle/**
+android/build/**
+*.log
+
+# ─── DEV TOOLING & NON-APP DIRECTORIES ──────
+scripts/**
+ci_scripts/**
+execution/**
+directives/**
+maestro/**
+fastlane/**
+playwright/**
+n8n-workflows/**
+docs/**
+store-assets/**
+.github/**
+.vscode/**
+
+# ─── SHELL & PYTHON SCRIPTS ─────────────────
+*.sh
+*.py
+
+# ─── ZIP ARCHIVES IN ASSETS (source files, already extracted) ──
+# These are 64 MB of source archives not used at runtime
+assets/Background_animations/*.zip
+assets/Background_animations/**/*.zip
+assets/trail-buddies/*.zip
+
+# ─── UNUSED / EXAMPLE ASSET FOLDERS ─────────
+# Keep settings_image.png (used by SubscriptionScreen + SettingsScreen)
 assets/examples/**
+!assets/examples/settings_image.png
 assets/errors/**
 assets/Claude iOS Onboarding/**
 assets/trail-buddies/example-input-images/**
 
-# Exclude backup images
+# ─── BACKUP & UNUSED IMAGES ─────────────────
 assets/*-backup*.png
 assets/icon-ios-brand*.png
 assets/icon-ios-solid.png
@@ -18,51 +79,39 @@ assets/Original-0.png
 assets/*.sql
 assets/simulator_screenshot*.png
 
-# Keep assets/music/** - it's required by useBackgroundMusic.ts
-# Exclude duplicate music in src/assets/ (not used by code)
+# ─── src/assets — UNUSED DUPLICATES ─────────
+# Music folders duplicated from assets/music/ (not imported by code)
 src/assets/Jazz Ambient/**
 src/assets/Lo-Fi/**
 src/assets/Classical/**
 src/assets/Ambient/**
 src/assets/Nature/**
 
-# Exclude large 3D models that are too complex
+# 3D model too complex / unused
 src/assets/Brain_MRI_Nevit%20Dilmen_NIH3D.gltf
 
-# Exclude documentation and test files
-*.md
-test-*.js
-debug-*.js
-verify-*.js
-fix-*.js
-comprehensive-*.js
-*.sql
-check-*.js
-storage-diagnostic.js
-optimize-*.js
+# App icon PNGs (Expo generates these from app.json icon)
+src/assets/Icon-App-*.png
+src/assets/ItunesArtwork@2x.png
+src/assets/iTunesArtwork@1x.png
+src/assets/iTunesArtwork@3x.png
 
-# Exclude build artifacts and caches
-dist/**
-.codebuddy/**
-ios/Pods/**
-android/.gradle/**
-android/build/**
-*.log
+# Random screenshots not used by app code
+src/assets/IMG_*.jpeg
 
-# Exclude scripts and development tools
-scripts/**
-ci_scripts/**
-execution/**
-directives/**
-.tmp/**
-*.sh
-*.exp
-*.py
+# Example/unused folders
+src/assets/example/**
+src/assets/sound effects/**
 
-# Keep these - they are used in the app:
-# - assets/nora-walking-cute.png
-# - assets/homescreen-image.png
-# - assets/triage-background-image.png
-# - assets/Nora-AI-Chatbot.png
-# - src/assets/transparent-triage.png
+# Unused .glb model (8.6 MB) — the .obj version is used by OBJBrain3D.tsx
+src/assets/models/Brain_Diagram_with_La_1027180205_texture.glb
+
+# ─── KEEP (used by the app) ─────────────────
+# assets/music/** — useBackgroundMusic.ts
+# assets/nora-walking-cute.png
+# assets/homescreen-image.png
+# assets/triage-background-image.png
+# assets/Nora-AI-Chatbot.png
+# src/assets/transparent-triage.png
+# src/assets/flint shop/** — FlintIcon.tsx
 
