@@ -17,7 +17,6 @@ export const initializeCurrentUser = mutation({
     const user = await getCurrentUserOrNull(ctx);
     if (!user) {
       // User record hasn't been created by Clerk webhook yet — skip silently
-      console.log("initializeCurrentUser: user not found in Convex yet, skipping");
       return { success: false, reason: "user_not_found" };
     }
     const userId = user._id;

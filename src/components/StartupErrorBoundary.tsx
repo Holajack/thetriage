@@ -1,6 +1,6 @@
 // Create src/components/StartupErrorBoundary.tsx
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React from "react";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 
 interface StartupErrorBoundaryState {
   hasError: boolean;
@@ -18,20 +18,16 @@ export class StartupErrorBoundary extends React.Component<
   }
 
   static getDerivedStateFromError(error: Error): StartupErrorBoundaryState {
-    console.log('🚨 Startup Error Boundary caught:', error);
-    return { 
-      hasError: true, 
+    // Startup Error Boundary caught an error
+    return {
+      hasError: true,
       error,
-      errorInfo: error.message || 'App startup failed'
+      errorInfo: error.message || "App startup failed",
     };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('🚨 Startup Error Details:', {
-      error: error.toString(),
-      stack: error.stack,
-      componentStack: errorInfo.componentStack
-    });
+    // Startup error details captured by error boundary
   }
 
   handleRestart = () => {
@@ -46,14 +42,12 @@ export class StartupErrorBoundary extends React.Component<
           <Text style={styles.subtitle}>
             HikeWise encountered a startup error.
           </Text>
-          
+
           {__DEV__ && this.state.errorInfo && (
-            <Text style={styles.errorText}>
-              {this.state.errorInfo}
-            </Text>
+            <Text style={styles.errorText}>{this.state.errorInfo}</Text>
           )}
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={styles.restartButton}
             onPress={this.handleRestart}
           >
@@ -70,41 +64,41 @@ export class StartupErrorBoundary extends React.Component<
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     padding: 20,
-    backgroundColor: '#0F2419',
+    backgroundColor: "#0F2419",
   },
   title: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 12,
-    color: '#FFFFFF',
-    textAlign: 'center',
+    color: "#FFFFFF",
+    textAlign: "center",
   },
   subtitle: {
     fontSize: 16,
     marginBottom: 30,
-    color: '#B0BEC5',
-    textAlign: 'center',
+    color: "#B0BEC5",
+    textAlign: "center",
     lineHeight: 24,
   },
   errorText: {
     fontSize: 12,
-    color: '#FF5252',
+    color: "#FF5252",
     marginBottom: 20,
-    textAlign: 'center',
-    fontFamily: 'monospace',
+    textAlign: "center",
+    fontFamily: "monospace",
   },
   restartButton: {
-    backgroundColor: '#388E3C',
+    backgroundColor: "#388E3C",
     paddingHorizontal: 30,
     paddingVertical: 15,
     borderRadius: 8,
   },
   restartButtonText: {
-    color: 'white',
+    color: "white",
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
 });

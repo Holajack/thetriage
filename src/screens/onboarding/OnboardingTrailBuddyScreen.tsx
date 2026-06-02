@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -8,12 +8,13 @@ import {
   Dimensions,
   Image,
   ImageSourcePropType,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
 import Animated, {
+  SharedValue,
   useSharedValue,
   useAnimatedStyle,
   useAnimatedScrollHandler,
@@ -22,14 +23,14 @@ import Animated, {
   FadeInDown,
   runOnJS,
   useDerivedValue,
-} from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
-import { useTheme } from '../../context/ThemeContext';
-import { useConvexProfile } from '../../hooks/useConvex';
-import NoraSpeechBubble from '../../components/onboarding/NoraSpeechBubble';
-import { AnimatedButton } from '../../components/premium/AnimatedButton';
+} from "react-native-reanimated";
+import * as Haptics from "expo-haptics";
+import { useTheme } from "../../context/ThemeContext";
+import { useConvexProfile } from "../../hooks/useConvex";
+import NoraSpeechBubble from "../../components/onboarding/NoraSpeechBubble";
+import { AnimatedButton } from "../../components/premium/AnimatedButton";
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const BUDDY_SIZE = 280;
 const BUDDY_SPACING = -40;
 const ITEM_WIDTH = BUDDY_SIZE + BUDDY_SPACING;
@@ -41,21 +42,24 @@ const TOTAL_FRAMES = 28;
 
 // Use spritesheets instead of individual frames (only 5 images vs 140)
 const BUDDY_SPRITESHEETS: Record<string, ImageSourcePropType> = {
-  fox: require('../../../assets/trail-buddies/fox_walking_optimized.png'),
-  deer: require('../../../assets/trail-buddies/deer_walking_optimized.png'),
-  wolf: require('../../../assets/trail-buddies/wolf_walking_optimized.png'),
-  nora: require('../../../assets/trail-buddies/nora_walking_optimized.png'),
-  bear: require('../../../assets/trail-buddies/bear_walking_optimized.png'),
-  lion: require('../../../assets/trail-buddies/lion_walking_optimized.png'),
+  // TODO: swap in dedicated Patrick spritesheet once art is delivered. Fox sheet is a placeholder.
+  patrick: require("../../../assets/trail-buddies/fox_walking_optimized.png"),
+  fox: require("../../../assets/trail-buddies/fox_walking_optimized.png"),
+  deer: require("../../../assets/trail-buddies/deer_walking_optimized.png"),
+  wolf: require("../../../assets/trail-buddies/wolf_walking_optimized.png"),
+  nora: require("../../../assets/trail-buddies/nora_walking_optimized.png"),
+  bear: require("../../../assets/trail-buddies/bear_walking_optimized.png"),
+  lion: require("../../../assets/trail-buddies/lion_walking_optimized.png"),
 };
 
 const DEFAULT_NAMES: Record<string, string> = {
-  fox: 'Scout',
-  bear: 'Bruno',
-  deer: 'Willow',
-  nora: 'Nora',
-  wolf: 'Shadow',
-  lion: 'Leo',
+  patrick: "Patrick",
+  fox: "Scout",
+  bear: "Bruno",
+  deer: "Willow",
+  nora: "Nora",
+  wolf: "Shadow",
+  lion: "Leo",
 };
 
 interface TrailBuddy {
@@ -68,56 +72,64 @@ interface TrailBuddy {
 
 const TRAIL_BUDDIES: TrailBuddy[] = [
   {
-    id: 'fox',
-    name: 'Fox',
-    color: '#FF6B35',
-    description: 'Quick and clever',
+    id: "patrick",
+    name: "Patrick",
+    color: "#FF7043",
+    description: "Your steady starter buddy",
     hasAnimation: true,
   },
   {
-    id: 'bear',
-    name: 'Bear',
-    color: '#8B4513',
-    description: 'Strong and steady',
+    id: "fox",
+    name: "Fox",
+    color: "#FF6B35",
+    description: "Quick and clever",
     hasAnimation: true,
   },
   {
-    id: 'deer',
-    name: 'Deer',
-    color: '#C4A484',
-    description: 'Graceful and calm',
+    id: "bear",
+    name: "Bear",
+    color: "#8B4513",
+    description: "Strong and steady",
     hasAnimation: true,
   },
   {
-    id: 'nora',
-    name: 'Nora',
-    color: '#9B59B6',
-    description: 'Wise and insightful',
+    id: "deer",
+    name: "Deer",
+    color: "#C4A484",
+    description: "Graceful and calm",
     hasAnimation: true,
   },
   {
-    id: 'wolf',
-    name: 'Wolf',
-    color: '#708090',
-    description: 'Loyal and determined',
+    id: "nora",
+    name: "Nora",
+    color: "#9B59B6",
+    description: "Wise and insightful",
     hasAnimation: true,
   },
   {
-    id: 'lion',
-    name: 'Lion',
-    color: '#FFD700',
-    description: 'Regal and powerful',
+    id: "wolf",
+    name: "Wolf",
+    color: "#708090",
+    description: "Loyal and determined",
+    hasAnimation: true,
+  },
+  {
+    id: "lion",
+    name: "Lion",
+    color: "#FFD700",
+    description: "Regal and powerful",
     hasAnimation: true,
   },
 ];
 
 const BUDDY_EMOJIS: Record<string, string> = {
-  fox: '🦊',
-  bear: '🐻',
-  deer: '🦌',
-  nora: '🔮',
-  wolf: '🐺',
-  lion: '🦁',
+  patrick: "🎒",
+  fox: "🦊",
+  bear: "🐻",
+  deer: "🦌",
+  nora: "🔮",
+  wolf: "🐺",
+  lion: "🦁",
 };
 
 // Animated Sprite Component using spritesheet - cycles through frames by offsetting the image
@@ -142,7 +154,7 @@ const AnimatedSprite = ({
     // Smooth walking animation - 50ms per frame (~20 fps for smooth 28-frame loop)
     // Full cycle takes ~1.4 seconds (28 frames * 50ms)
     const interval = setInterval(() => {
-      setCurrentFrame(prev => (prev + 1) % TOTAL_FRAMES);
+      setCurrentFrame((prev) => (prev + 1) % TOTAL_FRAMES);
     }, 50);
 
     return () => clearInterval(interval);
@@ -160,13 +172,15 @@ const AnimatedSprite = ({
         {
           width: displaySize,
           height: displaySize,
-          alignItems: 'center',
-          justifyContent: 'center',
+          alignItems: "center",
+          justifyContent: "center",
         },
       ]}
     >
       {/* Clip container to show only one frame */}
-      <View style={{ width: displaySize, height: displaySize, overflow: 'hidden' }}>
+      <View
+        style={{ width: displaySize, height: displaySize, overflow: "hidden" }}
+      >
         <Image
           source={spritesheet}
           style={{
@@ -191,7 +205,7 @@ const BuddyItem = ({
 }: {
   buddy: TrailBuddy;
   index: number;
-  scrollX: Animated.SharedValue<number>;
+  scrollX: SharedValue<number>;
   onSelect: () => void;
   isDark: boolean;
 }) => {
@@ -206,21 +220,21 @@ const BuddyItem = ({
       scrollX.value,
       inputRange,
       [0.5, 1, 0.5],
-      Extrapolation.CLAMP
+      Extrapolation.CLAMP,
     );
 
     const opacity = interpolate(
       scrollX.value,
       inputRange,
       [0.6, 1, 0.6],
-      Extrapolation.CLAMP
+      Extrapolation.CLAMP,
     );
 
     const translateY = interpolate(
       scrollX.value,
       inputRange,
       [60, 0, 60],
-      Extrapolation.CLAMP
+      Extrapolation.CLAMP,
     );
 
     return {
@@ -252,7 +266,9 @@ const BuddyItem = ({
               displaySize={characterSize}
             />
           ) : (
-            <Text style={[styles.buddyEmoji, { fontSize: characterSize * 0.5 }]}>
+            <Text
+              style={[styles.buddyEmoji, { fontSize: characterSize * 0.5 }]}
+            >
               {BUDDY_EMOJIS[buddy.id]}
             </Text>
           )}
@@ -263,7 +279,9 @@ const BuddyItem = ({
           style={[
             styles.shadowEllipse,
             {
-              backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
+              backgroundColor: isDark
+                ? "rgba(255,255,255,0.1)"
+                : "rgba(0,0,0,0.08)",
               width: selected ? 100 : 60,
               height: selected ? 24 : 16,
             },
@@ -275,12 +293,12 @@ const BuddyItem = ({
 };
 
 const OnboardingTrailBuddyScreen = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const { theme, isDark } = useTheme();
   const { updateProfile } = useConvexProfile();
 
   const [selectedIndex, setSelectedIndex] = useState(1); // Default to bear (middle)
-  const [buddyName, setBuddyName] = useState(DEFAULT_NAMES['bear']);
+  const [buddyName, setBuddyName] = useState(DEFAULT_NAMES["patrick"]);
   const [saving, setSaving] = useState(false);
 
   const scrollX = useSharedValue(ITEM_WIDTH);
@@ -325,10 +343,10 @@ const OnboardingTrailBuddyScreen = () => {
         trailBuddyName: buddyName.trim() || DEFAULT_NAMES[selectedBuddy.id],
       });
 
-      navigation.navigate('FocusSoundSetup' as any);
+      navigation.navigate("FocusSoundSetup" as any);
     } catch (error) {
-      console.error('Error saving trail buddy:', error);
-      alert('Could not save your trail buddy. Please try again.');
+      // Error saving trail buddy
+      alert("Could not save your trail buddy. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -349,7 +367,7 @@ const OnboardingTrailBuddyScreen = () => {
         isDark={isDark}
       />
     ),
-    [scrollX, handleBuddySelect, isDark]
+    [scrollX, handleBuddySelect, isDark],
   );
 
   const getItemLayout = useCallback(
@@ -358,15 +376,15 @@ const OnboardingTrailBuddyScreen = () => {
       offset: ITEM_WIDTH * index,
       index,
     }),
-    []
+    [],
   );
 
   return (
     <LinearGradient
       colors={
         isDark
-          ? ['#000000', '#1a1a1a', '#2a2a2a', '#1a1a1a']
-          : ['#0F2419', '#1B4A3A', '#2E5D4F', '#1B4A3A']
+          ? ["#000000", "#1a1a1a", "#2a2a2a", "#1a1a1a"]
+          : ["#0F2419", "#1B4A3A", "#2E5D4F", "#1B4A3A"]
       }
       style={styles.gradient}
     >
@@ -416,16 +434,22 @@ const OnboardingTrailBuddyScreen = () => {
           entering={FadeInDown.delay(400).duration(500)}
           style={styles.nameInputContainer}
         >
-          <Text style={styles.nameLabel}>Give your buddy a name (optional)</Text>
+          <Text style={styles.nameLabel}>
+            Give your buddy a name (optional)
+          </Text>
           <TextInput
             style={[
               styles.nameInput,
               {
-                color: '#FFFFFF',
-                borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.3)',
+                color: "#FFFFFF",
+                borderColor: isDark
+                  ? "rgba(255,255,255,0.2)"
+                  : "rgba(255,255,255,0.3)",
               },
             ]}
-            placeholder={DEFAULT_NAMES[TRAIL_BUDDIES[selectedIndex]?.id || 'bear']}
+            placeholder={
+              DEFAULT_NAMES[TRAIL_BUDDIES[selectedIndex]?.id || "patrick"]
+            }
             placeholderTextColor="rgba(255,255,255,0.4)"
             value={buddyName}
             onChangeText={setBuddyName}
@@ -440,14 +464,14 @@ const OnboardingTrailBuddyScreen = () => {
           style={styles.buttonContainer}
         >
           <AnimatedButton
-            title={saving ? 'Saving...' : 'Continue'}
+            title={saving ? "Saving..." : "Continue"}
             onPress={handleContinue}
             variant="primary"
             size="large"
             disabled={saving}
             fullWidth
             gradient
-            gradientColors={[theme.primary, '#4CAF50']}
+            gradientColors={[theme.primary, "#4CAF50"]}
           />
         </Animated.View>
       </SafeAreaView>
@@ -464,7 +488,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   backButton: {
-    position: 'absolute',
+    position: "absolute",
     top: 60,
     left: 20,
     zIndex: 10,
@@ -472,11 +496,11 @@ const styles = StyleSheet.create({
   },
   stepIndicator: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.7)',
-    textAlign: 'center',
+    color: "rgba(255,255,255,0.7)",
+    textAlign: "center",
     marginTop: 60,
     marginBottom: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   speechBubbleContainer: {
     marginBottom: 24,
@@ -487,22 +511,22 @@ const styles = StyleSheet.create({
   },
   carouselContent: {
     paddingHorizontal: (SCREEN_WIDTH - ITEM_WIDTH) / 2,
-    alignItems: 'center',
+    alignItems: "center",
   },
   buddyItem: {
     width: ITEM_WIDTH,
     height: BUDDY_SIZE,
-    alignItems: 'center',
-    justifyContent: 'flex-end',
+    alignItems: "center",
+    justifyContent: "flex-end",
     paddingBottom: 20,
   },
   characterContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   buddyEmoji: {},
   spriteContainer: {
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   shadowEllipse: {
     borderRadius: 50,
@@ -514,22 +538,22 @@ const styles = StyleSheet.create({
   },
   nameLabel: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
+    color: "rgba(255,255,255,0.8)",
     marginBottom: 8,
-    textAlign: 'center',
-    fontWeight: '600',
+    textAlign: "center",
+    fontWeight: "600",
   },
   nameInput: {
     fontSize: 16,
-    textAlign: 'center',
+    textAlign: "center",
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderWidth: 1,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: "rgba(255,255,255,0.05)",
   },
   buttonContainer: {
-    marginTop: 'auto',
+    marginTop: "auto",
     marginBottom: 20,
   },
 });

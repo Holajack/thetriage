@@ -1,19 +1,29 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Alert, Dimensions } from 'react-native';
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Modal,
+  Alert,
+  Dimensions,
+  Image,
+} from "react-native";
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const ITEM_MARGIN = 8;
 const ITEM_WIDTH = (SCREEN_WIDTH - 32 - ITEM_MARGIN) / 2; // 2 items per row with padding
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { MainTabParamList } from '../../navigation/types';
-import { useTheme } from '../../context/ThemeContext';
-import { useAuth } from '../../context/AuthContext';
-import { useConvexProfile } from '../../hooks/useConvex';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { UnifiedHeader } from '../../components/UnifiedHeader';
-import { FlintIcon } from '../../components/FlintIcon';
+import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { MainTabParamList } from "../../navigation/types";
+import { useTheme } from "../../context/ThemeContext";
+import { useAuth } from "../../context/AuthContext";
+import { useConvexProfile } from "../../hooks/useConvex";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { UnifiedHeader } from "../../components/UnifiedHeader";
+import { FlintIcon } from "../../components/FlintIcon";
 import Animated, {
   FadeInUp,
   Layout,
@@ -22,13 +32,23 @@ import Animated, {
   withSpring,
   withSequence,
   withTiming,
-  interpolate
-} from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
-import { AnimatedButton } from '../../components/premium/AnimatedButton';
-import { StaggeredItem } from '../../components/premium/StaggeredList';
-import { useCounterAnimation, usePulseAnimation, useSuccessAnimation } from '../../utils/animationUtils';
-import { AnimationConfig, Spacing, BorderRadius, Shadows, PremiumColors } from '../../theme/premiumTheme';
+  interpolate,
+} from "react-native-reanimated";
+import * as Haptics from "expo-haptics";
+import { AnimatedButton } from "../../components/premium/AnimatedButton";
+import { StaggeredItem } from "../../components/premium/StaggeredList";
+import {
+  useCounterAnimation,
+  usePulseAnimation,
+  useSuccessAnimation,
+} from "../../utils/animationUtils";
+import {
+  AnimationConfig,
+  Spacing,
+  BorderRadius,
+  Shadows,
+  PremiumColors,
+} from "../../theme/premiumTheme";
 import {
   addToInventory,
   equipItem,
@@ -37,11 +57,11 @@ import {
   ownsItem,
   isItemEquipped,
   type InventoryItem,
-  type EquippedItem
-} from '../../utils/inventoryService';
+  type EquippedItem,
+} from "../../utils/inventoryService";
 
 // Shop item categories
-type ShopCategory = 'gear' | 'shelter' | 'trail';
+type ShopCategory = "gear" | "shelter" | "trail";
 
 interface ShopItem {
   id: string;
@@ -50,62 +70,256 @@ interface ShopItem {
   cost: number; // in Flint
   category: ShopCategory;
   icon: string;
+  /** Preferred raster thumbnail. Falls back to `icon` (emoji) when missing. */
+  image?: any;
   comingSoon?: boolean;
 }
+
+// Trail thumbnails — using the existing parallax `path_animation.png` per trail so the shop
+// shows the actual environment rather than an emoji that may render as "tofu" on devices
+// without the matching glyph.
+const TRAIL_IMAGES: Record<string, any> = {
+  forest: require("../../../assets/Background_animations/Forest/path_animation.png"),
+  beach: require("../../../assets/Background_animations/Beach/beach_path.png"),
+  desert: require("../../../assets/Background_animations/Desert/desert_background.png"),
+  jungle: require("../../../assets/Background_animations/Jungle/generated/path_animation.png"),
+  snow: require("../../../assets/Background_animations/Snow/generated/path_animation.png"),
+  canyon: require("../../../assets/Background_animations/Canyon/generated/path_animation.png"),
+  volcano: require("../../../assets/Background_animations/Volcano/generated/path_animation.png"),
+  northern: require("../../../assets/Background_animations/Northern/generated/path_animation.png"),
+  // galaxy: no thumbnail yet — falls back to emoji
+};
 
 // Expanded shop items (prices in Flint = minutes of focus time required)
 const SHOP_ITEMS: ShopItem[] = [
   // Trail Gear (for pets/animals) - 5-50 hours of focus
-  { id: 'bandana', name: 'Bandana', description: 'A colorful bandana (5 hours)', cost: 300, category: 'gear', icon: '🧣' },
-  { id: 'hat', name: 'Explorer Hat', description: 'Perfect for adventures (10 hours)', cost: 600, category: 'gear', icon: '🎩' },
-  { id: 'vest', name: 'Adventure Vest', description: 'Hiking vest (15 hours)', cost: 900, category: 'gear', icon: '🦺' },
-  { id: 'sunglasses', name: 'Sunglasses', description: 'Cool shades for sunny trails (20 hours)', cost: 1200, category: 'gear', icon: '🕶️' },
-  { id: 'backpack', name: 'Mini Backpack', description: 'Carry essentials on the trail (25 hours)', cost: 1500, category: 'gear', icon: '🎒' },
-  { id: 'scarf', name: 'Cozy Scarf', description: 'Warm scarf for cold trails (30 hours)', cost: 1800, category: 'gear', icon: '🧵' },
-  { id: 'boots', name: 'Hiking Boots', description: 'Sturdy boots for any terrain (40 hours)', cost: 2400, category: 'gear', icon: '🥾' },
-  { id: 'compass', name: 'Compass Necklace', description: 'Never lose your way (50 hours)', cost: 3000, category: 'gear', icon: '🧭' },
+  {
+    id: "bandana",
+    name: "Bandana",
+    description: "A colorful bandana (5 hours)",
+    cost: 300,
+    category: "gear",
+    icon: "🧣",
+  },
+  {
+    id: "hat",
+    name: "Explorer Hat",
+    description: "Perfect for adventures (10 hours)",
+    cost: 600,
+    category: "gear",
+    icon: "🎩",
+  },
+  {
+    id: "vest",
+    name: "Adventure Vest",
+    description: "Hiking vest (15 hours)",
+    cost: 900,
+    category: "gear",
+    icon: "🦺",
+  },
+  {
+    id: "sunglasses",
+    name: "Sunglasses",
+    description: "Cool shades for sunny trails (20 hours)",
+    cost: 1200,
+    category: "gear",
+    icon: "🕶️",
+  },
+  {
+    id: "backpack",
+    name: "Mini Backpack",
+    description: "Carry essentials on the trail (25 hours)",
+    cost: 1500,
+    category: "gear",
+    icon: "🎒",
+  },
+  {
+    id: "scarf",
+    name: "Cozy Scarf",
+    description: "Warm scarf for cold trails (30 hours)",
+    cost: 1800,
+    category: "gear",
+    icon: "🧵",
+  },
+  {
+    id: "boots",
+    name: "Hiking Boots",
+    description: "Sturdy boots for any terrain (40 hours)",
+    cost: 2400,
+    category: "gear",
+    icon: "🥾",
+  },
+  {
+    id: "compass",
+    name: "Compass Necklace",
+    description: "Never lose your way (50 hours)",
+    cost: 3000,
+    category: "gear",
+    icon: "🧭",
+  },
 
   // Shelters - 25-300 hours of focus (progressive goals)
-  { id: 'tent', name: 'Camping Tent', description: 'Cozy tent for breaks (25 hours)', cost: 1500, category: 'shelter', icon: '⛺' },
-  { id: 'cabin', name: 'Log Cabin', description: 'A warm cabin retreat (50 hours)', cost: 3000, category: 'shelter', icon: '🛖' },
-  { id: 'treehouse', name: 'Tree House', description: 'A house in the trees (100 hours)', cost: 6000, category: 'shelter', icon: '🏠' },
-  { id: 'igloo', name: 'Ice Igloo', description: 'Cool shelter for arctic trails (150 hours)', cost: 9000, category: 'shelter', icon: '🏔️' },
-  { id: 'lighthouse', name: 'Lighthouse', description: 'Coastal shelter with a view (200 hours)', cost: 12000, category: 'shelter', icon: '🗼' },
-  { id: 'castle', name: 'Stone Castle', description: 'Royal mountain fortress (300 hours)', cost: 18000, category: 'shelter', icon: '🏰' },
+  {
+    id: "tent",
+    name: "Camping Tent",
+    description: "Cozy tent for breaks (25 hours)",
+    cost: 1500,
+    category: "shelter",
+    icon: "⛺",
+  },
+  {
+    id: "cabin",
+    name: "Log Cabin",
+    description: "A warm cabin retreat (50 hours)",
+    cost: 3000,
+    category: "shelter",
+    icon: "🛖",
+  },
+  {
+    id: "treehouse",
+    name: "Tree House",
+    description: "A house in the trees (100 hours)",
+    cost: 6000,
+    category: "shelter",
+    icon: "🏠",
+  },
+  {
+    id: "igloo",
+    name: "Ice Igloo",
+    description: "Cool shelter for arctic trails (150 hours)",
+    cost: 9000,
+    category: "shelter",
+    icon: "🏔️",
+  },
+  {
+    id: "lighthouse",
+    name: "Lighthouse",
+    description: "Coastal shelter with a view (200 hours)",
+    cost: 12000,
+    category: "shelter",
+    icon: "🗼",
+  },
+  {
+    id: "castle",
+    name: "Stone Castle",
+    description: "Royal mountain fortress (300 hours)",
+    cost: 18000,
+    category: "shelter",
+    icon: "🏰",
+  },
 
   // Trails - 15-375 hours of focus (progressive goals)
-  { id: 'forest', name: 'Forest Path', description: 'Your starting trail — always free!', cost: 0, category: 'trail', icon: '🌲' },
-  { id: 'desert', name: 'Desert Trail', description: 'Explore sandy dunes (30 hours)', cost: 1800, category: 'trail', icon: '🏜️' },
-  { id: 'beach', name: 'Beach Path', description: 'Walk along the shore (50 hours)', cost: 3000, category: 'trail', icon: '🏖️' },
-  { id: 'jungle', name: 'Jungle Trek', description: 'Adventure through the jungle (75 hours)', cost: 4500, category: 'trail', icon: '🌴' },
-  { id: 'snow', name: 'Snowy Path', description: 'Winter wonderland trail (100 hours)', cost: 6000, category: 'trail', icon: '❄️', comingSoon: true },
-  { id: 'canyon', name: 'Grand Canyon', description: 'Majestic canyon views (150 hours)', cost: 9000, category: 'trail', icon: '🏞️', comingSoon: true },
-  { id: 'volcano', name: 'Volcano Trail', description: 'Hike near active volcano (225 hours)', cost: 13500, category: 'trail', icon: '🌋' },
-  { id: 'northern', name: 'Northern Lights', description: 'Aurora borealis path (300 hours)', cost: 18000, category: 'trail', icon: '🌌', comingSoon: true },
-  { id: 'galaxy', name: 'Galaxy Trail', description: 'Traverse the cosmos (375 hours)', cost: 22500, category: 'trail', icon: '🪐', comingSoon: true },
+  {
+    id: "forest",
+    name: "Forest Path",
+    description: "Your starting trail — always free!",
+    cost: 0,
+    category: "trail",
+    icon: "🌲",
+    image: TRAIL_IMAGES.forest,
+  },
+  {
+    id: "desert",
+    name: "Desert Trail",
+    description: "Explore sandy dunes (30 hours)",
+    cost: 1800,
+    category: "trail",
+    icon: "🏜️",
+    image: TRAIL_IMAGES.desert,
+  },
+  {
+    id: "beach",
+    name: "Beach Path",
+    description: "Walk along the shore (50 hours)",
+    cost: 3000,
+    category: "trail",
+    icon: "🏖️",
+    image: TRAIL_IMAGES.beach,
+  },
+  {
+    id: "jungle",
+    name: "Jungle Trek",
+    description: "Adventure through the jungle (75 hours)",
+    cost: 4500,
+    category: "trail",
+    icon: "🌴",
+    image: TRAIL_IMAGES.jungle,
+  },
+  {
+    id: "snow",
+    name: "Snowy Path",
+    description: "Winter wonderland trail (100 hours)",
+    cost: 6000,
+    category: "trail",
+    icon: "❄️",
+    image: TRAIL_IMAGES.snow,
+    comingSoon: true,
+  },
+  {
+    id: "canyon",
+    name: "Grand Canyon",
+    description: "Majestic canyon views (150 hours)",
+    cost: 9000,
+    category: "trail",
+    icon: "🏞️",
+    image: TRAIL_IMAGES.canyon,
+    comingSoon: true,
+  },
+  {
+    id: "volcano",
+    name: "Volcano Trail",
+    description: "Hike near active volcano (225 hours)",
+    cost: 13500,
+    category: "trail",
+    icon: "🌋",
+    image: TRAIL_IMAGES.volcano,
+  },
+  {
+    id: "northern",
+    name: "Northern Lights",
+    description: "Aurora borealis path (300 hours)",
+    cost: 18000,
+    category: "trail",
+    icon: "🌌",
+    image: TRAIL_IMAGES.northern,
+    comingSoon: true,
+  },
+  {
+    id: "galaxy",
+    name: "Galaxy Trail",
+    description: "Traverse the cosmos (375 hours)",
+    cost: 22500,
+    category: "trail",
+    icon: "🪐",
+    comingSoon: true,
+  },
 ];
 
 // Per-trail accent colors (used for border + status tags when owned/equipped)
 const TRAIL_ACCENT_COLORS: Record<string, string> = {
-  forest: '#4CAF50',   // green
-  desert: '#E8913A',   // sandy orange
-  beach: '#3BA8D4',    // ocean blue
-  jungle: '#2E8B57',   // deep green
-  volcano: '#D4553A',  // lava red
-  snow: '#90CAF9',     // icy blue
-  canyon: '#C47A4A',   // canyon brown
-  northern: '#7B61FF', // aurora purple
-  galaxy: '#9C27B0',   // cosmic purple
+  forest: "#4CAF50", // green
+  desert: "#E8913A", // sandy orange
+  beach: "#3BA8D4", // ocean blue
+  jungle: "#2E8B57", // deep green
+  volcano: "#D4553A", // lava red
+  snow: "#90CAF9", // icy blue
+  canyon: "#C47A4A", // canyon brown
+  northern: "#7B61FF", // aurora purple
+  galaxy: "#9C27B0", // cosmic purple
 };
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
 const ShopScreen = () => {
-  const navigation = useNavigation<NativeStackNavigationProp<MainTabParamList>>();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<MainTabParamList>>();
   const { theme } = useTheme();
   const { user } = useAuth();
   const { profile, updateProfile } = useConvexProfile();
-  const [selectedCategory, setSelectedCategory] = useState<ShopCategory>('gear');
+  // The 'gear' (accessories) category is hidden until images are ready.
+  // Default to 'trail' so users land on the most visual section first.
+  const [selectedCategory, setSelectedCategory] =
+    useState<ShopCategory>("trail");
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [equippedItems, setEquippedItems] = useState<EquippedItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -128,7 +342,7 @@ const ShopScreen = () => {
     setLoading(true);
     const [invResult, equippedResult] = await Promise.all([
       getUserInventory(),
-      getEquippedItems()
+      getEquippedItems(),
     ]);
 
     if (invResult.success) {
@@ -141,21 +355,23 @@ const ShopScreen = () => {
   };
 
   // Filter items by selected category
-  const filteredItems = SHOP_ITEMS.filter(item => item.category === selectedCategory);
+  const filteredItems = SHOP_ITEMS.filter(
+    (item) => item.category === selectedCategory,
+  );
 
   // Check if item is owned
   const isOwned = (itemId: string) => {
-    return inventory.some(item => item.itemId === itemId);
+    return inventory.some((item) => item.itemId === itemId);
   };
 
   // Check if item is equipped
   const isEquipped = (itemId: string) => {
-    return equippedItems.some(item => item.itemId === itemId);
+    return equippedItems.some((item) => item.itemId === itemId);
   };
 
   const handleItemPress = async (item: ShopItem) => {
     if (item.comingSoon) {
-      Alert.alert('Coming Soon', `${item.name} is coming in a future update!`);
+      Alert.alert("Coming Soon", `${item.name} is coming in a future update!`);
       return;
     }
 
@@ -163,7 +379,7 @@ const ShopScreen = () => {
     const equipped = isEquipped(item.id);
 
     if (equipped) {
-      Alert.alert('Already Equipped', `${item.name} is currently equipped!`);
+      Alert.alert("Already Equipped", `${item.name} is currently equipped!`);
       return;
     }
 
@@ -180,9 +396,9 @@ const ShopScreen = () => {
         await equipItem(item.id, item.name, item.category, item.icon);
         await loadInventoryData();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert('Equipped!', `${item.name} is now equipped!`);
+        Alert.alert("Equipped!", `${item.name} is now equipped!`);
       } catch {
-        Alert.alert('Error', 'Failed to claim item. Please try again.');
+        Alert.alert("Error", "Failed to claim item. Please try again.");
       }
       return;
     }
@@ -190,9 +406,9 @@ const ShopScreen = () => {
     // Not owned, need to purchase
     if (flintCurrency < item.cost) {
       Alert.alert(
-        'Not Enough Flint',
+        "Not Enough Flint",
         `You need ${item.cost} Flint to purchase this item. Complete more focus sessions to earn Flint!`,
-        [{ text: 'OK' }]
+        [{ text: "OK" }],
       );
       return;
     }
@@ -203,12 +419,17 @@ const ShopScreen = () => {
   };
 
   const handleEquipFromInventory = async (item: ShopItem) => {
-    const result = await equipItem(item.id, item.name, item.category, item.icon);
+    const result = await equipItem(
+      item.id,
+      item.name,
+      item.category,
+      item.icon,
+    );
     if (result.success) {
       await loadInventoryData();
-      Alert.alert('Equipped!', `${item.name} is now equipped!`);
+      Alert.alert("Equipped!", `${item.name} is now equipped!`);
     } else {
-      Alert.alert('Error', result.error || 'Failed to equip item');
+      Alert.alert("Error", result.error || "Failed to equip item");
     }
   };
 
@@ -228,7 +449,7 @@ const ShopScreen = () => {
         selectedItem.id,
         selectedItem.name,
         selectedItem.category,
-        selectedItem.icon
+        selectedItem.icon,
       );
 
       // Equip immediately
@@ -236,7 +457,7 @@ const ShopScreen = () => {
         selectedItem.id,
         selectedItem.name,
         selectedItem.category,
-        selectedItem.icon
+        selectedItem.icon,
       );
 
       await loadInventoryData();
@@ -247,14 +468,14 @@ const ShopScreen = () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       Alert.alert(
-        'Equipped! 🎉',
+        "Equipped! 🎉",
         `${selectedItem.name} has been purchased and equipped!\n\nFlint balance: ${newBalance.toFixed(1)}`,
-        [{ text: 'Awesome!' }]
+        [{ text: "Awesome!" }],
       );
     } catch (error) {
       setIsPurchasing(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Error', 'Failed to purchase item. Please try again.');
+      Alert.alert("Error", "Failed to purchase item. Please try again.");
     }
   };
 
@@ -274,7 +495,7 @@ const ShopScreen = () => {
         selectedItem.id,
         selectedItem.name,
         selectedItem.category,
-        selectedItem.icon
+        selectedItem.icon,
       );
 
       await loadInventoryData();
@@ -285,45 +506,66 @@ const ShopScreen = () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       Alert.alert(
-        'Added to Backpack! 🎒',
+        "Added to Backpack! 🎒",
         `${selectedItem.name} has been added to your backpack!\n\nFlint balance: ${newBalance.toFixed(1)}`,
-        [{ text: 'Great!' }]
+        [{ text: "Great!" }],
       );
     } catch (error) {
       setIsPurchasing(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Error', 'Failed to purchase item. Please try again.');
+      Alert.alert("Error", "Failed to purchase item. Please try again.");
     }
   };
 
   const getCategoryLabel = (category: ShopCategory) => {
     switch (category) {
-      case 'gear': return 'Trail Gear';
-      case 'shelter': return 'Shelters';
-      case 'trail': return 'Trails';
+      case "gear":
+        return "Trail Gear";
+      case "shelter":
+        return "Shelters";
+      case "trail":
+        return "Trails";
     }
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <UnifiedHeader title="Gear Shop" onClose={() => navigation.navigate('Profile' as any)} />
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.background }]}
+    >
+      <UnifiedHeader
+        title="Gear Shop"
+        onClose={() => navigation.navigate("Profile" as any)}
+      />
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 100 }}
+      >
         {/* Flint Balance Card */}
         <Animated.View
           entering={FadeInUp.delay(50).duration(300)}
           style={[styles.balanceCard, { backgroundColor: theme.card }]}
         >
           <View style={styles.balanceContent}>
-            <View style={[styles.flintIcon, { backgroundColor: '#FF570020' }]}>
+            <View style={[styles.flintIcon, { backgroundColor: "#FF570020" }]}>
               <FlintIcon size={40} color="#FF5700" />
             </View>
             <View style={styles.balanceInfo}>
-              <Text style={[styles.balanceLabel, { color: theme.textSecondary }]}>Your Flint</Text>
-              <Animated.Text style={[styles.balanceAmount, { color: theme.text }]}>
+              <Text
+                style={[styles.balanceLabel, { color: theme.textSecondary }]}
+              >
+                Your Flint
+              </Text>
+              <Animated.Text
+                style={[styles.balanceAmount, { color: theme.text }]}
+              >
                 {Math.round(animatedFlint.value * 10) / 10}
               </Animated.Text>
-              <Text style={[styles.balanceHint, { color: theme.textSecondary }]}>Earn 1 Flint per focus minute completed</Text>
+              <Text
+                style={[styles.balanceHint, { color: theme.textSecondary }]}
+              >
+                Earn 1 Flint per focus minute completed
+              </Text>
             </View>
           </View>
         </Animated.View>
@@ -333,40 +575,30 @@ const ShopScreen = () => {
           entering={FadeInUp.delay(80).duration(300)}
           style={[styles.categoryTabs, { backgroundColor: theme.surface }]}
         >
-          <TouchableOpacity
-            style={[
-              styles.categoryTab,
-              selectedCategory === 'gear' && styles.categoryTabActive,
-              selectedCategory === 'gear' && { backgroundColor: theme.card }
-            ]}
-            onPress={() => {
-              Haptics.selectionAsync();
-              setSelectedCategory('gear');
-            }}
-          >
-            <Text style={[
-              styles.categoryTabText,
-              { color: selectedCategory === 'gear' ? theme.primary : theme.textSecondary }
-            ]}>
-              Trail Gear
-            </Text>
-          </TouchableOpacity>
+          {/* Trail Gear (accessories) tab hidden — accessories will return when art is ready. */}
 
           <TouchableOpacity
             style={[
               styles.categoryTab,
-              selectedCategory === 'shelter' && styles.categoryTabActive,
-              selectedCategory === 'shelter' && { backgroundColor: theme.card }
+              selectedCategory === "shelter" && styles.categoryTabActive,
+              selectedCategory === "shelter" && { backgroundColor: theme.card },
             ]}
             onPress={() => {
               Haptics.selectionAsync();
-              setSelectedCategory('shelter');
+              setSelectedCategory("shelter");
             }}
           >
-            <Text style={[
-              styles.categoryTabText,
-              { color: selectedCategory === 'shelter' ? theme.primary : theme.textSecondary }
-            ]}>
+            <Text
+              style={[
+                styles.categoryTabText,
+                {
+                  color:
+                    selectedCategory === "shelter"
+                      ? theme.primary
+                      : theme.textSecondary,
+                },
+              ]}
+            >
               Shelters
             </Text>
           </TouchableOpacity>
@@ -374,18 +606,25 @@ const ShopScreen = () => {
           <TouchableOpacity
             style={[
               styles.categoryTab,
-              selectedCategory === 'trail' && styles.categoryTabActive,
-              selectedCategory === 'trail' && { backgroundColor: theme.card }
+              selectedCategory === "trail" && styles.categoryTabActive,
+              selectedCategory === "trail" && { backgroundColor: theme.card },
             ]}
             onPress={() => {
               Haptics.selectionAsync();
-              setSelectedCategory('trail');
+              setSelectedCategory("trail");
             }}
           >
-            <Text style={[
-              styles.categoryTabText,
-              { color: selectedCategory === 'trail' ? theme.primary : theme.textSecondary }
-            ]}>
+            <Text
+              style={[
+                styles.categoryTabText,
+                {
+                  color:
+                    selectedCategory === "trail"
+                      ? theme.primary
+                      : theme.textSecondary,
+                },
+              ]}
+            >
               Trails
             </Text>
           </TouchableOpacity>
@@ -400,7 +639,7 @@ const ShopScreen = () => {
             const isFree = item.cost === 0;
             const isComingSoon = item.comingSoon === true;
             // Trail-specific accent color (falls back to green for non-trails)
-            const accentColor = TRAIL_ACCENT_COLORS[item.id] || '#4CAF50';
+            const accentColor = TRAIL_ACCENT_COLORS[item.id] || "#4CAF50";
 
             return (
               <StaggeredItem
@@ -415,9 +654,20 @@ const ShopScreen = () => {
                     styles.itemCard,
                     {
                       backgroundColor: theme.card,
-                      borderColor: isComingSoon ? theme.border : (equipped ? accentColor : (owned ? accentColor : (isFree ? accentColor : (canAfford ? '#FF5700' : theme.border))))
+                      borderColor: isComingSoon
+                        ? theme.border
+                        : equipped
+                          ? accentColor
+                          : owned
+                            ? accentColor
+                            : isFree
+                              ? accentColor
+                              : canAfford
+                                ? "#FF5700"
+                                : theme.border,
                     },
-                    (isComingSoon || (!canAfford && !owned && !isFree)) && styles.itemCardLocked
+                    (isComingSoon || (!canAfford && !owned && !isFree)) &&
+                      styles.itemCardLocked,
                   ]}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -425,64 +675,165 @@ const ShopScreen = () => {
                   }}
                   activeOpacity={0.7}
                 >
-                {/* Icon */}
-                <View style={[styles.itemIconContainer, { backgroundColor: theme.surface }]}>
-                  <Text style={styles.itemIcon}>{item.icon}</Text>
-                  {isComingSoon && (
-                    <View style={[styles.statusBadge, { backgroundColor: '#888' }]}>
-                      <Ionicons name="time-outline" size={10} color="#FFF" />
-                    </View>
-                  )}
-                  {!isComingSoon && equipped && (
-                    <View style={[styles.statusBadge, { backgroundColor: accentColor }]}>
-                      <Ionicons name="checkmark-outline" size={10} color="#FFF" />
-                    </View>
-                  )}
-                  {!isComingSoon && owned && !equipped && (
-                    <View style={[styles.statusBadge, { backgroundColor: accentColor }]}>
-                      <Ionicons name="swap-horizontal-outline" size={10} color="#FFF" />
-                    </View>
-                  )}
-                  {!isComingSoon && !canAfford && !owned && !isFree && (
-                    <View style={[styles.statusBadge, { backgroundColor: '#666' }]}>
-                      <Ionicons name="lock-closed-outline" size={10} color="#FFF" />
-                    </View>
-                  )}
-                </View>
+                  {/* Icon — prefer image when present, fall back to emoji */}
+                  <View
+                    style={[
+                      styles.itemIconContainer,
+                      { backgroundColor: theme.surface },
+                    ]}
+                  >
+                    {item.image ? (
+                      <Image
+                        source={item.image}
+                        style={styles.itemImage}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <Text style={styles.itemIcon}>{item.icon}</Text>
+                    )}
+                    {isComingSoon && (
+                      <View
+                        style={[
+                          styles.statusBadge,
+                          { backgroundColor: "#888" },
+                        ]}
+                      >
+                        <Ionicons name="time-outline" size={10} color="#FFF" />
+                      </View>
+                    )}
+                    {!isComingSoon && equipped && (
+                      <View
+                        style={[
+                          styles.statusBadge,
+                          { backgroundColor: accentColor },
+                        ]}
+                      >
+                        <Ionicons
+                          name="checkmark-outline"
+                          size={10}
+                          color="#FFF"
+                        />
+                      </View>
+                    )}
+                    {!isComingSoon && owned && !equipped && (
+                      <View
+                        style={[
+                          styles.statusBadge,
+                          { backgroundColor: accentColor },
+                        ]}
+                      >
+                        <Ionicons
+                          name="swap-horizontal-outline"
+                          size={10}
+                          color="#FFF"
+                        />
+                      </View>
+                    )}
+                    {!isComingSoon && !canAfford && !owned && !isFree && (
+                      <View
+                        style={[
+                          styles.statusBadge,
+                          { backgroundColor: "#666" },
+                        ]}
+                      >
+                        <Ionicons
+                          name="lock-closed-outline"
+                          size={10}
+                          color="#FFF"
+                        />
+                      </View>
+                    )}
+                  </View>
 
-                {/* Info */}
-                <Text style={[styles.itemName, { color: theme.text }]} numberOfLines={1}>
-                  {item.name}
-                </Text>
-                <Text style={[styles.itemDescription, { color: theme.textSecondary }]} numberOfLines={2}>
-                  {item.description}
-                </Text>
+                  {/* Info */}
+                  <Text
+                    style={[styles.itemName, { color: theme.text }]}
+                    numberOfLines={1}
+                  >
+                    {item.name}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.itemDescription,
+                      { color: theme.textSecondary },
+                    ]}
+                    numberOfLines={2}
+                  >
+                    {item.description}
+                  </Text>
 
-                {/* Status/Price */}
-                {isComingSoon ? (
-                  <View style={[styles.statusTag, { backgroundColor: '#88888820' }]}>
-                    <Text style={[styles.statusText, { color: '#888' }]}>Coming Soon</Text>
-                  </View>
-                ) : equipped ? (
-                  <View style={[styles.statusTag, { backgroundColor: accentColor + '20' }]}>
-                    <Text style={[styles.statusText, { color: accentColor }]}>Equipped</Text>
-                  </View>
-                ) : owned ? (
-                  <View style={[styles.statusTag, { backgroundColor: accentColor + '20' }]}>
-                    <Text style={[styles.statusText, { color: accentColor }]}>Tap to Equip</Text>
-                  </View>
-                ) : isFree ? (
-                  <View style={[styles.statusTag, { backgroundColor: accentColor + '20' }]}>
-                    <Text style={[styles.statusText, { color: accentColor }]}>Free</Text>
-                  </View>
-                ) : (
-                  <View style={[styles.priceTag, { backgroundColor: canAfford ? '#FF570015' : theme.surface }]}>
-                    <FlintIcon size={12} color={canAfford ? "#FF5700" : theme.textSecondary} />
-                    <Text style={[styles.itemCost, { color: canAfford ? '#FF5700' : theme.textSecondary }]}>
-                      {item.cost}
-                    </Text>
-                  </View>
-                )}
+                  {/* Status/Price */}
+                  {isComingSoon ? (
+                    <View
+                      style={[
+                        styles.statusTag,
+                        { backgroundColor: "#88888820" },
+                      ]}
+                    >
+                      <Text style={[styles.statusText, { color: "#888" }]}>
+                        Coming Soon
+                      </Text>
+                    </View>
+                  ) : equipped ? (
+                    <View
+                      style={[
+                        styles.statusTag,
+                        { backgroundColor: accentColor + "20" },
+                      ]}
+                    >
+                      <Text style={[styles.statusText, { color: accentColor }]}>
+                        Equipped
+                      </Text>
+                    </View>
+                  ) : owned ? (
+                    <View
+                      style={[
+                        styles.statusTag,
+                        { backgroundColor: accentColor + "20" },
+                      ]}
+                    >
+                      <Text style={[styles.statusText, { color: accentColor }]}>
+                        Tap to Equip
+                      </Text>
+                    </View>
+                  ) : isFree ? (
+                    <View
+                      style={[
+                        styles.statusTag,
+                        { backgroundColor: accentColor + "20" },
+                      ]}
+                    >
+                      <Text style={[styles.statusText, { color: accentColor }]}>
+                        Free
+                      </Text>
+                    </View>
+                  ) : (
+                    <View
+                      style={[
+                        styles.priceTag,
+                        {
+                          backgroundColor: canAfford
+                            ? "#FF570015"
+                            : theme.surface,
+                        },
+                      ]}
+                    >
+                      <FlintIcon
+                        size={12}
+                        color={canAfford ? "#FF5700" : theme.textSecondary}
+                      />
+                      <Text
+                        style={[
+                          styles.itemCost,
+                          {
+                            color: canAfford ? "#FF5700" : theme.textSecondary,
+                          },
+                        ]}
+                      >
+                        {item.cost}
+                      </Text>
+                    </View>
+                  )}
                 </AnimatedTouchable>
               </StaggeredItem>
             );
@@ -509,11 +860,18 @@ const ShopScreen = () => {
                   <Text style={{ fontSize: 60 }}>{selectedItem.icon}</Text>
                 </View>
 
-                <Text style={[styles.modalDescription, { color: theme.textSecondary }]}>
+                <Text
+                  style={[
+                    styles.modalDescription,
+                    { color: theme.textSecondary },
+                  ]}
+                >
                   {selectedItem.description}
                 </Text>
 
-                <View style={[styles.modalCost, { backgroundColor: '#FF570015' }]}>
+                <View
+                  style={[styles.modalCost, { backgroundColor: "#FF570015" }]}
+                >
                   <FlintIcon size={24} color="#FF5700" />
                   <Text style={styles.modalCostText}>
                     {selectedItem.cost} Flint
@@ -532,7 +890,13 @@ const ShopScreen = () => {
                     size="medium"
                     loading={isPurchasing}
                     disabled={isPurchasing}
-                    icon={<Ionicons name="cube-outline" size={20} color={theme.text} />}
+                    icon={
+                      <Ionicons
+                        name="cube-outline"
+                        size={20}
+                        color={theme.text}
+                      />
+                    }
                     iconPosition="left"
                     style={{ flex: 1 }}
                   />
@@ -543,10 +907,15 @@ const ShopScreen = () => {
                     variant="primary"
                     size="medium"
                     gradient
-                    gradientColors={[theme.primary, PremiumColors.gradients.primary[1]]}
+                    gradientColors={[
+                      theme.primary,
+                      PremiumColors.gradients.primary[1],
+                    ]}
                     loading={isPurchasing}
                     disabled={isPurchasing}
-                    icon={<Ionicons name="flash-outline" size={20} color="#FFF" />}
+                    icon={
+                      <Ionicons name="flash-outline" size={20} color="#FFF" />
+                    }
                     iconPosition="left"
                     style={{ flex: 1 }}
                   />
@@ -556,7 +925,12 @@ const ShopScreen = () => {
                   style={styles.modalCancel}
                   onPress={() => setShowApplyModal(false)}
                 >
-                  <Text style={[styles.modalCancelText, { color: theme.textSecondary }]}>
+                  <Text
+                    style={[
+                      styles.modalCancelText,
+                      { color: theme.textSecondary },
+                    ]}
+                  >
                     Cancel
                   </Text>
                 </TouchableOpacity>
@@ -577,22 +951,22 @@ const styles = StyleSheet.create({
     margin: 16,
     borderRadius: 16,
     padding: 20,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 3,
   },
   balanceContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   flintIcon: {
     width: 70,
     height: 70,
     borderRadius: 35,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     marginRight: 16,
   },
   balanceInfo: {
@@ -604,14 +978,14 @@ const styles = StyleSheet.create({
   },
   balanceAmount: {
     fontSize: 32,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 4,
   },
   balanceHint: {
     fontSize: 12,
   },
   categoryTabs: {
-    flexDirection: 'row',
+    flexDirection: "row",
     marginHorizontal: 16,
     marginBottom: 16,
     borderRadius: 12,
@@ -622,10 +996,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderRadius: 8,
-    alignItems: 'center',
+    alignItems: "center",
   },
   categoryTabActive: {
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -633,11 +1007,11 @@ const styles = StyleSheet.create({
   },
   categoryTabText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   itemsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     paddingHorizontal: 16,
     gap: ITEM_MARGIN,
   },
@@ -647,13 +1021,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 12,
     borderWidth: 2,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   itemCardLocked: {
     opacity: 0.6,
@@ -662,50 +1036,55 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-    alignSelf: 'center',
-    position: 'relative',
+    justifyContent: "center",
+    alignItems: "center",
+    alignSelf: "center",
+    position: "relative",
+    overflow: "hidden",
   },
   itemIcon: {
     fontSize: 32,
   },
+  itemImage: {
+    width: "100%",
+    height: "100%",
+  },
   statusBadge: {
-    position: 'absolute',
+    position: "absolute",
     bottom: -2,
     right: -2,
     width: 20,
     height: 20,
     borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     borderWidth: 2,
-    borderColor: '#FFF',
+    borderColor: "#FFF",
   },
   itemName: {
     fontSize: 13,
-    fontWeight: '600',
-    textAlign: 'center',
+    fontWeight: "600",
+    textAlign: "center",
   },
   itemDescription: {
     fontSize: 10,
-    textAlign: 'center',
+    textAlign: "center",
     lineHeight: 13,
   },
   statusTag: {
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 6,
-    alignItems: 'center',
+    alignItems: "center",
   },
   statusText: {
     fontSize: 9,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   priceTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 6,
@@ -713,37 +1092,37 @@ const styles = StyleSheet.create({
   },
   itemCost: {
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   modal: {
-    width: '85%',
+    width: "85%",
     borderRadius: 20,
     padding: 24,
-    alignItems: 'center',
+    alignItems: "center",
   },
   modalTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 20,
-    textAlign: 'center',
+    textAlign: "center",
   },
   modalIcon: {
     marginBottom: 16,
   },
   modalDescription: {
     fontSize: 16,
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: 20,
   },
   modalCost: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     paddingVertical: 12,
     paddingHorizontal: 20,
@@ -752,26 +1131,26 @@ const styles = StyleSheet.create({
   },
   modalCostText: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FF5700',
+    fontWeight: "bold",
+    color: "#FF5700",
   },
   modalQuestion: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
     marginBottom: 16,
-    textAlign: 'center',
+    textAlign: "center",
   },
   modalButtons: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 12,
-    width: '100%',
+    width: "100%",
     marginBottom: 12,
   },
   modalButton: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     paddingVertical: 14,
     borderRadius: 12,
@@ -779,11 +1158,10 @@ const styles = StyleSheet.create({
   modalButtonSecondary: {
     borderWidth: 2,
   },
-  modalButtonPrimary: {
-  },
+  modalButtonPrimary: {},
   modalButtonText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   modalCancel: {
     paddingVertical: 8,

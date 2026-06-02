@@ -45,7 +45,7 @@ export const listRequests = query({
       requests = await ctx.db
         .query("friendRequests")
         .withIndex("by_recipientId_status", (q) =>
-          q.eq("recipientId", user._id).eq("status", "pending")
+          q.eq("recipientId", user._id).eq("status", "pending"),
         )
         .collect();
     } else {
@@ -68,7 +68,6 @@ export const listRequests = query({
                 username: sender.username,
                 fullName: sender.fullName,
                 avatarUrl: sender.avatarUrl,
-                email: sender.email,
                 status: sender.status,
               }
             : null,
@@ -78,12 +77,11 @@ export const listRequests = query({
                 username: recipient.username,
                 fullName: recipient.fullName,
                 avatarUrl: recipient.avatarUrl,
-                email: recipient.email,
                 status: recipient.status,
               }
             : null,
         };
-      })
+      }),
     );
 
     return enrichedRequests;

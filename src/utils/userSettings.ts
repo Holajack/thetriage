@@ -1,22 +1,12 @@
-import { ConvexReactClient } from "convex/react";
 import { api } from "../../convex/_generated/api";
-
-let _convexClient: ConvexReactClient | null = null;
-
-export function setConvexClient(client: ConvexReactClient) {
-  _convexClient = client;
-}
-
-function getClient(): ConvexReactClient {
-  if (!_convexClient) throw new Error("Convex client not initialized");
-  return _convexClient;
-}
+import { getConvexClient } from "./convexClient";
+export { setConvexClient } from "./convexClient";
 
 export interface UserSettings {
   auto_play_sound?: boolean;
   sound_enabled?: boolean;
   music_volume?: number;
-  theme?: 'light' | 'dark' | 'auto';
+  theme?: "light" | "dark" | "auto";
   notifications_enabled?: boolean;
   study_reminders?: boolean;
   break_reminders?: boolean;
@@ -50,13 +40,15 @@ export interface UserSettings {
 /**
  * Get user settings from database
  */
-export async function getUserSettings(userId?: string): Promise<UserSettings | null> {
+export async function getUserSettings(
+  userId?: string,
+): Promise<UserSettings | null> {
   try {
-    const client = getClient();
+    const client = getConvexClient();
     const settings = await client.query(api.settings.get, {});
 
     if (!settings) {
-      console.warn('No settings found for current user');
+      // No settings found for current user
       return null;
     }
 
@@ -65,7 +57,7 @@ export async function getUserSettings(userId?: string): Promise<UserSettings | n
       auto_play_sound: settings.autoPlaySound,
       sound_enabled: settings.soundEnabled,
       music_volume: settings.musicVolume,
-      theme: settings.theme as 'light' | 'dark' | 'auto',
+      theme: settings.theme as "light" | "dark" | "auto",
       notifications_enabled: settings.notificationsEnabled,
       auto_start_breaks: settings.autoStartBreaks,
       auto_start_focus: settings.autoStartFocus,
@@ -78,7 +70,7 @@ export async function getUserSettings(userId?: string): Promise<UserSettings | n
       reduce_motion: settings.reduceMotion,
     };
   } catch (error) {
-    console.error('Error in getUserSettings:', error);
+    // Error in getUserSettings
     return null;
   }
 }
@@ -86,43 +78,68 @@ export async function getUserSettings(userId?: string): Promise<UserSettings | n
 /**
  * Update user settings in database
  */
-export async function updateUserSettings(userId: string, settings: UserSettings): Promise<boolean> {
+export async function updateUserSettings(
+  userId: string,
+  settings: UserSettings,
+): Promise<boolean> {
   try {
-    const client = getClient();
+    const client = getConvexClient();
 
     // Convert snake_case to camelCase for Convex
     const convexSettings: any = {};
 
-    if (settings.auto_play_sound !== undefined) convexSettings.autoPlaySound = settings.auto_play_sound;
-    if (settings.sound_enabled !== undefined) convexSettings.soundEnabled = settings.sound_enabled;
-    if (settings.music_volume !== undefined) convexSettings.musicVolume = settings.music_volume;
+    if (settings.auto_play_sound !== undefined)
+      convexSettings.autoPlaySound = settings.auto_play_sound;
+    if (settings.sound_enabled !== undefined)
+      convexSettings.soundEnabled = settings.sound_enabled;
+    if (settings.music_volume !== undefined)
+      convexSettings.musicVolume = settings.music_volume;
     if (settings.theme !== undefined) convexSettings.theme = settings.theme;
-    if (settings.notifications_enabled !== undefined) convexSettings.notificationsEnabled = settings.notifications_enabled;
-    if (settings.auto_start_breaks !== undefined) convexSettings.autoStartBreaks = settings.auto_start_breaks;
-    if (settings.auto_start_focus !== undefined) convexSettings.autoStartFocus = settings.auto_start_focus;
-    if (settings.auto_dnd_focus !== undefined) convexSettings.autoDndFocus = settings.auto_dnd_focus;
-    if (settings.daily_goal_minutes !== undefined) convexSettings.dailyGoalMinutes = settings.daily_goal_minutes;
-    if (settings.preferred_session_length !== undefined) convexSettings.preferredSessionLength = settings.preferred_session_length;
-    if (settings.preferred_break_length !== undefined) convexSettings.breakLength = settings.preferred_break_length;
+    if (settings.notifications_enabled !== undefined)
+      convexSettings.notificationsEnabled = settings.notifications_enabled;
+    if (settings.auto_start_breaks !== undefined)
+      convexSettings.autoStartBreaks = settings.auto_start_breaks;
+    if (settings.auto_start_focus !== undefined)
+      convexSettings.autoStartFocus = settings.auto_start_focus;
+    if (settings.auto_dnd_focus !== undefined)
+      convexSettings.autoDndFocus = settings.auto_dnd_focus;
+    if (settings.daily_goal_minutes !== undefined)
+      convexSettings.dailyGoalMinutes = settings.daily_goal_minutes;
+    if (settings.preferred_session_length !== undefined)
+      convexSettings.preferredSessionLength = settings.preferred_session_length;
+    if (settings.preferred_break_length !== undefined)
+      convexSettings.breakLength = settings.preferred_break_length;
     // Ambient sound and music service settings (already camelCase)
-    if (settings.ambientEnvironmentEnabled !== undefined) convexSettings.ambientEnvironmentEnabled = settings.ambientEnvironmentEnabled;
-    if (settings.ambientWhiteNoiseEnabled !== undefined) convexSettings.ambientWhiteNoiseEnabled = settings.ambientWhiteNoiseEnabled;
-    if (settings.ambientCrittersEnabled !== undefined) convexSettings.ambientCrittersEnabled = settings.ambientCrittersEnabled;
-    if (settings.ambientVolume !== undefined) convexSettings.ambientVolume = settings.ambientVolume;
-    if (settings.preferredMusicService !== undefined) convexSettings.preferredMusicService = settings.preferredMusicService;
-    if (settings.spotifyConnected !== undefined) convexSettings.spotifyConnected = settings.spotifyConnected;
-    if (settings.appleMusicConnected !== undefined) convexSettings.appleMusicConnected = settings.appleMusicConnected;
+    if (settings.ambientEnvironmentEnabled !== undefined)
+      convexSettings.ambientEnvironmentEnabled =
+        settings.ambientEnvironmentEnabled;
+    if (settings.ambientWhiteNoiseEnabled !== undefined)
+      convexSettings.ambientWhiteNoiseEnabled =
+        settings.ambientWhiteNoiseEnabled;
+    if (settings.ambientCrittersEnabled !== undefined)
+      convexSettings.ambientCrittersEnabled = settings.ambientCrittersEnabled;
+    if (settings.ambientVolume !== undefined)
+      convexSettings.ambientVolume = settings.ambientVolume;
+    if (settings.preferredMusicService !== undefined)
+      convexSettings.preferredMusicService = settings.preferredMusicService;
+    if (settings.spotifyConnected !== undefined)
+      convexSettings.spotifyConnected = settings.spotifyConnected;
+    if (settings.appleMusicConnected !== undefined)
+      convexSettings.appleMusicConnected = settings.appleMusicConnected;
     // Accessibility
-    if (settings.tts_enabled !== undefined) convexSettings.ttsEnabled = settings.tts_enabled;
-    if (settings.high_contrast !== undefined) convexSettings.highContrast = settings.high_contrast;
-    if (settings.reduce_motion !== undefined) convexSettings.reduceMotion = settings.reduce_motion;
+    if (settings.tts_enabled !== undefined)
+      convexSettings.ttsEnabled = settings.tts_enabled;
+    if (settings.high_contrast !== undefined)
+      convexSettings.highContrast = settings.high_contrast;
+    if (settings.reduce_motion !== undefined)
+      convexSettings.reduceMotion = settings.reduce_motion;
 
     await client.mutation(api.settings.update, convexSettings);
 
-    console.log('✅ User settings updated successfully');
+    // User settings updated
     return true;
   } catch (error) {
-    console.error('Error in updateUserSettings:', error);
+    // Error in updateUserSettings
     return false;
   }
 }
@@ -130,13 +147,15 @@ export async function updateUserSettings(userId: string, settings: UserSettings)
 /**
  * Create initial user settings for new users
  */
-export async function createInitialUserSettings(userId: string): Promise<boolean> {
+export async function createInitialUserSettings(
+  userId: string,
+): Promise<boolean> {
   try {
     const defaultSettings: UserSettings = {
       auto_play_sound: true,
       sound_enabled: true,
       music_volume: 0.5,
-      theme: 'auto',
+      theme: "auto",
       notifications_enabled: true,
       study_reminders: true,
       break_reminders: true,
@@ -146,14 +165,14 @@ export async function createInitialUserSettings(userId: string): Promise<boolean
       daily_goal_minutes: 120,
       preferred_session_length: 25,
       preferred_break_length: 5,
-      timezone: 'UTC',
-      language: 'en',
+      timezone: "UTC",
+      language: "en",
       vibration_enabled: true,
     };
 
     return await updateUserSettings(userId, defaultSettings);
   } catch (error) {
-    console.error('Error creating initial user settings:', error);
+    // Error creating initial user settings
     return false;
   }
 }

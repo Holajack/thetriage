@@ -9,8 +9,15 @@
  * - Premium feel without being distracting
  */
 
-import React, { useEffect, useCallback, ReactNode, Children } from 'react';
-import { StyleSheet, View, ViewStyle, FlatList, FlatListProps } from 'react-native';
+import React, { useEffect, useCallback, ReactNode, Children } from "react";
+import {
+  StyleSheet,
+  View,
+  ViewStyle,
+  FlatList,
+  FlatListProps,
+  DimensionValue,
+} from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -23,14 +30,19 @@ import Animated, {
   SlideInRight,
   Layout,
   Easing,
-} from 'react-native-reanimated';
-import { AnimationConfig, TimingConfig, StaggerDelay, Spacing } from '../../theme/premiumTheme';
+} from "react-native-reanimated";
+import {
+  AnimationConfig,
+  TimingConfig,
+  StaggerDelay,
+  Spacing,
+} from "../../theme/premiumTheme";
 
 // Subtle stagger delays - faster and less noticeable
 const SubtleStaggerDelay = {
-  fast: 30,    // Was 50
-  normal: 50,  // Was 80
-  slow: 80,    // Was 120
+  fast: 30, // Was 50
+  normal: 50, // Was 80
+  slow: 80, // Was 120
 };
 
 // ============================================
@@ -39,8 +51,8 @@ const SubtleStaggerDelay = {
 interface StaggeredItemProps {
   index: number;
   children: ReactNode;
-  delay?: 'fast' | 'normal' | 'slow';
-  direction?: 'up' | 'down' | 'right' | 'fade';
+  delay?: "fast" | "normal" | "slow";
+  direction?: "up" | "down" | "right" | "fade";
   style?: ViewStyle;
   subtle?: boolean; // New prop for subtle animations
 }
@@ -48,8 +60,8 @@ interface StaggeredItemProps {
 export const StaggeredItem: React.FC<StaggeredItemProps> = ({
   index,
   children,
-  delay = 'normal',
-  direction = 'up',
+  delay = "normal",
+  direction = "up",
   style,
   subtle = true, // Default to subtle animations
 }) => {
@@ -61,24 +73,30 @@ export const StaggeredItem: React.FC<StaggeredItemProps> = ({
     if (subtle) {
       // Subtle animations - pure fade with minimal movement
       switch (direction) {
-        case 'fade':
+        case "fade":
           return FadeIn.delay(staggerDelay).duration(250);
-        case 'down':
-          return FadeInDown.delay(staggerDelay).duration(300).damping(25).stiffness(200);
-        case 'right':
+        case "down":
+          return FadeInDown.delay(staggerDelay)
+            .duration(300)
+            .damping(25)
+            .stiffness(200);
+        case "right":
           return SlideInRight.delay(staggerDelay).duration(250).damping(25);
-        case 'up':
+        case "up":
         default:
-          return FadeInUp.delay(staggerDelay).duration(300).damping(25).stiffness(200);
+          return FadeInUp.delay(staggerDelay)
+            .duration(300)
+            .damping(25)
+            .stiffness(200);
       }
     } else {
       // Original bouncy animations for special cases
       switch (direction) {
-        case 'down':
+        case "down":
           return FadeInDown.delay(staggerDelay).springify().damping(15);
-        case 'right':
+        case "right":
           return SlideInRight.delay(staggerDelay).springify().damping(15);
-        case 'up':
+        case "up":
         default:
           return FadeInUp.delay(staggerDelay).springify().damping(15);
       }
@@ -86,10 +104,7 @@ export const StaggeredItem: React.FC<StaggeredItemProps> = ({
   };
 
   return (
-    <Animated.View
-      entering={getEntering()}
-      style={style}
-    >
+    <Animated.View entering={getEntering()} style={style}>
       {children}
     </Animated.View>
   );
@@ -100,21 +115,26 @@ export const StaggeredItem: React.FC<StaggeredItemProps> = ({
 // ============================================
 interface StaggeredListProps {
   children: ReactNode;
-  delay?: 'fast' | 'normal' | 'slow';
-  direction?: 'up' | 'down' | 'right';
+  delay?: "fast" | "normal" | "slow";
+  direction?: "up" | "down" | "right";
   style?: ViewStyle;
 }
 
 export const StaggeredList: React.FC<StaggeredListProps> = ({
   children,
-  delay = 'normal',
-  direction = 'up',
+  delay = "normal",
+  direction = "up",
   style,
 }) => {
   return (
     <View style={[styles.container, style]}>
       {Children.map(children, (child, index) => (
-        <StaggeredItem key={`staggered-${index}`} index={index} delay={delay} direction={direction}>
+        <StaggeredItem
+          key={`staggered-${index}`}
+          index={index}
+          delay={delay}
+          direction={direction}
+        >
           {child}
         </StaggeredItem>
       ))}
@@ -125,19 +145,22 @@ export const StaggeredList: React.FC<StaggeredListProps> = ({
 // ============================================
 // ANIMATED FLATLIST
 // ============================================
-interface AnimatedFlatListProps<T> extends Omit<FlatListProps<T>, 'renderItem'> {
+interface AnimatedFlatListProps<T> extends Omit<
+  FlatListProps<T>,
+  "renderItem"
+> {
   data: T[];
   renderItem: (info: { item: T; index: number }) => ReactNode;
-  delay?: 'fast' | 'normal' | 'slow';
-  direction?: 'up' | 'down' | 'right';
+  delay?: "fast" | "normal" | "slow";
+  direction?: "up" | "down" | "right" | "fade";
   itemContainerStyle?: ViewStyle;
 }
 
 export function AnimatedFlatList<T>({
   data,
   renderItem,
-  delay = 'fast',
-  direction = 'fade',
+  delay = "fast",
+  direction = "fade",
   itemContainerStyle,
   ...props
 }: AnimatedFlatListProps<T>) {
@@ -195,7 +218,7 @@ interface StaggeredGridProps {
   children: ReactNode;
   columns?: number;
   gap?: number;
-  delay?: 'fast' | 'normal' | 'slow';
+  delay?: "fast" | "normal" | "slow";
   style?: ViewStyle;
 }
 
@@ -203,7 +226,7 @@ export const StaggeredGrid: React.FC<StaggeredGridProps> = ({
   children,
   columns = 2,
   gap = Spacing.md,
-  delay = 'fast',
+  delay = "fast",
   style,
 }) => {
   return (
@@ -215,12 +238,11 @@ export const StaggeredGrid: React.FC<StaggeredGridProps> = ({
           delay={delay}
           direction="fade"
           subtle={true}
-          style={[
-            styles.gridItem,
-            {
-              width: `${100 / columns - (gap / columns) * (columns - 1)}%`,
-            },
-          ]}
+          style={{
+            ...styles.gridItem,
+            width:
+              `${100 / columns - (gap / columns) * (columns - 1)}%` as DimensionValue,
+          }}
         >
           {child}
         </StaggeredItem>
@@ -235,7 +257,7 @@ export const StaggeredGrid: React.FC<StaggeredGridProps> = ({
 interface StaggeredSectionProps {
   title?: string;
   children: ReactNode;
-  delay?: 'fast' | 'normal' | 'slow';
+  delay?: "fast" | "normal" | "slow";
   titleStyle?: ViewStyle;
   contentStyle?: ViewStyle;
   style?: ViewStyle;
@@ -244,7 +266,7 @@ interface StaggeredSectionProps {
 export const StaggeredSection: React.FC<StaggeredSectionProps> = ({
   title,
   children,
-  delay = 'normal',
+  delay = "normal",
   titleStyle,
   contentStyle,
   style,
@@ -261,7 +283,12 @@ export const StaggeredSection: React.FC<StaggeredSectionProps> = ({
       )}
       <View style={contentStyle}>
         {Children.map(children, (child, index) => (
-          <StaggeredItem key={`section-${index}`} index={index} delay={delay} direction="up">
+          <StaggeredItem
+            key={`section-${index}`}
+            index={index}
+            delay={delay}
+            direction="up"
+          >
             {child}
           </StaggeredItem>
         ))}
@@ -278,8 +305,8 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
   },
   gridItem: {
     // Width is set dynamically
@@ -289,7 +316,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: "600",
     marginBottom: Spacing.md,
   },
 });

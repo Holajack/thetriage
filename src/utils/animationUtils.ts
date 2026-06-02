@@ -5,8 +5,8 @@
  * Provides reusable animation hooks and helpers for premium feel
  */
 
-import { useEffect, useCallback, useState } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+import { useEffect, useCallback, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   useSharedValue,
   useAnimatedStyle,
@@ -21,9 +21,28 @@ import {
   SharedValue,
   Easing,
   cancelAnimation,
-} from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
-import { AnimationConfig, TimingConfig, StaggerDelay, HapticPatterns } from '../theme/premiumTheme';
+} from "react-native-reanimated";
+import * as Haptics from "expo-haptics";
+import {
+  AnimationConfig,
+  TimingConfig,
+  StaggerDelay,
+  HapticPatterns,
+} from "../theme/premiumTheme";
+import { useTheme } from "../context/ThemeContext";
+
+/**
+ * Read the app's reduce-motion setting from ThemeContext.
+ * Falls back to false if no provider (e.g., in tests/storybook).
+ */
+function useReduceMotionFlag(): boolean {
+  try {
+    const ctx = useTheme();
+    return ctx.reduceMotion === true;
+  } catch {
+    return false;
+  }
+}
 
 // ============================================
 // FOCUS-AWARE ANIMATION KEY
@@ -35,8 +54,8 @@ export const useFocusAnimationKey = () => {
   useFocusEffect(
     useCallback(() => {
       // Increment key on each focus to force remount of animated components
-      setFocusKey(prev => prev + 1);
-    }, [])
+      setFocusKey((prev) => prev + 1);
+    }, []),
   );
 
   return focusKey;
@@ -82,8 +101,14 @@ export const useEntranceAnimation = (delay: number = 0) => {
 
     // Small delay to ensure layout is ready, then animate
     const timeoutId = setTimeout(() => {
-      opacity.value = withDelay(delay, withTiming(1, { duration: TimingConfig.entrance }));
-      translateY.value = withDelay(delay, withSpring(0, AnimationConfig.gentle));
+      opacity.value = withDelay(
+        delay,
+        withTiming(1, { duration: TimingConfig.entrance }),
+      );
+      translateY.value = withDelay(
+        delay,
+        withSpring(0, AnimationConfig.gentle),
+      );
     }, 50);
 
     return () => {
@@ -107,25 +132,34 @@ export const useEntranceAnimation = (delay: number = 0) => {
 // ============================================
 export const useStaggeredEntrance = (
   itemCount: number,
-  delayType: 'fast' | 'normal' | 'slow' = 'normal'
+  delayType: "fast" | "normal" | "slow" = "normal",
 ) => {
   const baseDelay = StaggerDelay[delayType];
 
-  const getItemAnimation = useCallback((index: number) => {
-    const delay = index * baseDelay;
-    const opacity = useSharedValue(0);
-    const translateY = useSharedValue(30);
+  const getItemAnimation = useCallback(
+    (index: number) => {
+      const delay = index * baseDelay;
+      const opacity = useSharedValue(0);
+      const translateY = useSharedValue(30);
 
-    useEffect(() => {
-      opacity.value = withDelay(delay, withTiming(1, { duration: TimingConfig.entrance }));
-      translateY.value = withDelay(delay, withSpring(0, AnimationConfig.gentle));
-    }, []);
+      useEffect(() => {
+        opacity.value = withDelay(
+          delay,
+          withTiming(1, { duration: TimingConfig.entrance }),
+        );
+        translateY.value = withDelay(
+          delay,
+          withSpring(0, AnimationConfig.gentle),
+        );
+      }, []);
 
-    return useAnimatedStyle(() => ({
-      opacity: opacity.value,
-      transform: [{ translateY: translateY.value }],
-    }));
-  }, [baseDelay]);
+      return useAnimatedStyle(() => ({
+        opacity: opacity.value,
+        transform: [{ translateY: translateY.value }],
+      }));
+    },
+    [baseDelay],
+  );
 
   return { getItemAnimation };
 };
@@ -135,16 +169,22 @@ export const useStaggeredEntrance = (
 // ============================================
 export const usePulseAnimation = (enabled: boolean = true) => {
   const scale = useSharedValue(1);
+  const reduceMotion = useReduceMotionFlag();
 
   useEffect(() => {
+    if (reduceMotion) {
+      // Hold the resting scale; no looping animation when reduce motion is on.
+      scale.value = 1;
+      return;
+    }
     if (enabled) {
       scale.value = withRepeat(
         withSequence(
           withTiming(1.05, { duration: 1000 }),
-          withTiming(1, { duration: 1000 })
+          withTiming(1, { duration: 1000 }),
         ),
         -1, // Infinite
-        true
+        true,
       );
     } else {
       // Reset to default scale when disabled
@@ -155,7 +195,7 @@ export const usePulseAnimation = (enabled: boolean = true) => {
     return () => {
       cancelAnimation(scale);
     };
-  }, [enabled]);
+  }, [enabled, reduceMotion]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -169,22 +209,27 @@ export const usePulseAnimation = (enabled: boolean = true) => {
 // ============================================
 export const useShimmerAnimation = () => {
   const shimmerPosition = useSharedValue(-1);
+  const reduceMotion = useReduceMotionFlag();
 
   useEffect(() => {
+    if (reduceMotion) {
+      shimmerPosition.value = 0;
+      return;
+    }
     shimmerPosition.value = withRepeat(
       withTiming(2, { duration: 1500, easing: Easing.linear }),
       -1,
-      false
+      false,
     );
 
     // Cleanup: cancel animation on unmount
     return () => {
       cancelAnimation(shimmerPosition);
     };
-  }, []);
+  }, [reduceMotion]);
 
   const shimmerStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: shimmerPosition.value * 100 + '%' }],
+    transform: [{ translateX: shimmerPosition.value * 100 }],
   }));
 
   return shimmerStyle;
@@ -206,21 +251,18 @@ export const useSuccessAnimation = () => {
     scale.value = withSequence(
       withSpring(1.2, AnimationConfig.bouncy),
       withSpring(0.9, AnimationConfig.quick),
-      withSpring(1, AnimationConfig.standard)
+      withSpring(1, AnimationConfig.standard),
     );
 
     rotation.value = withSequence(
       withTiming(-5, { duration: 100 }),
       withTiming(5, { duration: 100 }),
-      withTiming(0, { duration: 100 })
+      withTiming(0, { duration: 100 }),
     );
   }, []);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { scale: scale.value },
-      { rotate: `${rotation.value}deg` },
-    ],
+    transform: [{ scale: scale.value }, { rotate: `${rotation.value}deg` }],
     opacity: opacity.value,
   }));
 
@@ -236,7 +278,9 @@ export const useTabSwitchAnimation = (isActive: boolean) => {
 
   useEffect(() => {
     scale.value = withSpring(isActive ? 1 : 0.9, AnimationConfig.quick);
-    opacity.value = withTiming(isActive ? 1 : 0.6, { duration: TimingConfig.fast });
+    opacity.value = withTiming(isActive ? 1 : 0.6, {
+      duration: TimingConfig.fast,
+    });
   }, [isActive]);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -252,17 +296,22 @@ export const useTabSwitchAnimation = (isActive: boolean) => {
 // ============================================
 export const useHolographicEffect = () => {
   const shinePosition = useSharedValue(0);
+  const reduceMotion = useReduceMotionFlag();
 
   useEffect(() => {
+    if (reduceMotion) {
+      shinePosition.value = 0.5;
+      return;
+    }
     shinePosition.value = withRepeat(
       withSequence(
         withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0, { duration: 2000, easing: Easing.inOut(Easing.ease) })
+        withTiming(0, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
       ),
       -1,
-      true
+      true,
     );
-  }, []);
+  }, [reduceMotion]);
 
   const holographicStyle = useAnimatedStyle(() => ({
     opacity: interpolate(shinePosition.value, [0, 0.5, 1], [0.3, 0.8, 0.3]),
@@ -296,12 +345,20 @@ export const useProgressAnimation = (targetProgress: number) => {
 // ============================================
 export const useCounterAnimation = (
   targetValue: number,
-  duration: number = 1000
+  duration: number = 1000,
 ) => {
   const count = useSharedValue(0);
   const [displayValue, setDisplayValue] = useState(0);
+  const reduceMotion = useReduceMotionFlag();
 
   useEffect(() => {
+    if (reduceMotion) {
+      // Snap to the target instead of counting up.
+      count.value = targetValue;
+      setDisplayValue(targetValue);
+      return;
+    }
+
     // Reset to 0 when target changes
     count.value = 0;
     setDisplayValue(0);
@@ -322,7 +379,9 @@ export const useCounterAnimation = (
       const progress = Math.min(elapsed / duration, 1);
       // Ease out cubic for smooth deceleration
       const easeProgress = 1 - Math.pow(1 - progress, 3);
-      const currentValue = Math.round(startValue + (targetValue - startValue) * easeProgress);
+      const currentValue = Math.round(
+        startValue + (targetValue - startValue) * easeProgress,
+      );
       setDisplayValue(currentValue);
 
       if (progress < 1) {
@@ -330,7 +389,7 @@ export const useCounterAnimation = (
       }
     };
     requestAnimationFrame(animate);
-  }, [targetValue, duration]);
+  }, [targetValue, duration, reduceMotion]);
 
   // Return object with both animated value and display value
   return { value: displayValue, sharedValue: count };
@@ -341,22 +400,22 @@ export const useCounterAnimation = (
 // ============================================
 export const triggerHaptic = (type: keyof typeof HapticPatterns) => {
   switch (type) {
-    case 'buttonPress':
+    case "buttonPress":
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       break;
-    case 'success':
+    case "success":
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       break;
-    case 'error':
+    case "error":
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       break;
-    case 'warning':
+    case "warning":
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       break;
-    case 'selection':
+    case "selection":
       Haptics.selectionAsync();
       break;
-    case 'milestone':
+    case "milestone":
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       break;
   }
@@ -395,17 +454,22 @@ export const useModalAnimation = (isVisible: boolean) => {
 // ============================================
 export const useFloatingAnimation = () => {
   const translateY = useSharedValue(0);
+  const reduceMotion = useReduceMotionFlag();
 
   useEffect(() => {
+    if (reduceMotion) {
+      translateY.value = 0;
+      return;
+    }
     translateY.value = withRepeat(
       withSequence(
         withTiming(-8, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0, { duration: 2000, easing: Easing.inOut(Easing.ease) })
+        withTiming(0, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
       ),
       -1,
-      true
+      true,
     );
-  }, []);
+  }, [reduceMotion]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
@@ -423,10 +487,7 @@ export const useNavigationSlideAnimation = () => {
   const opacity = useSharedValue(1);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { scale: scale.value },
-      { translateX: translateX.value },
-    ],
+    transform: [{ scale: scale.value }, { translateX: translateX.value }],
     opacity: opacity.value,
   }));
 

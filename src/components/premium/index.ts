@@ -6,7 +6,7 @@
  */
 
 // Buttons
-export { AnimatedButton, default as AnimatedButtonDefault } from './AnimatedButton';
+export { AnimatedButton } from "./AnimatedButton";
 
 // Loading states
 export {
@@ -15,11 +15,10 @@ export {
   SkeletonCard,
   SkeletonAvatarRow,
   SkeletonStatsGrid,
-  default as ShimmerLoaderDefault,
-} from './ShimmerLoader';
+} from "./ShimmerLoader";
 
 // Achievements & Gamification
-export { HolographicBadge, BadgeGrid, default as HolographicBadgeDefault } from './HolographicBadge';
+export { HolographicBadge, BadgeGrid } from "./HolographicBadge";
 
 // Tab Navigation
 export {
@@ -32,8 +31,7 @@ export {
   CommunityTabIcon,
   SettingsTabIcon,
   ChatTabIcon,
-  default as AnimatedTabIconDefault,
-} from './AnimatedTabIcon';
+} from "./AnimatedTabIcon";
 
 // Lists & Grids
 export {
@@ -43,5 +41,4 @@ export {
   CardListItem,
   StaggeredGrid,
   StaggeredSection,
-  default as StaggeredListDefault,
-} from './StaggeredList';
+} from "./StaggeredList";

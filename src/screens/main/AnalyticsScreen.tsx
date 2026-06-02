@@ -1,16 +1,27 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
-const { useUserAppData } = require('../../utils/userAppData');
-import { BottomTabBar } from '../../components/BottomTabBar';
-import { CircularChart, AnimatedCircularChart } from '../../components/CircularChart';
-import { UnifiedHeader } from '../../components/UnifiedHeader';
-import Svg, { Path, Rect, Defs, LinearGradient, Stop } from 'react-native-svg';
+import React, { useState, useEffect, useMemo } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Dimensions,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import { useAuth } from "../../context/AuthContext";
+import { useTheme } from "../../context/ThemeContext";
+const { useUserAppData } = require("../../utils/userAppData");
+import { BottomTabBar } from "../../components/BottomTabBar";
+import {
+  CircularChart,
+  AnimatedCircularChart,
+} from "../../components/CircularChart";
+import { UnifiedHeader } from "../../components/UnifiedHeader";
+import Svg, { Path, Rect, Defs, LinearGradient, Stop } from "react-native-svg";
 import Animated, {
+  SharedValue,
   useSharedValue,
   useAnimatedStyle,
   withTiming,
@@ -23,25 +34,36 @@ import Animated, {
   FadeIn,
   FadeInUp,
   FadeInDown,
-} from 'react-native-reanimated';
+} from "react-native-reanimated";
 
 // Session type colors for stacked charts
 const SESSION_TYPE_COLORS = {
-  deepWork: '#9C27B0',   // Purple
-  balanced: '#FF9800',   // Orange
-  sprint: '#2196F3',     // Blue
+  deepWork: "#9C27B0", // Purple
+  balanced: "#FF9800", // Orange
+  sprint: "#2196F3", // Blue
 };
 import {
   useCounterAnimation,
   useProgressAnimation,
   triggerHaptic,
   useFocusAnimationKey,
-} from '../../utils/animationUtils';
-import { ShimmerLoader, SkeletonStatsGrid } from '../../components/premium/ShimmerLoader';
-import { StaggeredList, StaggeredItem } from '../../components/premium/StaggeredList';
-import { Typography, Spacing, AnimationConfig, TimingConfig } from '../../theme/premiumTheme';
+} from "../../utils/animationUtils";
+import {
+  ShimmerLoader,
+  SkeletonStatsGrid,
+} from "../../components/premium/ShimmerLoader";
+import {
+  StaggeredList,
+  StaggeredItem,
+} from "../../components/premium/StaggeredList";
+import {
+  Typography,
+  Spacing,
+  AnimationConfig,
+  TimingConfig,
+} from "../../theme/premiumTheme";
 
-const { width } = Dimensions.get('window');
+const { width } = Dimensions.get("window");
 
 // Animated Bar Column Component - extracted to properly use hooks
 interface AnimatedBarColumnProps {
@@ -51,7 +73,7 @@ interface AnimatedBarColumnProps {
   label: string;
   theme: any;
   timeRange: string;
-  animationProgress: Animated.SharedValue<number>;
+  animationProgress: SharedValue<number>;
 }
 
 const AnimatedBarColumn: React.FC<AnimatedBarColumnProps> = ({
@@ -84,7 +106,12 @@ const AnimatedBarColumn: React.FC<AnimatedBarColumnProps> = ({
           ]}
         />
       </View>
-      <Text style={[styles.barLabel, { color: theme.primary, fontSize: timeRange === 'day' ? 7 : 9 }]}>
+      <Text
+        style={[
+          styles.barLabel,
+          { color: theme.primary, fontSize: timeRange === "day" ? 7 : 9 },
+        ]}
+      >
         {label}
       </Text>
     </Animated.View>
@@ -98,7 +125,7 @@ interface StackedBarColumnProps {
   index: number;
   label: string;
   theme: any;
-  animationProgress: Animated.SharedValue<number>;
+  animationProgress: SharedValue<number>;
 }
 
 const StackedBarColumn: React.FC<StackedBarColumnProps> = ({
@@ -133,17 +160,31 @@ const StackedBarColumn: React.FC<StackedBarColumnProps> = ({
       <View style={styles.barWrapper}>
         <View style={styles.stackedBarContainer}>
           <Animated.View
-            style={[styles.stackedBarSegment, { backgroundColor: SESSION_TYPE_COLORS.deepWork }, deepWorkStyle]}
+            style={[
+              styles.stackedBarSegment,
+              { backgroundColor: SESSION_TYPE_COLORS.deepWork },
+              deepWorkStyle,
+            ]}
           />
           <Animated.View
-            style={[styles.stackedBarSegment, { backgroundColor: SESSION_TYPE_COLORS.balanced }, balancedStyle]}
+            style={[
+              styles.stackedBarSegment,
+              { backgroundColor: SESSION_TYPE_COLORS.balanced },
+              balancedStyle,
+            ]}
           />
           <Animated.View
-            style={[styles.stackedBarSegment, { backgroundColor: SESSION_TYPE_COLORS.sprint }, sprintStyle]}
+            style={[
+              styles.stackedBarSegment,
+              { backgroundColor: SESSION_TYPE_COLORS.sprint },
+              sprintStyle,
+            ]}
           />
         </View>
       </View>
-      <Text style={[styles.barLabel, { color: theme.primary, fontSize: 9 }]}>{label}</Text>
+      <Text style={[styles.barLabel, { color: theme.primary, fontSize: 9 }]}>
+        {label}
+      </Text>
     </Animated.View>
   );
 };
@@ -156,27 +197,32 @@ interface HeatMapProps {
   theme: any;
 }
 
-const HeatMapChart: React.FC<HeatMapProps> = ({ data, firstDayOfMonth, daysInMonth, theme }) => {
-  const weekDays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+const HeatMapChart: React.FC<HeatMapProps> = ({
+  data,
+  firstDayOfMonth,
+  daysInMonth,
+  theme,
+}) => {
+  const weekDays = ["S", "M", "T", "W", "T", "F", "S"];
 
   // Heat map colors (0 = no data, 1-4 = increasing intensity)
   const getHeatColor = (intensity: number) => {
     const colors = [
-      theme.text + '15', // 0 - no activity
-      '#4CAF5040',       // 1 - light
-      '#4CAF5080',       // 2 - medium
-      '#4CAF50B0',       // 3 - high
-      '#4CAF50',         // 4 - max
+      theme.text + "15", // 0 - no activity
+      "#4CAF5040", // 1 - light
+      "#4CAF5080", // 2 - medium
+      "#4CAF50B0", // 3 - high
+      "#4CAF50", // 4 - max
     ];
     return colors[Math.min(intensity, 4)];
   };
 
   // Create grid with empty cells for alignment
-  const gridCells: (typeof data[0] | null)[] = [];
+  const gridCells: ((typeof data)[0] | null)[] = [];
   for (let i = 0; i < firstDayOfMonth; i++) {
     gridCells.push(null); // Empty cells before first day
   }
-  data.forEach(d => gridCells.push(d));
+  data.forEach((d) => gridCells.push(d));
 
   // Fill to complete last week
   const remainder = gridCells.length % 7;
@@ -198,7 +244,11 @@ const HeatMapChart: React.FC<HeatMapProps> = ({ data, firstDayOfMonth, daysInMon
       <View style={styles.heatMapRow}>
         {weekDays.map((day, index) => (
           <View key={`header-${index}`} style={styles.heatMapHeaderCell}>
-            <Text style={[styles.heatMapHeaderText, { color: theme.textSecondary }]}>{day}</Text>
+            <Text
+              style={[styles.heatMapHeaderText, { color: theme.textSecondary }]}
+            >
+              {day}
+            </Text>
           </View>
         ))}
       </View>
@@ -215,11 +265,20 @@ const HeatMapChart: React.FC<HeatMapProps> = ({ data, firstDayOfMonth, daysInMon
               key={`cell-${weekIndex}-${dayIndex}`}
               style={[
                 styles.heatMapCell,
-                { backgroundColor: cell ? getHeatColor(cell.intensity) : 'transparent' },
+                {
+                  backgroundColor: cell
+                    ? getHeatColor(cell.intensity)
+                    : "transparent",
+                },
               ]}
             >
               {cell && (
-                <Text style={[styles.heatMapDayText, { color: cell.intensity >= 3 ? '#fff' : theme.text }]}>
+                <Text
+                  style={[
+                    styles.heatMapDayText,
+                    { color: cell.intensity >= 3 ? "#fff" : theme.text },
+                  ]}
+                >
                   {cell.day}
                 </Text>
               )}
@@ -230,11 +289,25 @@ const HeatMapChart: React.FC<HeatMapProps> = ({ data, firstDayOfMonth, daysInMon
 
       {/* Legend */}
       <View style={styles.heatMapLegend}>
-        <Text style={[styles.heatMapLegendLabel, { color: theme.textSecondary }]}>Less</Text>
+        <Text
+          style={[styles.heatMapLegendLabel, { color: theme.textSecondary }]}
+        >
+          Less
+        </Text>
         {[0, 1, 2, 3, 4].map((i) => (
-          <View key={`legend-${i}`} style={[styles.heatMapLegendCell, { backgroundColor: getHeatColor(i) }]} />
+          <View
+            key={`legend-${i}`}
+            style={[
+              styles.heatMapLegendCell,
+              { backgroundColor: getHeatColor(i) },
+            ]}
+          />
         ))}
-        <Text style={[styles.heatMapLegendLabel, { color: theme.textSecondary }]}>More</Text>
+        <Text
+          style={[styles.heatMapLegendLabel, { color: theme.textSecondary }]}
+        >
+          More
+        </Text>
       </View>
     </View>
   );
@@ -248,7 +321,12 @@ interface StackedAreaChartProps {
   maxHeight: number;
 }
 
-const StackedAreaChart: React.FC<StackedAreaChartProps> = ({ data, labels, theme, maxHeight }) => {
+const StackedAreaChart: React.FC<StackedAreaChartProps> = ({
+  data,
+  labels,
+  theme,
+  maxHeight,
+}) => {
   const chartWidth = width - 80;
   const chartHeight = 140;
   const padding = 10;
@@ -256,7 +334,9 @@ const StackedAreaChart: React.FC<StackedAreaChartProps> = ({ data, labels, theme
   if (data.length === 0 || maxHeight === 0) {
     return (
       <View style={[styles.areaChartContainer, { height: chartHeight }]}>
-        <Text style={[styles.emptyChartText, { color: theme.textSecondary }]}>No data available</Text>
+        <Text style={[styles.emptyChartText, { color: theme.textSecondary }]}>
+          No data available
+        </Text>
       </View>
     );
   }
@@ -264,8 +344,11 @@ const StackedAreaChart: React.FC<StackedAreaChartProps> = ({ data, labels, theme
   const pointSpacing = (chartWidth - padding * 2) / (data.length - 1);
 
   // Create paths for each layer (stacked from bottom)
-  const createAreaPath = (getData: (d: typeof data[0]) => number, baseGetData?: (d: typeof data[0]) => number) => {
-    let path = '';
+  const createAreaPath = (
+    getData: (d: (typeof data)[0]) => number,
+    baseGetData?: (d: (typeof data)[0]) => number,
+  ) => {
+    let path = "";
     const baseY = chartHeight - padding;
 
     // Top line (left to right)
@@ -273,7 +356,8 @@ const StackedAreaChart: React.FC<StackedAreaChartProps> = ({ data, labels, theme
       const x = padding + i * pointSpacing;
       const value = getData(d);
       const baseValue = baseGetData ? baseGetData(d) : 0;
-      const y = baseY - ((value + baseValue) / maxHeight) * (chartHeight - padding * 2);
+      const y =
+        baseY - ((value + baseValue) / maxHeight) * (chartHeight - padding * 2);
 
       if (i === 0) {
         path += `M ${x} ${y}`;
@@ -290,17 +374,17 @@ const StackedAreaChart: React.FC<StackedAreaChartProps> = ({ data, labels, theme
       path += ` L ${x} ${y}`;
     }
 
-    path += ' Z';
+    path += " Z";
     return path;
   };
 
   const sprintPath = createAreaPath(
     (d) => d.sprint,
-    (d) => d.deepWork + d.balanced
+    (d) => d.deepWork + d.balanced,
   );
   const balancedPath = createAreaPath(
     (d) => d.balanced,
-    (d) => d.deepWork
+    (d) => d.deepWork,
   );
   const deepWorkPath = createAreaPath((d) => d.deepWork);
 
@@ -309,16 +393,40 @@ const StackedAreaChart: React.FC<StackedAreaChartProps> = ({ data, labels, theme
       <Svg width={chartWidth} height={chartHeight}>
         <Defs>
           <LinearGradient id="deepWorkGrad" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0%" stopColor={SESSION_TYPE_COLORS.deepWork} stopOpacity="0.8" />
-            <Stop offset="100%" stopColor={SESSION_TYPE_COLORS.deepWork} stopOpacity="0.3" />
+            <Stop
+              offset="0%"
+              stopColor={SESSION_TYPE_COLORS.deepWork}
+              stopOpacity="0.8"
+            />
+            <Stop
+              offset="100%"
+              stopColor={SESSION_TYPE_COLORS.deepWork}
+              stopOpacity="0.3"
+            />
           </LinearGradient>
           <LinearGradient id="balancedGrad" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0%" stopColor={SESSION_TYPE_COLORS.balanced} stopOpacity="0.8" />
-            <Stop offset="100%" stopColor={SESSION_TYPE_COLORS.balanced} stopOpacity="0.3" />
+            <Stop
+              offset="0%"
+              stopColor={SESSION_TYPE_COLORS.balanced}
+              stopOpacity="0.8"
+            />
+            <Stop
+              offset="100%"
+              stopColor={SESSION_TYPE_COLORS.balanced}
+              stopOpacity="0.3"
+            />
           </LinearGradient>
           <LinearGradient id="sprintGrad" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0%" stopColor={SESSION_TYPE_COLORS.sprint} stopOpacity="0.8" />
-            <Stop offset="100%" stopColor={SESSION_TYPE_COLORS.sprint} stopOpacity="0.3" />
+            <Stop
+              offset="0%"
+              stopColor={SESSION_TYPE_COLORS.sprint}
+              stopOpacity="0.8"
+            />
+            <Stop
+              offset="100%"
+              stopColor={SESSION_TYPE_COLORS.sprint}
+              stopOpacity="0.3"
+            />
           </LinearGradient>
         </Defs>
         <Path d={deepWorkPath} fill="url(#deepWorkGrad)" />
@@ -345,25 +453,46 @@ const StackedAreaChart: React.FC<StackedAreaChartProps> = ({ data, labels, theme
 const SessionTypeLegend: React.FC<{ theme: any }> = ({ theme }) => (
   <View style={styles.sessionTypeLegend}>
     <View style={styles.legendItemRow}>
-      <View style={[styles.legendDotSmall, { backgroundColor: SESSION_TYPE_COLORS.deepWork }]} />
-      <Text style={[styles.legendTextSmall, { color: theme.textSecondary }]}>Deep Work</Text>
+      <View
+        style={[
+          styles.legendDotSmall,
+          { backgroundColor: SESSION_TYPE_COLORS.deepWork },
+        ]}
+      />
+      <Text style={[styles.legendTextSmall, { color: theme.textSecondary }]}>
+        Deep Work
+      </Text>
     </View>
     <View style={styles.legendItemRow}>
-      <View style={[styles.legendDotSmall, { backgroundColor: SESSION_TYPE_COLORS.balanced }]} />
-      <Text style={[styles.legendTextSmall, { color: theme.textSecondary }]}>Balanced</Text>
+      <View
+        style={[
+          styles.legendDotSmall,
+          { backgroundColor: SESSION_TYPE_COLORS.balanced },
+        ]}
+      />
+      <Text style={[styles.legendTextSmall, { color: theme.textSecondary }]}>
+        Balanced
+      </Text>
     </View>
     <View style={styles.legendItemRow}>
-      <View style={[styles.legendDotSmall, { backgroundColor: SESSION_TYPE_COLORS.sprint }]} />
-      <Text style={[styles.legendTextSmall, { color: theme.textSecondary }]}>Sprint</Text>
+      <View
+        style={[
+          styles.legendDotSmall,
+          { backgroundColor: SESSION_TYPE_COLORS.sprint },
+        ]}
+      />
+      <Text style={[styles.legendTextSmall, { color: theme.textSecondary }]}>
+        Sprint
+      </Text>
     </View>
   </View>
 );
 
 const AnalyticsScreen = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const { user } = useAuth();
   const { theme } = useTheme();
-  const [timeRange, setTimeRange] = useState('day');
+  const [timeRange, setTimeRange] = useState("day");
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const { data: userData, isLoading } = useUserAppData();
@@ -375,7 +504,9 @@ const AnalyticsScreen = () => {
   const { leaderboard } = useAuth();
   const allSessions = userData?.sessions ?? [];
   // Only count completed sessions for analytics
-  const sessions = allSessions.filter((s: any) => s.status === 'completed' || !s.status);
+  const sessions = allSessions.filter(
+    (s: any) => s.status === "completed" || !s.status,
+  );
   const totalSessions = leaderboard?.total_sessions ?? sessions.length ?? 0;
   const totalMinutes = leaderboard?.total_focus_time ?? 0;
   const totalHours = Math.floor(totalMinutes / 60);
@@ -383,9 +514,22 @@ const AnalyticsScreen = () => {
 
   // Count session types: Deep Work, Balanced, Sprint (only completed sessions)
   // Note: Convex uses 'sessionType' while legacy data may use 'session_type'
-  const deepWorkCount = sessions.filter((s: any) => s.sessionType === 'deep_work' || s.sessionType === 'individual' || s.session_type === 'deep_work' || s.session_type === 'individual').length ?? 0;
-  const balancedCount = sessions.filter((s: any) => s.sessionType === 'balanced' || s.session_type === 'balanced').length ?? 0;
-  const sprintCount = sessions.filter((s: any) => s.sessionType === 'sprint' || s.session_type === 'sprint').length ?? 0;
+  const deepWorkCount =
+    sessions.filter(
+      (s: any) =>
+        s.sessionType === "deep_work" ||
+        s.sessionType === "individual" ||
+        s.session_type === "deep_work" ||
+        s.session_type === "individual",
+    ).length ?? 0;
+  const balancedCount =
+    sessions.filter(
+      (s: any) => s.sessionType === "balanced" || s.session_type === "balanced",
+    ).length ?? 0;
+  const sprintCount =
+    sessions.filter(
+      (s: any) => s.sessionType === "sprint" || s.session_type === "sprint",
+    ).length ?? 0;
 
   // Helper function to get session duration in minutes
   const getSessionDuration = (session: any): number => {
@@ -399,7 +543,8 @@ const AnalyticsScreen = () => {
 
   // Helper function to get session date (Convex uses startTime)
   const getSessionDate = (session: any): Date | null => {
-    const dateStr = session.startTime || session.created_at || session.start_time;
+    const dateStr =
+      session.startTime || session.created_at || session.start_time;
     if (!dateStr) return null;
     return new Date(dateStr);
   };
@@ -409,7 +554,8 @@ const AnalyticsScreen = () => {
     const breakdown: Record<string, number> = {};
 
     sessions.forEach((session: any) => {
-      const subject = session.subject || session.task_worked_on || 'General Study';
+      const subject =
+        session.subject || session.task_worked_on || "General Study";
       const duration = getSessionDuration(session);
 
       if (!breakdown[subject]) {
@@ -430,25 +576,36 @@ const AnalyticsScreen = () => {
   }, [sessions]);
 
   // Colors for different subjects
-  const subjectColors = ['#FF6B35', '#4ECDC4', '#F7B801', '#95E1D3', '#9B59B6', '#E74C3C', '#3498DB', '#2ECC71'];
+  const subjectColors = [
+    "#FF6B35",
+    "#4ECDC4",
+    "#F7B801",
+    "#95E1D3",
+    "#9B59B6",
+    "#E74C3C",
+    "#3498DB",
+    "#2ECC71",
+  ];
 
   // Generate dynamic insights based on user data
   const dynamicInsights = useMemo(() => {
     const insights: { icon: string; text: string; iconColor?: string }[] = [];
     const now = new Date();
-    const currentStreak = leaderboard?.current_streak ?? leaderboard?.currentStreak ?? 0;
-    const longestStreak = leaderboard?.longest_streak ?? leaderboard?.longestStreak ?? 0;
+    const currentStreak =
+      leaderboard?.current_streak ?? leaderboard?.currentStreak ?? 0;
+    const longestStreak =
+      leaderboard?.longest_streak ?? leaderboard?.longestStreak ?? 0;
 
     // Basic stats insight
     if (totalSessions > 0) {
       insights.push({
-        icon: 'bulb',
+        icon: "bulb",
         text: `You've completed ${totalSessions} sessions totaling ${totalHours}h ${remainingMinutes}m of focus time.`,
       });
     } else {
       insights.push({
-        icon: 'bulb',
-        text: 'Start your first study session to see insights here!',
+        icon: "bulb",
+        text: "Start your first study session to see insights here!",
       });
     }
 
@@ -456,21 +613,21 @@ const AnalyticsScreen = () => {
     if (currentStreak > 0) {
       if (currentStreak === longestStreak && currentStreak > 1) {
         insights.push({
-          icon: 'flame',
+          icon: "flame",
           text: `🔥 You're on your longest streak ever: ${currentStreak} days! Keep it going!`,
-          iconColor: '#FF5722',
+          iconColor: "#FF5722",
         });
       } else if (currentStreak >= 7) {
         insights.push({
-          icon: 'flame',
+          icon: "flame",
           text: `Amazing! You've maintained a ${currentStreak}-day streak. Your consistency is paying off!`,
-          iconColor: '#FF5722',
+          iconColor: "#FF5722",
         });
       } else if (currentStreak >= 3) {
         insights.push({
-          icon: 'flame',
+          icon: "flame",
           text: `Nice ${currentStreak}-day streak! Studies show it takes 21 days to form a habit.`,
-          iconColor: '#FF5722',
+          iconColor: "#FF5722",
         });
       }
     }
@@ -481,23 +638,23 @@ const AnalyticsScreen = () => {
       if (deepWorkCount > balancedCount && deepWorkCount > sprintCount) {
         const percent = Math.round((deepWorkCount / totalTyped) * 100);
         insights.push({
-          icon: 'bulb-outline',
+          icon: "bulb-outline",
           text: `Deep Work is your preferred method (${percent}% of sessions). Great for complex tasks!`,
-          iconColor: '#9C27B0',
+          iconColor: "#9C27B0",
         });
       } else if (balancedCount > sprintCount) {
         const percent = Math.round((balancedCount / totalTyped) * 100);
         insights.push({
-          icon: 'fitness-outline',
+          icon: "fitness-outline",
           text: `Balanced Focus leads at ${percent}%. A versatile approach for varied work!`,
-          iconColor: '#FF9800',
+          iconColor: "#FF9800",
         });
       } else if (sprintCount > 0) {
         const percent = Math.round((sprintCount / totalTyped) * 100);
         insights.push({
-          icon: 'flash-outline',
+          icon: "flash-outline",
           text: `Sprint Focus is your go-to (${percent}%). Quick bursts keep you energized!`,
-          iconColor: '#2196F3',
+          iconColor: "#2196F3",
         });
       }
     }
@@ -513,12 +670,24 @@ const AnalyticsScreen = () => {
     });
     const maxHour = hourlyData.indexOf(Math.max(...hourlyData));
     if (Math.max(...hourlyData) > 0) {
-      const timeLabel = maxHour < 12 ? `${maxHour || 12}AM` : `${maxHour === 12 ? 12 : maxHour - 12}PM`;
-      const period = maxHour < 6 ? 'early morning' : maxHour < 12 ? 'morning' : maxHour < 17 ? 'afternoon' : maxHour < 21 ? 'evening' : 'night';
+      const timeLabel =
+        maxHour < 12
+          ? `${maxHour || 12}AM`
+          : `${maxHour === 12 ? 12 : maxHour - 12}PM`;
+      const period =
+        maxHour < 6
+          ? "early morning"
+          : maxHour < 12
+            ? "morning"
+            : maxHour < 17
+              ? "afternoon"
+              : maxHour < 21
+                ? "evening"
+                : "night";
       insights.push({
-        icon: 'time-outline',
+        icon: "time-outline",
         text: `Your peak productivity is around ${timeLabel}. You're most focused in the ${period}!`,
-        iconColor: '#00BCD4',
+        iconColor: "#00BCD4",
       });
     }
 
@@ -539,25 +708,31 @@ const AnalyticsScreen = () => {
 
     const lastWeekMinutes = sessions.reduce((sum: number, s: any) => {
       const sessionDate = getSessionDate(s);
-      if (sessionDate && sessionDate >= lastWeekStart && sessionDate < thisWeekStart) {
+      if (
+        sessionDate &&
+        sessionDate >= lastWeekStart &&
+        sessionDate < thisWeekStart
+      ) {
         return sum + getSessionDuration(s);
       }
       return sum;
     }, 0);
 
     if (lastWeekMinutes > 0 && thisWeekMinutes > 0) {
-      const change = Math.round(((thisWeekMinutes - lastWeekMinutes) / lastWeekMinutes) * 100);
+      const change = Math.round(
+        ((thisWeekMinutes - lastWeekMinutes) / lastWeekMinutes) * 100,
+      );
       if (change > 10) {
         insights.push({
-          icon: 'trending-up',
+          icon: "trending-up",
           text: `You're up ${change}% this week compared to last week! Great momentum!`,
-          iconColor: '#4CAF50',
+          iconColor: "#4CAF50",
         });
       } else if (change < -10) {
         insights.push({
-          icon: 'trending-down',
+          icon: "trending-down",
           text: `Focus time is down ${Math.abs(change)}% this week. Time to get back on track!`,
-          iconColor: '#FF5722',
+          iconColor: "#FF5722",
         });
       }
     }
@@ -565,30 +740,66 @@ const AnalyticsScreen = () => {
     // Subject diversity insight
     if (subjectBreakdown.length > 3) {
       insights.push({
-        icon: 'layers-outline',
+        icon: "layers-outline",
         text: `You've studied ${subjectBreakdown.length} different subjects. Diverse learning strengthens neural connections!`,
-        iconColor: '#9C27B0',
+        iconColor: "#9C27B0",
       });
     }
 
     return insights.slice(0, 4); // Limit to 4 insights
-  }, [sessions, totalSessions, totalHours, remainingMinutes, leaderboard, deepWorkCount, balancedCount, sprintCount, subjectBreakdown]);
+  }, [
+    sessions,
+    totalSessions,
+    totalHours,
+    remainingMinutes,
+    leaderboard,
+    deepWorkCount,
+    balancedCount,
+    sprintCount,
+    subjectBreakdown,
+  ]);
 
   // Generate chart data based on time range
   const getChartData = () => {
-    if (timeRange === 'year') {
-      return ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-    } else if (timeRange === 'month') {
+    if (timeRange === "year") {
+      return [
+        "JAN",
+        "FEB",
+        "MAR",
+        "APR",
+        "MAY",
+        "JUN",
+        "JUL",
+        "AUG",
+        "SEP",
+        "OCT",
+        "NOV",
+        "DEC",
+      ];
+    } else if (timeRange === "month") {
       // Only show odd numbered days to avoid cramping
       return Array.from({ length: 31 }, (_, i) => i + 1)
-        .filter(day => day % 2 === 1)
-        .map(day => day.toString());
-    } else if (timeRange === 'week') {
-      return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        .filter((day) => day % 2 === 1)
+        .map((day) => day.toString());
+    } else if (timeRange === "week") {
+      return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     } else {
       // Day view - even hours only (0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22)
       // 0 represents midnight (24:00 / 00:00 in 24-hour format)
-      return ['0', '2', '4', '6', '8', '10', '12', '14', '16', '18', '20', '22'];
+      return [
+        "0",
+        "2",
+        "4",
+        "6",
+        "8",
+        "10",
+        "12",
+        "14",
+        "16",
+        "18",
+        "20",
+        "22",
+      ];
     }
   };
 
@@ -599,17 +810,25 @@ const AnalyticsScreen = () => {
     const month = now.getMonth();
     const date = now.getDate();
 
-    if (timeRange === 'year') {
+    if (timeRange === "year") {
       // Calculate hours per month for the current year
       return Array.from({ length: 12 }, (_, monthIndex) => {
         const monthSessions = sessions.filter((s: any) => {
           const sessionDate = getSessionDate(s);
           if (!sessionDate) return false;
-          return sessionDate.getFullYear() === year && sessionDate.getMonth() === monthIndex;
+          return (
+            sessionDate.getFullYear() === year &&
+            sessionDate.getMonth() === monthIndex
+          );
         });
-        return monthSessions.reduce((sum: number, s: any) => sum + getSessionDuration(s), 0) / 60;
+        return (
+          monthSessions.reduce(
+            (sum: number, s: any) => sum + getSessionDuration(s),
+            0,
+          ) / 60
+        );
       });
-    } else if (timeRange === 'month') {
+    } else if (timeRange === "month") {
       // Calculate hours per day for current month (only odd days)
       const daysInMonth = new Date(year, month + 1, 0).getDate();
       return Array.from({ length: 31 }, (_, dayIndex) => {
@@ -619,13 +838,20 @@ const AnalyticsScreen = () => {
         const daySessions = sessions.filter((s: any) => {
           const sessionDate = getSessionDate(s);
           if (!sessionDate) return false;
-          return sessionDate.getFullYear() === year &&
-                 sessionDate.getMonth() === month &&
-                 sessionDate.getDate() === day;
+          return (
+            sessionDate.getFullYear() === year &&
+            sessionDate.getMonth() === month &&
+            sessionDate.getDate() === day
+          );
         });
-        return daySessions.reduce((sum: number, s: any) => sum + getSessionDuration(s), 0) / 60;
+        return (
+          daySessions.reduce(
+            (sum: number, s: any) => sum + getSessionDuration(s),
+            0,
+          ) / 60
+        );
       }).filter((_, i) => (i + 1) % 2 === 1); // Only keep odd indexed items
-    } else if (timeRange === 'week') {
+    } else if (timeRange === "week") {
       // Calculate hours per day for current week
       const startOfWeek = new Date(now);
       startOfWeek.setDate(now.getDate() - now.getDay());
@@ -639,7 +865,12 @@ const AnalyticsScreen = () => {
           if (!sessionDate) return false;
           return sessionDate.toDateString() === day.toDateString();
         });
-        return daySessions.reduce((sum: number, s: any) => sum + getSessionDuration(s), 0) / 60;
+        return (
+          daySessions.reduce(
+            (sum: number, s: any) => sum + getSessionDuration(s),
+            0,
+          ) / 60
+        );
       });
     } else {
       // Day view - minutes per 2-hour block (12 blocks: 0-1, 2-3, 4-5, etc.)
@@ -651,12 +882,18 @@ const AnalyticsScreen = () => {
           const sessionDate = getSessionDate(s);
           if (!sessionDate) return false;
           const sessionHour = sessionDate.getHours();
-          return sessionDate.toDateString() === now.toDateString() &&
-                 sessionHour >= startHour && sessionHour < endHour;
+          return (
+            sessionDate.toDateString() === now.toDateString() &&
+            sessionHour >= startHour &&
+            sessionHour < endHour
+          );
         });
 
         // Return minutes (not hours) for day view
-        return daySessions.reduce((sum: number, s: any) => sum + getSessionDuration(s), 0);
+        return daySessions.reduce(
+          (sum: number, s: any) => sum + getSessionDuration(s),
+          0,
+        );
       });
     }
   };
@@ -670,7 +907,7 @@ const AnalyticsScreen = () => {
     const now = currentDate;
     const year = now.getFullYear();
 
-    if (timeRange === 'week') {
+    if (timeRange === "week") {
       // Get start of week
       const startOfWeek = new Date(now);
       startOfWeek.setDate(now.getDate() - now.getDay());
@@ -685,37 +922,86 @@ const AnalyticsScreen = () => {
           return sessionDate.toDateString() === day.toDateString();
         });
 
-        const deepWork = daySessions
-          .filter((s: any) => s.sessionType === 'deep_work' || s.sessionType === 'individual' || s.session_type === 'deep_work' || s.session_type === 'individual')
-          .reduce((sum: number, s: any) => sum + getSessionDuration(s), 0) / 60;
-        const balanced = daySessions
-          .filter((s: any) => s.sessionType === 'balanced' || s.session_type === 'balanced')
-          .reduce((sum: number, s: any) => sum + getSessionDuration(s), 0) / 60;
-        const sprint = daySessions
-          .filter((s: any) => s.sessionType === 'sprint' || s.session_type === 'sprint')
-          .reduce((sum: number, s: any) => sum + getSessionDuration(s), 0) / 60;
+        const deepWork =
+          daySessions
+            .filter(
+              (s: any) =>
+                s.sessionType === "deep_work" ||
+                s.sessionType === "individual" ||
+                s.session_type === "deep_work" ||
+                s.session_type === "individual",
+            )
+            .reduce((sum: number, s: any) => sum + getSessionDuration(s), 0) /
+          60;
+        const balanced =
+          daySessions
+            .filter(
+              (s: any) =>
+                s.sessionType === "balanced" || s.session_type === "balanced",
+            )
+            .reduce((sum: number, s: any) => sum + getSessionDuration(s), 0) /
+          60;
+        const sprint =
+          daySessions
+            .filter(
+              (s: any) =>
+                s.sessionType === "sprint" || s.session_type === "sprint",
+            )
+            .reduce((sum: number, s: any) => sum + getSessionDuration(s), 0) /
+          60;
 
-        return { deepWork, balanced, sprint, total: deepWork + balanced + sprint };
+        return {
+          deepWork,
+          balanced,
+          sprint,
+          total: deepWork + balanced + sprint,
+        };
       });
-    } else if (timeRange === 'year') {
+    } else if (timeRange === "year") {
       return Array.from({ length: 12 }, (_, monthIndex) => {
         const monthSessions = sessions.filter((s: any) => {
           const sessionDate = getSessionDate(s);
           if (!sessionDate) return false;
-          return sessionDate.getFullYear() === year && sessionDate.getMonth() === monthIndex;
+          return (
+            sessionDate.getFullYear() === year &&
+            sessionDate.getMonth() === monthIndex
+          );
         });
 
-        const deepWork = monthSessions
-          .filter((s: any) => s.sessionType === 'deep_work' || s.sessionType === 'individual' || s.session_type === 'deep_work' || s.session_type === 'individual')
-          .reduce((sum: number, s: any) => sum + getSessionDuration(s), 0) / 60;
-        const balanced = monthSessions
-          .filter((s: any) => s.sessionType === 'balanced' || s.session_type === 'balanced')
-          .reduce((sum: number, s: any) => sum + getSessionDuration(s), 0) / 60;
-        const sprint = monthSessions
-          .filter((s: any) => s.sessionType === 'sprint' || s.session_type === 'sprint')
-          .reduce((sum: number, s: any) => sum + getSessionDuration(s), 0) / 60;
+        const deepWork =
+          monthSessions
+            .filter(
+              (s: any) =>
+                s.sessionType === "deep_work" ||
+                s.sessionType === "individual" ||
+                s.session_type === "deep_work" ||
+                s.session_type === "individual",
+            )
+            .reduce((sum: number, s: any) => sum + getSessionDuration(s), 0) /
+          60;
+        const balanced =
+          monthSessions
+            .filter(
+              (s: any) =>
+                s.sessionType === "balanced" || s.session_type === "balanced",
+            )
+            .reduce((sum: number, s: any) => sum + getSessionDuration(s), 0) /
+          60;
+        const sprint =
+          monthSessions
+            .filter(
+              (s: any) =>
+                s.sessionType === "sprint" || s.session_type === "sprint",
+            )
+            .reduce((sum: number, s: any) => sum + getSessionDuration(s), 0) /
+          60;
 
-        return { deepWork, balanced, sprint, total: deepWork + balanced + sprint };
+        return {
+          deepWork,
+          balanced,
+          sprint,
+          total: deepWork + balanced + sprint,
+        };
       });
     }
 
@@ -729,7 +1015,8 @@ const AnalyticsScreen = () => {
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const firstDayOfMonth = new Date(year, month, 1).getDay();
 
-    const heatMapData: { day: number; minutes: number; intensity: number }[] = [];
+    const heatMapData: { day: number; minutes: number; intensity: number }[] =
+      [];
     let maxMinutes = 0;
 
     // Calculate minutes for each day
@@ -737,17 +1024,22 @@ const AnalyticsScreen = () => {
       const daySessions = sessions.filter((s: any) => {
         const sessionDate = getSessionDate(s);
         if (!sessionDate) return false;
-        return sessionDate.getFullYear() === year &&
-               sessionDate.getMonth() === month &&
-               sessionDate.getDate() === day;
+        return (
+          sessionDate.getFullYear() === year &&
+          sessionDate.getMonth() === month &&
+          sessionDate.getDate() === day
+        );
       });
-      const minutes = daySessions.reduce((sum: number, s: any) => sum + getSessionDuration(s), 0);
+      const minutes = daySessions.reduce(
+        (sum: number, s: any) => sum + getSessionDuration(s),
+        0,
+      );
       maxMinutes = Math.max(maxMinutes, minutes);
       heatMapData.push({ day, minutes, intensity: 0 });
     }
 
     // Calculate intensity (0-4 scale)
-    heatMapData.forEach(item => {
+    heatMapData.forEach((item) => {
       if (maxMinutes > 0) {
         item.intensity = Math.ceil((item.minutes / maxMinutes) * 4);
       }
@@ -757,24 +1049,8 @@ const AnalyticsScreen = () => {
   };
 
   const stackedData = getStackedData();
-  const stackedMaxHeight = Math.max(...stackedData.map(d => d.total), 1);
-  const heatMapInfo = timeRange === 'month' ? getHeatMapData() : null;
-
-  // Log data for debugging
-  useEffect(() => {
-    console.log(`📊 Stats for ${timeRange} view (${currentDate.toDateString()}):`, {
-      barHeights,
-      totalSessions: sessions.length,
-      maxHeight,
-      sampleSession: sessions[0] ? {
-        startTime: sessions[0].startTime,
-        durationSeconds: sessions[0].durationSeconds,
-        sessionType: sessions[0].sessionType,
-        subject: sessions[0].subject,
-        status: sessions[0].status,
-      } : null,
-    });
-  }, [timeRange, currentDate, sessions]);
+  const stackedMaxHeight = Math.max(...stackedData.map((d) => d.total), 1);
+  const heatMapInfo = timeRange === "month" ? getHeatMapData() : null;
 
   // Animated stats counters
   const deepWorkCounter = useCounterAnimation(deepWorkCount, 1000);
@@ -788,44 +1064,49 @@ const AnalyticsScreen = () => {
   // Trigger bar animation when data changes
   useEffect(() => {
     barAnimationProgress.value = 0;
-    barAnimationProgress.value = withDelay(200, withSpring(1, AnimationConfig.gentle));
+    barAnimationProgress.value = withDelay(
+      200,
+      withSpring(1, AnimationConfig.gentle),
+    );
   }, [timeRange, currentDate, barHeights.length]);
 
   // Format date display
   const getDateDisplay = () => {
     const year = currentDate.getFullYear();
-    const month = currentDate.toLocaleDateString('en-US', { month: 'long' });
+    const month = currentDate.toLocaleDateString("en-US", { month: "long" });
     const monthNum = currentDate.getMonth() + 1;
     const day = currentDate.getDate();
 
-    if (timeRange === 'year') {
+    if (timeRange === "year") {
       return year.toString();
-    } else if (timeRange === 'month') {
+    } else if (timeRange === "month") {
       return `${month}, ${year}`;
-    } else if (timeRange === 'week') {
+    } else if (timeRange === "week") {
       const startOfWeek = new Date(currentDate);
       startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
       const endOfWeek = new Date(startOfWeek);
       endOfWeek.setDate(startOfWeek.getDate() + 6);
 
-      return `${year}.${String(monthNum).padStart(2, '0')}.${String(startOfWeek.getDate()).padStart(2, '0')} - ${year}.${String(monthNum).padStart(2, '0')}.${String(endOfWeek.getDate()).padStart(2, '0')}`;
+      return `${year}.${String(monthNum).padStart(2, "0")}.${String(startOfWeek.getDate()).padStart(2, "0")} - ${year}.${String(monthNum).padStart(2, "0")}.${String(endOfWeek.getDate()).padStart(2, "0")}`;
     } else {
-      return `${year}.${String(monthNum).padStart(2, '0')}.${String(day).padStart(2, '0')}`;
+      return `${year}.${String(monthNum).padStart(2, "0")}.${String(day).padStart(2, "0")}`;
     }
   };
 
   // Navigate date
-  const navigateDate = (direction: 'prev' | 'next') => {
+  const navigateDate = (direction: "prev" | "next") => {
     const newDate = new Date(currentDate);
 
-    if (timeRange === 'year') {
-      newDate.setFullYear(newDate.getFullYear() + (direction === 'next' ? 1 : -1));
-    } else if (timeRange === 'month') {
-      newDate.setMonth(newDate.getMonth() + (direction === 'next' ? 1 : -1));
-    } else if (timeRange === 'week') {
-      newDate.setDate(newDate.getDate() + (direction === 'next' ? 7 : -7));
+    if (timeRange === "year") {
+      newDate.setFullYear(
+        newDate.getFullYear() + (direction === "next" ? 1 : -1),
+      );
+    } else if (timeRange === "month") {
+      newDate.setMonth(newDate.getMonth() + (direction === "next" ? 1 : -1));
+    } else if (timeRange === "week") {
+      newDate.setDate(newDate.getDate() + (direction === "next" ? 7 : -7));
     } else {
-      newDate.setDate(newDate.getDate() + (direction === 'next' ? 1 : -1));
+      newDate.setDate(newDate.getDate() + (direction === "next" ? 1 : -1));
     }
 
     setCurrentDate(newDate);
@@ -837,11 +1118,11 @@ const AnalyticsScreen = () => {
     iconColor,
     value,
     label,
-    index
+    index,
   }: {
     icon: string;
     iconColor: string;
-    value: Animated.SharedValue<number>;
+    value: SharedValue<number>;
     label: string;
     index: number;
   }) => {
@@ -855,8 +1136,8 @@ const AnalyticsScreen = () => {
         200 + index * 100, // Staggered delay
         withSequence(
           withSpring(1.03, { damping: 12, stiffness: 180 }), // Slight overshoot
-          withSpring(1, { damping: 14, stiffness: 200 }) // Settle smoothly
-        )
+          withSpring(1, { damping: 14, stiffness: 200 }), // Settle smoothly
+        ),
       );
     }, [focusKey]); // Re-trigger on screen focus
 
@@ -870,15 +1151,27 @@ const AnalyticsScreen = () => {
 
     return (
       <Animated.View
-        style={[styles.smallStatCard, { backgroundColor: theme.card }, bounceStyle]}
+        style={[
+          styles.smallStatCard,
+          { backgroundColor: theme.card },
+          bounceStyle,
+        ]}
       >
         <View style={styles.smallStatIcon}>
           <Ionicons name={icon as any} size={28} color={iconColor} />
         </View>
-        <Animated.Text style={[styles.smallStatNumber, { color: theme.text }, animatedTextProps]}>
+        <Animated.Text
+          style={[
+            styles.smallStatNumber,
+            { color: theme.text },
+            animatedTextProps,
+          ]}
+        >
           {Math.round(value.value)}
         </Animated.Text>
-        <Text style={[styles.smallStatLabel, { color: theme.primary }]}>{label}</Text>
+        <Text style={[styles.smallStatLabel, { color: theme.primary }]}>
+          {label}
+        </Text>
       </Animated.View>
     );
   };
@@ -886,9 +1179,17 @@ const AnalyticsScreen = () => {
   // Loading state with shimmer
   if (isLoading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-        <UnifiedHeader title="Analytics" onClose={() => navigation.navigate('Home')} />
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 16 }}>
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.background }]}
+      >
+        <UnifiedHeader
+          title="Analytics"
+          onClose={() => navigation.navigate("Home")}
+        />
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 16 }}
+        >
           <View style={{ marginTop: 20 }}>
             <SkeletonStatsGrid columns={3} />
           </View>
@@ -905,32 +1206,51 @@ const AnalyticsScreen = () => {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.background }]}
+    >
       {/* Unified Header */}
-      <UnifiedHeader title="Analytics" onClose={() => navigation.navigate('Home')} />
+      <UnifiedHeader
+        title="Analytics"
+        onClose={() => navigation.navigate("Home")}
+      />
 
-      <ScrollView key={focusKey} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }}>
+      <ScrollView
+        key={focusKey}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 100 }}
+      >
         {/* Time Range Selector */}
         <Animated.View
           entering={FadeInDown.delay(100).duration(400).duration(400)}
           style={styles.timeRangeContainer}
         >
-          {['Day', 'Week', 'Month', 'Year'].map((range, index) => (
+          {["Day", "Week", "Month", "Year"].map((range, index) => (
             <TouchableOpacity
               key={range}
               style={[
                 styles.timeRangeButton,
-                timeRange === range.toLowerCase() && [styles.timeRangeButtonActive, { backgroundColor: 'transparent' }]
+                timeRange === range.toLowerCase() && [
+                  styles.timeRangeButtonActive,
+                  { backgroundColor: "transparent" },
+                ],
               ]}
               onPress={() => {
-                triggerHaptic('selection');
+                triggerHaptic("selection");
                 setTimeRange(range.toLowerCase());
               }}
             >
-              <Text style={[
-                styles.timeRangeText,
-                { color: timeRange === range.toLowerCase() ? theme.primary : theme.text + '66' }
-              ]}>
+              <Text
+                style={[
+                  styles.timeRangeText,
+                  {
+                    color:
+                      timeRange === range.toLowerCase()
+                        ? theme.primary
+                        : theme.text + "66",
+                  },
+                ]}
+              >
                 {range}
               </Text>
             </TouchableOpacity>
@@ -944,8 +1264,8 @@ const AnalyticsScreen = () => {
         >
           <TouchableOpacity
             onPress={() => {
-              triggerHaptic('buttonPress');
-              navigateDate('prev');
+              triggerHaptic("buttonPress");
+              navigateDate("prev");
             }}
           >
             <Ionicons name="chevron-back" size={24} color={theme.primary} />
@@ -955,8 +1275,8 @@ const AnalyticsScreen = () => {
           </Text>
           <TouchableOpacity
             onPress={() => {
-              triggerHaptic('buttonPress');
-              navigateDate('next');
+              triggerHaptic("buttonPress");
+              navigateDate("next");
             }}
           >
             <Ionicons name="chevron-forward" size={24} color={theme.primary} />
@@ -971,21 +1291,21 @@ const AnalyticsScreen = () => {
           <AnimatedStatCard
             icon="bulb"
             iconColor="#9C27B0"
-            value={deepWorkCounter}
+            value={deepWorkCounter.sharedValue}
             label="Deep Work"
             index={0}
           />
           <AnimatedStatCard
             icon="fitness"
             iconColor="#FF9800"
-            value={balancedCounter}
+            value={balancedCounter.sharedValue}
             label="Balanced"
             index={1}
           />
           <AnimatedStatCard
             icon="flash"
             iconColor="#2196F3"
-            value={sprintCounter}
+            value={sprintCounter.sharedValue}
             label="Sprint"
             index={2}
           />
@@ -997,15 +1317,23 @@ const AnalyticsScreen = () => {
           style={[styles.chartContainer, { backgroundColor: theme.card }]}
         >
           {/* Day View - Bar Chart */}
-          {timeRange === 'day' && (
+          {timeRange === "day" && (
             <>
               <View style={styles.yAxisContainer}>
-                <Text style={[styles.axisLabel, { color: theme.text + '88' }]}>Minutes</Text>
+                <Text style={[styles.axisLabel, { color: theme.text + "88" }]}>
+                  Minutes
+                </Text>
               </View>
               <View style={styles.chartWithAxis}>
                 <View style={styles.yAxisScale}>
                   {[60, 45, 30, 15, 0].map((minute) => (
-                    <Text key={minute} style={[styles.yAxisScaleText, { color: theme.text + '66' }]}>
+                    <Text
+                      key={minute}
+                      style={[
+                        styles.yAxisScaleText,
+                        { color: theme.text + "66" },
+                      ]}
+                    >
                       {minute}
                     </Text>
                   ))}
@@ -1025,15 +1353,19 @@ const AnalyticsScreen = () => {
                   ))}
                 </View>
               </View>
-              <Text style={[styles.xAxisLabel, { color: theme.text + '88' }]}>Hours of Day</Text>
+              <Text style={[styles.xAxisLabel, { color: theme.text + "88" }]}>
+                Hours of Day
+              </Text>
             </>
           )}
 
           {/* Week View - Stacked Bar Chart */}
-          {timeRange === 'week' && (
+          {timeRange === "week" && (
             <>
               <View style={styles.yAxisContainer}>
-                <Text style={[styles.axisLabel, { color: theme.text + '88' }]}>Hours</Text>
+                <Text style={[styles.axisLabel, { color: theme.text + "88" }]}>
+                  Hours
+                </Text>
               </View>
               <View style={styles.chartBars}>
                 {stackedData.map((data, index) => (
@@ -1048,15 +1380,21 @@ const AnalyticsScreen = () => {
                   />
                 ))}
               </View>
-              <Text style={[styles.xAxisLabel, { color: theme.text + '88' }]}>Days of Week</Text>
+              <Text style={[styles.xAxisLabel, { color: theme.text + "88" }]}>
+                Days of Week
+              </Text>
               <SessionTypeLegend theme={theme} />
             </>
           )}
 
           {/* Month View - Heat Map */}
-          {timeRange === 'month' && heatMapInfo && (
+          {timeRange === "month" && heatMapInfo && (
             <>
-              <Text style={[styles.chartSubtitle, { color: theme.textSecondary }]}>Focus Activity</Text>
+              <Text
+                style={[styles.chartSubtitle, { color: theme.textSecondary }]}
+              >
+                Focus Activity
+              </Text>
               <HeatMapChart
                 data={heatMapInfo.data}
                 firstDayOfMonth={heatMapInfo.firstDayOfMonth}
@@ -1067,10 +1405,12 @@ const AnalyticsScreen = () => {
           )}
 
           {/* Year View - Stacked Area Chart */}
-          {timeRange === 'year' && (
+          {timeRange === "year" && (
             <>
               <View style={styles.yAxisContainer}>
-                <Text style={[styles.axisLabel, { color: theme.text + '88' }]}>Hours</Text>
+                <Text style={[styles.axisLabel, { color: theme.text + "88" }]}>
+                  Hours
+                </Text>
               </View>
               <StackedAreaChart
                 data={stackedData}
@@ -1078,7 +1418,9 @@ const AnalyticsScreen = () => {
                 theme={theme}
                 maxHeight={stackedMaxHeight}
               />
-              <Text style={[styles.xAxisLabel, { color: theme.text + '88' }]}>Months</Text>
+              <Text style={[styles.xAxisLabel, { color: theme.text + "88" }]}>
+                Months
+              </Text>
               <SessionTypeLegend theme={theme} />
             </>
           )}
@@ -1091,16 +1433,22 @@ const AnalyticsScreen = () => {
         {/* Subject Distribution - Animated Circular Chart */}
         <Animated.View
           entering={FadeInUp.delay(500).duration(400)}
-          style={[styles.circularChartContainer, { backgroundColor: theme.card }]}
+          style={[
+            styles.circularChartContainer,
+            { backgroundColor: theme.card },
+          ]}
         >
-          <Text style={[styles.chartSectionTitle, { color: theme.text }]}>Time by Subject</Text>
+          <Text style={[styles.chartSectionTitle, { color: theme.text }]}>
+            Time by Subject
+          </Text>
           {subjectBreakdown.length > 0 ? (
             <>
               <AnimatedCircularChart
                 key={focusKey} // Re-animate on focus
                 segments={subjectBreakdown.map((item, index) => ({
                   subject: item.subject,
-                  percentage: totalMinutes > 0 ? (item.minutes / totalMinutes) * 100 : 0,
+                  percentage:
+                    totalMinutes > 0 ? (item.minutes / totalMinutes) * 100 : 0,
                   color: subjectColors[index % subjectColors.length],
                 }))}
                 totalHours={totalHours}
@@ -1111,8 +1459,19 @@ const AnalyticsScreen = () => {
               <StaggeredList delay="fast" style={styles.legendContainer}>
                 {subjectBreakdown.map((item, index) => (
                   <View key={item.subject} style={styles.legendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: subjectColors[index % subjectColors.length] }]} />
-                    <Text style={[styles.legendText, { color: theme.text }]} numberOfLines={1}>
+                    <View
+                      style={[
+                        styles.legendDot,
+                        {
+                          backgroundColor:
+                            subjectColors[index % subjectColors.length],
+                        },
+                      ]}
+                    />
+                    <Text
+                      style={[styles.legendText, { color: theme.text }]}
+                      numberOfLines={1}
+                    >
                       {item.subject}
                     </Text>
                     <Text style={[styles.legendValue, { color: theme.text }]}>
@@ -1134,7 +1493,9 @@ const AnalyticsScreen = () => {
           entering={FadeInUp.delay(600).duration(400)}
           style={[styles.insightsContainer, { backgroundColor: theme.card }]}
         >
-          <Text style={[styles.insightsTitle, { color: theme.text }]}>Insights</Text>
+          <Text style={[styles.insightsTitle, { color: theme.text }]}>
+            Insights
+          </Text>
           <StaggeredList delay="fast">
             {dynamicInsights.map((insight, index) => (
               <View key={index} style={styles.insightItem}>
@@ -1164,9 +1525,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   navHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingTop: 10,
     paddingBottom: 10,
@@ -1178,20 +1539,20 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   navHeaderTitle: {
     fontSize: 22,
-    fontWeight: 'bold',
-    textAlign: 'center',
+    fontWeight: "bold",
+    textAlign: "center",
   },
   headerSpacer: {
     width: 48,
   },
   timeRangeContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
+    flexDirection: "row",
+    justifyContent: "space-around",
     paddingHorizontal: 40,
     paddingVertical: 12,
     marginTop: 8,
@@ -1202,25 +1563,25 @@ const styles = StyleSheet.create({
   },
   timeRangeButtonActive: {
     borderBottomWidth: 2,
-    borderBottomColor: '#4CAF50',
+    borderBottomColor: "#4CAF50",
   },
   timeRangeText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   dateContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 16,
   },
   dateText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
     marginHorizontal: 16,
   },
   statsRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     paddingHorizontal: 16,
     gap: 16, // Increased gap between cards
     marginBottom: 16,
@@ -1229,9 +1590,9 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 12,
     padding: 12,
-    alignItems: 'center',
+    alignItems: "center",
     borderWidth: 2,
-    borderColor: 'rgba(76, 175, 80, 0.3)',
+    borderColor: "rgba(76, 175, 80, 0.3)",
     marginHorizontal: 2, // Additional horizontal margin
   },
   smallStatIcon: {
@@ -1239,12 +1600,12 @@ const styles = StyleSheet.create({
   },
   smallStatNumber: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 2,
   },
   smallStatLabel: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   chartContainer: {
     marginHorizontal: 16,
@@ -1252,50 +1613,50 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     borderWidth: 2,
-    borderColor: 'rgba(76, 175, 80, 0.3)',
+    borderColor: "rgba(76, 175, 80, 0.3)",
   },
   yAxisContainer: {
     marginBottom: 8,
   },
   axisLabel: {
     fontSize: 12,
-    fontWeight: '600',
-    textAlign: 'center',
+    fontWeight: "600",
+    textAlign: "center",
   },
   chartWithAxis: {
     marginVertical: 4,
-    flexDirection: 'row',
+    flexDirection: "row",
   },
   yAxisScale: {
     height: 140,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
     marginRight: 8,
     paddingVertical: 4,
   },
   yAxisScaleText: {
     fontSize: 10,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   chartBars: {
-    flexDirection: 'row',
+    flexDirection: "row",
     height: 140,
     marginBottom: 8,
     flex: 1,
   },
   barColumn: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'flex-end',
+    alignItems: "center",
+    justifyContent: "flex-end",
   },
   barWrapper: {
-    width: '60%',
-    height: '80%',
-    justifyContent: 'flex-end',
+    width: "60%",
+    height: "80%",
+    justifyContent: "flex-end",
   },
   bar: {
-    width: '100%',
+    width: "100%",
     borderRadius: 4,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
@@ -1304,19 +1665,19 @@ const styles = StyleSheet.create({
   barLabel: {
     fontSize: 9,
     marginTop: 4,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   xAxisLabel: {
     fontSize: 12,
-    fontWeight: '600',
-    textAlign: 'center',
+    fontWeight: "600",
+    textAlign: "center",
     marginTop: 4,
     marginBottom: 8,
   },
   chartTotal: {
     fontSize: 18,
-    fontWeight: 'bold',
-    textAlign: 'center',
+    fontWeight: "bold",
+    textAlign: "center",
     marginTop: 4,
   },
   circularChartContainer: {
@@ -1324,28 +1685,28 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderRadius: 12,
     padding: 20,
-    alignItems: 'center',
+    alignItems: "center",
     borderWidth: 2,
-    borderColor: 'rgba(76, 175, 80, 0.3)',
+    borderColor: "rgba(76, 175, 80, 0.3)",
   },
   chartSectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 16,
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
   },
   emptyText: {
     fontSize: 14,
-    fontStyle: 'italic',
+    fontStyle: "italic",
     marginTop: 20,
   },
   legendContainer: {
     marginTop: 16,
-    width: '100%',
+    width: "100%",
   },
   legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 8,
   },
   legendDot: {
@@ -1357,11 +1718,11 @@ const styles = StyleSheet.create({
   legendText: {
     flex: 1,
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   legendValue: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   insightsContainer: {
     marginHorizontal: 16,
@@ -1369,16 +1730,16 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     borderWidth: 2,
-    borderColor: 'rgba(76, 175, 80, 0.3)',
+    borderColor: "rgba(76, 175, 80, 0.3)",
   },
   insightsTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 12,
   },
   insightItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     marginBottom: 12,
   },
   insightText: {
@@ -1389,55 +1750,55 @@ const styles = StyleSheet.create({
 
   // Stacked Bar Chart Styles
   stackedBarContainer: {
-    width: '100%',
-    height: '100%',
-    flexDirection: 'column-reverse', // Stack from bottom
-    justifyContent: 'flex-start',
+    width: "100%",
+    height: "100%",
+    flexDirection: "column-reverse", // Stack from bottom
+    justifyContent: "flex-start",
     borderRadius: 4,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   stackedBarSegment: {
-    width: '100%',
+    width: "100%",
     borderRadius: 0,
   },
 
   // Heat Map Styles
   heatMapContainer: {
-    width: '100%',
-    alignItems: 'center',
+    width: "100%",
+    alignItems: "center",
     paddingVertical: 8,
   },
   heatMapRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
     marginBottom: 4,
   },
   heatMapHeaderCell: {
     width: 36,
     height: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginHorizontal: 2,
   },
   heatMapHeaderText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   heatMapCell: {
     width: 36,
     height: 36,
     borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginHorizontal: 2,
   },
   heatMapDayText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   heatMapLegend: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginTop: 12,
     gap: 4,
   },
@@ -1453,41 +1814,41 @@ const styles = StyleSheet.create({
 
   // Stacked Area Chart Styles
   areaChartContainer: {
-    width: '100%',
-    alignItems: 'center',
+    width: "100%",
+    alignItems: "center",
     marginVertical: 8,
   },
   areaChartLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    width: "100%",
     paddingHorizontal: 10,
     marginTop: 4,
   },
   areaChartLabel: {
     fontSize: 8,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   emptyChartText: {
     fontSize: 14,
-    fontStyle: 'italic',
-    textAlign: 'center',
+    fontStyle: "italic",
+    textAlign: "center",
     marginTop: 60,
   },
 
   // Session Type Legend
   sessionTypeLegend: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
     gap: 16,
     marginTop: 12,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.1)',
+    borderTopColor: "rgba(0,0,0,0.1)",
   },
   legendItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
   },
   legendDotSmall: {
@@ -1497,15 +1858,15 @@ const styles = StyleSheet.create({
   },
   legendTextSmall: {
     fontSize: 11,
-    fontWeight: '500',
+    fontWeight: "500",
   },
 
   // Chart subtitle
   chartSubtitle: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: "500",
     marginBottom: 8,
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
   },
 });
 

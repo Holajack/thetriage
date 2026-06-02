@@ -1,0 +1,63 @@
+{
+  "runId": "9cbe0a4b-f54b-498c-ae25-c4996a44a383",
+  "themeInput": "Snow_day",
+  "themeResolved": "Snow_day",
+  "runMode": "all",
+  "quality": "high",
+  "providerMode": "api",
+  "providerPreference": "replicate_openai_gpt_image_1_5",
+  "apiProvider": "replicate_openai_gpt_image_1_5",
+  "generationMode": "preset",
+  "sceneDescription": "A snowy forest with frosted pines, fresh powder, and crisp winter sunlight on white trails",
+  "artStyle": "pixel",
+  "status": "completed",
+  "startedAt": "2026-02-14T15:28:34.541Z",
+  "progress": {
+    "total": 4,
+    "completed": 4,
+    "failed": 0
+  },
+  "artifacts": {
+    "runDirectory": "/Users/jackenholland/App Development/parallax-theme-studio/output/runs/9cbe0a4b-f54b-498c-ae25-c4996a44a383",
+    "generatedDirectory": "/Users/jackenholland/App Development/parallax-theme-studio/output/runs/9cbe0a4b-f54b-498c-ae25-c4996a44a383/generated"
+  },
+  "layers": {
+    "sky": {
+      "layer": "sky",
+      "fileName": "sunset_colors.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparentRequired": false,
+      "outputPath": "/Users/jackenholland/App Development/parallax-theme-studio/output/runs/9cbe0a4b-f54b-498c-ae25-c4996a44a383/generated/sunset_colors.png"
+    },
+    "mountain": {
+      "layer": "mountain",
+      "fileName": "rocky_mountain.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparentRequired": true,
+      "transparencyBorderOpaqueRatio": 0,
+      "outputPath": "/Users/jackenholland/App Development/parallax-theme-studio/output/runs/9cbe0a4b-f54b-498c-ae25-c4996a44a383/generated/rocky_mountain.png"
+    },
+    "tree": {
+      "layer": "tree",
+      "fileName": "evergreen_tree.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparentRequired": true,
+      "transparencyBorderOpaqueRatio": 0,
+      "outputPath": "/Users/jackenholland/App Development/parallax-theme-studio/output/runs/9cbe0a4b-f54b-498c-ae25-c4996a44a383/generated/evergreen_tree.png"
+    },
+    "ground": {
+      "layer": "ground",
+      "fileName": "path_animation.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparentRequired": true,
+      "transparencyBorderOpaqueRatio": 0,
+      "outputPath": "/Users/jackenholland/App Development/parallax-theme-studio/output/runs/9cbe0a4b-f54b-498c-ae25-c4996a44a383/generated/path_animation.png"
+    }
+  },
+  "errors": [],
+  "completedAt": "2026-02-14T15:32:40.894Z"
+}

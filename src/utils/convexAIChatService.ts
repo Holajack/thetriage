@@ -4,21 +4,9 @@
  * Screens call these functions to interact with AI chat features.
  * Internally uses the ConvexReactClient to invoke Convex actions.
  */
-import { ConvexReactClient } from "convex/react";
 import { api } from "../../convex/_generated/api";
-
-let _convexClient: ConvexReactClient | null = null;
-
-export function setConvexClient(client: ConvexReactClient) {
-  _convexClient = client;
-}
-
-function getClient(): ConvexReactClient {
-  if (!_convexClient) {
-    throw new Error("Convex client not initialized. Call setConvexClient first.");
-  }
-  return _convexClient;
-}
+import { getConvexClient } from "./convexClient";
+export { setConvexClient } from "./convexClient";
 
 // ────────────────────────────────────────────────────
 // Nora Chat
@@ -32,6 +20,8 @@ export interface NoraChatArgs {
   userSettings?: any;
   pdfContext?: { title: string; file_path?: string } | null;
   screenContext?: any;
+  /** OpenAI vector store ID for the attached ebook so file_search can find it. */
+  vectorStoreId?: string;
 }
 
 export interface AIChatResponse {
@@ -46,9 +36,11 @@ export interface AIChatResponse {
   sources?: Array<{ title: string; url: string }>;
 }
 
-export async function sendNoraChatMessage(args: NoraChatArgs): Promise<AIChatResponse> {
+export async function sendNoraChatMessage(
+  args: NoraChatArgs,
+): Promise<AIChatResponse> {
   try {
-    const client = getClient();
+    const client = getConvexClient();
     const result = await client.action(api.noraChat.sendMessage, {
       message: args.message,
       thinkingMode: args.thinkingMode || "quick",
@@ -57,13 +49,14 @@ export async function sendNoraChatMessage(args: NoraChatArgs): Promise<AIChatRes
       userSettings: args.userSettings,
       pdfContext: args.pdfContext || null,
       screenContext: args.screenContext,
+      vectorStoreId: args.vectorStoreId,
     });
     return result as AIChatResponse;
   } catch (error: any) {
-    console.error("Nora chat error:", error);
     return {
       error: error.message || "Failed to send message",
-      response: "I'm experiencing technical difficulties. Please try again in a moment.",
+      response:
+        "I'm experiencing technical difficulties. Please try again in a moment.",
       success: false,
     };
   }
@@ -79,9 +72,11 @@ export interface PatrickChatArgs {
   userSettings?: any;
 }
 
-export async function sendPatrickChatMessage(args: PatrickChatArgs): Promise<AIChatResponse> {
+export async function sendPatrickChatMessage(
+  args: PatrickChatArgs,
+): Promise<AIChatResponse> {
   try {
-    const client = getClient();
+    const client = getConvexClient();
     const result = await client.action(api.patrickChat.sendMessage, {
       message: args.message,
       pdfContext: args.pdfContext,
@@ -89,7 +84,6 @@ export async function sendPatrickChatMessage(args: PatrickChatArgs): Promise<AIC
     });
     return result as AIChatResponse;
   } catch (error: any) {
-    console.error("Patrick chat error:", error);
     return {
       error: error.message || "Failed to send message",
       response: "I'm having trouble right now. Please try again.",
@@ -114,9 +108,11 @@ export interface TranscribeResponse {
   error: string | null;
 }
 
-export async function transcribeAudio(args: TranscribeArgs): Promise<TranscribeResponse> {
+export async function transcribeAudio(
+  args: TranscribeArgs,
+): Promise<TranscribeResponse> {
   try {
-    const client = getClient();
+    const client = getConvexClient();
     const result = await client.action(api.transcribe.transcribe, {
       audioBase64: args.audioBase64,
       mimeType: args.mimeType,
@@ -125,7 +121,6 @@ export async function transcribeAudio(args: TranscribeArgs): Promise<TranscribeR
     });
     return result as TranscribeResponse;
   } catch (error: any) {
-    console.error("Transcribe error:", error);
     return { text: null, error: error.message || "Transcription failed" };
   }
 }

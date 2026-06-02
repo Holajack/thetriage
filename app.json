@@ -25,28 +25,23 @@
         "NSPhotoLibraryUsageDescription": "Allow HikeWise to access your photos to set a profile picture",
         "NSFaceIDUsageDescription": "Use Face ID to quickly and securely access your HikeWise account",
         "NSUserTrackingUsageDescription": "This allows HikeWise to provide personalized study recommendations and improve the app experience",
-        "LSApplicationQueriesSchemes": ["spotify", "music"]
+        "LSApplicationQueriesSchemes": ["spotify", "music"],
+        "ITSAppUsesNonExemptEncryption": false
       },
       "associatedDomains": [],
       "privacyManifests": {
         "NSPrivacyAccessedAPITypes": [
           {
             "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
-            "NSPrivacyAccessedAPITypeReasons": [
-              "CA92.1"
-            ]
+            "NSPrivacyAccessedAPITypeReasons": ["CA92.1"]
           },
           {
             "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
-            "NSPrivacyAccessedAPITypeReasons": [
-              "C617.1"
-            ]
+            "NSPrivacyAccessedAPITypeReasons": ["C617.1"]
           },
           {
             "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryDiskSpace",
-            "NSPrivacyAccessedAPITypeReasons": [
-              "E174.1"
-            ]
+            "NSPrivacyAccessedAPITypeReasons": ["E174.1"]
           }
         ],
         "NSPrivacyCollectedDataTypes": [

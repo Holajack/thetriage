@@ -1,8 +1,9 @@
-import { Alert, Linking, Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ConvexReactClient } from "convex/react";
+import { Alert, Linking, Platform } from "react-native";
+import * as Notifications from "expo-notifications";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api } from "../../convex/_generated/api";
+import { getConvexClient } from "./convexClient";
+export { setConvexClient } from "./convexClient";
 
 /**
  * Do Not Disturb Utility
@@ -15,16 +16,6 @@ import { api } from "../../convex/_generated/api";
  * 3. Providing quick access to system settings
  */
 
-let _convexClient: ConvexReactClient | null = null;
-
-export function setConvexClient(client: ConvexReactClient) {
-  _convexClient = client;
-}
-
-function getClient(): ConvexReactClient | null {
-  return _convexClient;
-}
-
 // Track current DND state
 let isDNDActive = false;
 let originalNotificationHandler: any = null;
@@ -34,13 +25,10 @@ let originalNotificationHandler: any = null;
  */
 export const isAutoDNDEnabled = async (): Promise<boolean> => {
   try {
-    const client = getClient();
-    if (!client) return false;
-
+    const client = getConvexClient();
     const settings = await client.query(api.settings.get, {});
     return settings?.autoDndFocus || false;
-  } catch (error) {
-    console.error('Error checking auto DND setting:', error);
+  } catch {
     return false;
   }
 };
@@ -57,17 +45,17 @@ export const enableFocusMode = async () => {
 
     // Set notification handler to suppress notifications during focus
     Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: false,
-        shouldPlaySound: false,
-        shouldSetBadge: false,
-      }),
+      handleNotification: async () =>
+        ({
+          shouldShowAlert: false,
+          shouldPlaySound: false,
+          shouldSetBadge: false,
+        }) as Notifications.NotificationBehavior,
     });
 
     isDNDActive = true;
-    console.log('✅ Focus mode enabled - notifications suppressed');
-  } catch (error) {
-    console.error('Error enabling focus mode:', error);
+  } catch {
+    // Error enabling focus mode
   }
 };
 
@@ -80,17 +68,17 @@ export const disableFocusMode = async () => {
   try {
     // Restore original notification handler
     Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-      }),
+      handleNotification: async () =>
+        ({
+          shouldShowAlert: true,
+          shouldPlaySound: true,
+          shouldSetBadge: true,
+        }) as Notifications.NotificationBehavior,
     });
 
     isDNDActive = false;
-    console.log('✅ Focus mode disabled - notifications restored');
-  } catch (error) {
-    console.error('Error disabling focus mode:', error);
+  } catch {
+    // Error disabling focus mode
   }
 };
 
@@ -99,22 +87,22 @@ export const disableFocusMode = async () => {
  */
 export const showDNDReminder = () => {
   Alert.alert(
-    '🔕 Enable Do Not Disturb',
-    'For the best focus experience, enable Do Not Disturb mode on your device.\n\nWould you like to open settings?',
+    "🔕 Enable Do Not Disturb",
+    "For the best focus experience, enable Do Not Disturb mode on your device.\n\nWould you like to open settings?",
     [
       {
-        text: 'Not Now',
-        style: 'cancel',
+        text: "Not Now",
+        style: "cancel",
       },
       {
-        text: 'Open Settings',
+        text: "Open Settings",
         onPress: () => openSystemSettings(),
       },
       {
         text: "Don't Ask Again",
         onPress: () => disableDNDReminder(),
       },
-    ]
+    ],
   );
 };
 
@@ -123,21 +111,20 @@ export const showDNDReminder = () => {
  */
 const openSystemSettings = async () => {
   try {
-    if (Platform.OS === 'ios') {
+    if (Platform.OS === "ios") {
       // iOS: Open Settings app
       await Linking.openSettings();
-    } else if (Platform.OS === 'android') {
+    } else if (Platform.OS === "android") {
       // Android: Open DND settings
-      await Linking.sendIntent('android.settings.ZEN_MODE_SETTINGS');
+      await Linking.sendIntent("android.settings.ZEN_MODE_SETTINGS");
     }
-  } catch (error) {
-    console.error('Error opening system settings:', error);
+  } catch {
     Alert.alert(
-      'Settings',
-      'Please manually enable Do Not Disturb in your device settings:\n\n' +
-      (Platform.OS === 'ios'
-        ? 'Settings > Focus > Do Not Disturb'
-        : 'Settings > Sound > Do Not Disturb')
+      "Settings",
+      "Please manually enable Do Not Disturb in your device settings:\n\n" +
+        (Platform.OS === "ios"
+          ? "Settings > Focus > Do Not Disturb"
+          : "Settings > Sound > Do Not Disturb"),
     );
   }
 };
@@ -148,17 +135,18 @@ const openSystemSettings = async () => {
 const disableDNDReminder = async () => {
   try {
     // Store preference in AsyncStorage
-    await AsyncStorage.setItem('@dnd_reminder_disabled', 'true');
-    console.log('User opted out of DND reminders');
-  } catch (error) {
-    console.error('Error saving DND reminder preference:', error);
+    await AsyncStorage.setItem("@dnd_reminder_disabled", "true");
+  } catch {
+    // Error saving DND reminder preference
   }
 };
 
 /**
  * Start focus session with Auto DND
  */
-export const startFocusSessionWithDND = async (showReminder: boolean = true) => {
+export const startFocusSessionWithDND = async (
+  showReminder: boolean = true,
+) => {
   const autoDNDEnabled = await isAutoDNDEnabled();
 
   if (autoDNDEnabled) {
@@ -168,7 +156,7 @@ export const startFocusSessionWithDND = async (showReminder: boolean = true) => 
     // Show reminder to enable system DND (first time only)
     if (showReminder) {
       // Check if user opted out
-      const disabled = await AsyncStorage.getItem('@dnd_reminder_disabled');
+      const disabled = await AsyncStorage.getItem("@dnd_reminder_disabled");
       if (!disabled) {
         setTimeout(() => {
           showDNDReminder();

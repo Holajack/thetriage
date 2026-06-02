@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -9,25 +9,28 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Image,
-  Alert
-} from 'react-native';
-import { ThemedImage } from '../components/ThemedImage';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useAuth } from '../context/AuthContext';
-import { useAuth as useClerkAuth, useUser } from '@clerk/clerk-expo';
-import { useTheme } from '../context/ThemeContext';
-import type { RootStackParamList } from '../navigation/types';
+  Alert,
+} from "react-native";
+import { ThemedImage } from "../components/ThemedImage";
+import { LinearGradient } from "expo-linear-gradient";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useAuth } from "../context/AuthContext";
+import { useAuth as useClerkAuth, useUser } from "@clerk/clerk-expo";
+import { useTheme } from "../context/ThemeContext";
+import type { RootStackParamList } from "../navigation/types";
 
-type LandingNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Landing'>;
+type LandingNavigationProp = NativeStackNavigationProp<
+  RootStackParamList,
+  "Landing"
+>;
 
-const { width, height } = Dimensions.get('window');
+const { width, height } = Dimensions.get("window");
 
 const HikeWiseLogo = ({ style }: { style?: any }) => (
   <View style={[styles.logoContainer, style]}>
     <ThemedImage
-      source={require('../assets/transparent-triage.png')}
+      source={require("../assets/transparent-triage.png")}
       style={styles.logoImage}
       resizeMode="contain"
       applyFilter={true}
@@ -37,28 +40,58 @@ const HikeWiseLogo = ({ style }: { style?: any }) => (
 
 const LandingPage: React.FC = () => {
   const navigation = useNavigation<LandingNavigationProp>();
-  const { setHasSeenLanding, isAuthenticated, hasCompletedOnboarding, isRecentLogin, hasSeenSplashAnimation, setHasSeenSplashAnimation } = useAuth();
+  const {
+    setHasSeenLanding,
+    isAuthenticated,
+    hasCompletedOnboarding,
+    isRecentLogin,
+    hasSeenSplashAnimation,
+    setHasSeenSplashAnimation,
+  } = useAuth();
   const { isSignedIn, signOut } = useClerkAuth();
   const { user: clerkUser } = useUser();
   const { theme } = useTheme();
   const [signingOut, setSigningOut] = useState(false);
 
   // If user has seen splash animation before, start with final animation values
-  const logoOpacity = useRef(new Animated.Value(hasSeenSplashAnimation ? 1 : 0)).current;
-  const logoScale = useRef(new Animated.Value(hasSeenSplashAnimation ? 1 : 0.8)).current;
-  const titleOpacity = useRef(new Animated.Value(hasSeenSplashAnimation ? 1 : 0)).current;
-  const taglineOpacity = useRef(new Animated.Value(hasSeenSplashAnimation ? 1 : 0)).current;
-  const buttonOpacity = useRef(new Animated.Value(hasSeenSplashAnimation ? 1 : 0)).current;
-  const buttonScale = useRef(new Animated.Value(hasSeenSplashAnimation ? 1 : 0.9)).current;
+  const logoOpacity = useRef(
+    new Animated.Value(hasSeenSplashAnimation ? 1 : 0),
+  ).current;
+  const logoScale = useRef(
+    new Animated.Value(hasSeenSplashAnimation ? 1 : 0.8),
+  ).current;
+  const titleOpacity = useRef(
+    new Animated.Value(hasSeenSplashAnimation ? 1 : 0),
+  ).current;
+  const taglineOpacity = useRef(
+    new Animated.Value(hasSeenSplashAnimation ? 1 : 0),
+  ).current;
+  const buttonOpacity = useRef(
+    new Animated.Value(hasSeenSplashAnimation ? 1 : 0),
+  ).current;
+  const buttonScale = useRef(
+    new Animated.Value(hasSeenSplashAnimation ? 1 : 0.9),
+  ).current;
 
-  // Log Clerk auth state for debugging
+  // Continuous shimmer sweep across the "Continue as …" button.
+  const shimmerX = useRef(new Animated.Value(0)).current;
+  const buttonWidthRef = useRef(0);
+
   useEffect(() => {
-    console.log('🏠 [LandingPage] Clerk auth state:', {
-      isSignedIn,
-      clerkUser: clerkUser?.primaryEmailAddress?.emailAddress,
-      clerkUserId: clerkUser?.id,
-    });
-  }, [isSignedIn, clerkUser]);
+    if (!isSignedIn) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmerX, {
+          toValue: 1,
+          duration: 1800,
+          useNativeDriver: true,
+        }),
+        Animated.delay(700),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [isSignedIn]);
 
   // Auto-redirect authenticated users who have completed onboarding (only if recent login)
   useEffect(() => {
@@ -69,34 +102,46 @@ const LandingPage: React.FC = () => {
       if (isAuth && hasCompletedOnboarding) {
         const recentLogin = await isRecentLogin();
         if (recentLogin) {
-          console.log('LandingPage: Auto-redirecting authenticated user with recent login to Main');
-          navigation.replace('Main');
+          // Auto-redirecting authenticated user with recent login to Main
+          navigation.replace("Main");
         } else {
-          console.log('LandingPage: Login expired (>24h), user needs to re-authenticate');
+          // Login expired (>24h), user needs to re-authenticate
           // User needs to sign in again after 24 hours
         }
       }
     };
 
     checkAutoRedirect();
-  }, [isAuthenticated, isSignedIn, hasCompletedOnboarding, isRecentLogin, navigation]);
+  }, [
+    isAuthenticated,
+    isSignedIn,
+    hasCompletedOnboarding,
+    isRecentLogin,
+    navigation,
+  ]);
 
   // Handle sign out for existing Clerk sessions
   const handleSignOut = async () => {
     setSigningOut(true);
     try {
       await signOut();
-      console.log('🏠 [LandingPage] Signed out successfully');
+      // Signed out successfully
     } catch (err: any) {
       // Handle React Native compatibility errors (CustomEvent, hasFocus, dispatchEvent, etc.)
       // Clerk SDK uses browser APIs that don't exist in RN
       const errMsg = err?.message || String(err);
-      if (errMsg.includes('CustomEvent') || errMsg.includes('hasFocus') || errMsg.includes('document') || errMsg.includes('dispatchEvent') || errMsg.includes('window')) {
-        console.log('🏠 [LandingPage] Clerk RN compatibility error (sign out likely succeeded):', errMsg);
+      if (
+        errMsg.includes("CustomEvent") ||
+        errMsg.includes("hasFocus") ||
+        errMsg.includes("document") ||
+        errMsg.includes("dispatchEvent") ||
+        errMsg.includes("window")
+      ) {
+        // Clerk RN compatibility error (sign out likely succeeded)
         // Sign out probably worked, token should be cleared
       } else {
-        console.log('🏠 [LandingPage] Sign out error:', err);
-        Alert.alert('Sign Out Error', 'Failed to sign out. Please try again.');
+        // Sign out error
+        Alert.alert("Sign Out Error", "Failed to sign out. Please try again.");
       }
     } finally {
       setSigningOut(false);
@@ -106,11 +151,11 @@ const LandingPage: React.FC = () => {
   useEffect(() => {
     // Skip animation if user has already seen it
     if (hasSeenSplashAnimation) {
-      console.log('LandingPage: Skipping splash animation (already seen)');
+      // Skipping splash animation (already seen)
       return;
     }
 
-    console.log('LandingPage: Playing splash animation for first time');
+    // Playing splash animation for first time
 
     const animationSequence = Animated.sequence([
       // Logo appears
@@ -177,7 +222,7 @@ const LandingPage: React.FC = () => {
       }).start(() => {
         setHasSeenLanding(true);
         // Navigate directly to onboarding flow — starts with account creation
-        navigation.navigate('Onboarding', { screen: 'AccountCreation' });
+        navigation.navigate("Onboarding", { screen: "AccountCreation" });
       });
     });
   };
@@ -185,19 +230,23 @@ const LandingPage: React.FC = () => {
   const handleSignIn = () => {
     setHasSeenLanding(true);
     // Navigate to Auth with login-only for existing users
-    navigation.navigate('Auth', { screen: 'Login' });
+    navigation.navigate("Auth", { screen: "Login" });
   };
 
   // Dynamic colors based on theme
-  const gradientColors = theme.isDark 
-    ? ['#000000', '#1a1a1a', '#2a2a2a', '#1a1a1a']
-    : ['#0F2419', '#1B4A3A', '#2E5D4F', '#1B4A3A'];
-  
-  const textColor = theme.isDark ? theme.text : '#E8F5E9';
-  const secondaryTextColor = theme.isDark ? theme.textSecondary : '#B8E6C1';
-  const buttonGradientColors = theme.isDark
-    ? [theme.primary, theme.secondary || theme.primary, theme.primary]
-    : ['#4CAF50', '#66BB6A', '#4CAF50'];
+  const gradientColors = (
+    theme.isDark
+      ? ["#000000", "#1a1a1a", "#2a2a2a", "#1a1a1a"]
+      : ["#0F2419", "#1B4A3A", "#2E5D4F", "#1B4A3A"]
+  ) as [string, string, ...string[]];
+
+  const textColor = theme.isDark ? theme.text : "#E8F5E9";
+  const secondaryTextColor = theme.isDark ? theme.textSecondary : "#B8E6C1";
+  const buttonGradientColors = (
+    theme.isDark
+      ? [theme.primary, theme.secondary || theme.primary, theme.primary]
+      : ["#4CAF50", "#66BB6A", "#4CAF50"]
+  ) as [string, string, ...string[]];
 
   return (
     <LinearGradient
@@ -205,8 +254,11 @@ const LandingPage: React.FC = () => {
       locations={[0, 0.3, 0.7, 1]}
       style={styles.container}
     >
-      <StatusBar barStyle="light-content" backgroundColor={theme.isDark ? '#000000' : '#1B4A3A'} />
-      
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor={theme.isDark ? "#000000" : "#1B4A3A"}
+      />
+
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.content}>
           {/* Logo Section */}
@@ -224,24 +276,21 @@ const LandingPage: React.FC = () => {
 
           {/* Title Section */}
           <Animated.View
-            style={[
-              styles.textContainer,
-              { opacity: titleOpacity },
-            ]}
+            style={[styles.textContainer, { opacity: titleOpacity }]}
           >
             <Text style={[styles.title, { color: textColor }]}>Hike Wise</Text>
           </Animated.View>
 
           {/* Tagline Section */}
           <Animated.View
-            style={[
-              styles.taglineContainer,
-              { opacity: taglineOpacity },
-            ]}
+            style={[styles.taglineContainer, { opacity: taglineOpacity }]}
           >
-            <Text style={[styles.tagline, { color: textColor }]}>Focus Starts Here</Text>
+            <Text style={[styles.tagline, { color: textColor }]}>
+              Focus Starts Here
+            </Text>
             <Text style={[styles.description, { color: secondaryTextColor }]}>
-              Transform your study sessions with focused learning and community support
+              Transform your study sessions with focused learning and community
+              support
             </Text>
           </Animated.View>
 
@@ -264,9 +313,12 @@ const LandingPage: React.FC = () => {
                   onPress={() => {
                     setHasSeenLanding(true);
                     // Signed-in users always go to Main
-                    navigation.replace('Main');
+                    navigation.replace("Main");
                   }}
                   activeOpacity={0.8}
+                  onLayout={(e) => {
+                    buttonWidthRef.current = e.nativeEvent.layout.width;
+                  }}
                 >
                   <LinearGradient
                     colors={buttonGradientColors}
@@ -274,8 +326,42 @@ const LandingPage: React.FC = () => {
                     style={styles.buttonGradient}
                   >
                     <Text style={styles.buttonText}>
-                      Continue as {clerkUser.firstName || clerkUser.primaryEmailAddress?.emailAddress?.split('@')[0] || 'User'}
+                      Continue as{" "}
+                      {clerkUser.firstName ||
+                        clerkUser.primaryEmailAddress?.emailAddress?.split(
+                          "@",
+                        )[0] ||
+                        "User"}
                     </Text>
+                    {/* Shimmer highlight sweeping across the button */}
+                    <Animated.View
+                      pointerEvents="none"
+                      style={[
+                        styles.shimmerSweep,
+                        {
+                          transform: [
+                            {
+                              translateX: shimmerX.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [-180, width],
+                              }),
+                            },
+                            { skewX: "-20deg" },
+                          ],
+                        },
+                      ]}
+                    >
+                      <LinearGradient
+                        colors={[
+                          "rgba(255,255,255,0)",
+                          "rgba(255,255,255,0.45)",
+                          "rgba(255,255,255,0)",
+                        ]}
+                        start={{ x: 0, y: 0.5 }}
+                        end={{ x: 1, y: 0.5 }}
+                        style={StyleSheet.absoluteFill}
+                      />
+                    </Animated.View>
                   </LinearGradient>
                 </TouchableOpacity>
 
@@ -285,8 +371,12 @@ const LandingPage: React.FC = () => {
                   activeOpacity={0.7}
                   disabled={signingOut}
                 >
-                  <Text style={[styles.secondaryButtonText, { color: textColor }]}>
-                    {signingOut ? 'Signing Out...' : 'Sign Out & Use Different Account'}
+                  <Text
+                    style={[styles.secondaryButtonText, { color: textColor }]}
+                  >
+                    {signingOut
+                      ? "Signing Out..."
+                      : "Sign Out & Use Different Account"}
                   </Text>
                 </TouchableOpacity>
               </>
@@ -312,7 +402,11 @@ const LandingPage: React.FC = () => {
                   onPress={handleSignIn}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.secondaryButtonText, { color: textColor }]}>Sign In</Text>
+                  <Text
+                    style={[styles.secondaryButtonText, { color: textColor }]}
+                  >
+                    Sign In
+                  </Text>
                 </TouchableOpacity>
               </>
             )}
@@ -320,22 +414,31 @@ const LandingPage: React.FC = () => {
 
           {/* Features Preview */}
           <Animated.View
-            style={[
-              styles.featuresContainer,
-              { opacity: buttonOpacity },
-            ]}
+            style={[styles.featuresContainer, { opacity: buttonOpacity }]}
           >
             <View style={styles.featureItem}>
-              <View style={[styles.featureDot, { backgroundColor: theme.primary }]} />
-              <Text style={[styles.featureText, { color: secondaryTextColor }]}>Study Room Collaboration</Text>
+              <View
+                style={[styles.featureDot, { backgroundColor: theme.primary }]}
+              />
+              <Text style={[styles.featureText, { color: secondaryTextColor }]}>
+                Study Room Collaboration
+              </Text>
             </View>
             <View style={styles.featureItem}>
-              <View style={[styles.featureDot, { backgroundColor: theme.primary }]} />
-              <Text style={[styles.featureText, { color: secondaryTextColor }]}>Focus Session Tracking</Text>
+              <View
+                style={[styles.featureDot, { backgroundColor: theme.primary }]}
+              />
+              <Text style={[styles.featureText, { color: secondaryTextColor }]}>
+                Focus Session Tracking
+              </Text>
             </View>
             <View style={styles.featureItem}>
-              <View style={[styles.featureDot, { backgroundColor: theme.primary }]} />
-              <Text style={[styles.featureText, { color: secondaryTextColor }]}>Community Leaderboards</Text>
+              <View
+                style={[styles.featureDot, { backgroundColor: theme.primary }]}
+              />
+              <Text style={[styles.featureText, { color: secondaryTextColor }]}>
+                Community Leaderboards
+              </Text>
             </View>
           </Animated.View>
         </View>
@@ -353,16 +456,16 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 20,
   },
   logoWrapper: {
     marginBottom: 30,
   },
   logoContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   logoImage: {
     width: 130,
@@ -370,45 +473,45 @@ const styles = StyleSheet.create({
     // Removed tintColor to show transparent logo as-is
   },
   textContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 20,
   },
   title: {
     fontSize: 42,
-    fontWeight: '700',
+    fontWeight: "700",
     letterSpacing: 8,
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: 5,
   },
   subtitle: {
     fontSize: 24,
-    fontWeight: '300',
+    fontWeight: "300",
     letterSpacing: 6,
-    textAlign: 'center',
+    textAlign: "center",
   },
   taglineContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 40,
     paddingHorizontal: 20,
   },
   tagline: {
     fontSize: 24,
-    fontWeight: '400',
+    fontWeight: "400",
     letterSpacing: 2,
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: 15,
   },
   description: {
     fontSize: 16,
-    fontWeight: '300',
-    textAlign: 'center',
+    fontWeight: "300",
+    textAlign: "center",
     lineHeight: 24,
     maxWidth: 280,
   },
   buttonContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 40,
-    width: '100%',
+    width: "100%",
   },
   getStartedButton: {
     width: width * 0.7,
@@ -416,7 +519,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     borderRadius: 28,
     elevation: 8,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -424,13 +527,20 @@ const styles = StyleSheet.create({
   buttonGradient: {
     flex: 1,
     borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "hidden",
+  },
+  shimmerSweep: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    width: 120,
   },
   buttonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: "600",
     letterSpacing: 1,
   },
   secondaryButton: {
@@ -441,17 +551,17 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: "500",
     letterSpacing: 0.5,
   },
   featuresContainer: {
-    alignItems: 'flex-start',
-    width: '100%',
+    alignItems: "flex-start",
+    width: "100%",
     maxWidth: 280,
   },
   featureItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 12,
   },
   featureDot: {
@@ -462,7 +572,7 @@ const styles = StyleSheet.create({
   },
   featureText: {
     fontSize: 14,
-    fontWeight: '400',
+    fontWeight: "400",
   },
 });
 

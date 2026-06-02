@@ -6,7 +6,7 @@
  * for typography, spacing, animations, and colors.
  */
 
-import { Easing } from 'react-native-reanimated';
+import { Easing } from "react-native-reanimated";
 
 // ============================================
 // TYPOGRAPHY SCALE
@@ -15,7 +15,7 @@ export const Typography = {
   // Display - Hero headlines
   display: {
     fontSize: 34,
-    fontWeight: '800' as const,
+    fontWeight: "800" as const,
     letterSpacing: -0.5,
     lineHeight: 40,
   },
@@ -23,7 +23,7 @@ export const Typography = {
   // H1 - Primary headlines
   h1: {
     fontSize: 28,
-    fontWeight: '700' as const,
+    fontWeight: "700" as const,
     letterSpacing: -0.3,
     lineHeight: 34,
   },
@@ -31,7 +31,7 @@ export const Typography = {
   // H2 - Section headers
   h2: {
     fontSize: 22,
-    fontWeight: '600' as const,
+    fontWeight: "600" as const,
     letterSpacing: -0.2,
     lineHeight: 28,
   },
@@ -39,7 +39,7 @@ export const Typography = {
   // H3 - Card titles
   h3: {
     fontSize: 18,
-    fontWeight: '600' as const,
+    fontWeight: "600" as const,
     letterSpacing: 0,
     lineHeight: 24,
   },
@@ -47,7 +47,7 @@ export const Typography = {
   // Body - Regular text
   body: {
     fontSize: 16,
-    fontWeight: '400' as const,
+    fontWeight: "400" as const,
     letterSpacing: 0.1,
     lineHeight: 22,
   },
@@ -55,7 +55,7 @@ export const Typography = {
   // Body Small
   bodySmall: {
     fontSize: 14,
-    fontWeight: '400' as const,
+    fontWeight: "400" as const,
     letterSpacing: 0.1,
     lineHeight: 20,
   },
@@ -63,7 +63,7 @@ export const Typography = {
   // Caption - Secondary text
   caption: {
     fontSize: 12,
-    fontWeight: '500' as const,
+    fontWeight: "500" as const,
     letterSpacing: 0.2,
     lineHeight: 16,
   },
@@ -71,26 +71,26 @@ export const Typography = {
   // Label - Buttons, tabs
   label: {
     fontSize: 14,
-    fontWeight: '600' as const,
+    fontWeight: "600" as const,
     letterSpacing: 0.5,
     lineHeight: 18,
-    textTransform: 'uppercase' as const,
+    textTransform: "uppercase" as const,
   },
 
   // Stats - Numbers, counters (tabular)
   stat: {
     fontSize: 32,
-    fontWeight: '700' as const,
+    fontWeight: "700" as const,
     letterSpacing: 0,
-    fontVariant: ['tabular-nums'] as const,
+    fontVariant: ["tabular-nums"] as "tabular-nums"[],
   },
 
   // Stat Small
   statSmall: {
     fontSize: 20,
-    fontWeight: '600' as const,
+    fontWeight: "600" as const,
     letterSpacing: 0,
-    fontVariant: ['tabular-nums'] as const,
+    fontVariant: ["tabular-nums"] as "tabular-nums"[],
   },
 };
 
@@ -126,28 +126,28 @@ export const BorderRadius = {
 // ============================================
 export const Shadows = {
   sm: {
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.08,
     shadowRadius: 2,
     elevation: 2,
   },
   md: {
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.12,
     shadowRadius: 6,
     elevation: 4,
   },
   lg: {
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.16,
     shadowRadius: 12,
     elevation: 8,
   },
   xl: {
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.2,
     shadowRadius: 24,
@@ -224,9 +224,9 @@ export const EasingConfig = {
 // STAGGER DELAYS (for list entrances)
 // ============================================
 export const StaggerDelay = {
-  fast: 50,    // Quick list items
-  normal: 80,  // Standard list items
-  slow: 120,   // Cards, larger items
+  fast: 50, // Quick list items
+  normal: 80, // Standard list items
+  slow: 120, // Cards, larger items
 };
 
 // ============================================
@@ -235,50 +235,50 @@ export const StaggerDelay = {
 export const PremiumColors = {
   // Success states
   success: {
-    light: '#4ADE80',
-    main: '#22C55E',
-    dark: '#16A34A',
+    light: "#4ADE80",
+    main: "#22C55E",
+    dark: "#16A34A",
   },
 
   // Warning states
   warning: {
-    light: '#FCD34D',
-    main: '#F59E0B',
-    dark: '#D97706',
+    light: "#FCD34D",
+    main: "#F59E0B",
+    dark: "#D97706",
   },
 
   // Error states
   error: {
-    light: '#F87171',
-    main: '#EF4444',
-    dark: '#DC2626',
+    light: "#F87171",
+    main: "#EF4444",
+    dark: "#DC2626",
   },
 
   // Info states
   info: {
-    light: '#60A5FA',
-    main: '#3B82F6',
-    dark: '#2563EB',
+    light: "#60A5FA",
+    main: "#3B82F6",
+    dark: "#2563EB",
   },
 
   // Gradients for premium feel
   gradients: {
-    primary: ['#6366F1', '#8B5CF6'],
-    success: ['#22C55E', '#16A34A'],
-    gold: ['#FCD34D', '#F59E0B'],
-    sunset: ['#F97316', '#EC4899'],
-    ocean: ['#06B6D4', '#3B82F6'],
-    premium: ['#8B5CF6', '#EC4899', '#F97316'],
+    primary: ["#6366F1", "#8B5CF6"],
+    success: ["#22C55E", "#16A34A"],
+    gold: ["#FCD34D", "#F59E0B"],
+    sunset: ["#F97316", "#EC4899"],
+    ocean: ["#06B6D4", "#3B82F6"],
+    premium: ["#8B5CF6", "#EC4899", "#F97316"],
   },
 
   // Holographic effect colors
   holographic: [
-    '#FF6B6B',
-    '#4ECDC4',
-    '#45B7D1',
-    '#96E6A1',
-    '#DDA0DD',
-    '#FFE66D',
+    "#FF6B6B",
+    "#4ECDC4",
+    "#45B7D1",
+    "#96E6A1",
+    "#DDA0DD",
+    "#FFE66D",
   ],
 };
 
@@ -286,13 +286,16 @@ export const PremiumColors = {
 // MASCOT STATES (Nora & Patrick)
 // ============================================
 export type MascotState =
-  | 'idle'      // Subtle breathing/blinking
-  | 'thinking'  // Processing animation
-  | 'excited'   // User achievement
-  | 'concerned' // User struggling
-  | 'sleeping'  // App backgrounded
-  | 'waving'    // Greeting/onboarding
-  | 'celebrating'; // Success celebration
+  | "idle" // Subtle breathing/blinking
+  | "thinking" // Processing animation
+  | "excited" // User achievement
+  | "concerned" // User struggling
+  | "sleeping" // App backgrounded
+  | "waving" // Greeting/onboarding
+  | "celebrating" // Success celebration
+  | "pumped" // Patrick energized
+  | "cheering" // Patrick cheering
+  | "coaching"; // Patrick coaching
 
 export const MascotAnimationDurations = {
   idle: 3000,
@@ -308,10 +311,10 @@ export const MascotAnimationDurations = {
 // HAPTIC PATTERNS
 // ============================================
 export const HapticPatterns = {
-  buttonPress: 'light' as const,
-  success: 'success' as const,
-  error: 'error' as const,
-  warning: 'warning' as const,
-  selection: 'selection' as const,
-  milestone: 'notification' as const,
+  buttonPress: "light" as const,
+  success: "success" as const,
+  error: "error" as const,
+  warning: "warning" as const,
+  selection: "selection" as const,
+  milestone: "notification" as const,
 };

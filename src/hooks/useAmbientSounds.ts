@@ -11,64 +11,64 @@
  * Each layer loads the correct audio file based on the user's equipped trail
  * and plays in a seamless loop at a lower volume than the main music.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Audio } from 'expo-av';
-import { Asset } from 'expo-asset';
-import { AppState } from 'react-native';
-import { useEquippedTrail } from './useEquippedTrail';
-import type { TrailId } from '../config/trailAssets';
-import type { AVPlaybackStatus } from 'expo-av';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Audio } from "expo-av";
+import { Asset } from "expo-asset";
+import { AppState } from "react-native";
+import { useEquippedTrail } from "./useEquippedTrail";
+import type { TrailId } from "../config/trailAssets";
+import type { AVPlaybackStatus } from "expo-av";
 
 // Static require map - React Native requires literal strings in require()
 const AMBIENT_ASSETS: Record<string, Record<string, any>> = {
   forest: {
-    environment: require('../../assets/ambient/forest/environment.mp3'),
-    whitenoise: require('../../assets/ambient/forest/whitenoise.mp3'),
-    critters: require('../../assets/ambient/forest/critters.mp3'),
+    environment: require("../../assets/ambient/forest/environment.mp3"),
+    whitenoise: require("../../assets/ambient/forest/whitenoise.mp3"),
+    critters: require("../../assets/ambient/forest/critters.mp3"),
   },
   beach: {
-    environment: require('../../assets/ambient/beach/environment.mp3'),
-    whitenoise: require('../../assets/ambient/beach/whitenoise.mp3'),
-    critters: require('../../assets/ambient/beach/critters.mp3'),
+    environment: require("../../assets/ambient/beach/environment.mp3"),
+    whitenoise: require("../../assets/ambient/beach/whitenoise.mp3"),
+    critters: require("../../assets/ambient/beach/critters.mp3"),
   },
   jungle: {
-    environment: require('../../assets/ambient/jungle/environment.mp3'),
-    whitenoise: require('../../assets/ambient/jungle/whitenoise.mp3'),
-    critters: require('../../assets/ambient/jungle/critters.mp3'),
+    environment: require("../../assets/ambient/jungle/environment.mp3"),
+    whitenoise: require("../../assets/ambient/jungle/whitenoise.mp3"),
+    critters: require("../../assets/ambient/jungle/critters.mp3"),
   },
   volcano: {
-    environment: require('../../assets/ambient/volcano/environment.mp3'),
-    whitenoise: require('../../assets/ambient/volcano/whitenoise.mp3'),
-    critters: require('../../assets/ambient/volcano/critters.mp3'),
+    environment: require("../../assets/ambient/volcano/environment.mp3"),
+    whitenoise: require("../../assets/ambient/volcano/whitenoise.mp3"),
+    critters: require("../../assets/ambient/volcano/critters.mp3"),
   },
   desert: {
-    environment: require('../../assets/ambient/desert/environment.mp3'),
-    whitenoise: require('../../assets/ambient/desert/whitenoise.mp3'),
-    critters: require('../../assets/ambient/desert/critters.mp3'),
+    environment: require("../../assets/ambient/desert/environment.mp3"),
+    whitenoise: require("../../assets/ambient/desert/whitenoise.mp3"),
+    critters: require("../../assets/ambient/desert/critters.mp3"),
   },
   canyon: {
-    environment: require('../../assets/ambient/canyon/environment.mp3'),
-    whitenoise: require('../../assets/ambient/canyon/whitenoise.mp3'),
-    critters: require('../../assets/ambient/canyon/critters.mp3'),
+    environment: require("../../assets/ambient/canyon/environment.mp3"),
+    whitenoise: require("../../assets/ambient/canyon/whitenoise.mp3"),
+    critters: require("../../assets/ambient/canyon/critters.mp3"),
   },
   galaxy: {
-    environment: require('../../assets/ambient/galaxy/environment.mp3'),
-    whitenoise: require('../../assets/ambient/galaxy/whitenoise.mp3'),
-    critters: require('../../assets/ambient/galaxy/critters.mp3'),
+    environment: require("../../assets/ambient/galaxy/environment.mp3"),
+    whitenoise: require("../../assets/ambient/galaxy/whitenoise.mp3"),
+    critters: require("../../assets/ambient/galaxy/critters.mp3"),
   },
   northern: {
-    environment: require('../../assets/ambient/northern/environment.mp3'),
-    whitenoise: require('../../assets/ambient/northern/whitenoise.mp3'),
-    critters: require('../../assets/ambient/northern/critters.mp3'),
+    environment: require("../../assets/ambient/northern/environment.mp3"),
+    whitenoise: require("../../assets/ambient/northern/whitenoise.mp3"),
+    critters: require("../../assets/ambient/northern/critters.mp3"),
   },
   snow: {
-    environment: require('../../assets/ambient/snow/environment.mp3'),
-    whitenoise: require('../../assets/ambient/snow/whitenoise.mp3'),
-    critters: require('../../assets/ambient/snow/critters.mp3'),
+    environment: require("../../assets/ambient/snow/environment.mp3"),
+    whitenoise: require("../../assets/ambient/snow/whitenoise.mp3"),
+    critters: require("../../assets/ambient/snow/critters.mp3"),
   },
 };
 
-export type AmbientLayer = 'environment' | 'whitenoise' | 'critters';
+export type AmbientLayer = "environment" | "whitenoise" | "critters";
 
 const DEFAULT_AMBIENT_VOLUME = 0.3;
 const FADE_DURATION_MS = 400;
@@ -99,9 +99,12 @@ export function useAmbientSounds() {
 
   const getSoundRef = (layer: AmbientLayer) => {
     switch (layer) {
-      case 'environment': return environmentSound;
-      case 'whitenoise': return whiteNoiseSound;
-      case 'critters': return crittersSound;
+      case "environment":
+        return environmentSound;
+      case "whitenoise":
+        return whiteNoiseSound;
+      case "critters":
+        return crittersSound;
     }
   };
 
@@ -121,56 +124,59 @@ export function useAmbientSounds() {
         } catch {
           return; // Sound was unloaded during fade
         }
-        await new Promise(r => setTimeout(r, FADE_STEP_MS));
+        await new Promise((r) => setTimeout(r, FADE_STEP_MS));
       }
     } catch {
       // Sound not loaded, ignore
     }
   };
 
-  const loadAndPlayLayer = useCallback(async (layer: AmbientLayer, trail: TrailId) => {
-    const soundRef = getSoundRef(layer);
-    const assets = AMBIENT_ASSETS[trail];
-    if (!assets || !assets[layer]) {
-      console.warn(`No ambient asset for ${trail}/${layer}`);
-      return;
-    }
-
-    // Stop existing sound if loaded
-    if (soundRef.current) {
-      try {
-        await soundRef.current.stopAsync();
-        await soundRef.current.unloadAsync();
-      } catch {
-        // Ignore cleanup errors
+  const loadAndPlayLayer = useCallback(
+    async (layer: AmbientLayer, trail: TrailId) => {
+      const soundRef = getSoundRef(layer);
+      const assets = AMBIENT_ASSETS[trail];
+      if (!assets || !assets[layer]) {
+        // No ambient asset available for this trail/layer combination
+        return;
       }
-      soundRef.current = null;
-    }
 
-    try {
-      const asset = Asset.fromModule(assets[layer]);
-      await asset.downloadAsync();
-
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: asset.localUri || asset.uri },
-        {
-          shouldPlay: true,
-          isLooping: true,
-          volume: 0, // Start silent, fade in
+      // Stop existing sound if loaded
+      if (soundRef.current) {
+        try {
+          await soundRef.current.stopAsync();
+          await soundRef.current.unloadAsync();
+        } catch {
+          // Ignore cleanup errors
         }
-      );
+        soundRef.current = null;
+      }
 
-      soundRef.current = sound;
-      loadedTrail.current[layer] = trail;
+      try {
+        const asset = Asset.fromModule(assets[layer]);
+        await asset.downloadAsync();
 
-      // Fade in
-      await fadeVolume(sound, volumeRef.current);
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: asset.localUri || asset.uri },
+          {
+            shouldPlay: true,
+            isLooping: true,
+            volume: 0, // Start silent, fade in
+          },
+        );
 
-      console.log(`🔊 Ambient ${layer} started for ${trail}`);
-    } catch (error) {
-      console.error(`Error loading ambient ${layer} for ${trail}:`, error);
-    }
-  }, []);
+        soundRef.current = sound;
+        loadedTrail.current[layer] = trail;
+
+        // Fade in
+        await fadeVolume(sound, volumeRef.current);
+
+        // Ambient layer started
+      } catch (error) {
+        // Error loading ambient layer
+      }
+    },
+    [],
+  );
 
   const stopLayer = useCallback(async (layer: AmbientLayer) => {
     const soundRef = getSoundRef(layer);
@@ -185,20 +191,20 @@ export function useAmbientSounds() {
     }
     soundRef.current = null;
     loadedTrail.current[layer] = null;
-    console.log(`🔇 Ambient ${layer} stopped`);
+    // Ambient layer stopped
   }, []);
 
   // Toggle handlers
   const toggleEnvironment = useCallback(() => {
-    setEnvironmentEnabled(prev => !prev);
+    setEnvironmentEnabled((prev) => !prev);
   }, []);
 
   const toggleWhiteNoise = useCallback(() => {
-    setWhiteNoiseEnabled(prev => !prev);
+    setWhiteNoiseEnabled((prev) => !prev);
   }, []);
 
   const toggleCritters = useCallback(() => {
-    setCrittersEnabled(prev => !prev);
+    setCrittersEnabled((prev) => !prev);
   }, []);
 
   const setVolume = useCallback((vol: number) => {
@@ -207,7 +213,7 @@ export function useAmbientSounds() {
     setVolumeState(clamped);
 
     // Update all active sounds
-    [environmentSound, whiteNoiseSound, crittersSound].forEach(ref => {
+    [environmentSound, whiteNoiseSound, crittersSound].forEach((ref) => {
       if (ref.current) {
         ref.current.setVolumeAsync(clamped).catch(() => {});
       }
@@ -216,41 +222,41 @@ export function useAmbientSounds() {
 
   const stopAll = useCallback(async () => {
     await Promise.all([
-      stopLayer('environment'),
-      stopLayer('whitenoise'),
-      stopLayer('critters'),
+      stopLayer("environment"),
+      stopLayer("whitenoise"),
+      stopLayer("critters"),
     ]);
   }, [stopLayer]);
 
   // React to toggle changes
   useEffect(() => {
     if (environmentEnabled) {
-      loadAndPlayLayer('environment', trailId);
+      loadAndPlayLayer("environment", trailId);
     } else {
-      stopLayer('environment');
+      stopLayer("environment");
     }
   }, [environmentEnabled, trailId, loadAndPlayLayer, stopLayer]);
 
   useEffect(() => {
     if (whiteNoiseEnabled) {
-      loadAndPlayLayer('whitenoise', trailId);
+      loadAndPlayLayer("whitenoise", trailId);
     } else {
-      stopLayer('whitenoise');
+      stopLayer("whitenoise");
     }
   }, [whiteNoiseEnabled, trailId, loadAndPlayLayer, stopLayer]);
 
   useEffect(() => {
     if (crittersEnabled) {
-      loadAndPlayLayer('critters', trailId);
+      loadAndPlayLayer("critters", trailId);
     } else {
-      stopLayer('critters');
+      stopLayer("critters");
     }
   }, [crittersEnabled, trailId, loadAndPlayLayer, stopLayer]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      [environmentSound, whiteNoiseSound, crittersSound].forEach(ref => {
+      [environmentSound, whiteNoiseSound, crittersSound].forEach((ref) => {
         if (ref.current) {
           ref.current.stopAsync().catch(() => {});
           ref.current.unloadAsync().catch(() => {});

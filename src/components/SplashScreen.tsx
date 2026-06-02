@@ -1,10 +1,19 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Dimensions, StatusBar, Image, Platform } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { ThemedImage } from './ThemedImage';
-import * as ExpoSplashScreen from 'expo-splash-screen';
+import React, { useEffect, useRef } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Animated,
+  Dimensions,
+  StatusBar,
+  Image,
+  Platform,
+} from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { ThemedImage } from "./ThemedImage";
+import * as ExpoSplashScreen from "expo-splash-screen";
 
-const { width, height } = Dimensions.get('window');
+const { width, height } = Dimensions.get("window");
 
 interface SplashScreenProps {
   onAnimationComplete: () => void;
@@ -13,7 +22,7 @@ interface SplashScreenProps {
 const HikeWiseLogo = ({ style }: { style?: any }) => (
   <View style={[styles.logoContainer, style]}>
     <ThemedImage
-      source={require('../assets/transparent-triage.png')}
+      source={require("../assets/transparent-triage.png")}
       style={styles.logoImage}
       resizeMode="contain"
       applyFilter={true}
@@ -21,7 +30,9 @@ const HikeWiseLogo = ({ style }: { style?: any }) => (
   </View>
 );
 
-export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationComplete }) => {
+export const SplashScreen: React.FC<SplashScreenProps> = ({
+  onAnimationComplete,
+}) => {
   const logoOpacity = useRef(new Animated.Value(0)).current;
   const logoScale = useRef(new Animated.Value(0.8)).current;
   const titleOpacity = useRef(new Animated.Value(0)).current;
@@ -30,23 +41,26 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationComplete 
   useEffect(() => {
     let isMounted = true;
     let animationRef: Animated.CompositeAnimation | null = null;
-    
+
     // Add a reliable fallback timeout for iOS
-    const fallbackTimeout = setTimeout(() => {
-      console.log('SplashScreen: Fallback timeout reached, completing animation');
-      if (isMounted) {
-        onAnimationComplete();
-      }
-    }, Platform.OS === 'ios' ? 4000 : 5000); // 4 seconds for iOS, 5 for others
-    
+    const fallbackTimeout = setTimeout(
+      () => {
+        // Fallback timeout reached, completing animation
+        if (isMounted) {
+          onAnimationComplete();
+        }
+      },
+      Platform.OS === "ios" ? 4000 : 5000,
+    ); // 4 seconds for iOS, 5 for others
+
     // Hide the native splash screen when our custom one starts
     const initializeAnimation = async () => {
       try {
-        console.log('SplashScreen: Starting animation sequence...');
+        // Starting animation sequence
         await ExpoSplashScreen.hideAsync();
-        
+
         if (!isMounted) return;
-        
+
         animationRef = Animated.sequence([
           // Logo appears
           Animated.parallel([
@@ -99,12 +113,12 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationComplete 
         animationRef.start((finished) => {
           clearTimeout(fallbackTimeout); // Clear fallback timeout if animation completes normally
           if (isMounted && finished) {
-            console.log('SplashScreen: Animation completed successfully');
+            // Animation completed successfully
             onAnimationComplete();
           }
         });
       } catch (error) {
-        console.error('SplashScreen: Animation error:', error);
+        // SplashScreen animation error
         clearTimeout(fallbackTimeout);
         // Fallback: complete immediately if there's an error
         if (isMounted) {
@@ -112,9 +126,9 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationComplete 
         }
       }
     };
-    
+
     initializeAnimation();
-    
+
     return () => {
       isMounted = false;
       clearTimeout(fallbackTimeout); // Clear timeout on cleanup
@@ -126,15 +140,15 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationComplete 
 
   return (
     <LinearGradient
-      colors={['#1B4A3A', '#2E5D4F', '#1B4A3A']}
+      colors={["#1B4A3A", "#2E5D4F", "#1B4A3A"]}
       style={styles.container}
     >
-      <StatusBar 
-        barStyle="light-content" 
-        backgroundColor="#1B4A3A" 
-        translucent={Platform.OS === 'android'}
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor="#1B4A3A"
+        translucent={Platform.OS === "android"}
       />
-      
+
       <View style={styles.content}>
         <Animated.View
           style={[
@@ -148,11 +162,15 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationComplete 
           <HikeWiseLogo />
         </Animated.View>
 
-        <Animated.View style={[styles.textContainer, { opacity: titleOpacity }]}>
+        <Animated.View
+          style={[styles.textContainer, { opacity: titleOpacity }]}
+        >
           <Text style={styles.title}>Hike Wise</Text>
         </Animated.View>
 
-        <Animated.View style={[styles.taglineContainer, { opacity: taglineOpacity }]}>
+        <Animated.View
+          style={[styles.taglineContainer, { opacity: taglineOpacity }]}
+        >
           <Text style={styles.tagline}>Focus • Learn • Succeed</Text>
         </Animated.View>
       </View>
@@ -163,20 +181,20 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationComplete 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   content: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     flex: 1,
   },
   logoWrapper: {
     marginBottom: 40,
   },
   logoContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   logoImage: {
     width: 200,
@@ -184,27 +202,27 @@ const styles = StyleSheet.create({
     // Removed tintColor to show transparent logo as-is
   },
   textContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 30,
   },
   title: {
     fontSize: 48,
-    fontWeight: 'bold',
-    color: '#E8F5E9',
+    fontWeight: "bold",
+    color: "#E8F5E9",
     letterSpacing: 4,
-    textAlign: 'center',
+    textAlign: "center",
   },
   taglineContainer: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 100,
-    alignItems: 'center',
+    alignItems: "center",
   },
   tagline: {
     fontSize: 22,
-    color: '#E8F5E9',
-    fontWeight: '300',
+    color: "#E8F5E9",
+    fontWeight: "300",
     letterSpacing: 2,
-    textAlign: 'center',
+    textAlign: "center",
   },
 });
 

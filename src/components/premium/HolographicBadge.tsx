@@ -9,8 +9,15 @@
  * - Celebration animation on unlock
  */
 
-import React, { useEffect, useCallback } from 'react';
-import { StyleSheet, View, ViewStyle, Text, Image, ImageSourcePropType } from 'react-native';
+import React, { useEffect, useCallback } from "react";
+import {
+  StyleSheet,
+  View,
+  ViewStyle,
+  Text,
+  Image,
+  ImageSourcePropType,
+} from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -21,11 +28,11 @@ import Animated, {
   interpolate,
   Extrapolation,
   runOnJS,
-} from 'react-native-reanimated';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { LinearGradient } from 'expo-linear-gradient';
-import * as Haptics from 'expo-haptics';
-import { useTheme } from '../../context/ThemeContext';
+} from "react-native-reanimated";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { LinearGradient } from "expo-linear-gradient";
+import * as Haptics from "expo-haptics";
+import { useTheme } from "../../context/ThemeContext";
 import {
   BorderRadius,
   Shadows,
@@ -33,35 +40,35 @@ import {
   Typography,
   AnimationConfig,
   PremiumColors,
-} from '../../theme/premiumTheme';
+} from "../../theme/premiumTheme";
 
 interface HolographicBadgeProps {
   title: string;
   description?: string;
   icon?: ImageSourcePropType | React.ReactNode;
   unlocked?: boolean;
-  rarity?: 'common' | 'rare' | 'epic' | 'legendary';
+  rarity?: "common" | "rare" | "epic" | "legendary";
   progress?: number; // 0-1 for locked badges
-  size?: 'small' | 'medium' | 'large';
+  size?: "small" | "medium" | "large";
   onPress?: () => void;
   style?: ViewStyle;
   showCelebration?: boolean;
 }
 
 const RARITY_COLORS = {
-  common: ['#94A3B8', '#64748B'],
-  rare: ['#60A5FA', '#3B82F6'],
-  epic: ['#A78BFA', '#8B5CF6'],
-  legendary: ['#FBBF24', '#F59E0B', '#EA580C'],
+  common: ["#94A3B8", "#64748B"],
+  rare: ["#60A5FA", "#3B82F6"],
+  epic: ["#A78BFA", "#8B5CF6"],
+  legendary: ["#FBBF24", "#F59E0B", "#EA580C"],
 };
 
 const HOLOGRAPHIC_COLORS = [
-  'rgba(255, 107, 107, 0.3)',
-  'rgba(78, 205, 196, 0.3)',
-  'rgba(69, 183, 209, 0.3)',
-  'rgba(150, 230, 161, 0.3)',
-  'rgba(221, 160, 221, 0.3)',
-  'rgba(255, 230, 109, 0.3)',
+  "rgba(255, 107, 107, 0.3)",
+  "rgba(78, 205, 196, 0.3)",
+  "rgba(69, 183, 209, 0.3)",
+  "rgba(150, 230, 161, 0.3)",
+  "rgba(221, 160, 221, 0.3)",
+  "rgba(255, 230, 109, 0.3)",
 ];
 
 export const HolographicBadge: React.FC<HolographicBadgeProps> = ({
@@ -69,9 +76,9 @@ export const HolographicBadge: React.FC<HolographicBadgeProps> = ({
   description,
   icon,
   unlocked = true,
-  rarity = 'common',
+  rarity = "common",
   progress = 0,
-  size = 'medium',
+  size = "medium",
   onPress,
   style,
   showCelebration = false,
@@ -89,9 +96,9 @@ export const HolographicBadge: React.FC<HolographicBadgeProps> = ({
   // Size configurations
   const getSizeConfig = () => {
     switch (size) {
-      case 'small':
+      case "small":
         return { width: 80, height: 100, iconSize: 32, titleSize: 11 };
-      case 'large':
+      case "large":
         return { width: 140, height: 175, iconSize: 64, titleSize: 15 };
       default:
         return { width: 110, height: 138, iconSize: 48, titleSize: 13 };
@@ -109,7 +116,7 @@ export const HolographicBadge: React.FC<HolographicBadgeProps> = ({
       celebrationScale.value = withSequence(
         withSpring(1.15, AnimationConfig.bouncy),
         withSpring(0.95, AnimationConfig.quick),
-        withSpring(1, AnimationConfig.standard)
+        withSpring(1, AnimationConfig.standard),
       );
 
       rotation.value = withSequence(
@@ -117,12 +124,12 @@ export const HolographicBadge: React.FC<HolographicBadgeProps> = ({
         withTiming(10, { duration: 100 }),
         withTiming(-5, { duration: 100 }),
         withTiming(5, { duration: 100 }),
-        withTiming(0, { duration: 100 })
+        withTiming(0, { duration: 100 }),
       );
 
       glowOpacity.value = withSequence(
         withTiming(0.8, { duration: 300 }),
-        withTiming(0, { duration: 500 })
+        withTiming(0, { duration: 500 }),
       );
     }
   }, [showCelebration, unlocked]);
@@ -133,10 +140,10 @@ export const HolographicBadge: React.FC<HolographicBadgeProps> = ({
       shineX.value = withRepeat(
         withSequence(
           withTiming(-0.5, { duration: 0 }),
-          withTiming(1.5, { duration: 3000 })
+          withTiming(1.5, { duration: 3000 }),
         ),
         -1,
-        false
+        false,
       );
     }
   }, [unlocked]);
@@ -182,7 +189,7 @@ export const HolographicBadge: React.FC<HolographicBadgeProps> = ({
       shineX.value + shineY.value,
       [0, 2],
       [0, 360],
-      Extrapolation.CLAMP
+      Extrapolation.CLAMP,
     );
 
     return {
@@ -215,11 +222,21 @@ export const HolographicBadge: React.FC<HolographicBadgeProps> = ({
         ]}
       >
         {/* Glow effect for celebration */}
-        <Animated.View style={[styles.glow, { backgroundColor: rarityColors[0] }, glowAnimatedStyle]} />
+        <Animated.View
+          style={[
+            styles.glow,
+            { backgroundColor: rarityColors[0] },
+            glowAnimatedStyle,
+          ]}
+        />
 
         {/* Card background */}
         <LinearGradient
-          colors={unlocked ? (rarityColors as [string, string, ...string[]]) : ['#4B5563', '#374151']}
+          colors={
+            unlocked
+              ? (rarityColors as [string, string, ...string[]])
+              : ["#4B5563", "#374151"]
+          }
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.card}
@@ -235,8 +252,13 @@ export const HolographicBadge: React.FC<HolographicBadgeProps> = ({
           </Animated.View>
 
           {/* Icon */}
-          <View style={[styles.iconContainer, { width: sizeConfig.iconSize, height: sizeConfig.iconSize }]}>
-            {typeof icon === 'object' && 'uri' in (icon as any) ? (
+          <View
+            style={[
+              styles.iconContainer,
+              { width: sizeConfig.iconSize, height: sizeConfig.iconSize },
+            ]}
+          >
+            {typeof icon === "object" && "uri" in (icon as any) ? (
               <Image
                 source={icon as ImageSourcePropType}
                 style={[
@@ -247,7 +269,7 @@ export const HolographicBadge: React.FC<HolographicBadgeProps> = ({
                 resizeMode="contain"
               />
             ) : (
-              icon
+              (icon as React.ReactNode)
             )}
           </View>
 
@@ -257,7 +279,12 @@ export const HolographicBadge: React.FC<HolographicBadgeProps> = ({
               <Text style={styles.lockIcon}>🔒</Text>
               {progress > 0 && (
                 <View style={styles.progressBar}>
-                  <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+                  <View
+                    style={[
+                      styles.progressFill,
+                      { width: `${progress * 100}%` },
+                    ]}
+                  />
                 </View>
               )}
             </View>
@@ -267,7 +294,10 @@ export const HolographicBadge: React.FC<HolographicBadgeProps> = ({
           <Text
             style={[
               styles.title,
-              { fontSize: sizeConfig.titleSize, color: unlocked ? '#FFFFFF' : '#9CA3AF' },
+              {
+                fontSize: sizeConfig.titleSize,
+                color: unlocked ? "#FFFFFF" : "#9CA3AF",
+              },
             ]}
             numberOfLines={2}
           >
@@ -275,7 +305,9 @@ export const HolographicBadge: React.FC<HolographicBadgeProps> = ({
           </Text>
 
           {/* Rarity indicator */}
-          <View style={[styles.rarityDot, { backgroundColor: rarityColors[0] }]} />
+          <View
+            style={[styles.rarityDot, { backgroundColor: rarityColors[0] }]}
+          />
         </LinearGradient>
       </Animated.View>
     </GestureDetector>
@@ -289,13 +321,16 @@ interface BadgeGridProps {
     title: string;
     icon?: ImageSourcePropType | React.ReactNode;
     unlocked: boolean;
-    rarity: 'common' | 'rare' | 'epic' | 'legendary';
+    rarity: "common" | "rare" | "epic" | "legendary";
     progress?: number;
   }>;
   onBadgePress?: (id: string) => void;
 }
 
-export const BadgeGrid: React.FC<BadgeGridProps> = ({ badges, onBadgePress }) => {
+export const BadgeGrid: React.FC<BadgeGridProps> = ({
+  badges,
+  onBadgePress,
+}) => {
   return (
     <View style={styles.grid}>
       {badges.map((badge) => (
@@ -317,75 +352,75 @@ export const BadgeGrid: React.FC<BadgeGridProps> = ({ badges, onBadgePress }) =>
 
 const styles = StyleSheet.create({
   container: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   glow: {
-    position: 'absolute',
-    width: '120%',
-    height: '120%',
+    position: "absolute",
+    width: "120%",
+    height: "120%",
     borderRadius: BorderRadius.xl,
     opacity: 0,
   },
   card: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
     borderRadius: BorderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     padding: Spacing.sm,
-    overflow: 'hidden',
+    overflow: "hidden",
     ...Shadows.lg,
   },
   shine: {
     ...StyleSheet.absoluteFillObject,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   shineGradient: {
-    width: '200%',
-    height: '200%',
+    width: "200%",
+    height: "200%",
   },
   iconContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: Spacing.xs,
   },
   icon: {
-    resizeMode: 'contain',
+    resizeMode: "contain",
   },
   lockedIcon: {
     opacity: 0.3,
-    tintColor: '#9CA3AF',
+    tintColor: "#9CA3AF",
   },
   lockOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
     borderRadius: BorderRadius.lg,
   },
   lockIcon: {
     fontSize: 24,
   },
   progressBar: {
-    width: '60%',
+    width: "60%",
     height: 4,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: "rgba(255,255,255,0.2)",
     borderRadius: 2,
     marginTop: Spacing.xs,
   },
   progressFill: {
-    height: '100%',
-    backgroundColor: '#FFFFFF',
+    height: "100%",
+    backgroundColor: "#FFFFFF",
     borderRadius: 2,
   },
   title: {
-    fontWeight: '600',
-    textAlign: 'center',
+    fontWeight: "600",
+    textAlign: "center",
     marginTop: Spacing.xxs,
   },
   rarityDot: {
-    position: 'absolute',
+    position: "absolute",
     top: 8,
     right: 8,
     width: 8,
@@ -393,9 +428,9 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
     gap: Spacing.sm,
   },
   gridItem: {

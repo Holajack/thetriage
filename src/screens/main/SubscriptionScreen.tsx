@@ -1,22 +1,36 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity, Image } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInUp, FadeIn } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
-import { useTheme } from '../../context/ThemeContext';
-import { Typography, Spacing, BorderRadius, PremiumColors, Shadows } from '../../theme/premiumTheme';
-import { StaggeredItem } from '../../components/premium/StaggeredList';
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Alert,
+  TouchableOpacity,
+  Image,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import Animated, { FadeInUp, FadeIn } from "react-native-reanimated";
+import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
+import { useNavigation } from "@react-navigation/native";
+import { useTheme } from "../../context/ThemeContext";
+import {
+  Typography,
+  Spacing,
+  BorderRadius,
+  PremiumColors,
+  Shadows,
+} from "../../theme/premiumTheme";
+import { StaggeredItem } from "../../components/premium/StaggeredList";
 
 // Sub-components
-import BillingToggle, { BillingPeriod } from './subscription/BillingToggle';
-import PlanCard, { PlanTier } from './subscription/PlanCard';
-import NoraShowcase from './subscription/NoraShowcase';
-import FeatureComparisonTable from './subscription/FeatureComparisonTable';
-import SocialProofBar from './subscription/SocialProofBar';
-import EliteCelebrationView from './subscription/EliteCelebrationView';
+import BillingToggle, { BillingPeriod } from "./subscription/BillingToggle";
+import PlanCard, { PlanTier } from "./subscription/PlanCard";
+import NoraShowcase from "./subscription/NoraShowcase";
+import FeatureComparisonTable from "./subscription/FeatureComparisonTable";
+import SocialProofBar from "./subscription/SocialProofBar";
+import EliteCelebrationView from "./subscription/EliteCelebrationView";
 
 import {
   getAvailablePackages,
@@ -28,51 +42,63 @@ import {
   presentCustomerCenter,
   isRevenueCatInitialized,
   PurchasesPackage,
-} from '../../services/revenuecat';
+} from "../../services/revenuecat";
 
 // ============================================
 // PLAN DATA
 // ============================================
 
 const PREMIUM_PLAN: PlanTier = {
-  name: 'Premium',
-  tier: 'premium',
+  name: "Pro",
+  tier: "premium",
   monthlyPrice: 14.99,
   annualPrice: 107.99,
   annualMonthlyEquivalent: 8.99,
-  badge: 'Most Popular',
-  tagline: 'Supercharge your study sessions',
+  badge: "Most Popular",
+  tagline: "Level up your study sessions",
   features: [
-    { text: 'Unlimited AI-Powered Insights', included: true },
-    { text: 'Advanced Task Prioritization', included: true },
-    { text: 'Soundscapes for Focus', included: true },
-    { text: 'Calendar Integration', included: true },
-    { text: 'Chrome Extension Beta', included: true },
-    { text: 'Priority Support', included: true },
+    { text: "Forest, Beach & Jungle trails", included: true },
+    { text: "All themes", included: true },
+    { text: "Pro-level trail buddies", included: true },
+    { text: "Pro sound albums", included: true },
+    { text: "Summit Focus Mode", included: true },
+    { text: "Up to 2 Study Rooms", included: true },
+    { text: "Community messaging", included: true },
+    { text: "Brain Mapping (limited)", included: true },
+    { text: "Self-Discovery Quizzes (Quick)", included: true },
   ],
   gradient: PremiumColors.gradients.primary,
 };
 
 const ELITE_PLAN: PlanTier = {
-  name: 'Elite',
-  tier: 'elite',
+  name: "Elite",
+  tier: "elite",
   monthlyPrice: 29.99,
   annualPrice: 215.99,
   annualMonthlyEquivalent: 17.99,
-  badge: 'Best Value',
-  tagline: 'The ultimate study companion with Nora AI',
+  badge: "Best Value",
+  tagline: "The ultimate study companion with Nora AI",
   features: [
-    { text: 'Everything in Premium', included: true },
-    { text: 'Nora AI Study Assistant', included: true, highlight: true },
-    { text: 'Voice Interaction & PDF Analysis', included: true, highlight: true },
-    { text: 'Personalized Study Plans', included: true },
-    { text: 'Brain Mapping & Motivation Profile', included: true },
-    { text: 'Self-Discovery Quizzes', included: true },
-    { text: 'eBooks Library Access', included: true },
-    { text: 'Session Reports & Analytics', included: true },
-    { text: 'App/Website Blocking', included: true },
-    { text: 'Early Access to New Features', included: true },
-    { text: 'Elite Badge in Leaderboard', included: true },
+    { text: "Everything in Pro", included: true },
+    {
+      text: "Nora Advanced AI Study Assistant",
+      included: true,
+      highlight: true,
+    },
+    {
+      text: "Voice Interaction & PDF Analysis",
+      included: true,
+      highlight: true,
+    },
+    { text: "All sound albums & themes", included: true },
+    { text: "Exclusive Lion trail buddy", included: true },
+    { text: "Unlimited Study Rooms", included: true },
+    { text: "Full Brain Mapping", included: true },
+    { text: "All Bonus Quizzes (incl. In-Depth)", included: true },
+    { text: "AI Insights & Personalized Plans", included: true },
+    { text: "Elite Badge & Name Color", included: true },
+    { text: "Early Access to New Features", included: true },
+    { text: "Exclusive in-app gift with purchase", included: true },
   ],
   gradient: PremiumColors.gradients.premium,
 };
@@ -80,12 +106,12 @@ const ELITE_PLAN: PlanTier = {
 // RevenueCat product identifiers — match these in App Store Connect
 const PLAN_PRODUCTS: Record<string, Record<BillingPeriod, string>> = {
   premium: {
-    monthly: 'hikewise_premium_monthly',   // $14.99/mo
-    annual: 'hikewise_premium_yearly',     // $107.99/yr
+    monthly: "hikewise_premium_monthly", // $14.99/mo
+    annual: "hikewise_premium_yearly", // $107.99/yr
   },
   elite: {
-    monthly: 'hikewise_elite_monthly',     // $29.99/mo
-    annual: 'hikewise_elite_yearly',       // $215.99/yr
+    monthly: "hikewise_elite_monthly", // $29.99/mo
+    annual: "hikewise_elite_yearly", // $215.99/yr
   },
 };
 
@@ -93,9 +119,10 @@ const PLAN_PRODUCTS: Record<string, Record<BillingPeriod, string>> = {
 function findPackageForPlan(
   packages: PurchasesPackage[],
   tier: string,
-  period: BillingPeriod
+  period: BillingPeriod,
 ): PurchasesPackage | undefined {
-  const productId = PLAN_PRODUCTS[tier]?.[period === 'monthly' ? 'monthly' : 'annual'];
+  const productId =
+    PLAN_PRODUCTS[tier]?.[period === "monthly" ? "monthly" : "annual"];
   return packages.find((pkg) => pkg.product.identifier === productId);
 }
 
@@ -106,8 +133,10 @@ function findPackageForPlan(
 const SubscriptionScreen = () => {
   const { theme } = useTheme();
   const navigation = useNavigation<any>();
-  const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>('monthly');
-  const [currentTier, setCurrentTier] = useState<'free' | 'premium' | 'elite'>('free');
+  const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>("monthly");
+  const [currentTier, setCurrentTier] = useState<"free" | "premium" | "elite">(
+    "free",
+  );
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingTier, setProcessingTier] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
@@ -129,11 +158,11 @@ const SubscriptionScreen = () => {
           setPackages(availablePackages);
         } else {
           // SDK not initialized yet — default to free
-          setCurrentTier('free');
+          setCurrentTier("free");
         }
       } catch (error) {
-        console.error('Error loading subscription data:', error);
-        setCurrentTier('free');
+        // Error loading subscription data
+        setCurrentTier("free");
       } finally {
         setLoadingPackages(false);
       }
@@ -152,47 +181,50 @@ const SubscriptionScreen = () => {
     }
   }, []);
 
-  const handleUpgrade = useCallback(async (plan: PlanTier) => {
-    setIsProcessing(true);
-    setProcessingTier(plan.tier);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  const handleUpgrade = useCallback(
+    async (plan: PlanTier) => {
+      setIsProcessing(true);
+      setProcessingTier(plan.tier);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    try {
-      // Try to find the matching RevenueCat package
-      const pkg = findPackageForPlan(packages, plan.tier, billingPeriod);
+      try {
+        // Try to find the matching RevenueCat package
+        const pkg = findPackageForPlan(packages, plan.tier, billingPeriod);
 
-      if (pkg) {
-        // Use RevenueCat native purchase flow
-        const result = await purchasePackage(pkg);
-        if (result.success) {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          Alert.alert(
-            'Welcome to ' + plan.name + '!',
-            `You now have full ${plan.name} access.`,
-            [{ text: 'OK' }],
-          );
-          setCurrentTier(plan.tier);
-        } else if (result.error !== 'cancelled') {
-          Alert.alert('Purchase Failed', result.error || 'Please try again.');
+        if (pkg) {
+          // Use RevenueCat native purchase flow
+          const result = await purchasePackage(pkg);
+          if (result.success) {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            Alert.alert(
+              "Welcome to " + plan.name + "!",
+              `You now have full ${plan.name} access.`,
+              [{ text: "OK" }],
+            );
+            setCurrentTier(plan.tier);
+          } else if (result.error !== "cancelled") {
+            Alert.alert("Purchase Failed", result.error || "Please try again.");
+          }
+        } else {
+          // No packages available yet — present RevenueCat Paywall instead
+          const purchased = await presentPaywall();
+          if (purchased) {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            const tier = await getCurrentTier();
+            setCurrentTier(tier);
+          }
         }
-      } else {
-        // No packages available yet — present RevenueCat Paywall instead
-        const purchased = await presentPaywall();
-        if (purchased) {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          const tier = await getCurrentTier();
-          setCurrentTier(tier);
-        }
+      } catch (error) {
+        // Purchase error
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        Alert.alert("Error", "An unexpected error occurred. Please try again.");
+      } finally {
+        setIsProcessing(false);
+        setProcessingTier(null);
       }
-    } catch (error) {
-      console.error('Purchase error:', error);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
-    } finally {
-      setIsProcessing(false);
-      setProcessingTier(null);
-    }
-  }, [billingPeriod, packages]);
+    },
+    [billingPeriod, packages],
+  );
 
   const handleRestorePurchases = useCallback(async () => {
     setIsRestoring(true);
@@ -200,22 +232,28 @@ const SubscriptionScreen = () => {
 
     try {
       const result = await restorePurchases();
-      if (result.success && result.tier !== 'free') {
+      if (result.success && result.tier !== "free") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert(
-          'Purchases Restored',
+          "Purchases Restored",
           `Your ${result.tier} subscription has been restored.`,
-          [{ text: 'OK' }],
+          [{ text: "OK" }],
         );
         setCurrentTier(result.tier);
-      } else if (result.tier === 'free') {
-        Alert.alert('No Purchases Found', 'No previous purchases were found to restore.');
+      } else if (result.tier === "free") {
+        Alert.alert(
+          "No Purchases Found",
+          "No previous purchases were found to restore.",
+        );
       } else {
-        Alert.alert('Restore Failed', result.error || 'Could not restore purchases.');
+        Alert.alert(
+          "Restore Failed",
+          result.error || "Could not restore purchases.",
+        );
       }
     } catch (error) {
-      console.error('Restore error:', error);
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      // Restore error
+      Alert.alert("Error", "An unexpected error occurred. Please try again.");
     } finally {
       setIsRestoring(false);
     }
@@ -232,29 +270,36 @@ const SubscriptionScreen = () => {
       // Fallback: open native management URL
       const url = await getManagementURL();
       if (url) {
-        const { Linking } = require('react-native');
+        const { Linking } = require("react-native");
         Linking.openURL(url);
       } else {
         Alert.alert(
-          'Manage Subscription',
-          'Please manage your subscription in your device Settings > Subscriptions.',
+          "Manage Subscription",
+          "Please manage your subscription in your device Settings > Subscriptions.",
         );
       }
     }
   }, []);
 
-  const isEliteUser = currentTier === 'elite';
-  const isPremiumUser = currentTier === 'premium';
-  const isFreeUser = currentTier === 'free';
+  const isEliteUser = currentTier === "elite";
+  const isPremiumUser = currentTier === "premium";
+  const isFreeUser = currentTier === "free";
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.background }]}
+    >
       {/* Header with back button */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        >
           <Ionicons name="chevron-back" size={24} color={theme.primary} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>Subscription</Text>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>
+          Subscription
+        </Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -268,31 +313,101 @@ const SubscriptionScreen = () => {
         <Animated.View entering={FadeInUp.delay(100).duration(500)}>
           <View style={styles.heroContainer}>
             <Image
-              source={require('../../../assets/examples/settings_image.png')}
+              source={require("../../../assets/examples/settings_image.png")}
               style={styles.heroImage}
               resizeMode="cover"
             />
             <LinearGradient
-              colors={['rgba(0,0,0,0.1)', 'rgba(0,0,0,0.55)', 'rgba(0,0,0,0.85)']}
+              colors={[
+                "rgba(0,0,0,0.1)",
+                "rgba(0,0,0,0.55)",
+                "rgba(0,0,0,0.85)",
+              ]}
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
               style={styles.heroOverlay}
             />
             <View style={styles.heroContent}>
-              <Ionicons name="diamond-outline" size={36} color="rgba(255,255,255,0.9)" />
+              <Ionicons
+                name="diamond-outline"
+                size={36}
+                color="rgba(255,255,255,0.9)"
+              />
               <Text style={styles.heroTitle}>
-                {isEliteUser ? 'Elite Member' : 'Unlock Your\nFull Potential'}
+                {isEliteUser ? "Elite Member" : "Unlock Your\nFull Potential"}
               </Text>
               <Text style={styles.heroSubtitle}>
                 {isEliteUser
-                  ? 'You have access to everything'
+                  ? "You have access to everything"
                   : isPremiumUser
-                    ? 'Upgrade to Elite for Nora AI and more'
-                    : 'Choose the plan that fits your study goals'}
+                    ? "Upgrade to Elite for Nora AI and more"
+                    : "Choose the plan that fits your study goals"}
               </Text>
             </View>
           </View>
         </Animated.View>
+
+        {/* ============================================ */}
+        {/* CURRENT PLAN CARD                              */}
+        {/* ============================================ */}
+        <StaggeredItem index={0} direction="up">
+          <View
+            style={[
+              styles.currentPlanCard,
+              { backgroundColor: theme.card, borderColor: theme.border },
+            ]}
+          >
+            <View style={styles.currentPlanRow}>
+              <View style={styles.currentPlanIcon}>
+                <Ionicons
+                  name={
+                    isEliteUser
+                      ? "diamond"
+                      : isPremiumUser
+                        ? "star"
+                        : "leaf-outline"
+                  }
+                  size={22}
+                  color={
+                    isEliteUser
+                      ? "#FFD24A"
+                      : isPremiumUser
+                        ? "#7B61FF"
+                        : theme.primary
+                  }
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={[
+                    styles.currentPlanLabel,
+                    { color: theme.textSecondary },
+                  ]}
+                >
+                  YOUR CURRENT PLAN
+                </Text>
+                <Text style={[styles.currentPlanTier, { color: theme.text }]}>
+                  {isEliteUser ? "Elite" : isPremiumUser ? "Premium" : "Free"}
+                </Text>
+              </View>
+              {!isFreeUser && (
+                <TouchableOpacity
+                  onPress={handleManageSubscription}
+                  style={styles.currentPlanManage}
+                >
+                  <Text
+                    style={[
+                      styles.currentPlanManageText,
+                      { color: theme.primary },
+                    ]}
+                  >
+                    Manage
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </StaggeredItem>
 
         {/* ============================================ */}
         {/* BILLING TOGGLE (non-elite users) */}
@@ -311,13 +426,18 @@ const SubscriptionScreen = () => {
         {isEliteUser ? (
           /* --- Elite User: Celebration View --- */
           <StaggeredItem index={0} delay="slow" direction="up">
-            <EliteCelebrationView onManageSubscription={handleManageSubscription} />
+            <EliteCelebrationView
+              onManageSubscription={handleManageSubscription}
+            />
           </StaggeredItem>
         ) : isPremiumUser ? (
           /* --- Premium User: Current Plan + Elite Upgrade --- */
           <View>
             {/* Current Plan Acknowledgment */}
-            <Animated.View entering={FadeIn.delay(350).duration(400)} style={styles.currentPlanBanner}>
+            <Animated.View
+              entering={FadeIn.delay(350).duration(400)}
+              style={styles.currentPlanBanner}
+            >
               <LinearGradient
                 colors={PremiumColors.gradients.primary as [string, string]}
                 start={{ x: 0, y: 0 }}
@@ -330,14 +450,19 @@ const SubscriptionScreen = () => {
             </Animated.View>
 
             {/* Elite Upgrade Card */}
-            <StaggeredItem index={0} delay="slow" direction="up" style={styles.cardContainer}>
+            <StaggeredItem
+              index={0}
+              delay="slow"
+              direction="up"
+              style={styles.cardContainer}
+            >
               <PlanCard
                 plan={ELITE_PLAN}
                 isRecommended
                 isCurrent={false}
                 billingPeriod={billingPeriod}
                 onUpgrade={() => handleUpgrade(ELITE_PLAN)}
-                isProcessing={isProcessing && processingTier === 'elite'}
+                isProcessing={isProcessing && processingTier === "elite"}
                 disabled={isProcessing || loadingPackages}
               />
             </StaggeredItem>
@@ -345,25 +470,35 @@ const SubscriptionScreen = () => {
         ) : (
           /* --- Free User: Both Plan Cards --- */
           <View>
-            <StaggeredItem index={0} delay="slow" direction="up" style={styles.cardContainer}>
+            <StaggeredItem
+              index={0}
+              delay="slow"
+              direction="up"
+              style={styles.cardContainer}
+            >
               <PlanCard
                 plan={PREMIUM_PLAN}
                 isCurrent={false}
                 billingPeriod={billingPeriod}
                 onUpgrade={() => handleUpgrade(PREMIUM_PLAN)}
-                isProcessing={isProcessing && processingTier === 'premium'}
+                isProcessing={isProcessing && processingTier === "premium"}
                 disabled={isProcessing || loadingPackages}
               />
             </StaggeredItem>
 
-            <StaggeredItem index={1} delay="slow" direction="up" style={styles.cardContainer}>
+            <StaggeredItem
+              index={1}
+              delay="slow"
+              direction="up"
+              style={styles.cardContainer}
+            >
               <PlanCard
                 plan={ELITE_PLAN}
                 isRecommended
                 isCurrent={false}
                 billingPeriod={billingPeriod}
                 onUpgrade={() => handleUpgrade(ELITE_PLAN)}
-                isProcessing={isProcessing && processingTier === 'elite'}
+                isProcessing={isProcessing && processingTier === "elite"}
                 disabled={isProcessing || loadingPackages}
               />
             </StaggeredItem>
@@ -396,7 +531,10 @@ const SubscriptionScreen = () => {
         {/* ============================================ */}
         {/* RESTORE + LEGAL FOOTER */}
         {/* ============================================ */}
-        <Animated.View entering={FadeIn.delay(1000).duration(300)} style={styles.footer}>
+        <Animated.View
+          entering={FadeIn.delay(1000).duration(300)}
+          style={styles.footer}
+        >
           <Animated.View style={styles.restoreButton}>
             <Ionicons
               name="refresh"
@@ -408,11 +546,12 @@ const SubscriptionScreen = () => {
               style={[styles.restoreText, { color: theme.textSecondary }]}
               onPress={handleRestorePurchases}
             >
-              {isRestoring ? 'Restoring...' : 'Restore Purchases'}
+              {isRestoring ? "Restoring..." : "Restore Purchases"}
             </Text>
           </Animated.View>
           <Text style={[styles.legalText, { color: theme.textSecondary }]}>
-            Subscriptions auto-renew until canceled.{'\n'}Cancel anytime in your device settings.
+            Subscriptions auto-renew until canceled.{"\n"}Cancel anytime in your
+            device settings.
           </Text>
         </Animated.View>
       </ScrollView>
@@ -429,17 +568,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
   },
   backButton: {
     width: 40,
     height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerTitle: {
     ...Typography.h2,
@@ -448,57 +587,100 @@ const styles = StyleSheet.create({
     paddingBottom: 60,
   },
 
+  // Current Plan card
+  currentPlanCard: {
+    marginHorizontal: Spacing.md,
+    marginTop: -Spacing.md,
+    marginBottom: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    ...Shadows.sm,
+  },
+  currentPlanRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  currentPlanIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,210,74,0.12)",
+  },
+  currentPlanLabel: {
+    ...Typography.caption,
+    fontWeight: "600",
+    letterSpacing: 0.6,
+    fontSize: 11,
+  },
+  currentPlanTier: {
+    ...Typography.h3,
+    marginTop: 2,
+  },
+  currentPlanManage: {
+    paddingHorizontal: Spacing.sm + 2,
+    paddingVertical: Spacing.xs,
+  },
+  currentPlanManageText: {
+    ...Typography.bodySmall,
+    fontWeight: "600",
+  },
+
   // Hero with image
   heroContainer: {
     height: 260,
-    position: 'relative',
-    overflow: 'hidden',
+    position: "relative",
+    overflow: "hidden",
     marginBottom: Spacing.lg,
   },
   heroImage: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
   },
   heroOverlay: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
   },
   heroContent: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
     paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing.xl,
-    alignItems: 'center',
+    alignItems: "center",
   },
   heroTitle: {
     fontSize: 34,
-    fontWeight: '800',
+    fontWeight: "800",
     letterSpacing: -0.5,
     lineHeight: 40,
-    color: '#FFFFFF',
-    textAlign: 'center',
+    color: "#FFFFFF",
+    textAlign: "center",
     marginTop: Spacing.sm,
     marginBottom: Spacing.xs,
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowColor: "rgba(0, 0, 0, 0.5)",
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 8,
   },
   heroSubtitle: {
     ...Typography.body,
-    color: 'rgba(255,255,255,0.9)',
-    textAlign: 'center',
+    color: "rgba(255,255,255,0.9)",
+    textAlign: "center",
     maxWidth: 300,
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowColor: "rgba(0, 0, 0, 0.5)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
   },
@@ -516,43 +698,43 @@ const styles = StyleSheet.create({
     marginHorizontal: Spacing.lg,
     marginBottom: Spacing.md,
     borderRadius: BorderRadius.md,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   currentPlanGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.md,
     borderRadius: BorderRadius.md,
   },
   currentPlanText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     ...Typography.h3,
   },
 
   // Footer
   footer: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingTop: Spacing.md,
     paddingBottom: Spacing.xl,
   },
   restoreButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.lg,
     marginBottom: Spacing.sm,
   },
   restoreText: {
     ...Typography.bodySmall,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   legalText: {
     ...Typography.caption,
-    textAlign: 'center',
+    textAlign: "center",
     lineHeight: 18,
     maxWidth: 300,
   },

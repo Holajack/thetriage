@@ -8,8 +8,8 @@
  * "Adding widgets to my apps DOUBLED my retention rates."
  */
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform, NativeModules } from 'react-native';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform, NativeModules } from "react-native";
 
 // Widget data structure (mirrors iOS HikeWiseWidgetData)
 export interface WidgetData {
@@ -25,19 +25,19 @@ export interface WidgetData {
 }
 
 // App Group identifier - must match iOS configuration
-const APP_GROUP_ID = 'group.com.hikewise.app';
+const APP_GROUP_ID = "group.com.hikewise.app";
 
 // Keys for shared data
 const WIDGET_KEYS = {
-  currentStreak: 'currentStreak',
-  totalFocusMinutes: 'totalFocusMinutes',
-  dailyGoalMinutes: 'dailyGoalMinutes',
-  dailyProgressMinutes: 'dailyProgressMinutes',
-  weeklyGoalMinutes: 'weeklyGoalMinutes',
-  weeklyProgressMinutes: 'weeklyProgressMinutes',
-  nextSessionTime: 'nextSessionTime',
-  motivationalQuote: 'motivationalQuote',
-  quoteAuthor: 'quoteAuthor',
+  currentStreak: "currentStreak",
+  totalFocusMinutes: "totalFocusMinutes",
+  dailyGoalMinutes: "dailyGoalMinutes",
+  dailyProgressMinutes: "dailyProgressMinutes",
+  weeklyGoalMinutes: "weeklyGoalMinutes",
+  weeklyProgressMinutes: "weeklyProgressMinutes",
+  nextSessionTime: "nextSessionTime",
+  motivationalQuote: "motivationalQuote",
+  quoteAuthor: "quoteAuthor",
 };
 
 /**
@@ -46,7 +46,7 @@ const WIDGET_KEYS = {
  * For now, we store in AsyncStorage and the native bridge reads it.
  */
 export async function syncWidgetData(data: Partial<WidgetData>): Promise<void> {
-  if (Platform.OS !== 'ios') {
+  if (Platform.OS !== "ios") {
     return; // Widgets only on iOS
   }
 
@@ -54,7 +54,7 @@ export async function syncWidgetData(data: Partial<WidgetData>): Promise<void> {
     // Store in AsyncStorage for the native bridge
     const storagePromises = Object.entries(data).map(([key, value]) => {
       if (value !== undefined && value !== null) {
-        const stringValue = typeof value === 'string' ? value : String(value);
+        const stringValue = typeof value === "string" ? value : String(value);
         return AsyncStorage.setItem(`widget_${key}`, stringValue);
       }
       return Promise.resolve();
@@ -67,9 +67,9 @@ export async function syncWidgetData(data: Partial<WidgetData>): Promise<void> {
       await NativeModules.WidgetSync.syncData(data);
     }
 
-    console.log('[Widget] Data synced:', Object.keys(data));
+    // Widget data synced
   } catch (error) {
-    console.warn('[Widget] Failed to sync data:', error);
+    // Widget failed to sync data
   }
 }
 
@@ -85,7 +85,7 @@ export async function updateWidgetStreak(streak: number): Promise<void> {
  */
 export async function updateWidgetDailyProgress(
   progressMinutes: number,
-  goalMinutes: number
+  goalMinutes: number,
 ): Promise<void> {
   await syncWidgetData({
     dailyProgressMinutes: progressMinutes,
@@ -98,7 +98,7 @@ export async function updateWidgetDailyProgress(
  */
 export async function updateWidgetWeeklyProgress(
   progressMinutes: number,
-  goalMinutes: number
+  goalMinutes: number,
 ): Promise<void> {
   await syncWidgetData({
     weeklyProgressMinutes: progressMinutes,
@@ -109,14 +109,18 @@ export async function updateWidgetWeeklyProgress(
 /**
  * Update total focus time in widget
  */
-export async function updateWidgetTotalFocus(totalMinutes: number): Promise<void> {
+export async function updateWidgetTotalFocus(
+  totalMinutes: number,
+): Promise<void> {
   await syncWidgetData({ totalFocusMinutes: totalMinutes });
 }
 
 /**
  * Update next session time in widget
  */
-export async function updateWidgetNextSession(date: Date | null): Promise<void> {
+export async function updateWidgetNextSession(
+  date: Date | null,
+): Promise<void> {
   await syncWidgetData({
     nextSessionTime: date ? date.toISOString() : null,
   });
@@ -125,7 +129,10 @@ export async function updateWidgetNextSession(date: Date | null): Promise<void> 
 /**
  * Update motivational quote in widget
  */
-export async function updateWidgetQuote(quote: string, author: string): Promise<void> {
+export async function updateWidgetQuote(
+  quote: string,
+  author: string,
+): Promise<void> {
   await syncWidgetData({
     motivationalQuote: quote,
     quoteAuthor: author,
@@ -144,17 +151,17 @@ export async function syncAllWidgetData(data: WidgetData): Promise<void> {
  * Uses WidgetKit.reloadAllTimelines()
  */
 export async function refreshWidgets(): Promise<void> {
-  if (Platform.OS !== 'ios') {
+  if (Platform.OS !== "ios") {
     return;
   }
 
   try {
     if (NativeModules.WidgetSync?.reloadWidgets) {
       await NativeModules.WidgetSync.reloadWidgets();
-      console.log('[Widget] Widgets refreshed');
+      // Widgets refreshed
     }
   } catch (error) {
-    console.warn('[Widget] Failed to refresh widgets:', error);
+    // Widget failed to refresh
   }
 }
 
@@ -179,8 +186,8 @@ export async function onSessionComplete(sessionData: {
     weeklyGoalMinutes: sessionData.weeklyGoal,
     weeklyProgressMinutes: sessionData.weeklyProgress,
     nextSessionTime: null, // Clear after session
-    motivationalQuote: '', // Will be set separately
-    quoteAuthor: '',
+    motivationalQuote: "", // Will be set separately
+    quoteAuthor: "",
   });
 
   await refreshWidgets();

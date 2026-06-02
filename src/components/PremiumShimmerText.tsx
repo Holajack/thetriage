@@ -8,8 +8,8 @@
  * - Premium, luxurious feel
  */
 
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, TextStyle } from 'react-native';
+import React, { useEffect } from "react";
+import { View, Text, StyleSheet, TextStyle } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -19,37 +19,37 @@ import Animated, {
   withSequence,
   interpolate,
   Easing,
-} from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
-import MaskedView from '@react-native-masked-view/masked-view';
+} from "react-native-reanimated";
+import { LinearGradient } from "expo-linear-gradient";
+import MaskedView from "@react-native-masked-view/masked-view";
 
 // Silver/Chrome color palette
 const SILVER_PALETTE = {
   // Base silver tones
-  silver: '#C0C0C0',
-  silverLight: '#E8E8E8',
-  silverDark: '#A8A8A8',
+  silver: "#C0C0C0",
+  silverLight: "#E8E8E8",
+  silverDark: "#A8A8A8",
 
   // Chrome/metallic highlights
-  chrome: '#F5F5F5',
-  chromeHighlight: '#FFFFFF',
-  chromeShadow: '#909090',
+  chrome: "#F5F5F5",
+  chromeHighlight: "#FFFFFF",
+  chromeShadow: "#909090",
 
   // Glass effects
-  glassShine: 'rgba(255, 255, 255, 0.9)',
-  glassReflection: 'rgba(255, 255, 255, 0.6)',
-  glassFrost: 'rgba(200, 210, 220, 0.3)',
+  glassShine: "rgba(255, 255, 255, 0.9)",
+  glassReflection: "rgba(255, 255, 255, 0.6)",
+  glassFrost: "rgba(200, 210, 220, 0.3)",
 };
 
 interface PremiumShimmerTextProps {
   children: string;
   style?: TextStyle;
-  variant?: 'silver' | 'chrome' | 'glass' | 'frost';
+  variant?: "silver" | "chrome" | "glass" | "frost";
   duration?: number;
   delay?: number;
   width?: number;
   disabled?: boolean;
-  intensity?: 'subtle' | 'medium' | 'strong';
+  intensity?: "subtle" | "medium" | "strong";
 }
 
 /**
@@ -58,40 +58,40 @@ interface PremiumShimmerTextProps {
 export const ShineText: React.FC<PremiumShimmerTextProps> = ({
   children,
   style,
-  variant = 'silver',
+  variant = "silver",
   duration = 2500,
   delay = 1000,
   width = 200,
   disabled = false,
-  intensity = 'medium',
+  intensity = "medium",
 }) => {
   const shinePosition = useSharedValue(0);
 
   // Get colors based on variant
   const getColors = () => {
     switch (variant) {
-      case 'chrome':
+      case "chrome":
         return {
           base: SILVER_PALETTE.chrome,
           highlight: SILVER_PALETTE.chromeHighlight,
           shadow: SILVER_PALETTE.chromeShadow,
-          shine: 'rgba(255, 255, 255, 0.95)',
+          shine: "rgba(255, 255, 255, 0.95)",
         };
-      case 'glass':
+      case "glass":
         return {
           base: SILVER_PALETTE.silverLight,
           highlight: SILVER_PALETTE.glassShine,
           shadow: SILVER_PALETTE.silverDark,
-          shine: 'rgba(255, 255, 255, 0.85)',
+          shine: "rgba(255, 255, 255, 0.85)",
         };
-      case 'frost':
+      case "frost":
         return {
-          base: 'rgba(220, 225, 235, 0.9)',
-          highlight: 'rgba(255, 255, 255, 0.95)',
-          shadow: 'rgba(180, 185, 195, 0.8)',
-          shine: 'rgba(255, 255, 255, 0.7)',
+          base: "rgba(220, 225, 235, 0.9)",
+          highlight: "rgba(255, 255, 255, 0.95)",
+          shadow: "rgba(180, 185, 195, 0.8)",
+          shine: "rgba(255, 255, 255, 0.7)",
         };
-      case 'silver':
+      case "silver":
       default:
         return {
           base: SILVER_PALETTE.silver,
@@ -107,11 +107,11 @@ export const ShineText: React.FC<PremiumShimmerTextProps> = ({
   // Shine intensity settings
   const getIntensitySettings = () => {
     switch (intensity) {
-      case 'subtle':
+      case "subtle":
         return { shineWidth: 40, opacity: 0.6 };
-      case 'strong':
+      case "strong":
         return { shineWidth: 80, opacity: 1 };
-      case 'medium':
+      case "medium":
       default:
         return { shineWidth: 60, opacity: 0.85 };
     }
@@ -130,11 +130,11 @@ export const ShineText: React.FC<PremiumShimmerTextProps> = ({
             duration: duration,
             easing: Easing.bezier(0.25, 0.1, 0.25, 1),
           }),
-          withDelay(1500, withTiming(0, { duration: 0 })) // Pause between shines
+          withDelay(1500, withTiming(0, { duration: 0 })), // Pause between shines
         ),
         -1,
-        false
-      )
+        false,
+      ),
     );
   }, [disabled, delay, duration]);
 
@@ -144,14 +144,20 @@ export const ShineText: React.FC<PremiumShimmerTextProps> = ({
         translateX: interpolate(
           shinePosition.value,
           [0, 1],
-          [-width * 0.5, width * 1.5]
+          [-width * 0.5, width * 1.5],
         ),
       },
     ],
     opacity: interpolate(
       shinePosition.value,
       [0, 0.15, 0.5, 0.85, 1],
-      [0, intensitySettings.opacity, intensitySettings.opacity, intensitySettings.opacity, 0]
+      [
+        0,
+        intensitySettings.opacity,
+        intensitySettings.opacity,
+        intensitySettings.opacity,
+        0,
+      ],
     ),
   }));
 
@@ -164,12 +170,16 @@ export const ShineText: React.FC<PremiumShimmerTextProps> = ({
       {/* Base silver text with subtle gradient effect */}
       <MaskedView
         style={StyleSheet.absoluteFill}
-        maskElement={
-          <Text style={[style, styles.maskText]}>{children}</Text>
-        }
+        maskElement={<Text style={[style, styles.maskText]}>{children}</Text>}
       >
         <LinearGradient
-          colors={[colors.shadow, colors.base, colors.highlight, colors.base, colors.shadow]}
+          colors={[
+            colors.shadow,
+            colors.base,
+            colors.highlight,
+            colors.base,
+            colors.shadow,
+          ]}
           locations={[0, 0.3, 0.5, 0.7, 1]}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
@@ -179,19 +189,23 @@ export const ShineText: React.FC<PremiumShimmerTextProps> = ({
 
       {/* Glass shine sweep overlay */}
       <MaskedView
-        style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]}
-        maskElement={
-          <Text style={[style, styles.maskText]}>{children}</Text>
-        }
+        style={[StyleSheet.absoluteFill, { overflow: "hidden" }]}
+        maskElement={<Text style={[style, styles.maskText]}>{children}</Text>}
       >
-        <Animated.View style={[styles.shineBar, { width: intensitySettings.shineWidth }, shineStyle]}>
+        <Animated.View
+          style={[
+            styles.shineBar,
+            { width: intensitySettings.shineWidth },
+            shineStyle,
+          ]}
+        >
           <LinearGradient
             colors={[
-              'transparent',
-              'rgba(255, 255, 255, 0.3)',
+              "transparent",
+              "rgba(255, 255, 255, 0.3)",
               colors.shine,
-              'rgba(255, 255, 255, 0.3)',
-              'transparent',
+              "rgba(255, 255, 255, 0.3)",
+              "transparent",
             ]}
             locations={[0, 0.2, 0.5, 0.8, 1]}
             start={{ x: 0, y: 0 }}
@@ -210,11 +224,11 @@ export const ShineText: React.FC<PremiumShimmerTextProps> = ({
 export const SimpleShimmerText: React.FC<PremiumShimmerTextProps> = ({
   children,
   style,
-  variant = 'silver',
+  variant = "silver",
   duration = 3000,
   delay = 0,
   disabled = false,
-  intensity = 'medium',
+  intensity = "medium",
 }) => {
   const shimmerOpacity = useSharedValue(0);
   const glowIntensity = useSharedValue(0);
@@ -222,26 +236,26 @@ export const SimpleShimmerText: React.FC<PremiumShimmerTextProps> = ({
   // Get colors based on variant
   const getColors = () => {
     switch (variant) {
-      case 'chrome':
+      case "chrome":
         return {
           base: SILVER_PALETTE.chrome,
-          glow: 'rgba(255, 255, 255, 0.8)',
+          glow: "rgba(255, 255, 255, 0.8)",
         };
-      case 'glass':
+      case "glass":
         return {
           base: SILVER_PALETTE.silverLight,
-          glow: 'rgba(200, 220, 255, 0.6)',
+          glow: "rgba(200, 220, 255, 0.6)",
         };
-      case 'frost':
+      case "frost":
         return {
-          base: 'rgba(210, 215, 225, 0.95)',
-          glow: 'rgba(180, 200, 230, 0.5)',
+          base: "rgba(210, 215, 225, 0.95)",
+          glow: "rgba(180, 200, 230, 0.5)",
         };
-      case 'silver':
+      case "silver":
       default:
         return {
           base: SILVER_PALETTE.silver,
-          glow: 'rgba(255, 255, 255, 0.6)',
+          glow: "rgba(255, 255, 255, 0.6)",
         };
     }
   };
@@ -251,9 +265,12 @@ export const SimpleShimmerText: React.FC<PremiumShimmerTextProps> = ({
   // Intensity multiplier
   const getIntensityMultiplier = () => {
     switch (intensity) {
-      case 'subtle': return 0.5;
-      case 'strong': return 1.5;
-      default: return 1;
+      case "subtle":
+        return 0.5;
+      case "strong":
+        return 1.5;
+      default:
+        return 1;
     }
   };
 
@@ -273,11 +290,11 @@ export const SimpleShimmerText: React.FC<PremiumShimmerTextProps> = ({
           withTiming(0, {
             duration: duration / 2,
             easing: Easing.inOut(Easing.ease),
-          })
+          }),
         ),
         -1,
-        false
-      )
+        false,
+      ),
     );
 
     glowIntensity.value = withDelay(
@@ -286,16 +303,16 @@ export const SimpleShimmerText: React.FC<PremiumShimmerTextProps> = ({
         withSequence(
           withTiming(1, {
             duration: duration / 2 + 400,
-            easing: Easing.inOut(Easing.sine),
+            easing: Easing.inOut(Easing.sin),
           }),
           withTiming(0, {
             duration: duration / 2 + 400,
-            easing: Easing.inOut(Easing.sine),
-          })
+            easing: Easing.inOut(Easing.sin),
+          }),
         ),
         -1,
-        false
-      )
+        false,
+      ),
     );
   }, [disabled, delay, duration]);
 
@@ -303,7 +320,11 @@ export const SimpleShimmerText: React.FC<PremiumShimmerTextProps> = ({
     opacity: interpolate(shimmerOpacity.value, [0, 0.5, 1], [0.8, 1, 0.8]),
     textShadowColor: colors.glow,
     textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: interpolate(glowIntensity.value, [0, 1], [0, 12 * intensityMult]),
+    textShadowRadius: interpolate(
+      glowIntensity.value,
+      [0, 1],
+      [0, 12 * intensityMult],
+    ),
   }));
 
   if (disabled) {
@@ -339,12 +360,18 @@ export const FrostedGlassText: React.FC<PremiumShimmerTextProps> = ({
       delay,
       withRepeat(
         withSequence(
-          withTiming(1, { duration: duration / 2, easing: Easing.inOut(Easing.ease) }),
-          withTiming(0, { duration: duration / 2, easing: Easing.inOut(Easing.ease) })
+          withTiming(1, {
+            duration: duration / 2,
+            easing: Easing.inOut(Easing.ease),
+          }),
+          withTiming(0, {
+            duration: duration / 2,
+            easing: Easing.inOut(Easing.ease),
+          }),
         ),
         -1,
-        false
-      )
+        false,
+      ),
     );
 
     // Slow reflection movement
@@ -353,8 +380,8 @@ export const FrostedGlassText: React.FC<PremiumShimmerTextProps> = ({
       withRepeat(
         withTiming(1, { duration: duration * 1.5, easing: Easing.linear }),
         -1,
-        false
-      )
+        false,
+      ),
     );
   }, [disabled, delay, duration]);
 
@@ -365,18 +392,26 @@ export const FrostedGlassText: React.FC<PremiumShimmerTextProps> = ({
   const reflectionStyle = useAnimatedStyle(() => ({
     transform: [
       {
-        translateX: interpolate(reflectionPos.value, [0, 1], [-width, width * 2]),
+        translateX: interpolate(
+          reflectionPos.value,
+          [0, 1],
+          [-width, width * 2],
+        ),
       },
     ],
     opacity: interpolate(
       reflectionPos.value,
       [0, 0.2, 0.5, 0.8, 1],
-      [0, 0.4, 0.6, 0.4, 0]
+      [0, 0.4, 0.6, 0.4, 0],
     ),
   }));
 
   if (disabled) {
-    return <Text style={[style, { color: SILVER_PALETTE.silverLight }]}>{children}</Text>;
+    return (
+      <Text style={[style, { color: SILVER_PALETTE.silverLight }]}>
+        {children}
+      </Text>
+    );
   }
 
   return (
@@ -387,7 +422,7 @@ export const FrostedGlassText: React.FC<PremiumShimmerTextProps> = ({
           style,
           {
             color: SILVER_PALETTE.silverLight,
-            textShadowColor: 'rgba(255, 255, 255, 0.3)',
+            textShadowColor: "rgba(255, 255, 255, 0.3)",
             textShadowOffset: { width: 0, height: 1 },
             textShadowRadius: 2,
           },
@@ -399,19 +434,17 @@ export const FrostedGlassText: React.FC<PremiumShimmerTextProps> = ({
 
       {/* Reflection overlay */}
       <MaskedView
-        style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]}
-        maskElement={
-          <Text style={[style, styles.maskText]}>{children}</Text>
-        }
+        style={[StyleSheet.absoluteFill, { overflow: "hidden" }]}
+        maskElement={<Text style={[style, styles.maskText]}>{children}</Text>}
       >
         <Animated.View style={[styles.reflectionBar, reflectionStyle]}>
           <LinearGradient
             colors={[
-              'transparent',
-              'rgba(255, 255, 255, 0.15)',
-              'rgba(255, 255, 255, 0.4)',
-              'rgba(255, 255, 255, 0.15)',
-              'transparent',
+              "transparent",
+              "rgba(255, 255, 255, 0.15)",
+              "rgba(255, 255, 255, 0.4)",
+              "rgba(255, 255, 255, 0.15)",
+              "transparent",
             ]}
             locations={[0, 0.3, 0.5, 0.7, 1]}
             start={{ x: 0, y: 0 }}
@@ -426,15 +459,15 @@ export const FrostedGlassText: React.FC<PremiumShimmerTextProps> = ({
 
 const styles = StyleSheet.create({
   maskText: {
-    color: '#000',
-    backgroundColor: 'transparent',
+    color: "#000",
+    backgroundColor: "transparent",
   },
   shineContainer: {
-    position: 'relative',
-    overflow: 'hidden',
+    position: "relative",
+    overflow: "hidden",
   },
   shineBar: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     bottom: 0,
   },
@@ -442,11 +475,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   frostedContainer: {
-    position: 'relative',
-    overflow: 'hidden',
+    position: "relative",
+    overflow: "hidden",
   },
   reflectionBar: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     bottom: 0,
     width: 100,

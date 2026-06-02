@@ -7,9 +7,10 @@
  * - Uses theme colors from user's environment
  */
 
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from "react";
+import { View, Text, StyleSheet } from "react-native";
 import Animated, {
+  SharedValue,
   useSharedValue,
   useAnimatedStyle,
   withTiming,
@@ -18,7 +19,7 @@ import Animated, {
   withSequence,
   Easing,
   interpolate,
-} from 'react-native-reanimated';
+} from "react-native-reanimated";
 
 interface NoraThinkingAnimationProps {
   steps: string[];
@@ -32,7 +33,7 @@ const WaveCharacter: React.FC<{
   char: string;
   index: number;
   totalChars: number;
-  wavePosition: Animated.SharedValue<number>;
+  wavePosition: SharedValue<number>;
   baseColor: string;
   shineColor: string;
 }> = ({ char, index, totalChars, wavePosition, baseColor, shineColor }) => {
@@ -50,7 +51,7 @@ const WaveCharacter: React.FC<{
       distance,
       [0, waveWidth / 2, waveWidth],
       [1, 0.5, 0],
-      'clamp'
+      "clamp",
     );
 
     return {
@@ -63,9 +64,7 @@ const WaveCharacter: React.FC<{
   });
 
   return (
-    <Animated.Text style={[styles.char, animatedStyle]}>
-      {char}
-    </Animated.Text>
+    <Animated.Text style={[styles.char, animatedStyle]}>{char}</Animated.Text>
   );
 };
 
@@ -81,21 +80,21 @@ export const NoraThinkingAnimation: React.FC<NoraThinkingAnimationProps> = ({
   const textOpacity = useSharedValue(1);
 
   // Default colors based on theme if not provided
-  const baseColor = textColor || (isDark ? '#8A9BB0' : '#5A6B7D');
-  const highlightColor = shineColor || (isDark ? '#C8D8E8' : '#4A5B6D');
+  const baseColor = textColor || (isDark ? "#8A9BB0" : "#5A6B7D");
+  const highlightColor = shineColor || (isDark ? "#C8D8E8" : "#4A5B6D");
 
-  const currentText = steps[currentStep] || 'Thinking...';
-  const chars = currentText.split('');
+  const currentText = steps[currentStep] || "Thinking...";
+  const chars = currentText.split("");
 
   // Continuous wave animation
   useEffect(() => {
     wavePosition.value = withRepeat(
       withSequence(
         withTiming(1.2, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
-        withDelay(400, withTiming(-0.2, { duration: 0 }))
+        withDelay(400, withTiming(-0.2, { duration: 0 })),
       ),
       -1,
-      false
+      false,
     );
   }, []);
 
@@ -141,11 +140,11 @@ export const NoraThinkingAnimation: React.FC<NoraThinkingAnimationProps> = ({
 };
 
 // Simple dots for other uses
-export const NoraThinkingDots: React.FC<{ isDark?: boolean; color?: string }> = ({
-  isDark = true,
-  color,
-}) => {
-  const dotColor = color || (isDark ? '#7A8B9D' : '#5A6B7D');
+export const NoraThinkingDots: React.FC<{
+  isDark?: boolean;
+  color?: string;
+}> = ({ isDark = true, color }) => {
+  const dotColor = color || (isDark ? "#7A8B9D" : "#5A6B7D");
   const [activeDot, setActiveDot] = useState(0);
 
   useEffect(() => {
@@ -178,17 +177,17 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   textRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
   },
   char: {
     fontSize: 15,
-    fontStyle: 'italic',
+    fontStyle: "italic",
   },
   dotsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
   },
   dot: {

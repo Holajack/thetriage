@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-02-10T18:48:54.087Z",
+  "flow": "discovery/navigation-integrity.yaml",
+  "exitCode": 1,
+  "passed": false,
+  "output": "\nWaiting for flows to complete...\n[Failed] Navigation Integrity Check (21s) (Element not found: Text matching regex: Profile)\n\n1/1 Flow Failed\n\n╭────────────────────────────────────────────────────────────────────────────────────────────────╮\n│                                                                                                │\n│   Debug tests faster by easy access to test recordings, maestro logs, screenshots, and more.   │\n│                                                                                                │\n│   Run your flows on Maestro Cloud:                                                             │\n│   maestro cloud app_file flows_folder/                                                         │\n│                                                                                                │\n╰────────────────────────────────────────────────────────────────────────────────────────────────╯\n\n"
+}

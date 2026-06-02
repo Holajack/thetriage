@@ -1,19 +1,38 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, Image } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useRoute, useNavigation } from '@react-navigation/native';
-import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
-import * as MessageService from '../../utils/convexMessagingService';
-import { useQuery } from 'convex/react';
-import { api } from '../../../convex/_generated/api';
-import { Id } from '../../../convex/_generated/dataModel';
-import Animated, { FadeInUp, FadeInDown, SlideInRight, useAnimatedStyle, withSpring, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
-import { AnimatedButton } from '../../components/premium/AnimatedButton';
-import * as Haptics from 'expo-haptics';
-import { AnimationConfig } from '../../theme/premiumTheme';
-import { ShimmerLoader } from '../../components/premium/ShimmerLoader';
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  Image,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { useRoute, useNavigation } from "@react-navigation/native";
+import { useAuth } from "../../context/AuthContext";
+import { useTheme } from "../../context/ThemeContext";
+import * as MessageService from "../../utils/convexMessagingService";
+import { useQuery } from "convex/react";
+import { api } from "../../../convex/_generated/api";
+import { Id } from "../../../convex/_generated/dataModel";
+import Animated, {
+  FadeInUp,
+  FadeInDown,
+  SlideInRight,
+  useAnimatedStyle,
+  withSpring,
+  useSharedValue,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
+import { AnimatedButton } from "../../components/premium/AnimatedButton";
+import * as Haptics from "expo-haptics";
+import { AnimationConfig } from "../../theme/premiumTheme";
+import { ShimmerLoader } from "../../components/premium/ShimmerLoader";
 
 interface RouteParams {
   contact: {
@@ -30,25 +49,25 @@ const MessageScreen = () => {
   const { user } = useAuth();
   const { theme } = useTheme();
   const { contact } = route.params as RouteParams;
-  
-  const [inputText, setInputText] = useState('');
+
+  const [inputText, setInputText] = useState("");
   const [sending, setSending] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const prevMessagesLengthRef = useRef<number>(0);
 
   // Get recipient ID from contact
-  const recipientId = contact.id || '';
+  const recipientId = contact.id || "";
 
   // Use Convex useQuery for real-time message updates
   const messagesQuery = useQuery(
     api.messages.getConversation,
-    recipientId ? { otherUserId: recipientId as Id<"users"> } : "skip"
+    recipientId ? { otherUserId: recipientId as Id<"users"> } : "skip",
   );
 
   // Query user presence for real-time online status
   const presenceQuery = useQuery(
     api.users.getUserPresence,
-    recipientId ? { userId: recipientId as Id<"users"> } : "skip"
+    recipientId ? { userId: recipientId as Id<"users"> } : "skip",
   );
 
   const loading = messagesQuery === undefined;
@@ -92,19 +111,22 @@ const MessageScreen = () => {
 
     setSending(true);
     const messageContent = inputText.trim();
-    setInputText('');
+    setInputText("");
 
     try {
-      const result = await MessageService.sendMessage(recipientId, messageContent);
+      const result = await MessageService.sendMessage(
+        recipientId,
+        messageContent,
+      );
       if (!result.success) {
-        console.error('Error sending message:', result.error);
+        // Error sending message
         // Restore the input text if sending failed
         setInputText(messageContent);
       }
       // No need for optimistic update - Convex useQuery will automatically
       // update with the new message in real-time
     } catch (error) {
-      console.error('Error sending message:', error);
+      // Error sending message
       // Restore the input text if sending failed
       setInputText(messageContent);
     } finally {
@@ -112,7 +134,13 @@ const MessageScreen = () => {
     }
   };
 
-  const renderMessage = ({ item, index }: { item: MessageService.Message; index: number }) => {
+  const renderMessage = ({
+    item,
+    index,
+  }: {
+    item: MessageService.Message;
+    index: number;
+  }) => {
     const isMyMessage = item.sender_id === user?.id;
 
     // Use spring physics for message entrance
@@ -124,9 +152,17 @@ const MessageScreen = () => {
         {!isMyMessage && (
           <View style={styles.messageAvatar}>
             {contact.avatar ? (
-              <Image source={{ uri: contact.avatar }} style={styles.messageAvatarImage} />
+              <Image
+                source={{ uri: contact.avatar }}
+                style={styles.messageAvatarImage}
+              />
             ) : (
-              <View style={[styles.messageAvatarPlaceholder, { backgroundColor: theme.primary + '20' }]}>
+              <View
+                style={[
+                  styles.messageAvatarPlaceholder,
+                  { backgroundColor: theme.primary + "20" },
+                ]}
+              >
                 <Ionicons name="person" size={16} color={theme.primary} />
               </View>
             )}
@@ -134,23 +170,40 @@ const MessageScreen = () => {
         )}
 
         <Animated.View
-          entering={AnimationDirection.delay(index * 30).duration(400).stiffness(150)}
+          entering={AnimationDirection.delay(index * 30)
+            .duration(400)
+            .stiffness(150)}
           style={[
             styles.messageContainer,
-            isMyMessage ? [styles.myMessage, { backgroundColor: theme.primary }] : [styles.theirMessage, { backgroundColor: theme.card }]
+            isMyMessage
+              ? [styles.myMessage, { backgroundColor: theme.primary }]
+              : [styles.theirMessage, { backgroundColor: theme.card }],
           ]}
         >
-          <Text style={[
-            styles.messageText,
-            isMyMessage ? styles.myMessageText : [styles.theirMessageText, { color: theme.text }]
-          ]}>
+          <Text
+            style={[
+              styles.messageText,
+              isMyMessage
+                ? styles.myMessageText
+                : [styles.theirMessageText, { color: theme.text }],
+            ]}
+          >
             {item.content}
           </Text>
-          <Text style={[styles.timestamp, { color: isMyMessage ? 'rgba(255,255,255,0.7)' : theme.textSecondary }]}>
+          <Text
+            style={[
+              styles.timestamp,
+              {
+                color: isMyMessage
+                  ? "rgba(255,255,255,0.7)"
+                  : theme.textSecondary,
+              },
+            ]}
+          >
             {new Date(item.created_at).toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: true
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: true,
             })}
           </Text>
         </Animated.View>
@@ -159,19 +212,37 @@ const MessageScreen = () => {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.background }]}
+    >
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+      <View
+        style={[
+          styles.header,
+          { backgroundColor: theme.card, borderBottomColor: theme.border },
+        ]}
+      >
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        >
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
 
         {/* Contact Avatar */}
         <View style={styles.headerAvatarContainer}>
           {contact.avatar ? (
-            <Image source={{ uri: contact.avatar }} style={styles.headerAvatar} />
+            <Image
+              source={{ uri: contact.avatar }}
+              style={styles.headerAvatar}
+            />
           ) : (
-            <View style={[styles.headerAvatarPlaceholder, { backgroundColor: theme.primary + '20' }]}>
+            <View
+              style={[
+                styles.headerAvatarPlaceholder,
+                { backgroundColor: theme.primary + "20" },
+              ]}
+            >
               <Ionicons name="person" size={24} color={theme.primary} />
             </View>
           )}
@@ -179,40 +250,57 @@ const MessageScreen = () => {
         </View>
 
         <View style={styles.headerInfo}>
-          <Text style={[styles.contactName, { color: theme.text }]}>{contact.name}</Text>
+          <Text style={[styles.contactName, { color: theme.text }]}>
+            {contact.name}
+          </Text>
           <View style={styles.statusRow}>
-            <Text style={[styles.status, { color: isOnline ? '#22c55e' : theme.textSecondary }]}>
-              {isOnline ? 'Online' : 'Offline'}
+            <Text
+              style={[
+                styles.status,
+                { color: isOnline ? "#22c55e" : theme.textSecondary },
+              ]}
+            >
+              {isOnline ? "Online" : "Offline"}
             </Text>
           </View>
         </View>
       </View>
 
       {/* Messages List */}
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         style={styles.messagesContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 0}
       >
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ShimmerLoader variant="circular" size={48} />
+            <ShimmerLoader variant="circle" size={48} />
           </View>
         ) : (
           <FlatList
             ref={flatListRef}
             data={messages}
             renderItem={renderMessage}
-            keyExtractor={item => item.id}
+            keyExtractor={(item) => item.id}
             contentContainerStyle={styles.messagesList}
-            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+            onContentSizeChange={() =>
+              flatListRef.current?.scrollToEnd({ animated: false })
+            }
           />
         )}
 
         {/* Input Area */}
-        <View style={[styles.inputContainer, { backgroundColor: theme.card, borderTopColor: theme.border }]}>
+        <View
+          style={[
+            styles.inputContainer,
+            { backgroundColor: theme.card, borderTopColor: theme.border },
+          ]}
+        >
           <TextInput
-            style={[styles.input, { backgroundColor: theme.background, color: theme.text }]}
+            style={[
+              styles.input,
+              { backgroundColor: theme.background, color: theme.text },
+            ]}
             value={inputText}
             onChangeText={setInputText}
             placeholder="Type a message..."
@@ -225,11 +313,17 @@ const MessageScreen = () => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               sendMessage();
             }}
-            style={[styles.sendButton, { backgroundColor: theme.primary, opacity: inputText.trim() && !sending ? 1 : 0.5 }]}
+            style={[
+              styles.sendButton,
+              {
+                backgroundColor: theme.primary,
+                opacity: inputText.trim() && !sending ? 1 : 0.5,
+              },
+            ]}
             disabled={!inputText.trim() || sending}
           >
             {sending ? (
-              <ShimmerLoader variant="circular" size={20} />
+              <ShimmerLoader variant="circle" size={20} />
             ) : (
               <Animated.View entering={FadeInUp.duration(400)}>
                 <Ionicons name="send" size={20} color="#fff" />
@@ -247,8 +341,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
@@ -257,7 +351,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   headerAvatarContainer: {
-    position: 'relative',
+    position: "relative",
     marginRight: 12,
   },
   headerAvatar: {
@@ -269,33 +363,33 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerOnlineDot: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 2,
     right: 2,
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#22c55e',
+    backgroundColor: "#22c55e",
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: "#fff",
   },
   headerInfo: {
     flex: 1,
   },
   contactName: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   status: {
     fontSize: 14,
   },
   statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginTop: 2,
   },
   messagesContainer: {
@@ -303,20 +397,20 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   messagesList: {
     paddingHorizontal: 16,
     paddingVertical: 16,
   },
   messageRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
+    flexDirection: "row",
+    alignItems: "flex-end",
     marginVertical: 4,
   },
   myMessageRow: {
-    justifyContent: 'flex-end',
+    justifyContent: "flex-end",
   },
   messageAvatar: {
     marginRight: 8,
@@ -331,25 +425,25 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   messageContainer: {
     padding: 12,
     borderRadius: 16,
-    maxWidth: '75%',
+    maxWidth: "75%",
   },
   myMessage: {
-    alignSelf: 'flex-end',
+    alignSelf: "flex-end",
   },
   theirMessage: {
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
   },
   messageText: {
     fontSize: 16,
   },
   myMessageText: {
-    color: '#fff',
+    color: "#fff",
   },
   theirMessageText: {
     // Color will be set dynamically
@@ -360,8 +454,8 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
+    flexDirection: "row",
+    alignItems: "flex-end",
     paddingHorizontal: 16,
     paddingVertical: 8, // Reduced from 12 to 8
     borderTopWidth: 1,
@@ -380,9 +474,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
 });
 
-export default MessageScreen; 
+export default MessageScreen;

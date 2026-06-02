@@ -5,7 +5,13 @@
  * to maintain engagement and entice upgrades.
  */
 import { v } from "convex/values";
-import { query, mutation, internalMutation, internalAction, internalQuery } from "./_generated/server";
+import {
+  query,
+  mutation,
+  internalMutation,
+  internalAction,
+  internalQuery,
+} from "./_generated/server";
 import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 
@@ -126,7 +132,7 @@ export const generateNotifications = internalAction({
   args: {},
   handler: async (ctx) => {
     const users: any[] = await ctx.runQuery(
-      internal.noraNotifications._getActiveUsers
+      internal.noraNotifications._getActiveUsers,
     );
 
     const now = new Date();
@@ -138,7 +144,7 @@ export const generateNotifications = internalAction({
         // Check what notifications were already sent today
         const todayNotifs: any[] = await ctx.runQuery(
           internal.noraNotifications._getTodayNotifications,
-          { userId: user._id, date: today }
+          { userId: user._id, date: today },
         );
 
         const sentTypes = new Set(todayNotifs.map((n: any) => n.type));
@@ -146,12 +152,12 @@ export const generateNotifications = internalAction({
         // Get user's recent activity
         const recentSessions: any[] = await ctx.runQuery(
           internal.noraNotifications._getRecentSessions,
-          { userId: user._id }
+          { userId: user._id },
         );
 
         const leaderboard: any = await ctx.runQuery(
           internal.noraNotifications._getLeaderboard,
-          { userId: user._id }
+          { userId: user._id },
         );
 
         const tier = user.subscriptionTier || "free";
@@ -166,7 +172,7 @@ export const generateNotifications = internalAction({
               title: "Nora misses you!",
               body: "It's been a while since your last study session. Ready to get back on track? I can help you plan your next session.",
               scheduledFor: now.toISOString(),
-            }
+            },
           );
         }
 
@@ -185,7 +191,7 @@ export const generateNotifications = internalAction({
               title: `${streak}-day streak at risk!`,
               body: `You've been studying for ${streak} days straight. Don't break your streak -- even a short session counts!`,
               scheduledFor: now.toISOString(),
-            }
+            },
           );
         }
 
@@ -202,7 +208,7 @@ export const generateNotifications = internalAction({
               title: "Your Weekly Study Summary",
               body: `You've logged ${weeklyHours}h of focus time${streak > 0 ? ` with a ${streak}-day streak` : ""}. ${tier === "elite" ? "Check your progress with Nora!" : "Upgrade to Elite to get AI-powered study insights!"}`,
               scheduledFor: now.toISOString(),
-            }
+            },
           );
         }
 
@@ -220,14 +226,11 @@ export const generateNotifications = internalAction({
               title: "Unlock AI Study Support",
               body: "Nora can help you with study plans, web research, document analysis, and more. Upgrade to Elite to unlock full AI assistance!",
               scheduledFor: now.toISOString(),
-            }
+            },
           );
         }
-      } catch (e) {
-        console.error(
-          `Failed to generate notifications for user ${user._id}:`,
-          e
-        );
+      } catch {
+        // Failed to generate notifications for user
       }
     }
   },
@@ -262,7 +265,7 @@ export const _getRecentSessions = internalQuery({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId }) => {
     const twoDaysAgo = new Date(
-      Date.now() - 2 * 24 * 60 * 60 * 1000
+      Date.now() - 2 * 24 * 60 * 60 * 1000,
     ).toISOString();
 
     const sessions = await ctx.db
@@ -271,9 +274,7 @@ export const _getRecentSessions = internalQuery({
       .order("desc")
       .take(5);
 
-    return sessions.filter(
-      (s) => s.startTime && s.startTime > twoDaysAgo
-    );
+    return sessions.filter((s) => s.startTime && s.startTime > twoDaysAgo);
   },
 });
 

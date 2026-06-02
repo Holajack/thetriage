@@ -1,15 +1,32 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { Modal, View, Text, Image, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, NavigationContainerRef } from '@react-navigation/native';
-import { useAuth } from './AuthContext';
-import { useTheme } from './ThemeContext';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useRef,
+} from "react";
+import {
+  Modal,
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import {
+  useNavigation,
+  NavigationContainerRef,
+} from "@react-navigation/native";
+import { useAuth } from "./AuthContext";
+import { useTheme } from "./ThemeContext";
 import {
   subscribeToPendingQRRequests,
   acceptQRRequest,
   declineQRRequest,
   QRScanNotification,
-} from '../utils/qrAcceptanceService';
+} from "../utils/qrAcceptanceService";
 
 // Store navigation ref for use outside of components
 let navigationRef: NavigationContainerRef<any> | null = null;
@@ -26,24 +43,28 @@ const QRAcceptanceContext = createContext<QRAcceptanceContextType>({});
 
 export const useQRAcceptance = () => useContext(QRAcceptanceContext);
 
-export const QRAcceptanceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const QRAcceptanceProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const { user } = useAuth();
   const { theme } = useTheme();
-  const [notification, setNotification] = useState<QRScanNotification | null>(null);
+  const [notification, setNotification] = useState<QRScanNotification | null>(
+    null,
+  );
   const [processing, setProcessing] = useState(false);
 
   // Subscribe to QR scan notifications
   useEffect(() => {
     if (!user?.id) return;
 
-    console.log('👂 Starting QR acceptance listener for user:', user.id);
+    // Starting QR acceptance listener
 
     const subscription = subscribeToPendingQRRequests(
       user.id,
       (newNotification) => {
-        console.log('🔔 Received QR scan notification:', newNotification);
+        // Received QR scan notification
         setNotification(newNotification);
-      }
+      },
     );
 
     return () => {
@@ -58,7 +79,7 @@ export const QRAcceptanceProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const result = await acceptQRRequest(notification.requestId);
 
     if (result.success) {
-      console.log('✅ Friend request accepted, navigating to Community');
+      // Friend request accepted, navigating to Community
 
       // Close modal first
       setNotification(null);
@@ -68,21 +89,21 @@ export const QRAcceptanceProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setTimeout(() => {
         if (navigationRef) {
           // Navigate to Main > Community with Friends tab selected
-          navigationRef.navigate('Main', {
-            screen: 'HomeDrawer',
+          navigationRef.navigate("Main", {
+            screen: "HomeDrawer",
             params: {
-              screen: 'HomeTabs',
+              screen: "HomeTabs",
               params: {
-                screen: 'Community',
-                params: { initialTab: 'friends' }
-              }
-            }
+                screen: "Community",
+                params: { initialTab: "friends" },
+              },
+            },
           });
         }
       }, 300);
     } else {
       setProcessing(false);
-      alert(result.error || 'Failed to accept request');
+      alert(result.error || "Failed to accept request");
     }
   };
 
@@ -135,9 +156,18 @@ export const QRAcceptanceProvider: React.FC<{ children: React.ReactNode }> = ({ 
                       style={styles.avatar}
                     />
                   ) : (
-                    <View style={[styles.avatarPlaceholder, { backgroundColor: theme.primary + '20' }]}>
-                      <Text style={[styles.avatarText, { color: theme.primary }]}>
-                        {(notification.scannerProfile.full_name || 'U').charAt(0).toUpperCase()}
+                    <View
+                      style={[
+                        styles.avatarPlaceholder,
+                        { backgroundColor: theme.primary + "20" },
+                      ]}
+                    >
+                      <Text
+                        style={[styles.avatarText, { color: theme.primary }]}
+                      >
+                        {(notification.scannerProfile.full_name || "U")
+                          .charAt(0)
+                          .toUpperCase()}
                       </Text>
                     </View>
                   )}
@@ -145,29 +175,39 @@ export const QRAcceptanceProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
                 {/* User Info */}
                 <Text style={[styles.name, { color: theme.text }]}>
-                  {notification.scannerProfile.full_name || 'User'}
+                  {notification.scannerProfile.full_name || "User"}
                 </Text>
                 <Text style={[styles.username, { color: theme.textSecondary }]}>
-                  @{notification.scannerProfile.username || 'user'}
+                  @{notification.scannerProfile.username || "user"}
                 </Text>
 
-                {notification.scannerProfile.university && notification.scannerProfile.university.trim() !== '' && (
-                  <View style={styles.infoRow}>
-                    <Ionicons name="school-outline" size={16} color={theme.textSecondary} />
-                    <Text style={[styles.infoText, { color: theme.text }]}>
-                      {notification.scannerProfile.university}
-                    </Text>
-                  </View>
-                )}
+                {notification.scannerProfile.university &&
+                  notification.scannerProfile.university.trim() !== "" && (
+                    <View style={styles.infoRow}>
+                      <Ionicons
+                        name="school-outline"
+                        size={16}
+                        color={theme.textSecondary}
+                      />
+                      <Text style={[styles.infoText, { color: theme.text }]}>
+                        {notification.scannerProfile.university}
+                      </Text>
+                    </View>
+                  )}
 
-                {notification.scannerProfile.major && notification.scannerProfile.major.trim() !== '' && (
-                  <View style={styles.infoRow}>
-                    <Ionicons name="book-outline" size={16} color={theme.textSecondary} />
-                    <Text style={[styles.infoText, { color: theme.text }]}>
-                      {notification.scannerProfile.major}
-                    </Text>
-                  </View>
-                )}
+                {notification.scannerProfile.major &&
+                  notification.scannerProfile.major.trim() !== "" && (
+                    <View style={styles.infoRow}>
+                      <Ionicons
+                        name="book-outline"
+                        size={16}
+                        color={theme.textSecondary}
+                      />
+                      <Text style={[styles.infoText, { color: theme.text }]}>
+                        {notification.scannerProfile.major}
+                      </Text>
+                    </View>
+                  )}
 
                 <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
                   Someone just scanned your QR code!
@@ -176,17 +216,28 @@ export const QRAcceptanceProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 {/* Action Buttons */}
                 <View style={styles.buttonRow}>
                   <TouchableOpacity
-                    style={[styles.declineButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                    style={[
+                      styles.declineButton,
+                      {
+                        backgroundColor: theme.surface,
+                        borderColor: theme.border,
+                      },
+                    ]}
                     onPress={handleDecline}
                     disabled={processing}
                   >
-                    <Text style={[styles.declineButtonText, { color: theme.text }]}>
+                    <Text
+                      style={[styles.declineButtonText, { color: theme.text }]}
+                    >
                       Decline
                     </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.acceptButton, { backgroundColor: theme.primary }]}
+                    style={[
+                      styles.acceptButton,
+                      { backgroundColor: theme.primary },
+                    ]}
                     onPress={handleAccept}
                     disabled={processing}
                   >
@@ -194,7 +245,11 @@ export const QRAcceptanceProvider: React.FC<{ children: React.ReactNode }> = ({ 
                       <ActivityIndicator size="small" color="#FFFFFF" />
                     ) : (
                       <>
-                        <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={20}
+                          color="#FFFFFF"
+                        />
                         <Text style={styles.acceptButtonText}>Accept</Text>
                       </>
                     )}
@@ -206,7 +261,12 @@ export const QRAcceptanceProvider: React.FC<{ children: React.ReactNode }> = ({ 
                   onPress={handleDismiss}
                   disabled={processing}
                 >
-                  <Text style={[styles.laterButtonText, { color: theme.textSecondary }]}>
+                  <Text
+                    style={[
+                      styles.laterButtonText,
+                      { color: theme.textSecondary },
+                    ]}
+                  >
                     Decide Later
                   </Text>
                 </TouchableOpacity>
@@ -222,29 +282,29 @@ export const QRAcceptanceProvider: React.FC<{ children: React.ReactNode }> = ({ 
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   modal: {
-    width: '90%',
+    width: "90%",
     maxWidth: 400,
     borderRadius: 20,
     padding: 24,
-    alignItems: 'center',
+    alignItems: "center",
   },
   dismissButton: {
-    position: 'absolute',
+    position: "absolute",
     top: 16,
     right: 16,
     zIndex: 1,
   },
   title: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginTop: 8,
     marginBottom: 24,
-    textAlign: 'center',
+    textAlign: "center",
   },
   avatarContainer: {
     marginBottom: 16,
@@ -258,27 +318,27 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   avatarText: {
     fontSize: 40,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   name: {
     fontSize: 22,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 4,
-    textAlign: 'center',
+    textAlign: "center",
   },
   username: {
     fontSize: 16,
     marginBottom: 16,
-    textAlign: 'center',
+    textAlign: "center",
   },
   infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     marginBottom: 8,
   },
@@ -289,38 +349,38 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 16,
     marginBottom: 24,
-    textAlign: 'center',
+    textAlign: "center",
   },
   buttonRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 12,
-    width: '100%',
+    width: "100%",
     marginBottom: 12,
   },
   declineButton: {
     flex: 1,
     paddingVertical: 14,
     borderRadius: 12,
-    alignItems: 'center',
+    alignItems: "center",
     borderWidth: 1,
   },
   declineButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   acceptButton: {
     flex: 1,
-    flexDirection: 'row',
+    flexDirection: "row",
     paddingVertical: 14,
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
   },
   acceptButtonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   laterButton: {
     paddingVertical: 8,

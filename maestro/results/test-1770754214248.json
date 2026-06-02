@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-02-10T20:11:03.087Z",
+  "flow": "discovery/explore-all-screens.yaml",
+  "exitCode": 1,
+  "passed": false,
+  "output": "\nWaiting for flows to complete...\n[Failed] Explore All Screens (20s) (Element not found: Text matching regex: Analytics)\n\n1/1 Flow Failed\n\n"
+}

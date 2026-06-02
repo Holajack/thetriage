@@ -41,7 +41,9 @@ export const useNoraSessions = () => {
   const rawSessions = useQuery(api.noraSessions.listSessions);
   const createSessionMutation = useMutation(api.noraSessions.createSession);
   const deleteSessionMutation = useMutation(api.noraSessions.deleteSession);
-  const renameSessionMutation = useMutation(api.noraSessions.updateSessionTitle);
+  const renameSessionMutation = useMutation(
+    api.noraSessions.updateSessionTitle,
+  );
   const generateTitle = useAction(api.noraSessions.generateSessionTitle);
 
   const isLoading = rawSessions === undefined;
@@ -55,7 +57,7 @@ export const useNoraSessions = () => {
         messageCount: s.messageCount ?? 0,
         thinkingMode: s.thinkingMode,
       })),
-    [rawSessions]
+    [rawSessions],
   );
 
   const groupedSessions: DateGroupedSessions[] = useMemo(() => {
@@ -83,7 +85,7 @@ export const useNoraSessions = () => {
     async (title?: string) => {
       return await createSessionMutation({ title });
     },
-    [createSessionMutation]
+    [createSessionMutation],
   );
 
   const deleteSession = useCallback(
@@ -92,7 +94,7 @@ export const useNoraSessions = () => {
         sessionId: sessionId as Id<"noraChatSessions">,
       });
     },
-    [deleteSessionMutation]
+    [deleteSessionMutation],
   );
 
   const renameSession = useCallback(
@@ -102,7 +104,7 @@ export const useNoraSessions = () => {
         title,
       });
     },
-    [renameSessionMutation]
+    [renameSessionMutation],
   );
 
   const requestTitleGeneration = useCallback(
@@ -112,10 +114,10 @@ export const useNoraSessions = () => {
           sessionId: sessionId as Id<"noraChatSessions">,
         });
       } catch (e) {
-        console.error("Failed to generate session title:", e);
+        // Failed to generate session title
       }
     },
-    [generateTitle]
+    [generateTitle],
   );
 
   return {
@@ -130,14 +132,10 @@ export const useNoraSessions = () => {
 };
 
 /** Hook to get messages for a specific session */
-export const useNoraSessionMessages = (
-  sessionId: string | null
-) => {
+export const useNoraSessionMessages = (sessionId: string | null) => {
   const messages = useQuery(
     api.noraSessions.getSessionMessages,
-    sessionId
-      ? { sessionId: sessionId as Id<"noraChatSessions"> }
-      : "skip"
+    sessionId ? { sessionId: sessionId as Id<"noraChatSessions"> } : "skip",
   );
 
   return {

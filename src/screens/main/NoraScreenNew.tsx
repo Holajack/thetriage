@@ -12,7 +12,7 @@
  * - Clean text output (no markdown symbols)
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -29,14 +29,21 @@ import {
   Image,
   Linking,
   Alert,
-} from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import { sendNoraChatMessage, transcribeAudio as convexTranscribeAudio } from '../../utils/convexAIChatService';
-import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
-import * as Haptics from 'expo-haptics';
+  InteractionManager,
+} from "react-native";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import {
+  sendNoraChatMessage,
+  transcribeAudio as convexTranscribeAudio,
+} from "../../utils/convexAIChatService";
+import { useAuth } from "../../context/AuthContext";
+import { useTheme } from "../../context/ThemeContext";
+import * as Haptics from "expo-haptics";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -53,50 +60,113 @@ import Animated, {
   Easing,
   interpolate,
   cancelAnimation,
-} from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Audio } from 'expo-av';
-import { NoraSideNav, NavItem, ChatSession } from '../../components/NoraSideNav';
-import { useFocusAnimationKey } from '../../utils/animationUtils';
-import { NoraThinkingAnimation } from '../../components/NoraThinkingAnimation';
-import { useQuery, useMutation } from 'convex/react';
-import { api } from '../../../convex/_generated/api';
-import { Id } from '../../../convex/_generated/dataModel';
-import { useNoraSessions, useNoraSessionMessages } from '../../hooks/useNoraSessions';
-import NoraOnboarding from '../../components/NoraOnboarding';
-import * as FileSystem from 'expo-file-system/legacy';
-import Markdown from 'react-native-markdown-display';
+} from "react-native-reanimated";
+import { LinearGradient } from "expo-linear-gradient";
+import { Audio } from "expo-av";
+import {
+  NoraSideNav,
+  NavItem,
+  ChatSession,
+} from "../../components/NoraSideNav";
+import { useFocusAnimationKey } from "../../utils/animationUtils";
+import { NoraThinkingAnimation } from "../../components/NoraThinkingAnimation";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
+import { Id } from "../../../convex/_generated/dataModel";
+import {
+  useNoraSessions,
+  useNoraSessionMessages,
+} from "../../hooks/useNoraSessions";
+import NoraOnboarding from "../../components/NoraOnboarding";
+import * as FileSystem from "expo-file-system/legacy";
+import Markdown from "react-native-markdown-display";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const { width, height } = Dimensions.get('window');
+const { width, height } = Dimensions.get("window");
 
 // Types
 interface Message {
   id: string;
   content: string;
-  sender: 'user' | 'nora';
+  sender: "user" | "nora";
   timestamp: string;
   sources?: Source[];
   isSearching?: boolean;
   searchSteps?: string[];
   isNew?: boolean;
-  mode?: 'auto' | 'quick' | 'deep' | 'research';
+  mode?: "auto" | "quick" | "deep" | "research";
 }
 
 interface Source {
   title: string;
   url?: string;
-  type: 'web' | 'document' | 'memory';
+  type: "web" | "document" | "memory";
 }
 
 // ChatSession is imported from NoraSideNav
 
 // Quick Action Suggestions
 const QUICK_ACTIONS = [
-  { id: '1', text: 'Help me study for my exam', icon: 'school-outline' },
-  { id: '2', text: 'Create a study plan for this week', icon: 'calendar-outline' },
-  { id: '3', text: 'Explain a difficult concept', icon: 'bulb-outline' },
-  { id: '4', text: 'Quiz me on what I learned', icon: 'help-circle-outline' },
+  { id: "1", text: "Help me study for my exam", icon: "school-outline" },
+  {
+    id: "2",
+    text: "Create a study plan for this week",
+    icon: "calendar-outline",
+  },
+  { id: "3", text: "Learn something new", icon: "bulb-outline" },
+  { id: "4", text: "Quiz me on what I learned", icon: "help-circle-outline" },
 ];
+
+// Topic categories for the "Learn something new" chip — keeps OpenAI from
+// returning the same concept twice in a session.
+const LEARN_CATEGORIES = [
+  "biology",
+  "philosophy",
+  "history",
+  "mathematics",
+  "physics",
+  "language and linguistics",
+  "visual art",
+  "technology",
+  "psychology",
+  "finance and economics",
+  "astronomy",
+  "music theory",
+  "chemistry",
+];
+
+const LEARN_RECENT_TOPICS_KEY = "@nora_recent_learn_topics";
+
+async function buildLearnPrompt(): Promise<string> {
+  let recent: string[] = [];
+  try {
+    const raw = await AsyncStorage.getItem(LEARN_RECENT_TOPICS_KEY);
+    if (raw) recent = JSON.parse(raw);
+  } catch {}
+  const seedCategory =
+    LEARN_CATEGORIES[Math.floor(Math.random() * LEARN_CATEGORIES.length)];
+  const exclusion = recent.length
+    ? ` Do NOT pick any of these recently-shown topics: ${recent.join("; ")}.`
+    : "";
+  return (
+    `Pick one fascinating concept from ${seedCategory} (or a related field if you prefer).` +
+    `${exclusion} ` +
+    `Teach me the concept in 3 short paragraphs: (1) what it is, (2) why it matters or how it works, (3) one surprising example. ` +
+    `End with the topic name on its own line prefixed with "TOPIC: " so I can track it.`
+  );
+}
+
+async function recordLearnTopic(noraResponse: string): Promise<void> {
+  try {
+    const match = noraResponse.match(/TOPIC:\s*(.+)/i);
+    if (!match) return;
+    const topic = match[1].trim().slice(0, 80);
+    const raw = await AsyncStorage.getItem(LEARN_RECENT_TOPICS_KEY);
+    const recent: string[] = raw ? JSON.parse(raw) : [];
+    const next = [topic, ...recent.filter((t) => t !== topic)].slice(0, 10);
+    await AsyncStorage.setItem(LEARN_RECENT_TOPICS_KEY, JSON.stringify(next));
+  } catch {}
+}
 
 // Markdown styles are created per-theme in the component below
 
@@ -110,7 +180,13 @@ const AnimatedWaveBar: React.FC<{
   isActive: boolean;
   color?: string;
   totalBars: number;
-}> = ({ index, amplitude, isActive, color = 'rgba(255,255,255,0.7)', totalBars = 24 }) => {
+}> = ({
+  index,
+  amplitude,
+  isActive,
+  color = "rgba(255,255,255,0.7)",
+  totalBars = 24,
+}) => {
   const heightValue = useSharedValue(0.08);
   const scaleX = useSharedValue(1);
 
@@ -127,9 +203,10 @@ const AnimatedWaveBar: React.FC<{
 
       // Dynamic response to amplitude with spring physics
       const baseHeight = 0.08;
-      const targetHeight = amplitude > 0.03
-        ? Math.min(baseHeight + (amplitude * variation * 1.2), 0.95)
-        : baseHeight + (variation * 0.05); // Subtle idle animation
+      const targetHeight =
+        amplitude > 0.03
+          ? Math.min(baseHeight + amplitude * variation * 1.2, 0.95)
+          : baseHeight + variation * 0.05; // Subtle idle animation
 
       // Apple uses critically damped springs for smooth feel
       heightValue.value = withSpring(targetHeight, {
@@ -157,11 +234,7 @@ const AnimatedWaveBar: React.FC<{
 
   return (
     <Animated.View
-      style={[
-        styles.voiceWaveBar,
-        animatedStyle,
-        { backgroundColor: color },
-      ]}
+      style={[styles.voiceWaveBar, animatedStyle, { backgroundColor: color }]}
     />
   );
 };
@@ -169,7 +242,10 @@ const AnimatedWaveBar: React.FC<{
 // ============================================
 // SEARCHING INDICATOR - Simplified (not currently used)
 // ============================================
-const SearchingIndicator: React.FC<{ steps: string[]; theme: any }> = ({ steps, theme }) => {
+const SearchingIndicator: React.FC<{ steps: string[]; theme: any }> = ({
+  steps,
+  theme,
+}) => {
   const [currentStep, setCurrentStep] = useState(0);
 
   useEffect(() => {
@@ -188,13 +264,16 @@ const SearchingIndicator: React.FC<{ steps: string[]; theme: any }> = ({ steps, 
               key={i}
               style={[
                 styles.searchingDot,
-                { backgroundColor: theme.primary, opacity: i === currentStep % 3 ? 1 : 0.3 },
+                {
+                  backgroundColor: theme.primary,
+                  opacity: i === currentStep % 3 ? 1 : 0.3,
+                },
               ]}
             />
           ))}
         </View>
         <Text style={[styles.searchingText, { color: theme.textSecondary }]}>
-          {steps[currentStep] || 'Thinking...'}
+          {steps[currentStep] || "Thinking..."}
         </Text>
       </View>
     </View>
@@ -215,13 +294,15 @@ const InlineVoiceBar: React.FC<{
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
   return (
     <View style={styles.inlineVoiceBar}>
       {/* Duration on left side to avoid being hidden by button */}
-      <Text style={[styles.inlineDuration, { color: themeColor }]}>{formatDuration(duration)}</Text>
+      <Text style={[styles.inlineDuration, { color: themeColor }]}>
+        {formatDuration(duration)}
+      </Text>
       <View style={styles.inlineWaveContainer}>
         {barIndicesArray.map((index) => (
           <AnimatedWaveBar
@@ -249,7 +330,9 @@ const StreamingMarkdown: React.FC<{
   markdownStyle: any;
   onComplete?: () => void;
 }> = ({ content, isNew, markdownStyle, onComplete }) => {
-  const [displayedContent, setDisplayedContent] = useState(isNew ? '' : content);
+  const [displayedContent, setDisplayedContent] = useState(
+    isNew ? "" : content,
+  );
   const indexRef = useRef(isNew ? 0 : content.length);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -260,7 +343,7 @@ const StreamingMarkdown: React.FC<{
     }
 
     indexRef.current = 0;
-    setDisplayedContent('');
+    setDisplayedContent("");
 
     intervalRef.current = setInterval(() => {
       indexRef.current += 3; // ~3 characters at a time for smooth feel
@@ -272,7 +355,11 @@ const StreamingMarkdown: React.FC<{
       } else {
         // Find the next word boundary to avoid splitting mid-word
         let end = indexRef.current;
-        while (end < content.length && content[end] !== ' ' && content[end] !== '\n') {
+        while (
+          end < content.length &&
+          content[end] !== " " &&
+          content[end] !== "\n"
+        ) {
           end++;
         }
         indexRef.current = end;
@@ -287,11 +374,7 @@ const StreamingMarkdown: React.FC<{
 
   if (!displayedContent) return null;
 
-  return (
-    <Markdown style={markdownStyle}>
-      {displayedContent}
-    </Markdown>
-  );
+  return <Markdown style={markdownStyle}>{displayedContent}</Markdown>;
 };
 
 // ============================================
@@ -300,7 +383,7 @@ const StreamingMarkdown: React.FC<{
 const getDomain = (url: string): string => {
   try {
     const parsed = new URL(url);
-    return parsed.hostname.replace('www.', '');
+    return parsed.hostname.replace("www.", "");
   } catch {
     return url;
   }
@@ -313,8 +396,10 @@ const SourceRow: React.FC<{
   theme: any;
   isDark: boolean;
 }> = ({ source, index, theme, isDark }) => {
-  const domain = source.url ? getDomain(source.url) : '';
-  const faviconUrl = source.url ? `https://www.google.com/s2/favicons?domain=${domain}&sz=64` : '';
+  const domain = source.url ? getDomain(source.url) : "";
+  const faviconUrl = source.url
+    ? `https://www.google.com/s2/favicons?domain=${domain}&sz=64`
+    : "";
 
   const handlePress = () => {
     if (source.url) {
@@ -326,7 +411,11 @@ const SourceRow: React.FC<{
     <TouchableOpacity
       style={[
         styles.sourceRow,
-        { borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' },
+        {
+          borderBottomColor: isDark
+            ? "rgba(255,255,255,0.06)"
+            : "rgba(0,0,0,0.06)",
+        },
       ]}
       onPress={handlePress}
       activeOpacity={0.7}
@@ -335,23 +424,34 @@ const SourceRow: React.FC<{
         <Image
           source={{ uri: faviconUrl }}
           style={styles.sourceRowFavicon}
-          defaultSource={require('../../../assets/icon.png')}
+          defaultSource={require("../../../assets/icon.png")}
         />
       ) : (
-        <View style={[styles.sourceRowFaviconFallback, { backgroundColor: theme.primary + '20' }]}>
+        <View
+          style={[
+            styles.sourceRowFaviconFallback,
+            { backgroundColor: theme.primary + "20" },
+          ]}
+        >
           <Ionicons
-            name={source.type === 'document' ? 'document-text' : 'sparkles'}
+            name={source.type === "document" ? "document-text" : "sparkles"}
             size={14}
             color={theme.primary}
           />
         </View>
       )}
       <View style={styles.sourceRowText}>
-        <Text style={[styles.sourceRowTitle, { color: theme.text }]} numberOfLines={1}>
+        <Text
+          style={[styles.sourceRowTitle, { color: theme.text }]}
+          numberOfLines={1}
+        >
           {source.title || domain}
         </Text>
         {source.url && (
-          <Text style={[styles.sourceRowDomain, { color: theme.textSecondary }]} numberOfLines={1}>
+          <Text
+            style={[styles.sourceRowDomain, { color: theme.textSecondary }]}
+            numberOfLines={1}
+          >
             {domain}
           </Text>
         )}
@@ -364,28 +464,26 @@ const SourceRow: React.FC<{
 };
 
 // Bottom-sheet sources popup (like Claude/ChatGPT)
-const SourceCitation: React.FC<{ sources: Source[]; theme: any; isDark?: boolean }> = ({
-  sources,
-  theme,
-  isDark = true,
-}) => {
+const SourceCitation: React.FC<{
+  sources: Source[];
+  theme: any;
+  isDark?: boolean;
+}> = ({ sources, theme, isDark = true }) => {
   const [showSheet, setShowSheet] = useState(false);
 
   if (!sources || sources.length === 0) return null;
 
   // Get up to 4 unique favicon URLs for the pill preview
-  const webSources = sources.filter(s => s.url);
-  const previewFavicons = webSources.slice(0, 4).map(s => ({
+  const webSources = sources.filter((s) => s.url);
+  const previewFavicons = webSources.slice(0, 4).map((s) => ({
     url: `https://www.google.com/s2/favicons?domain=${getDomain(s.url!)}&sz=64`,
     domain: getDomain(s.url!),
   }));
 
   const glassBackground = isDark
-    ? 'rgba(255,255,255,0.06)'
-    : 'rgba(0,0,0,0.03)';
-  const glassBorder = isDark
-    ? 'rgba(255,255,255,0.12)'
-    : 'rgba(0,0,0,0.08)';
+    ? "rgba(255,255,255,0.06)"
+    : "rgba(0,0,0,0.03)";
+  const glassBorder = isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)";
 
   return (
     <View style={styles.sourcesContainer}>
@@ -396,7 +494,7 @@ const SourceCitation: React.FC<{ sources: Source[]; theme: any; isDark?: boolean
           {
             backgroundColor: glassBackground,
             borderColor: glassBorder,
-            shadowColor: '#7B61FF',
+            shadowColor: "#7B61FF",
             shadowOffset: { width: 0, height: 2 },
             shadowOpacity: isDark ? 0.15 : 0.08,
             shadowRadius: 8,
@@ -416,28 +514,37 @@ const SourceCitation: React.FC<{ sources: Source[]; theme: any; isDark?: boolean
                   source={{ uri: fav.url }}
                   style={[
                     styles.faviconStackIcon,
-                    { marginLeft: i === 0 ? 0 : -6, zIndex: previewFavicons.length - i, borderColor: isDark ? '#1a1a2e' : '#f5f5f5' },
+                    {
+                      marginLeft: i === 0 ? 0 : -6,
+                      zIndex: previewFavicons.length - i,
+                      borderColor: isDark ? "#1a1a2e" : "#f5f5f5",
+                    },
                   ]}
-                  defaultSource={require('../../../assets/icon.png')}
+                  defaultSource={require("../../../assets/icon.png")}
                 />
               ))
             ) : (
-              <View style={[styles.faviconStackIcon, { backgroundColor: '#7B61FF20', alignItems: 'center', justifyContent: 'center' }]}>
+              <View
+                style={[
+                  styles.faviconStackIcon,
+                  {
+                    backgroundColor: "#7B61FF20",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  },
+                ]}
+              >
                 <Ionicons name="sparkles" size={14} color="#7B61FF" />
               </View>
             )}
           </View>
           <Text style={[styles.sourcesCollapsedLabel, { color: theme.text }]}>
             {webSources.length > 0
-              ? `${sources.length} ${sources.length === 1 ? 'Source' : 'Sources'}`
-              : 'Sources'}
+              ? `${sources.length} ${sources.length === 1 ? "Source" : "Sources"}`
+              : "Sources"}
           </Text>
         </View>
-        <Ionicons
-          name="chevron-up"
-          size={16}
-          color={theme.textSecondary}
-        />
+        <Ionicons name="chevron-up" size={16} color={theme.textSecondary} />
       </TouchableOpacity>
 
       {/* Bottom sheet modal */}
@@ -456,21 +563,34 @@ const SourceCitation: React.FC<{ sources: Source[]; theme: any; isDark?: boolean
             <View
               style={[
                 styles.sourcesSheetContainer,
-                { backgroundColor: isDark ? '#1a1a2e' : '#FFFFFF' },
+                { backgroundColor: isDark ? "#1a1a2e" : "#FFFFFF" },
               ]}
             >
               {/* Handle bar */}
               <View style={styles.sourcesSheetHandle}>
-                <View style={[styles.sourcesSheetHandleBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)' }]} />
+                <View
+                  style={[
+                    styles.sourcesSheetHandleBar,
+                    {
+                      backgroundColor: isDark
+                        ? "rgba(255,255,255,0.2)"
+                        : "rgba(0,0,0,0.15)",
+                    },
+                  ]}
+                />
               </View>
 
               {/* Header */}
               <View style={styles.sourcesSheetHeader}>
                 <Text style={[styles.sourcesSheetTitle, { color: theme.text }]}>
-                  {sources.length} {sources.length === 1 ? 'Source' : 'Sources'}
+                  {sources.length} {sources.length === 1 ? "Source" : "Sources"}
                 </Text>
                 <TouchableOpacity onPress={() => setShowSheet(false)}>
-                  <Ionicons name="close-circle" size={26} color={theme.textSecondary} />
+                  <Ionicons
+                    name="close-circle"
+                    size={26}
+                    color={theme.textSecondary}
+                  />
                 </TouchableOpacity>
               </View>
 
@@ -502,15 +622,18 @@ const MessageBubble: React.FC<{
   theme: any;
   isDark: boolean;
 }> = ({ message, theme, isDark }) => {
-  const isUser = message.sender === 'user';
+  const isUser = message.sender === "user";
 
   // Mode-specific avatar: icon and gradient colors match the mode used
-  const mode = message.mode || 'auto';
-  const modeAvatarConfig: Record<string, { colors: [string, string]; icon: keyof typeof Ionicons.glyphMap }> = {
-    auto: { colors: ['#7B61FF', '#9D4EDD'], icon: 'sparkles' },
-    quick: { colors: ['#7B61FF', '#9D4EDD'], icon: 'flash' },
-    research: { colors: ['#4ECDC4', '#2AB7A9'], icon: 'globe-outline' },
-    deep: { colors: ['#FF6B6B', '#FF8E53'], icon: 'glasses-outline' },
+  const mode = message.mode || "auto";
+  const modeAvatarConfig: Record<
+    string,
+    { colors: [string, string]; icon: keyof typeof Ionicons.glyphMap }
+  > = {
+    auto: { colors: ["#7B61FF", "#9D4EDD"], icon: "sparkles" },
+    quick: { colors: ["#7B61FF", "#9D4EDD"], icon: "flash" },
+    research: { colors: ["#4ECDC4", "#2AB7A9"], icon: "globe-outline" },
+    deep: { colors: ["#FF6B6B", "#FF8E53"], icon: "glasses-outline" },
   };
   const avatarConfig = modeAvatarConfig[mode] || modeAvatarConfig.auto;
 
@@ -535,14 +658,26 @@ const MessageBubble: React.FC<{
       {message.isSearching ? (
         <View style={styles.thinkingContainer}>
           <NoraThinkingAnimation
-            steps={message.searchSteps || ['Thinking...', 'Analyzing...', 'Preparing response...']}
+            steps={
+              message.searchSteps || [
+                "Thinking...",
+                "Analyzing...",
+                "Preparing response...",
+              ]
+            }
             isDark={isDark}
             textColor={theme.textSecondary}
-            shineColor={isDark ? '#C0CDD8' : '#8A9DB0'}
+            shineColor={isDark ? "#C0CDD8" : "#8A9DB0"}
           />
         </View>
       ) : isUser ? (
-        <View style={[styles.messageBubble, styles.userBubble, { backgroundColor: theme.primary }]}>
+        <View
+          style={[
+            styles.messageBubble,
+            styles.userBubble,
+            { backgroundColor: theme.primary },
+          ]}
+        >
           <Text style={[styles.messageText, styles.userMessageText]}>
             {message.content}
           </Text>
@@ -554,24 +689,76 @@ const MessageBubble: React.FC<{
             isNew={!!message.isNew}
             markdownStyle={{
               body: { color: theme.text, fontSize: 16, lineHeight: 26 },
-              heading1: { color: theme.text, fontSize: 24, fontWeight: '700' as const, lineHeight: 32, marginBottom: 12, marginTop: 20 },
-              heading2: { color: theme.text, fontSize: 20, fontWeight: '700' as const, lineHeight: 28, marginBottom: 8, marginTop: 18 },
-              heading3: { color: theme.text, fontSize: 17, fontWeight: '600' as const, lineHeight: 24, marginBottom: 6, marginTop: 14 },
-              strong: { fontWeight: '700' as const, color: theme.text },
-              em: { fontStyle: 'italic' as const },
+              heading1: {
+                color: theme.text,
+                fontSize: 24,
+                fontWeight: "700" as const,
+                lineHeight: 32,
+                marginBottom: 12,
+                marginTop: 20,
+              },
+              heading2: {
+                color: theme.text,
+                fontSize: 20,
+                fontWeight: "700" as const,
+                lineHeight: 28,
+                marginBottom: 8,
+                marginTop: 18,
+              },
+              heading3: {
+                color: theme.text,
+                fontSize: 17,
+                fontWeight: "600" as const,
+                lineHeight: 24,
+                marginBottom: 6,
+                marginTop: 14,
+              },
+              strong: { fontWeight: "700" as const, color: theme.text },
+              em: { fontStyle: "italic" as const },
               bullet_list: { marginBottom: 12, marginTop: 4 },
               ordered_list: { marginBottom: 12, marginTop: 4 },
               list_item: { marginBottom: 6 },
-              code_block: { backgroundColor: isDark ? '#1a1a2e' : '#f5f5f5', borderRadius: 10, padding: 14, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 14, lineHeight: 20, marginVertical: 10 },
-              code_inline: { backgroundColor: isDark ? '#1a1a2e' : '#f0f0f0', borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 14 },
-              blockquote: { borderLeftWidth: 3, borderLeftColor: theme.primary, paddingLeft: 14, marginVertical: 10 },
-              link: { color: theme.primary, textDecorationLine: 'underline' as const },
+              code_block: {
+                backgroundColor: isDark ? "#1a1a2e" : "#f5f5f5",
+                borderRadius: 10,
+                padding: 14,
+                fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+                fontSize: 14,
+                lineHeight: 20,
+                marginVertical: 10,
+              },
+              code_inline: {
+                backgroundColor: isDark ? "#1a1a2e" : "#f0f0f0",
+                borderRadius: 5,
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+                fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+                fontSize: 14,
+              },
+              blockquote: {
+                borderLeftWidth: 3,
+                borderLeftColor: theme.primary,
+                paddingLeft: 14,
+                marginVertical: 10,
+              },
+              link: {
+                color: theme.primary,
+                textDecorationLine: "underline" as const,
+              },
               paragraph: { marginBottom: 12 },
-              hr: { backgroundColor: theme.text + '20', height: 1, marginVertical: 16 },
+              hr: {
+                backgroundColor: theme.text + "20",
+                height: 1,
+                marginVertical: 16,
+              },
             }}
           />
           {message.sources && message.sources.length > 0 && (
-            <SourceCitation sources={message.sources} theme={theme} isDark={isDark} />
+            <SourceCitation
+              sources={message.sources}
+              theme={theme}
+              isDark={isDark}
+            />
           )}
         </View>
       )}
@@ -583,7 +770,7 @@ const MessageBubble: React.FC<{
 // QUICK ACTION CARD
 // ============================================
 const QuickActionCard: React.FC<{
-  action: typeof QUICK_ACTIONS[0];
+  action: (typeof QUICK_ACTIONS)[0];
   onPress: () => void;
   index: number;
   theme: any;
@@ -591,23 +778,32 @@ const QuickActionCard: React.FC<{
   return (
     <Animated.View entering={FadeIn.delay(100 + index * 60).duration(300)}>
       <TouchableOpacity
-        style={[styles.quickActionCard, { backgroundColor: theme.card, borderColor: theme.border }]}
+        style={[
+          styles.quickActionCard,
+          { backgroundColor: theme.card, borderColor: theme.border },
+        ]}
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           onPress();
         }}
         activeOpacity={0.7}
       >
-        <View style={[styles.quickActionIcon, { backgroundColor: theme.primary + '15' }]}>
+        <View
+          style={[
+            styles.quickActionIcon,
+            { backgroundColor: theme.primary + "15" },
+          ]}
+        >
           <Ionicons name={action.icon as any} size={20} color={theme.primary} />
         </View>
-        <Text style={[styles.quickActionText, { color: theme.text }]}>{action.text}</Text>
+        <Text style={[styles.quickActionText, { color: theme.text }]}>
+          {action.text}
+        </Text>
         <Ionicons name="arrow-forward" size={16} color={theme.primary} />
       </TouchableOpacity>
     </Animated.View>
   );
 };
-
 
 // ============================================
 // PDF PICKER MODAL
@@ -618,18 +814,24 @@ const PDFPickerModal: React.FC<{
   pdfs: any[];
   onSelect: (pdf: any) => void;
   theme: any;
-}> = ({ visible, onClose, pdfs, onSelect, theme }) => {
-  if (!visible) return null;
-
+}> = React.memo(({ visible, onClose, pdfs, onSelect, theme }) => {
+  // Let Modal own the show/hide animation. Drop the inner FadeInUp so we don't
+  // double-animate (which is what caused the "flash" on open).
   return (
-    <Modal visible={visible} transparent animationType="fade">
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
       <View style={styles.modalOverlay}>
-        <Animated.View
-          entering={FadeInUp.duration(250)}
-          style={[styles.pdfModal, { backgroundColor: theme.background }]}
-        >
-          <View style={[styles.pdfModalHeader, { borderBottomColor: theme.border }]}>
-            <Text style={[styles.pdfModalTitle, { color: theme.text }]}>Attach PDF</Text>
+        <View style={[styles.pdfModal, { backgroundColor: theme.background }]}>
+          <View
+            style={[styles.pdfModalHeader, { borderBottomColor: theme.border }]}
+          >
+            <Text style={[styles.pdfModalTitle, { color: theme.text }]}>
+              Attach PDF
+            </Text>
             <TouchableOpacity onPress={onClose}>
               <Ionicons name="close" size={24} color={theme.text} />
             </TouchableOpacity>
@@ -647,25 +849,35 @@ const PDFPickerModal: React.FC<{
                   onClose();
                 }}
               >
-                <Ionicons name="document-text" size={24} color={theme.primary} />
-                <Text style={[styles.pdfName, { color: theme.text }]} numberOfLines={1}>
+                <Ionicons
+                  name="document-text"
+                  size={24}
+                  color={theme.primary}
+                />
+                <Text
+                  style={[styles.pdfName, { color: theme.text }]}
+                  numberOfLines={1}
+                >
                   {item.title || item.name}
                 </Text>
               </TouchableOpacity>
             )}
             ListEmptyComponent={
               <View style={styles.emptyPdfs}>
-                <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
+                <Text
+                  style={[styles.emptyText, { color: theme.textSecondary }]}
+                >
                   No PDFs in your library
                 </Text>
               </View>
             }
           />
-        </Animated.View>
+        </View>
       </View>
     </Modal>
   );
-};
+});
+PDFPickerModal.displayName = "PDFPickerModal";
 
 // ============================================
 // MAIN COMPONENT
@@ -682,50 +894,67 @@ const NoraScreenNew: React.FC = () => {
 
   // State
   const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [showWelcome, setShowWelcome] = useState(true);
-  const [thinkingMode, setThinkingMode] = useState<'auto' | 'quick' | 'deep' | 'research'>('quick');
+  const [thinkingMode, setThinkingMode] = useState<
+    "auto" | "quick" | "deep" | "research"
+  >("quick");
   const [showPdfPicker, setShowPdfPicker] = useState(false);
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
-  const [uploadedPdfs, setUploadedPdfs] = useState<any[]>([]);
+  // Live ebook list — replaces the local `uploadedPdfs` state with a Convex query.
+  const ebooks = useQuery(api.ebooks.listForCurrentUser, {});
+  const uploadedPdfs = (ebooks ?? []).map((e: any) => ({
+    id: e._id,
+    title: e.title,
+    file_path: e.storageId,
+    vectorStoreId: e.vectorStoreId,
+    status: e.status,
+  }));
   const [selectedPdf, setSelectedPdf] = useState<any>(null);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [voiceAmplitude, setVoiceAmplitude] = useState(0);
-  const [activeNavItem, setActiveNavItem] = useState<string>('chat');
+  const [activeNavItem, setActiveNavItem] = useState<string>("chat");
 
   // Session management
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   // Hooks
-  const { sessions: noraSessions, groupedSessions, createSession, deleteSession: deleteNoraSess, requestTitleGeneration } = useNoraSessions();
-  const { messages: sessionMessages, isLoading: isLoadingSession } = useNoraSessionMessages(currentSessionId);
+  const {
+    sessions: noraSessions,
+    groupedSessions,
+    createSession,
+    deleteSession: deleteNoraSess,
+    requestTitleGeneration,
+  } = useNoraSessions();
+  const { messages: sessionMessages, isLoading: isLoadingSession } =
+    useNoraSessionMessages(currentSessionId);
 
   // Onboarding status
   const onboardingStatus = useQuery(api.noraOnboarding.getStatus);
 
   // Navigation items for side nav (New Chat is handled by the green button, not in nav items)
   const navItems: NavItem[] = [
-    { id: 'pdf', label: 'PDF Reader', icon: 'document-text-outline' },
-    { id: 'focus', label: 'Focus Timer', icon: 'timer-outline' },
-    { id: 'progress', label: 'Progress Tracker', icon: 'trophy-outline' },
+    { id: "pdf", label: "PDF Reader", icon: "document-text-outline" },
+    { id: "focus", label: "Focus Timer", icon: "timer-outline" },
+    { id: "progress", label: "Progress Tracker", icon: "trophy-outline" },
   ];
 
   const handleNavItemSelect = (itemId: string) => {
     setActiveNavItem(itemId);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     switch (itemId) {
-      case 'pdf':
+      case "pdf":
         setShowPdfPicker(true);
         break;
-      case 'focus':
-        navigation.navigate('FocusPreparation' as never);
+      case "focus":
+        navigation.navigate("FocusPreparation" as never);
         break;
-      case 'progress':
-        navigation.navigate('Main' as never, { screen: 'Results' });
+      case "progress":
+        navigation.navigate("Main" as never, { screen: "Results" });
         break;
     }
   };
@@ -750,9 +979,7 @@ const NoraScreenNew: React.FC = () => {
         setShowWelcome(true);
         setCurrentSessionId(null);
       }
-    } catch (error) {
-      console.error('Failed to delete chat session:', error);
-    }
+    } catch {}
   };
 
   const recordingRef = useRef<Audio.Recording | null>(null);
@@ -790,9 +1017,7 @@ const NoraScreenNew: React.FC = () => {
           allowsRecordingIOS: false,
           playsInSilentModeIOS: true,
         });
-      } catch (e) {
-        console.log('Audio reset on mount:', e);
-      }
+      } catch {}
     };
     resetAudio();
   }, []);
@@ -812,8 +1037,10 @@ const NoraScreenNew: React.FC = () => {
       const loaded: Message[] = sessionMessages.map((m: any) => ({
         id: m._id,
         content: m.content,
-        sender: m.role === 'user' ? 'user' : 'nora',
-        timestamp: m._creationTime ? new Date(m._creationTime).toISOString() : new Date().toISOString(),
+        sender: m.role === "user" ? "user" : "nora",
+        timestamp: m._creationTime
+          ? new Date(m._creationTime).toISOString()
+          : new Date().toISOString(),
       }));
       setMessages(loaded);
       isRestoringSession.current = false;
@@ -822,7 +1049,10 @@ const NoraScreenNew: React.FC = () => {
 
   // Enforce onboarding
   useEffect(() => {
-    if (onboardingStatus !== undefined && !onboardingStatus?.hasAcceptedPolicies) {
+    if (
+      onboardingStatus !== undefined &&
+      !onboardingStatus?.hasAcceptedPolicies
+    ) {
       setShowOnboarding(true);
     }
   }, [onboardingStatus]);
@@ -862,12 +1092,18 @@ const NoraScreenNew: React.FC = () => {
       // Checkmark fades in
       checkmarkRotation.value = withTiming(1, { duration: 200 });
       // Cancel button appears
-      cancelButtonOpacity.value = withDelay(100, withTiming(1, { duration: 200 }));
-      cancelButtonScale.value = withDelay(100, withSpring(1, { damping: 15, stiffness: 200 }));
+      cancelButtonOpacity.value = withDelay(
+        100,
+        withTiming(1, { duration: 200 }),
+      );
+      cancelButtonScale.value = withDelay(
+        100,
+        withSpring(1, { damping: 15, stiffness: 200 }),
+      );
       // Input container subtle pulse
       inputContainerScale.value = withSequence(
         withSpring(1.02, { damping: 15, stiffness: 300 }),
-        withSpring(1, { damping: 15, stiffness: 200 })
+        withSpring(1, { damping: 15, stiffness: 200 }),
       );
     } else {
       // Reset animations
@@ -884,15 +1120,18 @@ const NoraScreenNew: React.FC = () => {
     if (input.trim()) {
       sendButtonScale.value = withSequence(
         withSpring(1.15, { damping: 10, stiffness: 300 }),
-        withSpring(1, { damping: 12, stiffness: 200 })
+        withSpring(1, { damping: 12, stiffness: 200 }),
       );
       sendButtonGlow.value = withRepeat(
         withSequence(
           withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
-          withTiming(0.3, { duration: 1500, easing: Easing.inOut(Easing.ease) })
+          withTiming(0.3, {
+            duration: 1500,
+            easing: Easing.inOut(Easing.ease),
+          }),
         ),
         -1,
-        false
+        false,
       );
     } else {
       sendButtonScale.value = withSpring(1, { damping: 15 });
@@ -918,7 +1157,9 @@ const NoraScreenNew: React.FC = () => {
   // Checkmark icon style - simple fade in (no rotation)
   const checkmarkRotationStyle = useAnimatedStyle(() => ({
     opacity: interpolate(checkmarkRotation.value, [0, 1], [0, 1]),
-    transform: [{ scale: interpolate(checkmarkRotation.value, [0, 1], [0.8, 1]) }],
+    transform: [
+      { scale: interpolate(checkmarkRotation.value, [0, 1], [0.8, 1]) },
+    ],
   }));
 
   // Enhanced input area animated styles
@@ -955,7 +1196,7 @@ const NoraScreenNew: React.FC = () => {
     return Object.entries(groups).map(([date, msgs]) => ({
       id: date,
       date,
-      preview: msgs[0]?.content || '',
+      preview: msgs[0]?.content || "",
       messages: msgs.map((m) => ({
         id: m.id,
         content: m.content,
@@ -966,11 +1207,7 @@ const NoraScreenNew: React.FC = () => {
   };
 
   const loadPdfs = async () => {
-    if (!user) return;
-
-    // TODO: Load PDFs from Convex file storage
-    // PDF storage will be migrated to Convex in a future phase
-    setUploadedPdfs([]);
+    // PDFs are now loaded reactively via the ebooks Convex query
   };
 
   // Voice recording with Whisper
@@ -979,7 +1216,6 @@ const NoraScreenNew: React.FC = () => {
   const startRecording = async () => {
     // Prevent concurrent recording starts
     if (isStartingRecording.current) {
-      console.log('Already starting a recording, ignoring...');
       return;
     }
 
@@ -987,20 +1223,16 @@ const NoraScreenNew: React.FC = () => {
 
     try {
       const { status } = await Audio.requestPermissionsAsync();
-      if (status !== 'granted') {
-        console.error('Permission not granted');
+      if (status !== "granted") {
         isStartingRecording.current = false;
         return;
       }
 
       // Aggressively clean up any existing recording first
       if (recordingRef.current) {
-        console.log('Cleaning up existing recording...');
         try {
           await recordingRef.current.stopAndUnloadAsync();
-        } catch (e) {
-          console.log('Cleanup error (ignored):', e);
-        }
+        } catch {}
         recordingRef.current = null;
         setRecording(null);
       }
@@ -1012,7 +1244,7 @@ const NoraScreenNew: React.FC = () => {
       });
 
       // Small delay to ensure cleanup completes
-      await new Promise(resolve => setTimeout(resolve, 150));
+      await new Promise((resolve) => setTimeout(resolve, 150));
 
       // Reset audio mode
       await Audio.setAudioModeAsync({
@@ -1033,14 +1265,13 @@ const NoraScreenNew: React.FC = () => {
         await newRecording.prepareToRecordAsync(recordingOptions);
       } catch (prepareError: any) {
         // If prepare fails, try unloading this recording and retry once
-        if (prepareError.message?.includes('Only one Recording')) {
-          console.log('Recording conflict detected, attempting cleanup retry...');
+        if (prepareError.message?.includes("Only one Recording")) {
           try {
             await newRecording.stopAndUnloadAsync();
           } catch (e) {}
 
           // Wait a bit longer
-          await new Promise(resolve => setTimeout(resolve, 300));
+          await new Promise((resolve) => setTimeout(resolve, 300));
 
           // Try with a fresh recording object
           const retryRecording = new Audio.Recording();
@@ -1079,8 +1310,7 @@ const NoraScreenNew: React.FC = () => {
       recordingTimerRef.current = setInterval(() => {
         setRecordingDuration((prev) => prev + 1);
       }, 1000);
-    } catch (error) {
-      console.error('Failed to start recording:', error);
+    } catch {
       // Reset state on error
       recordingRef.current = null;
       setRecording(null);
@@ -1160,8 +1390,7 @@ const NoraScreenNew: React.FC = () => {
       if (uri) {
         await transcribeAudio(uri, true); // true = auto-send
       }
-    } catch (error) {
-      console.error('Failed to stop recording:', error);
+    } catch {
       recordingRef.current = null;
       setRecording(null);
       setRecordingDuration(0);
@@ -1187,15 +1416,17 @@ const NoraScreenNew: React.FC = () => {
       if (uri) {
         await transcribeAudio(uri, false); // false = just put in input box
       }
-    } catch (error) {
-      console.error('Failed to stop recording:', error);
+    } catch {
       recordingRef.current = null;
       setRecording(null);
       setRecordingDuration(0);
     }
   };
 
-  const transcribeAudio = async (audioUri: string, autoSend: boolean = true) => {
+  const transcribeAudio = async (
+    audioUri: string,
+    autoSend: boolean = true,
+  ) => {
     try {
       // Only show loading if we're going to auto-send
       if (autoSend) {
@@ -1203,17 +1434,17 @@ const NoraScreenNew: React.FC = () => {
       }
 
       // Read audio file as base64 for Convex action
-      const fileExtension = audioUri.split('.').pop() || 'm4a';
-      const mimeType = fileExtension === 'wav' ? 'audio/wav' : 'audio/m4a';
+      const fileExtension = audioUri.split(".").pop() || "m4a";
+      const mimeType = fileExtension === "wav" ? "audio/wav" : "audio/m4a";
       const audioBase64 = await FileSystem.readAsStringAsync(audioUri, {
-        encoding: 'base64',
+        encoding: "base64",
       });
 
       const result = await convexTranscribeAudio({
         audioBase64,
         mimeType,
         fileName: `recording.${fileExtension}`,
-        model: 'whisper-1',
+        model: "whisper-1",
       });
 
       if (result.text) {
@@ -1223,13 +1454,17 @@ const NoraScreenNew: React.FC = () => {
           handleSend(result.text);
         }
       } else {
-        console.error('Transcription failed:', result.error);
-        Alert.alert('Voice Error', 'Could not transcribe your audio. Please type your message instead or try again.');
+        Alert.alert(
+          "Voice Error",
+          "Could not transcribe your audio. Please type your message instead or try again.",
+        );
         setIsLoading(false);
       }
-    } catch (error: any) {
-      console.error('Transcription error:', error);
-      Alert.alert('Voice Error', 'Something went wrong with voice input. Please type your message instead.');
+    } catch {
+      Alert.alert(
+        "Voice Error",
+        "Something went wrong with voice input. Please type your message instead.",
+      );
       setIsLoading(false);
     }
   };
@@ -1243,61 +1478,83 @@ const NoraScreenNew: React.FC = () => {
     }
   };
 
-  const handleSend = async (text?: string) => {
+  const handleSend = async (
+    text?: string,
+    displayText?: string,
+    modeOverride?: "auto" | "quick" | "deep" | "research",
+  ) => {
     const messageText = text || input.trim();
-    console.log('[Nora] handleSend called:', { messageText: messageText?.slice(0, 30), user: !!user, isLoading, onboardingStatus });
     if (!messageText || !user || isLoading) {
-      console.log('[Nora] handleSend blocked:', { noText: !messageText, noUser: !user, isLoading });
       return;
     }
+    // Quick Action chips always use Quick mode for the fastest response, even if the
+    // user has previously toggled into Deep/Research.
+    const effectiveThinkingMode = modeOverride ?? thinkingMode;
 
     // Block if onboarding not complete
     if (!onboardingStatus?.hasAcceptedPolicies) {
-      console.log('[Nora] handleSend blocked: onboarding not complete');
       setShowOnboarding(true);
       return;
     }
 
-    setInput('');
+    setInput("");
     setShowWelcome(false);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     const userMessage: Message = {
       id: Date.now().toString(),
-      content: messageText,
-      sender: 'user',
+      // Show the friendly chip label in the bubble; send the full prompt to Nora.
+      content: displayText ?? messageText,
+      sender: "user",
       timestamp: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, userMessage]);
 
     const thinkingSteps: Record<string, string[]> = {
-      auto: ['Analyzing your request...', 'Choosing the best approach...', 'Searching for sources...', 'Working on it...'],
-      quick: ['Preparing response...'],
-      deep: ['Analyzing in depth...', 'Searching for authoritative sources...', 'Cross-referencing research...', 'Building comprehensive analysis...'],
-      research: ['Searching the web...', 'Reading multiple sources...', 'Cross-referencing data...', 'Synthesizing findings...', 'Preparing cited response...'],
+      auto: [
+        "Analyzing your request...",
+        "Choosing the best approach...",
+        "Searching for sources...",
+        "Working on it...",
+      ],
+      quick: ["Preparing response..."],
+      deep: [
+        "Analyzing in depth...",
+        "Searching for authoritative sources...",
+        "Cross-referencing research...",
+        "Building comprehensive analysis...",
+      ],
+      research: [
+        "Searching the web...",
+        "Reading multiple sources...",
+        "Cross-referencing data...",
+        "Synthesizing findings...",
+        "Preparing cited response...",
+      ],
     };
 
     const searchingMessage: Message = {
-      id: 'searching',
-      content: '',
-      sender: 'nora',
+      id: "searching",
+      content: "",
+      sender: "nora",
       timestamp: new Date().toISOString(),
       isSearching: true,
-      searchSteps: thinkingSteps[thinkingMode] || thinkingSteps.quick,
-      mode: thinkingMode,
+      searchSteps: thinkingSteps[effectiveThinkingMode] || thinkingSteps.quick,
+      mode: effectiveThinkingMode,
     };
     setMessages((prev) => [...prev, searchingMessage]);
     setIsLoading(true);
 
     try {
-      console.log('[Nora] Sending message to Convex...', { thinkingMode, sessionId: currentSessionId });
       const data = await sendNoraChatMessage({
         message: messageText,
-        thinkingMode,
+        thinkingMode: effectiveThinkingMode,
         sessionId: currentSessionId || undefined,
-        pdfContext: selectedPdf ? { title: selectedPdf.title, file_path: selectedPdf.file_path } : null,
+        pdfContext: selectedPdf
+          ? { title: selectedPdf.title, file_path: selectedPdf.file_path }
+          : null,
+        vectorStoreId: selectedPdf?.vectorStoreId,
       });
-      console.log('[Nora] Response received:', { success: data.success, error: data.error, hasResponse: !!data.response, sessionId: data.sessionId, sourcesCount: data.sources?.length ?? 0, sources: data.sources });
 
       // Store the session ID returned from the backend
       if (data.sessionId && !currentSessionId) {
@@ -1307,7 +1564,7 @@ const NoraScreenNew: React.FC = () => {
       }
 
       setMessages((prev) => {
-        const filtered = prev.filter((m) => m.id !== 'searching');
+        const filtered = prev.filter((m) => m.id !== "searching");
 
         // Build sources: prefer API-returned web sources, fall back to context-based, then Nora's knowledge
         let messageSources: Source[] = [];
@@ -1315,35 +1572,42 @@ const NoraScreenNew: React.FC = () => {
           messageSources = data.sources.map((s: any) => ({
             title: s.title,
             url: s.url,
-            type: 'web' as const,
+            type: "web" as const,
           }));
         } else if (selectedPdf) {
-          messageSources = [{ title: selectedPdf.title, type: 'document' }];
+          messageSources = [{ title: selectedPdf.title, type: "document" }];
         }
 
+        const responseText =
+          data.response || "I'm here to help! What would you like to know?";
         const noraMessage: Message = {
           id: Date.now().toString(),
-          content: data.response || "I'm here to help! What would you like to know?",
-          sender: 'nora',
+          // Strip the "TOPIC: …" trailer we ask for in the Learn-something-new prompt.
+          content: responseText.replace(/\n?TOPIC:\s*.+$/i, "").trim(),
+          sender: "nora",
           timestamp: new Date().toISOString(),
           sources: messageSources.length > 0 ? messageSources : undefined,
           isNew: true,
-          mode: thinkingMode,
+          mode: effectiveThinkingMode,
         };
         return [...filtered, noraMessage];
       });
 
+      // Track the topic from a Learn-something-new response so we don't repeat it.
+      if (displayText === "Learn something new" && data.response) {
+        recordLearnTopic(data.response);
+      }
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (error) {
-      console.error('Error:', error);
+    } catch {
       setMessages((prev) => {
-        const filtered = prev.filter((m) => m.id !== 'searching');
+        const filtered = prev.filter((m) => m.id !== "searching");
         return [
           ...filtered,
           {
             id: Date.now().toString(),
             content: "I'm having trouble connecting. Please try again.",
-            sender: 'nora',
+            sender: "nora",
             timestamp: new Date().toISOString(),
           },
         ];
@@ -1359,37 +1623,43 @@ const NoraScreenNew: React.FC = () => {
     isRestoringSession.current = false;
     setMessages([]);
     setShowWelcome(true);
-    setInput('');
+    setInput("");
     setSelectedPdf(null);
     setCurrentSessionId(null);
   };
 
   const handleGoHome = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    navigation.navigate('Home');
+    navigation.navigate("Home");
   };
 
   const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour < 5) return 'How can I help you this late night?';
-    if (hour < 12) return 'Good morning! How can I help?';
-    if (hour < 17) return 'Good afternoon! How can I help?';
-    if (hour < 21) return 'Good evening! How can I help?';
-    return 'How can I help you tonight?';
+    if (hour < 5) return "How can I help you this late night?";
+    if (hour < 12) return "Good morning! How can I help?";
+    if (hour < 17) return "Good afternoon! How can I help?";
+    if (hour < 21) return "Good evening! How can I help?";
+    return "How can I help you tonight?";
   };
 
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.background }]}
-      edges={['top', 'left', 'right']}
+      edges={["top", "left", "right"]}
     >
-      <StatusBar barStyle={theme.background === '#FFFFFF' ? 'dark-content' : 'light-content'} />
+      <StatusBar
+        barStyle={
+          theme.background === "#FFFFFF" ? "dark-content" : "light-content"
+        }
+      />
 
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <TouchableOpacity style={styles.headerButton} onPress={handleGoHome}>
           <Ionicons name="chevron-back" size={24} color={theme.text} />
-          <Text style={[styles.headerBackText, { color: theme.text }]}>Home</Text>
+          <Text style={[styles.headerBackText, { color: theme.text }]}>
+            Home
+          </Text>
         </TouchableOpacity>
 
         <View style={styles.headerCenter}>
@@ -1401,7 +1671,7 @@ const NoraScreenNew: React.FC = () => {
           activeItemId={activeNavItem}
           onItemSelect={handleNavItemSelect}
           onNewChat={handleNewChat}
-          chatSessions={noraSessions.map(s => ({
+          chatSessions={noraSessions.map((s) => ({
             id: s._id,
             date: new Date(s.lastMessageAt).toLocaleDateString(),
             preview: s.title,
@@ -1415,11 +1685,17 @@ const NoraScreenNew: React.FC = () => {
       {/* Project/Context indicator */}
       {selectedPdf && (
         <TouchableOpacity
-          style={[styles.projectIndicator, { backgroundColor: theme.card, borderColor: theme.border }]}
+          style={[
+            styles.projectIndicator,
+            { backgroundColor: theme.card, borderColor: theme.border },
+          ]}
           onPress={() => setShowPdfPicker(true)}
         >
           <Ionicons name="document-text-outline" size={16} color={theme.text} />
-          <Text style={[styles.projectText, { color: theme.text }]} numberOfLines={1}>
+          <Text
+            style={[styles.projectText, { color: theme.text }]}
+            numberOfLines={1}
+          >
             {selectedPdf.title}
           </Text>
         </TouchableOpacity>
@@ -1428,7 +1704,7 @@ const NoraScreenNew: React.FC = () => {
       {/* Main Content */}
       <KeyboardAvoidingView
         style={styles.content}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={0}
       >
         <ScrollView
@@ -1442,8 +1718,14 @@ const NoraScreenNew: React.FC = () => {
             <View style={styles.welcomeContainer}>
               <Animated.View style={[styles.welcomeLogo, logoAnimatedStyle]}>
                 <LinearGradient
-                  colors={['#7B61FF', '#9D4EDD']}
-                  style={{ width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' }}
+                  colors={["#7B61FF", "#9D4EDD"]}
+                  style={{
+                    width: 64,
+                    height: 64,
+                    borderRadius: 32,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
                 >
                   <Ionicons name="sparkles" size={28} color="#FFFFFF" />
                 </LinearGradient>
@@ -1463,7 +1745,17 @@ const NoraScreenNew: React.FC = () => {
                     action={action}
                     index={index}
                     theme={theme}
-                    onPress={() => handleSend(action.text)}
+                    onPress={async () => {
+                      // Quick Actions always use Quick mode — this gives the fastest
+                      // response and is what users expect from a one-tap suggestion.
+                      if (action.id === "3") {
+                        // The "Learn something new" chip sends a richer, deduplicated prompt.
+                        const prompt = await buildLearnPrompt();
+                        handleSend(prompt, action.text, "quick");
+                      } else {
+                        handleSend(action.text, undefined, "quick");
+                      }
+                    }}
                   />
                 ))}
               </View>
@@ -1471,23 +1763,49 @@ const NoraScreenNew: React.FC = () => {
           ) : (
             <View style={styles.messagesContainer}>
               {isRestoringSession.current && messages.length === 0 && (
-                <View style={{ padding: 20, alignItems: 'center' }}>
-                  <Text style={{ color: theme.textSecondary, fontSize: 14 }}>Loading conversation...</Text>
+                <View style={{ padding: 20, alignItems: "center" }}>
+                  <Text style={{ color: theme.textSecondary, fontSize: 14 }}>
+                    Loading conversation...
+                  </Text>
                 </View>
               )}
               {messages.map((message) => (
-                <MessageBubble key={message.id} message={message} theme={theme} isDark={theme.isDark ?? false} />
+                <MessageBubble
+                  key={message.id}
+                  message={message}
+                  theme={theme}
+                  isDark={theme.isDark ?? false}
+                />
               ))}
             </View>
           )}
         </ScrollView>
 
         {/* Input Area */}
-        <View style={[styles.inputArea, { backgroundColor: theme.background, paddingBottom: Math.max(insets.bottom, 4) }]}>
-          <Animated.View style={[styles.inputContainer, { backgroundColor: theme.card, borderColor: theme.border }, inputContainerAnimatedStyle]}>
+        <View
+          style={[
+            styles.inputArea,
+            {
+              backgroundColor: theme.background,
+              paddingBottom: Math.max(insets.bottom, 4),
+            },
+          ]}
+        >
+          <Animated.View
+            style={[
+              styles.inputContainer,
+              { backgroundColor: theme.card, borderColor: theme.border },
+              inputContainerAnimatedStyle,
+            ]}
+          >
             {/* Show voice bar when recording, text input otherwise */}
             {isRecording ? (
-              <View style={[styles.recordingInlineContainer, { backgroundColor: theme.primary + '10' }]}>
+              <View
+                style={[
+                  styles.recordingInlineContainer,
+                  { backgroundColor: theme.primary + "10" },
+                ]}
+              >
                 <InlineVoiceBar
                   amplitude={voiceAmplitude}
                   duration={recordingDuration}
@@ -1513,11 +1831,22 @@ const NoraScreenNew: React.FC = () => {
                   {/* Cancel button */}
                   <Animated.View style={cancelButtonAnimatedStyle}>
                     <TouchableOpacity
-                      style={[styles.inputIconButton, { backgroundColor: (theme.error || '#FF6B6B') + '15', borderRadius: 12, padding: 8 }]}
+                      style={[
+                        styles.inputIconButton,
+                        {
+                          backgroundColor: (theme.error || "#FF6B6B") + "15",
+                          borderRadius: 12,
+                          padding: 8,
+                        },
+                      ]}
                       onPress={cancelRecording}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     >
-                      <Ionicons name="close" size={22} color={theme.error || '#FF6B6B'} />
+                      <Ionicons
+                        name="close"
+                        size={22}
+                        color={theme.error || "#FF6B6B"}
+                      />
                     </TouchableOpacity>
                   </Animated.View>
                   <View style={{ flex: 1 }} />
@@ -1525,59 +1854,112 @@ const NoraScreenNew: React.FC = () => {
               ) : (
                 <>
                   {/* Plus button for PDFs */}
-                  <TouchableOpacity style={styles.inputIconButton} onPress={() => setShowPdfPicker(true)}>
-                    <Ionicons name="add" size={22} color={theme.textSecondary} />
+                  <TouchableOpacity
+                    style={styles.inputIconButton}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      // Defer mount so press-feedback animation completes first.
+                      InteractionManager.runAfterInteractions(() =>
+                        setShowPdfPicker(true),
+                      );
+                    }}
+                  >
+                    <Ionicons
+                      name="add"
+                      size={22}
+                      color={theme.textSecondary}
+                    />
                   </TouchableOpacity>
 
                   {/* Mode selector pills — Quick (default), Auto, Research (web), Deep (thorough) */}
-                  {(['quick', 'auto', 'research', 'deep'] as const).map((mode) => {
-                    const modeConfig = {
-                      quick: { icon: 'flash-outline' as const, color: theme.textSecondary, label: 'Quick' },
-                      auto: { icon: 'sparkles-outline' as const, color: '#7B61FF', label: 'Auto' },
-                      research: { icon: 'globe-outline' as const, color: '#4ECDC4', label: 'Research' },
-                      deep: { icon: 'glasses-outline' as const, color: '#FF6B6B', label: 'Deep' },
-                    };
-                    const config = modeConfig[mode];
-                    const isActive = thinkingMode === mode;
-                    return (
-                      <TouchableOpacity
-                        key={mode}
-                        style={[
-                          styles.inputIconButton,
-                          isActive && { backgroundColor: config.color + '20', borderRadius: 12 },
-                        ]}
-                        onPress={() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                          setThinkingMode(mode);
-                        }}
-                      >
-                        <Ionicons
-                          name={config.icon}
-                          size={18}
-                          color={isActive ? config.color : theme.textSecondary}
-                        />
-                      </TouchableOpacity>
-                    );
-                  })}
+                  {(["quick", "auto", "research", "deep"] as const).map(
+                    (mode) => {
+                      const modeConfig = {
+                        quick: {
+                          icon: "flash-outline" as const,
+                          color: theme.textSecondary,
+                          label: "Quick",
+                        },
+                        auto: {
+                          icon: "sparkles-outline" as const,
+                          color: "#7B61FF",
+                          label: "Auto",
+                        },
+                        research: {
+                          icon: "globe-outline" as const,
+                          color: "#4ECDC4",
+                          label: "Research",
+                        },
+                        deep: {
+                          icon: "glasses-outline" as const,
+                          color: "#FF6B6B",
+                          label: "Deep",
+                        },
+                      };
+                      const config = modeConfig[mode];
+                      const isActive = thinkingMode === mode;
+                      return (
+                        <TouchableOpacity
+                          key={mode}
+                          style={[
+                            styles.inputIconButton,
+                            isActive && {
+                              backgroundColor: config.color + "20",
+                              borderRadius: 12,
+                            },
+                          ]}
+                          onPress={() => {
+                            Haptics.impactAsync(
+                              Haptics.ImpactFeedbackStyle.Light,
+                            );
+                            setThinkingMode(mode);
+                          }}
+                        >
+                          <Ionicons
+                            name={config.icon}
+                            size={18}
+                            color={
+                              isActive ? config.color : theme.textSecondary
+                            }
+                          />
+                        </TouchableOpacity>
+                      );
+                    },
+                  )}
                   <View style={{ flex: 1 }} />
                 </>
               )}
 
               {/* Mic button - always visible */}
               <TouchableOpacity
-                style={[styles.sendIconButton, { backgroundColor: theme.primary + '15', marginRight: 6 }]}
+                style={[
+                  styles.sendIconButton,
+                  { backgroundColor: theme.primary + "15", marginRight: 6 },
+                ]}
                 onPress={isRecording ? stopAndTranscribe : handleVoicePress}
                 activeOpacity={0.8}
               >
                 {/* Rotating icon container */}
                 <View style={styles.rotatingIconContainer}>
                   {/* Mic icon - rotates out when recording */}
-                  <Animated.View style={[styles.rotatingIcon, micRotationStyle]}>
+                  <Animated.View
+                    style={[styles.rotatingIcon, micRotationStyle]}
+                  >
                     <Ionicons name="mic" size={18} color={theme.primary} />
                   </Animated.View>
                   {/* Checkmark icon - rotates in when recording */}
-                  <Animated.View style={[styles.rotatingIcon, styles.rotatingIconAbsolute, checkmarkRotationStyle]}>
-                    <Ionicons name="checkmark" size={20} color={theme.primary} />
+                  <Animated.View
+                    style={[
+                      styles.rotatingIcon,
+                      styles.rotatingIconAbsolute,
+                      checkmarkRotationStyle,
+                    ]}
+                  >
+                    <Ionicons
+                      name="checkmark"
+                      size={20}
+                      color={theme.primary}
+                    />
                   </Animated.View>
                 </View>
               </TouchableOpacity>
@@ -1595,11 +1977,18 @@ const NoraScreenNew: React.FC = () => {
                   />
                   <Animated.View style={sendButtonAnimatedStyle}>
                     <TouchableOpacity
-                      style={[styles.sendIconButton, { backgroundColor: theme.text }]}
+                      style={[
+                        styles.sendIconButton,
+                        { backgroundColor: theme.text },
+                      ]}
                       onPress={() => handleSend()}
                       disabled={isLoading}
                     >
-                      <Ionicons name="arrow-up" size={18} color={theme.background} />
+                      <Ionicons
+                        name="arrow-up"
+                        size={18}
+                        color={theme.background}
+                      />
                     </TouchableOpacity>
                   </Animated.View>
                 </View>
@@ -1634,16 +2023,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 8,
     paddingVertical: 10,
     borderBottomWidth: 0,
   },
   headerButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     padding: 8,
     borderRadius: 10,
   },
@@ -1652,17 +2041,17 @@ const styles = StyleSheet.create({
     marginLeft: 2,
   },
   headerCenter: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   headerTitle: {
     fontSize: 17,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   projectIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "center",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
@@ -1672,7 +2061,7 @@ const styles = StyleSheet.create({
   },
   projectText: {
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: "500",
     maxWidth: 200,
   },
   content: {
@@ -1688,8 +2077,8 @@ const styles = StyleSheet.create({
   },
   welcomeContainer: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 40,
   },
   welcomeLogo: {
@@ -1700,18 +2089,18 @@ const styles = StyleSheet.create({
   },
   welcomeTitle: {
     fontSize: 26,
-    fontWeight: '600',
+    fontWeight: "600",
     marginBottom: 40,
-    textAlign: 'center',
+    textAlign: "center",
     paddingHorizontal: 20,
   },
   quickActions: {
-    width: '100%',
+    width: "100%",
     gap: 10,
   },
   quickActionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
@@ -1720,28 +2109,28 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 12,
   },
   quickActionText: {
     flex: 1,
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   messagesContainer: {
     paddingTop: 12,
   },
   messageBubbleContainer: {
-    flexDirection: 'row',
+    flexDirection: "row",
     marginBottom: 12,
   },
   userBubbleContainer: {
-    justifyContent: 'flex-end',
+    justifyContent: "flex-end",
   },
   noraBubbleContainer: {
-    justifyContent: 'flex-start',
-    alignItems: 'flex-start',
+    justifyContent: "flex-start",
+    alignItems: "flex-start",
     flex: 1,
   },
   noraAvatarSmall: {
@@ -1752,11 +2141,11 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   messageBubble: {
-    maxWidth: '82%',
+    maxWidth: "82%",
     borderRadius: 18,
     padding: 12,
   },
@@ -1780,18 +2169,18 @@ const styles = StyleSheet.create({
     lineHeight: 21,
   },
   userMessageText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   noraMessageText: {},
   searchingContainer: {
     paddingVertical: 4,
   },
   searchingContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   searchingDots: {
-    flexDirection: 'row',
+    flexDirection: "row",
     marginRight: 10,
   },
   searchingDot: {
@@ -1802,47 +2191,47 @@ const styles = StyleSheet.create({
   },
   searchingText: {
     fontSize: 13,
-    fontStyle: 'italic',
+    fontStyle: "italic",
   },
   sourcesContainer: {
     marginTop: 12,
   },
   // Collapsed bar (tap to expand)
   sourcesCollapsedBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderRadius: 16,
     borderWidth: 1,
   },
   sourcesCollapsedLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
   },
   sourcesCollapsedLabel: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   // Stacked favicon circles (overlap effect)
   faviconStack: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   faviconStackIcon: {
     width: 24,
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: 'transparent',
+    borderColor: "transparent",
   },
   // Bottom sheet modal
   sourcesSheetOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "flex-end",
   },
   sourcesSheetContainer: {
     borderTopLeftRadius: 20,
@@ -1851,7 +2240,7 @@ const styles = StyleSheet.create({
     paddingBottom: 34, // safe area
   },
   sourcesSheetHandle: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: 10,
   },
   sourcesSheetHandleBar: {
@@ -1860,23 +2249,23 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   sourcesSheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingBottom: 12,
   },
   sourcesSheetTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   sourcesSheetList: {
     paddingHorizontal: 6,
   },
   // Individual source row
   sourceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderBottomWidth: 1,
@@ -1891,15 +2280,15 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   sourceRowText: {
     flex: 1,
   },
   sourceRowTitle: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: "500",
     lineHeight: 18,
   },
   sourceRowDomain: {
@@ -1909,7 +2298,7 @@ const styles = StyleSheet.create({
   // Thinking Bubble Container
   thinkingBubbleContainer: {
     flex: 1,
-    maxWidth: '85%',
+    maxWidth: "85%",
   },
   inputArea: {
     paddingHorizontal: 12,
@@ -1935,34 +2324,34 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 8,
     paddingHorizontal: 4,
-    justifyContent: 'center',
+    justifyContent: "center",
     marginBottom: 8,
   },
   inputIconsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
   },
   inputIconButton: {
     padding: 6,
   },
   deepThinkActiveButton: {
-    backgroundColor: 'rgba(255, 107, 107, 0.15)',
+    backgroundColor: "rgba(255, 107, 107, 0.15)",
     borderRadius: 12,
   },
   sendIconButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   // Deep Think button glow effect
   deepThinkWrapper: {
-    position: 'relative',
+    position: "relative",
   },
   deepThinkGlow: {
-    position: 'absolute',
+    position: "absolute",
     width: 34,
     height: 34,
     borderRadius: 17,
@@ -1971,17 +2360,17 @@ const styles = StyleSheet.create({
   },
   // Send button glow effect
   sendButtonWrapper: {
-    position: 'relative',
+    position: "relative",
   },
   sendButtonGlow: {
-    position: 'absolute',
+    position: "absolute",
     width: 32,
     height: 32,
     borderRadius: 16,
   },
   // Inline Voice Recording - Apple-style circular reveal
   recordingRevealOverlay: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
@@ -1989,10 +2378,10 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     paddingVertical: 12,
     paddingHorizontal: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    transformOrigin: 'right bottom', // Expand from mic button position
-    overflow: 'hidden',
+    justifyContent: "center",
+    alignItems: "center",
+    transformOrigin: "right bottom", // Expand from mic button position
+    overflow: "hidden",
   },
   // Legacy - keep for backward compatibility
   recordingOverlay: {
@@ -2005,33 +2394,33 @@ const styles = StyleSheet.create({
   rotatingIconContainer: {
     width: 18,
     height: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   rotatingIcon: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   rotatingIconAbsolute: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   inlineVoiceBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 12,
   },
   inlineWaveContainer: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     height: 36,
     gap: 2,
   },
@@ -2041,36 +2430,36 @@ const styles = StyleSheet.create({
   },
   inlineDuration: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
     minWidth: 40,
-    textAlign: 'left',
+    textAlign: "left",
   },
   // PDF modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   pdfModal: {
     width: width * 0.85,
     borderRadius: 16,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   pdfModalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     padding: 16,
     borderBottomWidth: 1,
   },
   pdfModalTitle: {
     fontSize: 17,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   pdfItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     padding: 14,
     borderBottomWidth: 1,
     gap: 12,
@@ -2081,11 +2470,11 @@ const styles = StyleSheet.create({
   },
   emptyPdfs: {
     padding: 30,
-    alignItems: 'center',
+    alignItems: "center",
   },
   emptyText: {
     fontSize: 14,
-    textAlign: 'center',
+    textAlign: "center",
   },
 });
 

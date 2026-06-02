@@ -1,20 +1,15 @@
-const React = require('react');
-const { api } = require('../../convex/_generated/api');
+const React = require("react");
+const { api } = require("../../convex/_generated/api");
 
 /**
  * Hooks and utilities for fetching and displaying user data from Convex
  * Uses Convex imperative client pattern.
  */
 
-let _convexClient = null;
-
-function setConvexClient(client) {
-  _convexClient = client;
-}
+const { getConvexClient, setConvexClient } = require("./convexClient");
 
 function getClient() {
-  if (!_convexClient) throw new Error('Convex client not initialized for userAppData');
-  return _convexClient;
+  return getConvexClient();
 }
 
 /**
@@ -25,7 +20,7 @@ async function fetchUserAppData(userId = null) {
   try {
     const client = getClient();
 
-    console.log('📊 Fetching user app data from Convex');
+    console.log("📊 Fetching user app data from Convex");
 
     // Parallel fetch all user data via Convex queries
     const [
@@ -53,10 +48,10 @@ async function fetchUserAppData(userId = null) {
     ]);
 
     // Fallbacks for missing data
-    const safeProfile = profile || { fullName: 'Study User', email: '' };
+    const safeProfile = profile || { fullName: "Study User", email: "" };
     const safeOnboarding = onboarding || {
-      focusMethod: 'Balanced',
-      soundPreference: 'Lo-Fi',
+      focusMethod: "Balanced",
+      soundPreference: "Lo-Fi",
       weeklyFocusGoal: 10,
       isOnboardingComplete: true,
     };
@@ -86,28 +81,38 @@ async function fetchUserAppData(userId = null) {
     // Calculate weekly focus time in minutes (durationSeconds is in seconds, convert to minutes)
     const weeklyFocusTime = safeSessions
       .filter((session) => {
-        const sessionDate = new Date(session.startTime || session._creationTime);
-        return sessionDate >= weekStart && session.status === 'completed';
+        const sessionDate = new Date(
+          session.startTime || session._creationTime,
+        );
+        return sessionDate >= weekStart && session.status === "completed";
       })
-      .reduce((total, session) => total + ((session.durationSeconds || 0) / 60), 0);
+      .reduce(
+        (total, session) => total + (session.durationSeconds || 0) / 60,
+        0,
+      );
 
     // Daily focus data for the past 7 days
     const dailyFocusData = [];
-    const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
     for (let i = 6; i >= 0; i--) {
       const date = new Date(today);
       date.setDate(today.getDate() - i);
       const dayName = daysOfWeek[date.getDay()];
-      const dateString = date.toISOString().split('T')[0];
+      const dateString = date.toISOString().split("T")[0];
 
       // Calculate daily focus time in minutes (durationSeconds is in seconds, convert to minutes)
       const daySessionsMinutes = safeSessions
         .filter((session) => {
-          const sessionDate = (session.startTime || new Date(session._creationTime).toISOString()).split('T')[0];
-          return sessionDate === dateString && session.status === 'completed';
+          const sessionDate = (
+            session.startTime || new Date(session._creationTime).toISOString()
+          ).split("T")[0];
+          return sessionDate === dateString && session.status === "completed";
         })
-        .reduce((total, session) => total + ((session.durationSeconds || 0) / 60), 0);
+        .reduce(
+          (total, session) => total + (session.durationSeconds || 0) / 60,
+          0,
+        );
 
       dailyFocusData.push({
         day: dayName,
@@ -122,11 +127,13 @@ async function fetchUserAppData(userId = null) {
       const date = new Date(today);
       date.setDate(today.getDate() - i);
       const dayName = daysOfWeek[date.getDay()];
-      const dateString = date.toISOString().split('T')[0];
+      const dateString = date.toISOString().split("T")[0];
 
       const completedCount = safeTasks.filter((task) => {
-        if (task.status !== 'completed') return false;
-        const taskDate = new Date(task._creationTime).toISOString().split('T')[0];
+        if (task.status !== "completed") return false;
+        const taskDate = new Date(task._creationTime)
+          .toISOString()
+          .split("T")[0];
         return taskDate === dateString;
       }).length;
 
@@ -137,7 +144,7 @@ async function fetchUserAppData(userId = null) {
       });
     }
 
-    console.log('📊 User data compiled successfully:', {
+    console.log("📊 User data compiled successfully:", {
       tasksCount: safeTasks.length,
       sessionsCount: safeSessions.length,
       weeklyFocusTime,
@@ -161,12 +168,13 @@ async function fetchUserAppData(userId = null) {
       dailyTasksCompleted,
 
       // Helper data
-      activeTasks: safeTasks.filter((task) => task.status !== 'completed'),
-      completedTasks: safeTasks.filter((task) => task.status === 'completed'),
-      activeSession: safeSessions.find((session) => session.status === 'active') || null,
+      activeTasks: safeTasks.filter((task) => task.status !== "completed"),
+      completedTasks: safeTasks.filter((task) => task.status === "completed"),
+      activeSession:
+        safeSessions.find((session) => session.status === "active") || null,
     };
   } catch (error) {
-    console.error('Error fetching user app data:', error);
+    console.error("Error fetching user app data:", error);
     return getEmptyData();
   }
 }
@@ -186,7 +194,7 @@ function useUserAppData() {
       const userData = await fetchUserAppData();
       setData(userData);
     } catch (err) {
-      console.error('Error in useUserAppData:', err);
+      console.error("Error in useUserAppData:", err);
       setError(err.message);
       setData(getEmptyData());
     } finally {
@@ -207,21 +215,21 @@ function useUserAppData() {
  */
 async function getDailyInspiration() {
   const quotes = [
-    'The secret of getting ahead is getting started.',
-    'Your focus determines your reality.',
-    'The best way to predict your future is to create it.',
-    'Learning is not attained by chance, it must be sought with ardor and attended to with diligence.',
-    'The more that you read, the more things you will know. The more that you learn, the more places you\'ll go.',
-    'It always seems impossible until it\'s done.',
-    'The expert in anything was once a beginner.',
-    'Knowledge is power.',
-    'All our dreams can come true, if we have the courage to pursue them.',
-    'Success is not final, failure is not fatal: it is the courage to continue that counts.',
+    "The secret of getting ahead is getting started.",
+    "Your focus determines your reality.",
+    "The best way to predict your future is to create it.",
+    "Learning is not attained by chance, it must be sought with ardor and attended to with diligence.",
+    "The more that you read, the more things you will know. The more that you learn, the more places you'll go.",
+    "It always seems impossible until it's done.",
+    "The expert in anything was once a beginner.",
+    "Knowledge is power.",
+    "All our dreams can come true, if we have the courage to pursue them.",
+    "Success is not final, failure is not fatal: it is the courage to continue that counts.",
   ];
 
   const today = new Date();
   const dayOfYear = Math.floor(
-    (today - new Date(today.getFullYear(), 0, 0)) / 1000 / 60 / 60 / 24
+    (today - new Date(today.getFullYear(), 0, 0)) / 1000 / 60 / 60 / 24,
   );
   const quoteIndex = dayOfYear % quotes.length;
 
@@ -245,7 +253,8 @@ async function getLeaderboardData() {
     const globalLeaderboard = (globalStats || []).map((entry) => ({
       ...entry,
       is_current_user: myStats ? entry.userId === myStats.userId : false,
-      display_name: entry.user?.fullName || entry.user?.username || 'Unknown User',
+      display_name:
+        entry.user?.fullName || entry.user?.username || "Unknown User",
       avatar_url: entry.user?.avatarUrl || null,
       points: entry.points || 0,
     }));
@@ -254,17 +263,21 @@ async function getLeaderboardData() {
     const friendsLeaderboard = (friendsStats || []).map((entry) => ({
       ...entry,
       is_current_user: myStats ? entry.userId === myStats.userId : false,
-      display_name: entry.user?.fullName || entry.user?.username || 'Unknown User',
+      display_name:
+        entry.user?.fullName || entry.user?.username || "Unknown User",
       avatar_url: entry.user?.avatarUrl || null,
       points: entry.points || 0,
     }));
 
     // Add current user to friends if not already present
-    if (myStats && !friendsLeaderboard.some((e) => e.userId === myStats.userId)) {
+    if (
+      myStats &&
+      !friendsLeaderboard.some((e) => e.userId === myStats.userId)
+    ) {
       friendsLeaderboard.push({
         ...myStats,
         is_current_user: true,
-        display_name: 'You',
+        display_name: "You",
         avatar_url: null,
       });
     }
@@ -277,7 +290,7 @@ async function getLeaderboardData() {
       globalLeaderboard,
     };
   } catch (error) {
-    console.error('Error fetching leaderboard data:', error);
+    console.error("Error fetching leaderboard data:", error);
     return {
       userEntry: null,
       friendsLeaderboard: [],
@@ -291,10 +304,10 @@ async function getLeaderboardData() {
  */
 function getEmptyData() {
   return {
-    profile: { fullName: 'Study User', email: '' },
+    profile: { fullName: "Study User", email: "" },
     onboarding: {
-      focusMethod: 'Balanced',
-      soundPreference: 'Lo-Fi',
+      focusMethod: "Balanced",
+      soundPreference: "Lo-Fi",
       weeklyFocusGoal: 10,
       isOnboardingComplete: true,
     },
@@ -302,7 +315,11 @@ function getEmptyData() {
     sessions: [],
     tasks: [],
     achievements: [],
-    settings: { autoPlaySound: true, musicVolume: 0.7, notificationsEnabled: true },
+    settings: {
+      autoPlaySound: true,
+      musicVolume: 0.7,
+      notificationsEnabled: true,
+    },
     insights: [],
     metrics: {},
     friends: [],
@@ -317,9 +334,7 @@ function getEmptyData() {
 
 // Explicit exports for CommonJS compatibility
 module.exports = {
-  fetchUserAppData,
   useUserAppData,
-  getDailyInspiration,
   getLeaderboardData,
   setConvexClient,
 };

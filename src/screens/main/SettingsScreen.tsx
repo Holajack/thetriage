@@ -1,43 +1,66 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity, Image, Modal, Platform, Linking } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import type { MainTabParamList } from '../../navigation/types';
-import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { useConvexProfile } from '../../hooks/useConvex';
-import { useTheme, themePalettes } from '../../context/ThemeContext';
-import { useAuth } from '../../context/AuthContext';
-import { useAuth as useClerkAuth, useUser } from '@clerk/clerk-expo';
-import { getUserSettings, updateUserSettings } from '../../utils/userSettings';
-import { CommonActions } from '@react-navigation/native';
-import Slider from '@react-native-community/slider';
-import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
-import { useFocusAnimationKey } from '../../utils/animationUtils';
-import { Typography, Spacing, BorderRadius } from '../../theme/premiumTheme';
-import { StaggeredItem } from '../../components/premium/StaggeredList';
-import SettingsRow from './settings/components/SettingsRow';
-import SettingsGroup from './settings/components/SettingsGroup';
-import SettingsSectionHeader from './settings/components/SettingsSectionHeader';
+import React, { useState, useEffect, useMemo } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Alert,
+  TouchableOpacity,
+  Image,
+  Modal,
+  Platform,
+  Linking,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
+import type { MainTabParamList } from "../../navigation/types";
+import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
+import { useConvexProfile } from "../../hooks/useConvex";
+import { useTheme, themePalettes } from "../../context/ThemeContext";
+import { useAuth } from "../../context/AuthContext";
+import { useAuth as useClerkAuth, useUser } from "@clerk/clerk-expo";
+import { getUserSettings, updateUserSettings } from "../../utils/userSettings";
+import { CommonActions } from "@react-navigation/native";
+import Slider from "@react-native-community/slider";
+import Animated, { FadeIn, FadeInUp } from "react-native-reanimated";
+import { useFocusAnimationKey } from "../../utils/animationUtils";
+import {
+  Typography,
+  Spacing,
+  BorderRadius,
+  PremiumColors,
+  Shadows,
+} from "../../theme/premiumTheme";
+import { StaggeredItem } from "../../components/premium/StaggeredList";
+import { LinearGradient } from "expo-linear-gradient";
+import SettingsRow from "./settings/components/SettingsRow";
+import SettingsGroup from "./settings/components/SettingsGroup";
+import SettingsSectionHeader from "./settings/components/SettingsSectionHeader";
 
-const { useUserAppData } = require('../../utils/userAppData');
+const { useUserAppData } = require("../../utils/userAppData");
 
 const MAIN_GOAL_OPTIONS = [
-  { label: 'Intense Focus', value: 'Intense Focus' },
-  { label: 'Study', value: 'Study' },
-  { label: 'Accountability', value: 'Accountability' },
+  { label: "Intense Focus", value: "Intense Focus" },
+  { label: "Study", value: "Study" },
+  { label: "Accountability", value: "Accountability" },
 ] as const;
 
 const WORK_STYLE_OPTIONS = [
-  { label: 'Balanced', focusDuration: 45, breakDuration: 15 },
-  { label: 'Sprint', focusDuration: 25, breakDuration: 5 },
-  { label: 'Deep Work', focusDuration: 60, breakDuration: 15 },
+  { label: "Balanced", focusDuration: 45, breakDuration: 15 },
+  { label: "Sprint", focusDuration: 25, breakDuration: 5 },
+  { label: "Deep Work", focusDuration: 60, breakDuration: 15 },
 ];
 
 const SettingsScreen = () => {
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
   const { profile, updateProfile } = useConvexProfile();
-  const { theme, themeName } = useTheme();
+  const {
+    theme,
+    themeName,
+    setColorBlindMode,
+    setReduceMotion: setReduceMotionContext,
+  } = useTheme();
   const { updateOnboarding, signOut: legacySignOut } = useAuth();
   const { signOut: clerkSignOut, userId: clerkUserId } = useClerkAuth();
   const { user: clerkUser } = useUser();
@@ -47,7 +70,7 @@ const SettingsScreen = () => {
 
   // Focus & Study state (kept inline)
   const [mainGoal, setMainGoal] = useState<string>(MAIN_GOAL_OPTIONS[0].value);
-  const [workStyle, setWorkStyle] = useState('Balanced');
+  const [workStyle, setWorkStyle] = useState("Balanced");
   const [focusDuration, setFocusDuration] = useState(25);
   const [autoDND, setAutoDND] = useState(false);
   const [weeklyGoal, setWeeklyGoal] = useState(10);
@@ -59,7 +82,8 @@ const SettingsScreen = () => {
   const [highContrast, setHighContrast] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
 
-  const secondaryTextColor = theme.textSecondary ?? (isDark ? '#A6A6A6' : '#666');
+  const secondaryTextColor =
+    theme.textSecondary ?? (isDark ? "#A6A6A6" : "#666");
 
   // Load profile data
   useEffect(() => {
@@ -79,32 +103,43 @@ const SettingsScreen = () => {
             setTts(settings.tts_enabled || false);
             setHighContrast(settings.high_contrast || false);
             setReduceMotion(settings.reduce_motion || false);
+            // Mirror persisted accessibility state into ThemeContext so the rest of
+            // the app (animation hooks, palette swap) sees it on next render.
+            setColorBlindMode(!!settings.high_contrast);
+            setReduceMotionContext(!!settings.reduce_motion);
           }
         }
       } catch (error) {
-        console.error('Failed to load accessibility settings:', error);
+        // Failed to load accessibility settings
       }
     };
     load();
   }, [clerkUserId]);
 
   // Subscription info for AI row
-  const subscriptionTier = profile?.subscription_tier || 'free';
-  const isElite = subscriptionTier === 'elite';
-  const isPremium = subscriptionTier === 'premium';
+  const subscriptionTier = profile?.subscription_tier || "free";
+  const isElite = subscriptionTier === "elite";
+  const isPremium = subscriptionTier === "premium";
   const hasAIAccess = isElite || isPremium;
-  const aiSummary = !hasAIAccess ? 'Requires Premium or Elite' : isElite ? 'Elite Plan' : 'Premium Plan';
+  const aiSummary = !hasAIAccess
+    ? "Requires Premium or Elite"
+    : isElite
+      ? "Elite Plan"
+      : "Premium Plan";
 
   // --- Focus & Study Handlers ---
   const handleMainGoalUpdate = async (goal: string) => {
-    if (goal === mainGoal) { setShowMainGoalModal(false); return; }
+    if (goal === mainGoal) {
+      setShowMainGoalModal(false);
+      return;
+    }
     setMainGoal(goal);
     setShowMainGoalModal(false);
     try {
       await updateOnboarding({ user_goal: goal });
     } catch (error) {
-      console.error('Error updating main goal:', error);
-      Alert.alert('Error', 'Failed to update main goal.');
+      // Error updating main goal
+      Alert.alert("Error", "Failed to update main goal.");
     }
   };
 
@@ -115,10 +150,13 @@ const SettingsScreen = () => {
     if (selected) {
       setFocusDuration(selected.focusDuration);
       try {
-        await updateProfile({ focusDuration: selected.focusDuration, workStyle: style });
+        await updateProfile({
+          focusDuration: selected.focusDuration,
+          workStyle: style,
+        });
         await updateOnboarding({ work_style: style, focus_method: style });
       } catch (error) {
-        Alert.alert('Error', 'Failed to update work style.');
+        Alert.alert("Error", "Failed to update work style.");
       }
     }
   };
@@ -130,16 +168,26 @@ const SettingsScreen = () => {
         await updateUserSettings(clerkUserId, { auto_dnd_focus: value });
       }
       if (value) {
-        Alert.alert('Enable Do Not Disturb', 'For the best focus, enable DND on your device.', [
-          { text: 'Later', style: 'cancel' },
-          { text: 'Open Settings', onPress: () => {
-            if (Platform.OS === 'ios') Linking.openSettings();
-            else Linking.sendIntent('android.settings.ZEN_MODE_SETTINGS').catch(() => Linking.openSettings());
-          }},
-        ]);
+        Alert.alert(
+          "Enable Do Not Disturb",
+          "For the best focus, enable DND on your device.",
+          [
+            { text: "Later", style: "cancel" },
+            {
+              text: "Open Settings",
+              onPress: () => {
+                if (Platform.OS === "ios") Linking.openSettings();
+                else
+                  Linking.sendIntent(
+                    "android.settings.ZEN_MODE_SETTINGS",
+                  ).catch(() => Linking.openSettings());
+              },
+            },
+          ],
+        );
       }
     } catch (error) {
-      console.error('Error updating DND setting:', error);
+      // Error updating DND setting
       setAutoDND(!value);
     }
   };
@@ -152,163 +200,292 @@ const SettingsScreen = () => {
         await updateOnboarding({ weekly_focus_goal: g });
       } catch (error: any) {
         setWeeklyGoal(prev);
-        Alert.alert('Error', error?.message || 'Failed to update weekly goal.');
+        Alert.alert("Error", error?.message || "Failed to update weekly goal.");
       }
     };
     if (goal > 60) {
-      Alert.alert('Big Goal!', 'Are you sure? It may be harder to earn rewards, but bigger rewards if you do!', [
-        { text: 'Cancel', style: 'cancel', onPress: () => setWeeklyGoal(weeklyGoal) },
-        { text: "Yes, I'm Sure", onPress: () => save(goal) },
-      ]);
+      Alert.alert(
+        "Big Goal!",
+        "Are you sure? It may be harder to earn rewards, but bigger rewards if you do!",
+        [
+          {
+            text: "Cancel",
+            style: "cancel",
+            onPress: () => setWeeklyGoal(weeklyGoal),
+          },
+          { text: "Yes, I'm Sure", onPress: () => save(goal) },
+        ],
+      );
     } else {
       await save(goal);
     }
   };
 
   // --- Accessibility Handlers ---
-  const handleAccessibilityToggle = async (type: 'tts' | 'highContrast' | 'reduceMotion', value: boolean) => {
-    const setter = type === 'tts' ? setTts : type === 'highContrast' ? setHighContrast : setReduceMotion;
+  const handleAccessibilityToggle = async (
+    type: "tts" | "highContrast" | "reduceMotion",
+    value: boolean,
+  ) => {
+    const setter =
+      type === "tts"
+        ? setTts
+        : type === "highContrast"
+          ? setHighContrast
+          : setReduceMotion;
     setter(value);
+    // Push the setting through ThemeContext too so animation hooks pick it up immediately.
+    if (type === "highContrast") setColorBlindMode(value);
+    if (type === "reduceMotion") setReduceMotionContext(value);
     try {
       if (clerkUserId) {
-        const key = type === 'tts' ? 'tts_enabled' : type === 'highContrast' ? 'high_contrast' : 'reduce_motion';
+        const key =
+          type === "tts"
+            ? "tts_enabled"
+            : type === "highContrast"
+              ? "high_contrast"
+              : "reduce_motion";
         await updateUserSettings(clerkUserId, { [key]: value });
       }
     } catch (error) {
-      console.error(`Error updating ${type}:`, error);
+      // Error updating accessibility setting
       setter(!value);
     }
   };
 
   // --- Account Handlers ---
   const handleChangeEmail = () => {
-    Alert.prompt('Change Email', 'Enter your new email address', async (newEmail) => {
-      if (!newEmail?.trim()) return;
-      try {
-        if (!clerkUser) { Alert.alert('Error', 'Please log in again.'); return; }
-        await clerkUser.createEmailAddress({ email: newEmail.trim() });
-        Alert.alert('Verification Sent', 'Check your new email to confirm.');
-      } catch (error: any) {
-        Alert.alert('Error', error.message || 'Failed to change email.');
-      }
-    }, 'plain-text', '', 'email-address');
+    Alert.prompt(
+      "Change Email",
+      "Enter your new email address",
+      async (newEmail) => {
+        if (!newEmail?.trim()) return;
+        try {
+          if (!clerkUser) {
+            Alert.alert("Error", "Please log in again.");
+            return;
+          }
+          await clerkUser.createEmailAddress({ email: newEmail.trim() });
+          Alert.alert("Verification Sent", "Check your new email to confirm.");
+        } catch (error: any) {
+          Alert.alert("Error", error.message || "Failed to change email.");
+        }
+      },
+      "plain-text",
+      "",
+      "email-address",
+    );
   };
 
   const handleChangePassword = () => {
-    Alert.prompt('Change Password', 'Enter your new password (min 8 characters)', async (newPassword) => {
-      if (!newPassword || newPassword.length < 8) {
-        Alert.alert('Invalid Password', 'Must be at least 8 characters.'); return;
-      }
-      try {
-        if (!clerkUser) { Alert.alert('Error', 'Please log in again.'); return; }
-        await clerkUser.updatePassword({ newPassword });
-        Alert.alert('Password Updated', 'Your password has been changed.');
-      } catch (error: any) {
-        Alert.alert('Error', error.message || 'Failed to change password.');
-      }
-    }, 'secure-text');
+    Alert.prompt(
+      "Change Password",
+      "Enter your new password (min 8 characters)",
+      async (newPassword) => {
+        if (!newPassword || newPassword.length < 8) {
+          Alert.alert("Invalid Password", "Must be at least 8 characters.");
+          return;
+        }
+        try {
+          if (!clerkUser) {
+            Alert.alert("Error", "Please log in again.");
+            return;
+          }
+          await clerkUser.updatePassword({ newPassword });
+          Alert.alert("Password Updated", "Your password has been changed.");
+        } catch (error: any) {
+          Alert.alert("Error", error.message || "Failed to change password.");
+        }
+      },
+      "secure-text",
+    );
   };
 
   const handleChangeEmailPassword = () => {
-    Alert.alert('Account Settings', 'What would you like to update?', [
-      { text: 'Change Email', onPress: handleChangeEmail },
-      { text: 'Change Password', onPress: handleChangePassword },
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert("Account Settings", "What would you like to update?", [
+      { text: "Change Email", onPress: handleChangeEmail },
+      { text: "Change Password", onPress: handleChangePassword },
+      { text: "Cancel", style: "cancel" },
     ]);
   };
 
   const handleExportData = () => {
-    Alert.alert('Export Your Data', 'This will export all your profile data, sessions, tasks, and settings.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Export', onPress: async () => {
-        try {
-          if (!clerkUserId || !clerkUser) { Alert.alert('Error', 'Please log in.'); return; }
-          const exportData = {
-            export_date: new Date().toISOString(),
-            user_id: clerkUserId,
-            email: clerkUser.primaryEmailAddress?.emailAddress,
-            profile: userData?.profile || profile,
-            focus_sessions: userData?.sessions || [],
-            tasks: userData?.tasks || [],
-            settings: userData?.settings,
-          };
-          console.log('User Data Export:', JSON.stringify(exportData, null, 2));
-          Alert.alert('Export Complete', 'Your data has been logged to the console.');
-        } catch (error) {
-          Alert.alert('Error', 'Failed to export data.');
-        }
-      }},
-    ]);
+    Alert.alert(
+      "Export Your Data",
+      "This will export all your profile data, sessions, tasks, and settings.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Export",
+          onPress: async () => {
+            try {
+              if (!clerkUserId || !clerkUser) {
+                Alert.alert("Error", "Please log in.");
+                return;
+              }
+              const exportData = {
+                export_date: new Date().toISOString(),
+                user_id: clerkUserId,
+                email: clerkUser.primaryEmailAddress?.emailAddress,
+                profile: userData?.profile || profile,
+                focus_sessions: userData?.sessions || [],
+                tasks: userData?.tasks || [],
+                settings: userData?.settings,
+              };
+              Alert.alert("Export Complete", "Your data export is ready.");
+            } catch (error) {
+              Alert.alert("Error", "Failed to export data.");
+            }
+          },
+        },
+      ],
+    );
   };
 
   const handleSignOut = () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'destructive', onPress: async () => {
-        try { await clerkSignOut(); } catch (e: any) {
-          const msg = e?.message || String(e);
-          if (!msg.includes('CustomEvent') && !msg.includes('hasFocus') && !msg.includes('document')) {
-            console.error('Clerk sign out error:', e);
+    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Sign Out",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await clerkSignOut();
+          } catch (e: any) {
+            const msg = e?.message || String(e);
+            if (
+              !msg.includes("CustomEvent") &&
+              !msg.includes("hasFocus") &&
+              !msg.includes("document")
+            ) {
+              // Clerk sign out error
+            }
           }
-        }
-        try { await legacySignOut(); } catch (_) {}
-        navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'Landing' as any }] }));
-      }},
+          try {
+            await legacySignOut();
+          } catch (_) {}
+          navigation.dispatch(
+            CommonActions.reset({
+              index: 0,
+              routes: [{ name: "Landing" as any }],
+            }),
+          );
+        },
+      },
     ]);
   };
 
   // --- Support Handlers ---
   const handleHelpCenter = () => {
-    Alert.alert('Help Center', 'Choose how to get help:', [
-      { text: 'Getting Started', onPress: () => Alert.alert('Getting Started', '1. Set focus duration\n2. Choose environment theme\n3. Pick focus sound\n4. Set daily reminders\n5. Start your first session!') },
-      { text: 'Study Tips', onPress: () => Alert.alert('Study Tips', 'Use Balanced technique (25/5)\nFind a quiet space\nSet specific goals\nStay hydrated') },
-      { text: 'Troubleshooting', onPress: () => Alert.alert('Troubleshooting', 'Audio: Check volume, restart app\nSync: Check internet\nTimer: Keep app in foreground') },
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert("Help Center", "Choose how to get help:", [
+      {
+        text: "Getting Started",
+        onPress: () =>
+          Alert.alert(
+            "Getting Started",
+            "1. Set focus duration\n2. Choose environment theme\n3. Pick focus sound\n4. Set daily reminders\n5. Start your first session!",
+          ),
+      },
+      {
+        text: "Study Tips",
+        onPress: () =>
+          Alert.alert(
+            "Study Tips",
+            "Use Balanced technique (25/5)\nFind a quiet space\nSet specific goals\nStay hydrated",
+          ),
+      },
+      {
+        text: "Troubleshooting",
+        onPress: () =>
+          Alert.alert(
+            "Troubleshooting",
+            "Audio: Check volume, restart app\nSync: Check internet\nTimer: Keep app in foreground",
+          ),
+      },
+      { text: "Cancel", style: "cancel" },
     ]);
   };
 
   const handleContactSupport = () => {
-    Alert.alert('Contact Support', 'How can we help?', [
-      { text: 'Email Support', onPress: () => Alert.alert('Email Support', 'support@hikewise.app\nWe respond within 24 hours!') },
-      { text: 'Report Bug', onPress: () => Alert.alert('Report Bug', 'Send details to bugs@hikewise.app\nInclude device model and steps to reproduce.') },
-      { text: 'Feature Request', onPress: () => Alert.alert('Feature Request', 'Send ideas to features@hikewise.app') },
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert("Contact Support", "How can we help?", [
+      {
+        text: "Email Support",
+        onPress: () =>
+          Alert.alert(
+            "Email Support",
+            "support@hikewise.app\nWe respond within 24 hours!",
+          ),
+      },
+      {
+        text: "Report Bug",
+        onPress: () =>
+          Alert.alert(
+            "Report Bug",
+            "Send details to bugs@hikewise.app\nInclude device model and steps to reproduce.",
+          ),
+      },
+      {
+        text: "Feature Request",
+        onPress: () =>
+          Alert.alert("Feature Request", "Send ideas to features@hikewise.app"),
+      },
+      { text: "Cancel", style: "cancel" },
     ]);
   };
 
   const handleAppInfo = () => {
-    Alert.alert('App Information', 'HikeWise Study Tracker\nVersion: 2.0.0\nBuild: 2025.001\n\nMade for students everywhere', [
-      { text: 'Check for Updates', onPress: () => Alert.alert('Up to Date!', 'You have the latest version.') },
-      { text: 'Close' },
-    ]);
+    Alert.alert(
+      "App Information",
+      "HikeWise Study Tracker\nVersion: 2.0.0\nBuild: 2025.001\n\nMade for students everywhere",
+      [
+        {
+          text: "Check for Updates",
+          onPress: () =>
+            Alert.alert("Up to Date!", "You have the latest version."),
+        },
+        { text: "Close" },
+      ],
+    );
   };
 
   const handleTermsOfService = () => {
     Alert.alert(
-      'Terms of Service',
-      'You must be 13+ to use HikeWise. Don\'t misuse the app or harm other users. We may update these terms with notice.',
+      "Terms of Service",
+      "You must be 13+ to use HikeWise. Don't misuse the app or harm other users. We may update these terms with notice.",
       [
-        { text: 'Read Full Terms', onPress: () => Linking.openURL('https://hikewise.app/terms').catch(() => {}) },
-        { text: 'Close' },
-      ]
+        {
+          text: "Read Full Terms",
+          onPress: () =>
+            Linking.openURL("https://hikewise.app/terms").catch(() => {}),
+        },
+        { text: "Close" },
+      ],
     );
   };
 
   const handlePrivacyPolicy = () => {
     Alert.alert(
-      'Privacy Policy',
-      'We collect account info and study data to power the app. We never sell your data. You can export or delete your data anytime.',
+      "Privacy Policy",
+      "We collect account info and study data to power the app. We never sell your data. You can export or delete your data anytime.",
       [
-        { text: 'Read Full Policy', onPress: () => Linking.openURL('https://hikewise.app/privacy').catch(() => {}) },
-        { text: 'Close' },
-      ]
+        {
+          text: "Read Full Policy",
+          onPress: () =>
+            Linking.openURL("https://hikewise.app/privacy").catch(() => {}),
+        },
+        { text: "Close" },
+      ],
     );
   };
 
   // --- Modal styles ---
-  const modalBoxStyle = useMemo(() => ({
-    backgroundColor: isDark ? (theme.surface ?? '#1E1E1E') : (theme.card ?? '#FFFFFF'),
-  }), [isDark, theme]);
+  const modalBoxStyle = useMemo(
+    () => ({
+      backgroundColor: isDark
+        ? (theme.surface ?? "#1E1E1E")
+        : (theme.card ?? "#FFFFFF"),
+    }),
+    [isDark, theme],
+  );
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
@@ -318,12 +495,22 @@ const SettingsScreen = () => {
         entering={FadeIn.duration(250)}
         style={styles.header}
       >
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeButton}>
-          <View style={[styles.closeButtonCircle, { backgroundColor: `${theme.primary}30` }]}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.closeButton}
+        >
+          <View
+            style={[
+              styles.closeButtonCircle,
+              { backgroundColor: `${theme.primary}30` },
+            ]}
+          >
             <Ionicons name="close-outline" size={24} color={theme.primary} />
           </View>
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.primary }]}>Settings</Text>
+        <Text style={[styles.headerTitle, { color: theme.primary }]}>
+          Settings
+        </Text>
         <View style={{ width: 48 }} />
       </Animated.View>
 
@@ -333,21 +520,83 @@ const SettingsScreen = () => {
         style={{ flex: 1 }}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Elite Trekker Banner */}
+        {/* Tier Card — celebrates Elite users, upsells everyone else */}
         <StaggeredItem index={0}>
           <TouchableOpacity
-            style={styles.proBanner}
-            onPress={() => navigation.navigate('Subscription' as any)}
-            activeOpacity={0.9}
+            style={styles.tierCard}
+            onPress={() => navigation.navigate("Subscription" as any)}
+            activeOpacity={0.92}
           >
             <Image
-              source={require('../../../assets/examples/settings_image.png')}
-              style={styles.proBannerImage}
+              source={require("../../../assets/examples/settings_image.png")}
+              style={styles.tierCardImage}
               resizeMode="cover"
             />
-            <View style={styles.proBannerContent}>
-              <Text style={styles.proBannerTitle}>Become an Elite HikeWise Member</Text>
-              <Text style={styles.proBannerSubtitle}>Unlock Nora AI, study plans & more</Text>
+            <LinearGradient
+              colors={
+                isElite
+                  ? [
+                      "rgba(11,28,46,0.0)",
+                      "rgba(11,28,46,0.55)",
+                      "rgba(11,28,46,0.92)",
+                    ]
+                  : ["rgba(0,0,0,0.05)", "rgba(0,0,0,0.5)", "rgba(0,0,0,0.88)"]
+              }
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={styles.tierCardBadgeWrap}>
+              <View
+                style={[
+                  styles.tierCardBadge,
+                  {
+                    backgroundColor: isElite
+                      ? "#FFD24A"
+                      : "rgba(255,255,255,0.16)",
+                  },
+                ]}
+              >
+                <Ionicons
+                  name={isElite ? "diamond" : "sparkles"}
+                  size={14}
+                  color={isElite ? "#3B2A00" : "#FFFFFF"}
+                />
+                <Text
+                  style={[
+                    styles.tierCardBadgeText,
+                    { color: isElite ? "#3B2A00" : "#FFFFFF" },
+                  ]}
+                >
+                  {isElite
+                    ? "ELITE MEMBER"
+                    : isPremium
+                      ? "PREMIUM PLAN"
+                      : "UPGRADE"}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.tierCardContent}>
+              <Text style={styles.tierCardTitle}>
+                {isElite
+                  ? "Welcome back, Trailblazer"
+                  : isPremium
+                    ? "Step up to Elite"
+                    : "Become an Elite HikeWise Member"}
+              </Text>
+              <Text style={styles.tierCardSubtitle}>
+                {isElite
+                  ? "You have full access to Nora AI, brain mapping, and every premium feature."
+                  : isPremium
+                    ? "Unlock Nora AI, voice + PDF analysis, and unlimited study rooms."
+                    : "Unlock Nora AI, voice analysis, brain mapping & more."}
+              </Text>
+              <View style={styles.tierCardCtaRow}>
+                <Text style={styles.tierCardCta}>
+                  {isElite ? "Manage Subscription" : "See Plans"}
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color="#FFFFFF" />
+              </View>
             </View>
           </TouchableOpacity>
         </StaggeredItem>
@@ -359,14 +608,14 @@ const SettingsScreen = () => {
             <SettingsRow
               icon="musical-notes-outline"
               label="Sound"
-              value={profile?.soundPreference || 'Lo-Fi'}
-              onPress={() => (navigation as any).navigate('SoundSettings')}
+              value={profile?.soundPreference || "Lo-Fi"}
+              onPress={() => (navigation as any).navigate("SoundSettings")}
             />
             <SettingsRow
               icon="color-palette-outline"
-              label="Theme & Environment"
+              label="Theme"
               value={themePalettes[themeName].name}
-              onPress={() => (navigation as any).navigate('ThemeSettings')}
+              onPress={() => (navigation as any).navigate("ThemeSettings")}
               isLast
             />
           </SettingsGroup>
@@ -403,7 +652,11 @@ const SettingsScreen = () => {
               isLast
             >
               <View style={styles.sliderRow}>
-                <Text style={[styles.sliderLabel, { color: secondaryTextColor }]}>5h</Text>
+                <Text
+                  style={[styles.sliderLabel, { color: secondaryTextColor }]}
+                >
+                  5h
+                </Text>
                 <Slider
                   style={styles.slider}
                   minimumValue={5}
@@ -413,10 +666,16 @@ const SettingsScreen = () => {
                   onValueChange={setWeeklyGoal}
                   onSlidingComplete={handleWeeklyGoalUpdate}
                   minimumTrackTintColor={theme.primary}
-                  maximumTrackTintColor={isDark ? '#3A3A3A' : '#E0E0E0'}
-                  thumbTintColor={isDark ? (theme.secondary ?? '#A5D6A7') : theme.primary}
+                  maximumTrackTintColor={isDark ? "#3A3A3A" : "#E0E0E0"}
+                  thumbTintColor={
+                    isDark ? (theme.secondary ?? "#A5D6A7") : theme.primary
+                  }
                 />
-                <Text style={[styles.sliderLabel, { color: secondaryTextColor }]}>80h</Text>
+                <Text
+                  style={[styles.sliderLabel, { color: secondaryTextColor }]}
+                >
+                  80h
+                </Text>
               </View>
             </SettingsRow>
           </SettingsGroup>
@@ -430,7 +689,9 @@ const SettingsScreen = () => {
               icon="notifications-outline"
               label="Notification Preferences"
               description="Reminders, social, goals"
-              onPress={() => (navigation as any).navigate('NotificationSettings')}
+              onPress={() =>
+                (navigation as any).navigate("NotificationSettings")
+              }
               isLast
             />
           </SettingsGroup>
@@ -444,7 +705,7 @@ const SettingsScreen = () => {
               icon="card-outline"
               label="Subscription"
               description="Manage your plan"
-              onPress={() => navigation.navigate('Subscription' as any)}
+              onPress={() => navigation.navigate("Subscription" as any)}
             />
             <SettingsRow
               icon="mail-outline"
@@ -454,7 +715,7 @@ const SettingsScreen = () => {
             <SettingsRow
               icon="lock-closed-outline"
               label="Privacy Settings"
-              onPress={() => navigation.navigate('Privacy')}
+              onPress={() => navigation.navigate("Privacy")}
             />
             <SettingsRow
               icon="download-outline"
@@ -473,7 +734,7 @@ const SettingsScreen = () => {
               icon="bulb-outline"
               label="AI Integration"
               description={aiSummary}
-              onPress={() => (navigation as any).navigate('AISettings')}
+              onPress={() => (navigation as any).navigate("AISettings")}
               isLast
             />
           </SettingsGroup>
@@ -489,7 +750,7 @@ const SettingsScreen = () => {
               description="Read notifications aloud"
               toggle
               toggleValue={tts}
-              onToggleChange={(v) => handleAccessibilityToggle('tts', v)}
+              onToggleChange={(v) => handleAccessibilityToggle("tts", v)}
             />
             <SettingsRow
               icon="color-palette-outline"
@@ -497,7 +758,9 @@ const SettingsScreen = () => {
               description="Adjust colors for color vision deficiency"
               toggle
               toggleValue={highContrast}
-              onToggleChange={(v) => handleAccessibilityToggle('highContrast', v)}
+              onToggleChange={(v) =>
+                handleAccessibilityToggle("highContrast", v)
+              }
             />
             <SettingsRow
               icon="contrast-outline"
@@ -505,7 +768,9 @@ const SettingsScreen = () => {
               description="Minimize animations and transitions"
               toggle
               toggleValue={reduceMotion}
-              onToggleChange={(v) => handleAccessibilityToggle('reduceMotion', v)}
+              onToggleChange={(v) =>
+                handleAccessibilityToggle("reduceMotion", v)
+              }
               isLast
             />
           </SettingsGroup>
@@ -515,11 +780,39 @@ const SettingsScreen = () => {
         <StaggeredItem index={7}>
           <SettingsSectionHeader title="SUPPORT" />
           <SettingsGroup>
-            <SettingsRow icon="help-circle-outline" label="Help Center" onPress={handleHelpCenter} />
-            <SettingsRow icon="headset-outline" label="Contact Support" onPress={handleContactSupport} />
-            <SettingsRow icon="information-circle-outline" label="App Info" value="v2.0.0" onPress={handleAppInfo} />
-            <SettingsRow icon="document-text-outline" label="Terms of Service" onPress={handleTermsOfService} />
-            <SettingsRow icon="shield-checkmark-outline" label="Privacy Policy" onPress={handlePrivacyPolicy} isLast />
+            <SettingsRow
+              icon="play-circle-outline"
+              label="Replay Walkthroughs"
+              description="Revisit a screen tour anytime"
+              onPress={() => (navigation as any).navigate("ReplayWalkthrough")}
+            />
+            <SettingsRow
+              icon="help-circle-outline"
+              label="Help Center"
+              onPress={handleHelpCenter}
+            />
+            <SettingsRow
+              icon="headset-outline"
+              label="Contact Support"
+              onPress={handleContactSupport}
+            />
+            <SettingsRow
+              icon="information-circle-outline"
+              label="App Info"
+              value="v2.0.0"
+              onPress={handleAppInfo}
+            />
+            <SettingsRow
+              icon="document-text-outline"
+              label="Terms of Service"
+              onPress={handleTermsOfService}
+            />
+            <SettingsRow
+              icon="shield-checkmark-outline"
+              label="Privacy Policy"
+              onPress={handlePrivacyPolicy}
+              isLast
+            />
           </SettingsGroup>
         </StaggeredItem>
 
@@ -527,53 +820,121 @@ const SettingsScreen = () => {
         <StaggeredItem index={8}>
           <View style={{ marginTop: Spacing.lg }}>
             <SettingsGroup>
-              <SettingsRow icon="log-out-outline" label="Sign Out" onPress={handleSignOut} isLast />
+              <SettingsRow
+                icon="log-out-outline"
+                label="Sign Out"
+                onPress={handleSignOut}
+                isLast
+              />
             </SettingsGroup>
           </View>
         </StaggeredItem>
 
         {/* Version */}
-        <Text style={[styles.version, { color: `${theme.text}66` }]}>v2.0.0 (517)</Text>
+        <Text style={[styles.version, { color: `${theme.text}66` }]}>
+          v2.0.0 (517)
+        </Text>
       </Animated.ScrollView>
 
       {/* Main Goal Modal */}
-      <Modal visible={showMainGoalModal} transparent animationType="fade" onRequestClose={() => setShowMainGoalModal(false)}>
+      <Modal
+        visible={showMainGoalModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowMainGoalModal(false)}
+      >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalBox, modalBoxStyle]}>
-            <Text style={[styles.modalTitle, { color: theme.primary }]}>Select Main Goal</Text>
+            <Text style={[styles.modalTitle, { color: theme.primary }]}>
+              Select Main Goal
+            </Text>
             {MAIN_GOAL_OPTIONS.map((option) => (
-              <TouchableOpacity key={option.value} style={styles.modalOption} onPress={() => handleMainGoalUpdate(option.value)}>
-                <Text style={[styles.modalOptionText, { color: theme.text }, mainGoal === option.value && { color: theme.primary, fontWeight: 'bold' }]}>
+              <TouchableOpacity
+                key={option.value}
+                style={styles.modalOption}
+                onPress={() => handleMainGoalUpdate(option.value)}
+              >
+                <Text
+                  style={[
+                    styles.modalOptionText,
+                    { color: theme.text },
+                    mainGoal === option.value && {
+                      color: theme.primary,
+                      fontWeight: "bold",
+                    },
+                  ]}
+                >
                   {option.label}
                 </Text>
               </TouchableOpacity>
             ))}
-            <TouchableOpacity style={styles.modalCancel} onPress={() => setShowMainGoalModal(false)}>
-              <Text style={[styles.modalCancelText, { color: secondaryTextColor }]}>Cancel</Text>
+            <TouchableOpacity
+              style={styles.modalCancel}
+              onPress={() => setShowMainGoalModal(false)}
+            >
+              <Text
+                style={[styles.modalCancelText, { color: secondaryTextColor }]}
+              >
+                Cancel
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
       {/* Work Style Modal */}
-      <Modal visible={showWorkStyleModal} transparent animationType="fade" onRequestClose={() => setShowWorkStyleModal(false)}>
+      <Modal
+        visible={showWorkStyleModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowWorkStyleModal(false)}
+      >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalBox, modalBoxStyle]}>
-            <Text style={[styles.modalTitle, { color: theme.primary }]}>Select Work Style</Text>
+            <Text style={[styles.modalTitle, { color: theme.primary }]}>
+              Select Work Style
+            </Text>
             {WORK_STYLE_OPTIONS.map((option) => (
-              <TouchableOpacity key={option.label} style={styles.modalOption} onPress={() => handleWorkStyleUpdate(option.label)}>
-                <View style={{ alignItems: 'center' }}>
-                  <Text style={[styles.modalOptionText, { color: theme.text }, workStyle === option.label && { color: theme.primary, fontWeight: 'bold' }]}>
+              <TouchableOpacity
+                key={option.label}
+                style={styles.modalOption}
+                onPress={() => handleWorkStyleUpdate(option.label)}
+              >
+                <View style={{ alignItems: "center" }}>
+                  <Text
+                    style={[
+                      styles.modalOptionText,
+                      { color: theme.text },
+                      workStyle === option.label && {
+                        color: theme.primary,
+                        fontWeight: "bold",
+                      },
+                    ]}
+                  >
                     {option.label}
                   </Text>
-                  <Text style={{ fontSize: 13, color: secondaryTextColor, marginTop: 2 }}>
-                    {option.focusDuration}min focus / {option.breakDuration}min break
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      color: secondaryTextColor,
+                      marginTop: 2,
+                    }}
+                  >
+                    {option.focusDuration}min focus / {option.breakDuration}min
+                    break
                   </Text>
                 </View>
               </TouchableOpacity>
             ))}
-            <TouchableOpacity style={styles.modalCancel} onPress={() => setShowWorkStyleModal(false)}>
-              <Text style={[styles.modalCancelText, { color: secondaryTextColor }]}>Cancel</Text>
+            <TouchableOpacity
+              style={styles.modalCancel}
+              onPress={() => setShowWorkStyleModal(false)}
+            >
+              <Text
+                style={[styles.modalCancelText, { color: secondaryTextColor }]}
+              >
+                Cancel
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -584,9 +945,9 @@ const SettingsScreen = () => {
 
 const styles = StyleSheet.create({
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: Spacing.md + 4,
     paddingTop: 4,
     paddingBottom: Spacing.xs,
@@ -598,61 +959,86 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerTitle: {
     ...Typography.h1,
-    textAlign: 'center',
+    textAlign: "center",
   },
   scrollContent: {
     paddingHorizontal: Spacing.sm,
     paddingBottom: Spacing.xl,
   },
-  // Pro Banner
-  proBanner: {
+  // Tier card (elite/upgrade)
+  tierCard: {
     marginTop: Spacing.sm,
     marginBottom: Spacing.lg,
     borderRadius: BorderRadius.xl,
-    overflow: 'hidden',
-    height: 200,
-    position: 'relative',
+    overflow: "hidden",
+    height: 210,
+    position: "relative",
+    ...Shadows.lg,
   },
-  proBannerImage: {
-    position: 'absolute',
+  tierCardImage: {
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
   },
-  proBannerContent: {
-    padding: Spacing.md + 4,
-    flex: 1,
-    justifyContent: 'flex-start',
-    paddingTop: 30,
+  tierCardBadgeWrap: {
+    position: "absolute",
+    top: Spacing.md,
+    left: Spacing.md,
   },
-  proBannerTitle: {
+  tierCardBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: BorderRadius.xl,
+  },
+  tierCardBadgeText: {
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1.1,
+  },
+  tierCardContent: {
+    position: "absolute",
+    left: Spacing.md,
+    right: Spacing.md,
+    bottom: Spacing.md,
+  },
+  tierCardTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+    fontWeight: "800",
+    color: "#FFFFFF",
     marginBottom: 4,
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
   },
-  proBannerSubtitle: {
-    fontSize: 15,
-    color: '#FFFFFF',
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+  tierCardSubtitle: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.85)",
+    marginBottom: Spacing.sm,
+    lineHeight: 19,
+  },
+  tierCardCtaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  tierCardCta: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   // Slider
   sliderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginTop: Spacing.xs,
   },
   slider: {
@@ -662,11 +1048,11 @@ const styles = StyleSheet.create({
   },
   sliderLabel: {
     ...Typography.caption,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   // Version
   version: {
-    textAlign: 'center',
+    textAlign: "center",
     ...Typography.caption,
     marginTop: Spacing.sm,
     marginBottom: Spacing.lg,
@@ -674,31 +1060,31 @@ const styles = StyleSheet.create({
   // Modals
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.25)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0,0,0,0.25)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   modalBox: {
     borderRadius: BorderRadius.xl,
     padding: Spacing.lg,
     width: 320,
-    alignItems: 'stretch',
+    alignItems: "stretch",
   },
   modalTitle: {
     ...Typography.h3,
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: Spacing.sm,
   },
   modalOption: {
     paddingVertical: Spacing.sm + 2,
-    alignItems: 'center',
+    alignItems: "center",
   },
   modalOptionText: {
     ...Typography.body,
   },
   modalCancel: {
     marginTop: Spacing.sm,
-    alignItems: 'center',
+    alignItems: "center",
   },
   modalCancelText: {
     ...Typography.body,

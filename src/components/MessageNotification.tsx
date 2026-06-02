@@ -1,9 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import * as MessageService from '../utils/convexMessagingService';
-import { useAuth } from '../context/AuthContext';
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Animated,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import * as MessageService from "../utils/convexMessagingService";
+import { useAuth } from "../context/AuthContext";
 
 interface MessageNotificationProps {
   visible: boolean;
@@ -12,11 +18,11 @@ interface MessageNotificationProps {
 
 const MessageNotification: React.FC<MessageNotificationProps> = ({
   visible,
-  onClose
+  onClose,
 }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [fadeAnim] = useState(new Animated.Value(0));
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const { user } = useAuth();
 
   useEffect(() => {
@@ -44,7 +50,7 @@ const MessageNotification: React.FC<MessageNotificationProps> = ({
       user.id,
       () => {
         loadUnreadCount();
-      }
+      },
     );
 
     return unsubscribe;
@@ -52,19 +58,17 @@ const MessageNotification: React.FC<MessageNotificationProps> = ({
 
   const loadUnreadCount = async () => {
     try {
-      const result = await MessageService.getUnreadMessageCount();
-      if (result.success) {
-        setUnreadCount(result.count || 0);
-      }
+      const count = await MessageService.getUnreadMessageCount();
+      setUnreadCount(count || 0);
     } catch (error) {
-      console.error('Error loading unread count:', error);
+      // Error loading unread count
     }
   };
 
   const handlePress = () => {
     onClose();
     // Navigate to messages tab in community screen
-    navigation.navigate('CommunityScreen' as any, { initialTab: 'Messages' });
+    navigation.navigate("CommunityScreen" as any, { initialTab: "Messages" });
   };
 
   if (!visible || unreadCount === 0) {
@@ -83,7 +87,7 @@ const MessageNotification: React.FC<MessageNotificationProps> = ({
         <View style={styles.content}>
           <Text style={styles.title}>New Messages</Text>
           <Text style={styles.subtitle}>
-            You have {unreadCount} unread message{unreadCount !== 1 ? 's' : ''}
+            You have {unreadCount} unread message{unreadCount !== 1 ? "s" : ""}
           </Text>
         </View>
         <TouchableOpacity onPress={onClose} style={styles.closeButton}>
@@ -96,66 +100,66 @@ const MessageNotification: React.FC<MessageNotificationProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    position: 'absolute',
+    position: "absolute",
     top: 100,
     left: 20,
     right: 20,
     zIndex: 1000,
   },
   notification: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     padding: 16,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 8,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: "#E0E0E0",
   },
   iconContainer: {
-    position: 'relative',
+    position: "relative",
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#4CAF50',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#4CAF50",
+    justifyContent: "center",
+    alignItems: "center",
     marginRight: 12,
   },
   badge: {
-    position: 'absolute',
+    position: "absolute",
     top: -5,
     right: -5,
-    backgroundColor: '#F44336',
+    backgroundColor: "#F44336",
     borderRadius: 10,
     minWidth: 20,
     height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: "#FFFFFF",
   },
   badgeText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   content: {
     flex: 1,
   },
   title: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: "600",
+    color: "#333",
     marginBottom: 2,
   },
   subtitle: {
     fontSize: 14,
-    color: '#666',
+    color: "#666",
   },
   closeButton: {
     padding: 4,

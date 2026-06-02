@@ -5,7 +5,13 @@
  * for future reference. Users can view and manage what Nora knows.
  */
 import { v } from "convex/values";
-import { query, mutation, internalMutation, internalAction, internalQuery } from "./_generated/server";
+import {
+  query,
+  mutation,
+  internalMutation,
+  internalAction,
+  internalQuery,
+} from "./_generated/server";
 import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 
@@ -44,9 +50,7 @@ export const _getTopMemories = internalQuery({
       .withIndex("by_userId", (q) => q.eq("userId", userId))
       .collect();
 
-    return memories
-      .sort((a, b) => b.confidence - a.confidence)
-      .slice(0, limit);
+    return memories.sort((a, b) => b.confidence - a.confidence).slice(0, limit);
   },
 });
 
@@ -64,7 +68,10 @@ export const _upsertMemory = internalMutation({
     confidence: v.number(),
     source: v.string(),
   },
-  handler: async (ctx, { userId, category, key, value, confidence, source }) => {
+  handler: async (
+    ctx,
+    { userId, category, key, value, confidence, source },
+  ) => {
     // Check if memory with this key already exists for user
     const existing = await ctx.db
       .query("noraMemory")
@@ -72,7 +79,7 @@ export const _upsertMemory = internalMutation({
       .collect();
 
     const match = existing.find(
-      (m) => m.key === key && m.category === category
+      (m) => m.key === key && m.category === category,
     );
 
     if (match) {
@@ -150,9 +157,7 @@ export const extractMemories = internalAction({
   },
   handler: async (ctx, { userId, userMessage, noraResponse }) => {
     const apiKey =
-      process.env.OPENAI_API_KEY_NEW_NORA ||
-      process.env.OPENAI_API_KEY ||
-      "";
+      process.env.OPENAI_API_KEY_NEW_NORA || process.env.OPENAI_API_KEY || "";
 
     if (!apiKey) return;
 
@@ -239,8 +244,8 @@ Return ONLY valid JSON, no markdown or explanation.`,
           source: "inferred",
         });
       }
-    } catch (e) {
-      console.error("Memory extraction failed:", e);
+    } catch {
+      // Memory extraction failed
     }
   },
 });

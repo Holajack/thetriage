@@ -19,16 +19,24 @@ export const getGlobal = query({
   handler: async (ctx, args) => {
     const allStats = await ctx.db.query("leaderboardStats").collect();
 
-    // Sort by points descending
     allStats.sort((a, b) => (b.points ?? 0) - (a.points ?? 0));
 
     const limited = args.limit ? allStats.slice(0, args.limit) : allStats;
 
-    // Enrich with user data
     const enriched = [];
     for (const stat of limited) {
       const user = await ctx.db.get(stat.userId);
-      enriched.push({ ...stat, user });
+      enriched.push({
+        ...stat,
+        user: user
+          ? {
+              _id: user._id,
+              username: user.username,
+              fullName: user.fullName,
+              avatarUrl: user.avatarUrl,
+            }
+          : null,
+      });
     }
     return enriched;
   },
@@ -62,7 +70,17 @@ export const getFriends = query({
     const enriched = [];
     for (const stat of friendStats) {
       const friendUser = await ctx.db.get(stat.userId);
-      enriched.push({ ...stat, user: friendUser });
+      enriched.push({
+        ...stat,
+        user: friendUser
+          ? {
+              _id: friendUser._id,
+              username: friendUser.username,
+              fullName: friendUser.fullName,
+              avatarUrl: friendUser.avatarUrl,
+            }
+          : null,
+      });
     }
     return enriched;
   },

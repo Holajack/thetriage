@@ -231,8 +231,7 @@ export default defineSchema({
     senderId: v.id("users"),
     content: v.string(),
     messageType: v.optional(v.string()), // 'text' | 'system' | 'join' | 'leave'
-  })
-    .index("by_roomId", ["roomId"]),
+  }).index("by_roomId", ["roomId"]),
 
   studyRoomInvitations: defineTable({
     roomId: v.id("studyRooms"),
@@ -521,7 +520,7 @@ export default defineSchema({
         value: v.number(),
         label: v.string(),
         scoringWeight: v.optional(v.number()), // For non-linear scoring
-      })
+      }),
     ),
 
     // Scoring metadata
@@ -540,10 +539,10 @@ export default defineSchema({
             v.object({
               value: v.number(),
               label: v.string(),
-            })
+            }),
           ),
-        })
-      )
+        }),
+      ),
     ),
 
     // Research backing
@@ -555,8 +554,8 @@ export default defineSchema({
           title: v.string(),
           journal: v.optional(v.string()),
           doi: v.optional(v.string()),
-        })
-      )
+        }),
+      ),
     ),
 
     // Deduplication
@@ -643,7 +642,7 @@ export default defineSchema({
         rawScore: v.number(),
         normalizedScore: v.number(), // 0-100
         percentileRank: v.optional(v.number()),
-      })
+      }),
     ),
 
     // Trait profile identification
@@ -662,7 +661,7 @@ export default defineSchema({
         subDimensionSlug: v.string(),
         score: v.number(),
         description: v.string(),
-      })
+      }),
     ),
     areasForGrowth: v.array(
       v.object({
@@ -670,7 +669,7 @@ export default defineSchema({
         score: v.number(),
         description: v.string(),
         recommendations: v.array(v.string()),
-      })
+      }),
     ),
 
     // Metadata
@@ -696,7 +695,7 @@ export default defineSchema({
       v.object({
         slug: v.string(),
         score: v.number(),
-      })
+      }),
     ),
     percentileRank: v.optional(v.number()),
 
@@ -722,7 +721,7 @@ export default defineSchema({
       v.object({
         percentile: v.number(),
         scoreThreshold: v.number(),
-      })
+      }),
     ),
 
     // Sub-dimension benchmarks
@@ -735,9 +734,9 @@ export default defineSchema({
           v.object({
             percentile: v.number(),
             scoreThreshold: v.number(),
-          })
+          }),
         ),
-      })
+      }),
     ),
 
     lastUpdatedAt: v.string(),
@@ -795,4 +794,48 @@ export default defineSchema({
   })
     .index("by_userId", ["userId"])
     .index("by_userId_triggerType", ["userId", "triggerType"]),
+
+  // App-level key/value config (feature flags, environment settings, etc.)
+  appConfig: defineTable({
+    key: v.string(),
+    value: v.string(),
+  }).index("by_key", ["key"]),
+
+  // Promo code definitions (admin-seeded via CLI)
+  promoCodes: defineTable({
+    code: v.string(),
+    description: v.string(),
+    tier: v.string(),
+    flintAmount: v.number(),
+    grantAllTrails: v.boolean(),
+    maxRedemptions: v.optional(v.number()),
+    currentRedemptions: v.number(),
+    isActive: v.boolean(),
+    expiresAt: v.optional(v.string()),
+  }).index("by_code", ["code"]),
+
+  // Per-user promo code redemption records
+  promoRedemptions: defineTable({
+    userId: v.id("users"),
+    promoCodeId: v.optional(v.id("promoCodes")),
+    code: v.string(),
+    redeemedAt: v.string(),
+  }).index("by_userId", ["userId"]),
+
+  // User-uploaded ebooks for Nora to reference. The PDF bytes live in Convex
+  // file storage; OpenAI ingestion creates a vector store the file_search tool
+  // can query during a Nora chat.
+  ebooks: defineTable({
+    userId: v.id("users"),
+    title: v.string(),
+    fileSize: v.number(),
+    storageId: v.string(), // Convex storage ID of the raw PDF
+    openaiFileId: v.optional(v.string()), // /v1/files id once uploaded
+    vectorStoreId: v.optional(v.string()), // /v1/vector_stores id, attached to Nora's file_search
+    status: v.string(), // 'uploading' | 'processing' | 'ready' | 'failed'
+    errorMessage: v.optional(v.string()),
+    uploadedAt: v.string(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_userId_status", ["userId", "status"]),
 });

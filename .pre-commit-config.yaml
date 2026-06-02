@@ -1,0 +1,112 @@
+# .pre-commit-config.yaml
+# ---
+# This file defines hooks that run automatically before every git commit.
+# Purpose: catch bad code before it ever enters the repo.
+#
+# First-time setup:
+#   1. Install pre-commit:   pip install pre-commit   (or: brew install pre-commit)
+#   2. Install the hooks:    pre-commit install
+#   3. Test it:              pre-commit run --all-files
+#
+# After that, it runs automatically on `git commit`.
+# To bypass in a true emergency (rare):  git commit --no-verify
+# To update hook versions periodically:  pre-commit autoupdate
+# ---
+
+minimum_pre_commit_version: "3.0.0"
+
+repos:
+  # ==========================================================================
+  # UNIVERSAL HOOKS — run on every file type, catch the basics
+  # ==========================================================================
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace # removes trailing spaces
+      - id: end-of-file-fixer # ensures files end with a newline
+      - id: check-yaml # validates YAML syntax
+      - id: check-json # validates JSON syntax
+      - id: check-toml # validates TOML syntax
+      - id: check-merge-conflict # catches unresolved merge markers
+      - id: check-case-conflict # catches files that conflict on case-insensitive filesystems (macOS/Windows)
+      - id: check-added-large-files # blocks accidentally committing huge files
+        args: ["--maxkb=1000"] # 1MB limit — tune as needed
+      - id: detect-private-key # blocks committing SSH/SSL private keys
+      - id: mixed-line-ending # normalizes line endings (LF vs CRLF)
+
+  # ==========================================================================
+  # SECRETS SCANNING — blocks API keys, tokens, and credentials
+  # This is the most important hook in this file. Run it on every commit.
+  # ==========================================================================
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.28.0
+    hooks:
+      - id: gitleaks
+        name: "Scan for secrets (API keys, tokens, passwords)"
+
+  # ==========================================================================
+  # PYTHON — Ruff replaces Black, Flake8, isort, Bandit all in one
+  # Only runs on *.py files. Comment out this block if you have no Python.
+  # ==========================================================================
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.0
+    hooks:
+      - id: ruff
+        name: "Lint Python with Ruff"
+        args: [--fix] # auto-fix what it can
+      - id: ruff-format
+        name: "Format Python with Ruff"
+
+  # ==========================================================================
+  # JAVASCRIPT / TYPESCRIPT — formatting via Prettier
+  # We run ESLint as a local hook (see below) because it needs node_modules.
+  # ==========================================================================
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v4.0.0-alpha.8
+    hooks:
+      - id: prettier
+        name: "Format JS/TS/CSS/MD/JSON with Prettier"
+        types_or: [javascript, jsx, ts, tsx, css, scss, json, yaml, markdown]
+
+  # ==========================================================================
+  # ESLint — disabled until project has its own eslint.config.js
+  # Uncomment once ESLint is set up in this repo.
+  # ==========================================================================
+  # - repo: local
+  #   hooks:
+  #     - id: eslint
+  #       name: "Lint JS/TS with ESLint"
+  #       entry: npx eslint --fix
+  #       language: system
+  #       files: \.(js|jsx|ts|tsx)$
+  #       pass_filenames: true
+
+  # ==========================================================================
+  # SEMGREP — static analysis for security bugs across 20+ languages
+  # Catches SQL injection, XSS, hardcoded secrets patterns, insecure configs.
+  # Uses their free default ruleset. Login at semgrep.dev for Pro rules later.
+  # ==========================================================================
+  - repo: https://github.com/semgrep/pre-commit
+    rev: "v1.156.0"
+    hooks:
+      - id: semgrep
+        name: "Security scan with Semgrep"
+        args:
+          - "--config=p/default" # general-purpose security ruleset
+          - "--config=p/secrets" # extra secrets detection
+          - "--config=p/owasp-top-ten" # OWASP Top 10 patterns
+          - "--error" # fail commit if issues found
+          - "--skip-unknown-extensions"
+          - "--quiet"
+
+  # ==========================================================================
+  # AI SLOP DETECTOR — catches stubs, phantom imports, bloated AI-generated code
+  # Purpose-built for what we've been talking about. Optional but recommended.
+  # ==========================================================================
+  # Uncomment to enable (requires Python 3.8+):
+  # - repo: https://github.com/flamehaven01/AI-SLOP-Detector
+  #   rev: v3.5.0
+  #   hooks:
+  #     - id: slop-detector
+  #       name: "Detect AI slop patterns"
+  #       args: ['--ci-mode', 'soft']        # start 'soft' (warn), upgrade to 'hard' (block) later

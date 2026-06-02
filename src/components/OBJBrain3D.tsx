@@ -3,7 +3,7 @@
  * Loads the actual OBJ brain model with proper positioning and colors
  */
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState } from "react";
 import {
   View,
   StyleSheet,
@@ -13,21 +13,21 @@ import {
   PanResponder,
   GestureResponderEvent,
   PanResponderGestureState,
-} from 'react-native';
-import { GLView } from 'expo-gl';
-import { Renderer } from 'expo-three';
-import * as THREE from 'three';
-import { Asset } from 'expo-asset';
+} from "react-native";
+import { GLView } from "expo-gl";
+import { Renderer } from "expo-three";
+import * as THREE from "three";
+import { Asset } from "expo-asset";
 // NOTE: OBJLoader is dynamically imported inside onContextCreate to avoid
 // the "Invalid URL:" error that occurs when Three.js loaders are imported
 // at module load time in React Native. The dynamic import ensures the URL
 // polyfill is fully active before the loader is loaded.
-import { Brain3DRegion } from '../utils/brain3DData';
+import { Brain3DRegion } from "../utils/brain3DData";
 
-const { width } = Dimensions.get('window');
+const { width } = Dimensions.get("window");
 const CANVAS_SIZE = Math.min(width - 40, 400);
 const BACKGROUND_COLOR = 0x0f172a;
-const BACKGROUND_HEX = '#0f172a';
+const BACKGROUND_HEX = "#0f172a";
 
 interface OBJBrain3DProps {
   regions: Brain3DRegion[];
@@ -42,11 +42,11 @@ const OBJBrain3D: React.FC<OBJBrain3DProps> = ({
   onRegionPress,
   autoRotate = true,
   onInteractionStart,
-  onInteractionEnd
+  onInteractionEnd,
 }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const brainGroupRef = useRef<THREE.Group | null>(null);
+  const brainGroupRef = useRef<any | null>(null);
   const frameIdRef = useRef<number | null>(null);
 
   // Touch interaction state
@@ -56,15 +56,11 @@ const OBJBrain3D: React.FC<OBJBrain3DProps> = ({
 
   const onContextCreate = async (gl: any) => {
     try {
-      console.log('🧠 [OBJ] Initializing renderer...');
-
       // Initialize renderer
       const renderer = new Renderer({ gl });
 
       // Get actual device pixel ratio
       const pixelRatio = gl.drawingBufferWidth / CANVAS_SIZE;
-      console.log('🧠 [OBJ] Pixel ratio:', pixelRatio);
-      console.log('🧠 [OBJ] GL drawing buffer:', gl.drawingBufferWidth, 'x', gl.drawingBufferHeight);
 
       renderer.setPixelRatio(pixelRatio);
       renderer.setSize(CANVAS_SIZE, CANVAS_SIZE);
@@ -74,27 +70,19 @@ const OBJBrain3D: React.FC<OBJBrain3DProps> = ({
 
       renderer.setClearColor(BACKGROUND_COLOR, 1);
 
-      console.log('🧠 [OBJ] Renderer viewport size:', CANVAS_SIZE, 'x', CANVAS_SIZE);
-      console.log('🧠 [OBJ] Renderer created with pixel ratio:', pixelRatio);
-
       // Create scene
       const scene = new THREE.Scene();
 
       // Create camera with perfect centering
       const camera = new THREE.PerspectiveCamera(
-        50,  // Field of view
-        1,   // Aspect ratio (square viewport)
+        50, // Field of view
+        1, // Aspect ratio (square viewport)
         0.1,
-        1000
+        1000,
       );
-      camera.position.set(0, 0, 140);  // Camera on Z axis
-      camera.lookAt(0, 0, 0);  // Looking directly at origin
+      camera.position.set(0, 0, 140); // Camera on Z axis
+      camera.lookAt(0, 0, 0); // Looking directly at origin
       camera.updateProjectionMatrix();
-
-      console.log('🧠 [OBJ] Camera FOV:', camera.fov);
-      console.log('🧠 [OBJ] Camera aspect:', camera.aspect);
-      console.log('🧠 [OBJ] Camera position:', camera.position);
-      console.log('🧠 [OBJ] Camera is looking at: (0, 0, 0)');
 
       // Add lights
       const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -109,27 +97,27 @@ const OBJBrain3D: React.FC<OBJBrain3DProps> = ({
       scene.add(backLight);
 
       // Load OBJ file
-      console.log('🧠 [OBJ] Loading brain model...');
-      const objAsset = Asset.fromModule(require('../assets/models/Brain_Diagram_with_La_1027134643_texture_obj/Brain_Diagram_with_La_1027134643_texture.obj'));
+      const objAsset = Asset.fromModule(
+        require("../assets/models/Brain_Diagram_with_La_1027134643_texture_obj/Brain_Diagram_with_La_1027134643_texture.obj"),
+      );
       await objAsset.downloadAsync();
-      console.log('🧠 [OBJ] Asset downloaded');
 
       const avgActivity = regions.length
-        ? regions.reduce((sum, region) => sum + Math.max(0, region.activity), 0) / regions.length
+        ? regions.reduce(
+            (sum, region) => sum + Math.max(0, region.activity),
+            0,
+          ) / regions.length
         : 0.5;
 
       // Dynamic import to avoid URL error at module load time
-      const { OBJLoader } = await import('three/examples/jsm/loaders/OBJLoader');
+      const { OBJLoader } =
+        await import("three/examples/jsm/loaders/OBJLoader");
       const loader = new OBJLoader();
 
       loader.load(
         objAsset.localUri || objAsset.uri,
-        (obj) => {
-          console.log('🧠 [OBJ] Model loaded successfully!');
-
+        (obj: any) => {
           let vertexCount = 0;
-
-          console.log('🧠 [OBJ] Mapping colors from', regions.length, 'regions');
 
           // Convert hex color to HSL
           const hexToHSL = (hex: string) => {
@@ -140,7 +128,7 @@ const OBJBrain3D: React.FC<OBJBrain3DProps> = ({
           };
 
           // Function to find closest region to a mesh position and return color data
-          const getRegionColorData = (meshPos: THREE.Vector3) => {
+          const getRegionColorData = (meshPos: any) => {
             if (regions.length === 0) {
               // Default gray color if no regions
               return { h: 0, s: 0, l: 0.5, activity: 0.3 };
@@ -151,14 +139,14 @@ const OBJBrain3D: React.FC<OBJBrain3DProps> = ({
             const normalized = {
               x: meshPos.x / 30,
               y: meshPos.y / 30,
-              z: meshPos.z / 30
+              z: meshPos.z / 30,
             };
 
             let closestRegion = regions[0];
             let minDistance = Infinity;
 
             // Find the region closest to this mesh position
-            regions.forEach(region => {
+            regions.forEach((region) => {
               const dx = normalized.x - region.position.x;
               const dy = normalized.y - region.position.y;
               const dz = normalized.z - region.position.z;
@@ -175,19 +163,19 @@ const OBJBrain3D: React.FC<OBJBrain3DProps> = ({
 
             // Adjust lightness based on activity level
             // Higher activity = brighter color
-            const activityBrightness = 0.4 + (closestRegion.activity * 0.35);
+            const activityBrightness = 0.4 + closestRegion.activity * 0.35;
 
             return {
               h: hsl.h,
               s: Math.min(hsl.s + 0.2, 1), // Boost saturation slightly
               l: activityBrightness,
-              activity: closestRegion.activity
+              activity: closestRegion.activity,
             };
           };
 
           // Replace materials with colored regions
-          obj.traverse((child) => {
-            if (child instanceof THREE.Mesh) {
+          obj.traverse((child: any) => {
+            if (child.isMesh) {
               if (child.geometry.attributes.position) {
                 vertexCount += child.geometry.attributes.position.count;
               }
@@ -207,7 +195,7 @@ const OBJBrain3D: React.FC<OBJBrain3DProps> = ({
               const brainColor = new THREE.Color().setHSL(
                 colorData.h,
                 colorData.s,
-                colorData.l
+                colorData.l,
               );
 
               const material = new THREE.MeshPhongMaterial({
@@ -224,19 +212,14 @@ const OBJBrain3D: React.FC<OBJBrain3DProps> = ({
             }
           });
 
-          console.log('🧠 [OBJ] Model has', vertexCount, 'vertices');
-
           // Calculate bounding box for centering
           const box = new THREE.Box3().setFromObject(obj);
           const center = box.getCenter(new THREE.Vector3());
           const size = box.getSize(new THREE.Vector3());
 
-          console.log('🧠 [OBJ] Original size:', size);
-          console.log('🧠 [OBJ] Original center:', center);
-
           // Scale to FILL the viewport - make it BIGGER
           const maxDim = Math.max(size.x, size.y, size.z);
-          const targetSize = 100;  // Even bigger to fill viewport
+          const targetSize = 100; // Even bigger to fill viewport
           const scale = targetSize / maxDim;
           obj.scale.setScalar(scale);
 
@@ -247,29 +230,21 @@ const OBJBrain3D: React.FC<OBJBrain3DProps> = ({
           const scaledCenter = center.clone().multiplyScalar(scale);
           obj.position.set(-scaledCenter.x, -scaledCenter.y, -scaledCenter.z);
 
-          console.log('🧠 [OBJ] First pass position:', obj.position);
-
           // Second pass: FORCE EXACT centering
           // Recalculate the bounding box with the new position
           obj.updateMatrixWorld(true);
           const repositionedBox = new THREE.Box3().setFromObject(obj);
-          const repositionedCenter = repositionedBox.getCenter(new THREE.Vector3());
-
-          console.log('🧠 [OBJ] Brain center after first positioning:', repositionedCenter);
+          const repositionedCenter = repositionedBox.getCenter(
+            new THREE.Vector3(),
+          );
 
           // Adjust position to FORCE center to exactly (0, 0, 0)
           obj.position.x -= repositionedCenter.x;
           obj.position.y -= repositionedCenter.y;
           obj.position.z -= repositionedCenter.z;
 
-          console.log('🧠 [OBJ] ADJUSTED position to force (0,0,0):', obj.position);
-
           // Final verification
           obj.updateMatrixWorld(true);
-          const finalBox = new THREE.Box3().setFromObject(obj);
-          const finalCenter = finalBox.getCenter(new THREE.Vector3());
-          console.log('🧠 [OBJ] ✅ FINAL brain center:', finalCenter);
-          console.log('🧠 [OBJ] ✅ FINAL brain size:', maxDim * scale);
 
           obj.visible = true;
           obj.frustumCulled = false;
@@ -277,20 +252,15 @@ const OBJBrain3D: React.FC<OBJBrain3DProps> = ({
           brainGroupRef.current = obj;
           scene.add(obj);
 
-          console.log('🧠 [OBJ] Brain added to scene at CENTER');
           setLoading(false);
         },
-        (progress) => {
-          if (progress.total > 0) {
-            const percent = (progress.loaded / progress.total) * 100;
-            console.log('🧠 [OBJ] Loading:', percent.toFixed(0) + '%');
-          }
+        (progress: any) => {
+          // Loading progress
         },
-        (err) => {
-          console.error('🧠 [OBJ] Load error:', err);
-          setError('Failed to load OBJ brain model');
+        (err: any) => {
+          setError("Failed to load OBJ brain model");
           setLoading(false);
-        }
+        },
       );
 
       // Animation loop (same as SimpleBrain3D)
@@ -312,7 +282,6 @@ const OBJBrain3D: React.FC<OBJBrain3DProps> = ({
         // Ensure viewport is set correctly before each render
         if (frameCount === 0) {
           gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-          console.log('🧠 [OBJ] First frame - viewport set to:', gl.drawingBufferWidth, 'x', gl.drawingBufferHeight);
         }
         frameCount++;
 
@@ -321,11 +290,8 @@ const OBJBrain3D: React.FC<OBJBrain3DProps> = ({
       };
 
       animate();
-      console.log('🧠 [OBJ] Animation started');
-
-    } catch (err) {
-      console.error('🧠 [OBJ] Initialization error:', err);
-      setError('Failed to initialize 3D renderer');
+    } catch {
+      setError("Failed to initialize 3D renderer");
       setLoading(false);
     }
   };
@@ -335,18 +301,27 @@ const OBJBrain3D: React.FC<OBJBrain3DProps> = ({
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (evt: GestureResponderEvent, gestureState: PanResponderGestureState) => {
+      onPanResponderGrant: (
+        evt: GestureResponderEvent,
+        gestureState: PanResponderGestureState,
+      ) => {
         isInteractingRef.current = true;
         lastTouchRef.current = { x: gestureState.x0, y: gestureState.y0 };
         onInteractionStart?.();
       },
-      onPanResponderMove: (evt: GestureResponderEvent, gestureState: PanResponderGestureState) => {
+      onPanResponderMove: (
+        evt: GestureResponderEvent,
+        gestureState: PanResponderGestureState,
+      ) => {
         const deltaX = gestureState.moveX - lastTouchRef.current.x;
         const deltaY = gestureState.moveY - lastTouchRef.current.y;
 
         rotationRef.current.y += deltaX * 0.01;
         rotationRef.current.x += deltaY * 0.01;
-        rotationRef.current.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, rotationRef.current.x));
+        rotationRef.current.x = Math.max(
+          -Math.PI / 2,
+          Math.min(Math.PI / 2, rotationRef.current.x),
+        );
 
         lastTouchRef.current = { x: gestureState.moveX, y: gestureState.moveY };
       },
@@ -354,7 +329,7 @@ const OBJBrain3D: React.FC<OBJBrain3DProps> = ({
         isInteractingRef.current = false;
         onInteractionEnd?.();
       },
-    })
+    }),
   ).current;
 
   useEffect(() => {
@@ -395,50 +370,50 @@ const styles = StyleSheet.create({
   container: {
     width: CANVAS_SIZE,
     height: CANVAS_SIZE,
-    alignSelf: 'center',
+    alignSelf: "center",
     backgroundColor: BACKGROUND_HEX,
     borderRadius: 16,
-    overflow: 'hidden',
+    overflow: "hidden",
     elevation: 4,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   gl: {
     width: CANVAS_SIZE,
     height: CANVAS_SIZE,
   },
   centerContent: {
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     padding: 20,
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(15, 23, 42, 0.95)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(15, 23, 42, 0.95)",
+    justifyContent: "center",
+    alignItems: "center",
     zIndex: 10,
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    fontWeight: '600',
-    color: '#1B5E20',
+    fontWeight: "600",
+    color: "#1B5E20",
   },
   loadingSubtext: {
     marginTop: 8,
     fontSize: 12,
-    color: '#666',
+    color: "#666",
   },
   errorText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#d32f2f',
-    textAlign: 'center',
+    fontWeight: "600",
+    color: "#d32f2f",
+    textAlign: "center",
   },
 });
 

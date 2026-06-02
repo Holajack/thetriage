@@ -37,7 +37,9 @@ export const transcribe = action({
   },
   handler: async (ctx, args) => {
     // 1. Authenticate
-    const currentUser: any = await ctx.runQuery(internal.transcribe._getCurrentUser);
+    const currentUser: any = await ctx.runQuery(
+      internal.transcribe._getCurrentUser,
+    );
     if (!currentUser) {
       return { error: "Authentication failed", text: null };
     }
@@ -71,7 +73,6 @@ export const transcribe = action({
 
     if (!res.ok) {
       const errorText = await res.text();
-      console.error("Whisper API error:", res.status, errorText);
       return { error: "Transcription failed", text: null, details: errorText };
     }
 

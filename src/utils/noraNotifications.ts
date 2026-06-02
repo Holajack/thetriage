@@ -4,24 +4,24 @@
  * Queries Convex for pending notifications and schedules them
  * as local push notifications via Expo Notifications.
  */
-import * as Notifications from 'expo-notifications';
-import { ConvexReactClient } from 'convex/react';
-import { api } from '../../convex/_generated/api';
+import * as Notifications from "expo-notifications";
+import { ConvexReactClient } from "convex/react";
+import { api } from "../../convex/_generated/api";
 
 /**
  * Schedule Nora notifications from Convex data.
  * Call on app launch / Nora screen mount.
  */
 export async function scheduleNoraNotifications(
-  convexClient: ConvexReactClient
+  convexClient: ConvexReactClient,
 ): Promise<void> {
   try {
     const { status } = await Notifications.getPermissionsAsync();
-    if (status !== 'granted') return;
+    if (status !== "granted") return;
 
     // Fetch unread notifications from Convex
     const notifications = await convexClient.query(
-      api.noraNotifications.getNotifications
+      api.noraNotifications.getNotifications,
     );
 
     if (!notifications || notifications.length === 0) return;
@@ -38,15 +38,18 @@ export async function scheduleNoraNotifications(
 
       const trigger =
         scheduledDate > now
-          ? { date: scheduledDate }
-          : null; // Immediate
+          ? ({
+              type: Notifications.SchedulableTriggerInputTypes.DATE,
+              date: scheduledDate,
+            } as const)
+          : null;
 
       await Notifications.scheduleNotificationAsync({
         content: {
           title: notif.title,
           body: notif.body,
           data: {
-            type: 'nora_notification',
+            type: "nora_notification",
             notificationId: notif._id,
             notificationType: notif.type,
           },
@@ -55,7 +58,7 @@ export async function scheduleNoraNotifications(
       });
     }
   } catch (error) {
-    console.error('Failed to schedule Nora notifications:', error);
+    // Failed to schedule Nora notifications
   }
 }
 
@@ -63,7 +66,7 @@ export async function scheduleNoraNotifications(
  * Handle a notification tap that opens the Nora chat screen.
  */
 export function isNoraNotification(
-  notification: Notifications.Notification
+  notification: Notifications.Notification,
 ): boolean {
-  return notification.request.content.data?.type === 'nora_notification';
+  return notification.request.content.data?.type === "nora_notification";
 }

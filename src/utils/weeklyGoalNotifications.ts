@@ -1,6 +1,7 @@
-import * as Notifications from 'expo-notifications';
-import { ConvexReactClient } from "convex/react";
+import * as Notifications from "expo-notifications";
 import { api } from "../../convex/_generated/api";
+import { getConvexClient } from "./convexClient";
+export { setConvexClient } from "./convexClient";
 
 /**
  * Weekly Goal Notification System
@@ -8,17 +9,6 @@ import { api } from "../../convex/_generated/api";
  * Tracks user's weekly focus progress and sends notifications when they're
  * behind on their weekly goal, especially near the end of the week.
  */
-
-let _convexClient: ConvexReactClient | null = null;
-
-export function setConvexClient(client: ConvexReactClient) {
-  _convexClient = client;
-}
-
-function getClient(): ConvexReactClient {
-  if (!_convexClient) throw new Error("Convex client not initialized");
-  return _convexClient;
-}
 
 interface WeeklyProgress {
   totalMinutes: number;
@@ -51,9 +41,11 @@ const getWeekBounds = (): { startOfWeek: Date; endOfWeek: Date } => {
 /**
  * Calculate weekly progress for a user
  */
-export const getWeeklyProgress = async (userId: string): Promise<WeeklyProgress | null> => {
+export const getWeeklyProgress = async (
+  userId: string,
+): Promise<WeeklyProgress | null> => {
   try {
-    const client = getClient();
+    const client = getConvexClient();
 
     // Get user's weekly goal from onboarding preferences
     const onboarding = await client.query(api.onboarding.get, {});
@@ -68,7 +60,7 @@ export const getWeeklyProgress = async (userId: string): Promise<WeeklyProgress 
     const sessions = (allSessions || []).filter((session: any) => {
       const sessionDate = new Date(session.startTime);
       return (
-        session.status === 'completed' &&
+        session.status === "completed" &&
         sessionDate >= startOfWeek &&
         sessionDate <= endOfWeek
       );
@@ -92,8 +84,7 @@ export const getWeeklyProgress = async (userId: string): Promise<WeeklyProgress 
       percentComplete: Math.min(100, percentComplete),
       isOnTrack,
     };
-  } catch (error) {
-    console.error('Error calculating weekly progress:', error);
+  } catch {
     return null;
   }
 };
@@ -101,7 +92,9 @@ export const getWeeklyProgress = async (userId: string): Promise<WeeklyProgress 
 /**
  * Check if user needs a reminder and send notification
  */
-export const checkAndSendWeeklyGoalReminder = async (userId: string): Promise<void> => {
+export const checkAndSendWeeklyGoalReminder = async (
+  userId: string,
+): Promise<void> => {
   try {
     const progress = await getWeeklyProgress(userId);
     if (!progress) return;
@@ -118,13 +111,12 @@ export const checkAndSendWeeklyGoalReminder = async (userId: string): Promise<vo
 
     // Request notification permissions
     const { status } = await Notifications.getPermissionsAsync();
-    if (status !== 'granted') {
-      console.log('Notification permission not granted');
+    if (status !== "granted") {
       return;
     }
 
     // Create notification message
-    let message = '';
+    let message = "";
     const hoursNeeded = Math.ceil(progress.remainingHours);
 
     if (dayOfWeek === 6) {
@@ -141,22 +133,20 @@ export const checkAndSendWeeklyGoalReminder = async (userId: string): Promise<vo
     // Schedule notification
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: '⏰ Weekly Goal Reminder',
+        title: "⏰ Weekly Goal Reminder",
         body: message,
         sound: true,
         priority: Notifications.AndroidNotificationPriority.HIGH,
-        data: { type: 'weekly_goal_reminder' },
+        data: { type: "weekly_goal_reminder" },
       },
       trigger: {
-        type: 'timeInterval',
+        type: "timeInterval",
         seconds: 2,
         repeats: false,
       } as any,
     });
-
-    console.log(`📬 Weekly goal reminder sent: ${progress.percentComplete}% complete, ${hoursNeeded}h remaining`);
-  } catch (error) {
-    console.error('Error sending weekly goal reminder:', error);
+  } catch {
+    // Error sending weekly goal reminder
   }
 };
 
@@ -164,12 +154,14 @@ export const checkAndSendWeeklyGoalReminder = async (userId: string): Promise<vo
  * Schedule daily check for weekly goal progress
  * This should be called when the app starts or when user logs in
  */
-export const scheduleWeeklyGoalChecks = async (userId: string): Promise<void> => {
+export const scheduleWeeklyGoalChecks = async (
+  userId: string,
+): Promise<void> => {
   try {
     // Cancel any existing weekly goal notifications
     const scheduled = await Notifications.getAllScheduledNotificationsAsync();
     const weeklyGoalNotifications = scheduled.filter(
-      notif => notif.content.data?.type === 'weekly_goal_reminder'
+      (notif) => notif.content.data?.type === "weekly_goal_reminder",
     );
 
     for (const notif of weeklyGoalNotifications) {
@@ -192,11 +184,9 @@ export const scheduleWeeklyGoalChecks = async (userId: string): Promise<void> =>
 
       // Immediate check
       await checkAndSendWeeklyGoalReminder(userId);
-
-      console.log(`📅 Scheduled weekly goal checks for user ${userId}`);
     }
-  } catch (error) {
-    console.error('Error scheduling weekly goal checks:', error);
+  } catch {
+    // Error scheduling weekly goal checks
   }
 };
 
@@ -207,16 +197,14 @@ export const cancelWeeklyGoalNotifications = async (): Promise<void> => {
   try {
     const scheduled = await Notifications.getAllScheduledNotificationsAsync();
     const weeklyGoalNotifications = scheduled.filter(
-      notif => notif.content.data?.type === 'weekly_goal_reminder'
+      (notif) => notif.content.data?.type === "weekly_goal_reminder",
     );
 
     for (const notif of weeklyGoalNotifications) {
       await Notifications.cancelScheduledNotificationAsync(notif.identifier);
     }
-
-    console.log('📭 Cancelled all weekly goal notifications');
-  } catch (error) {
-    console.error('Error cancelling weekly goal notifications:', error);
+  } catch {
+    // Error cancelling weekly goal notifications
   }
 };
 

@@ -5,7 +5,13 @@
  * Titles are auto-generated from the first exchange.
  */
 import { v } from "convex/values";
-import { query, mutation, internalMutation, internalQuery, action } from "./_generated/server";
+import {
+  query,
+  mutation,
+  internalMutation,
+  internalQuery,
+  action,
+} from "./_generated/server";
 import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 
@@ -177,7 +183,7 @@ export const deleteSession = mutation({
       const responseIdRecord = await ctx.db
         .query("noraResponseIds")
         .withIndex("by_userId_sessionId", (q) =>
-          q.eq("userId", user._id).eq("sessionId", sessionId)
+          q.eq("userId", user._id).eq("sessionId", sessionId),
         )
         .unique();
       if (responseIdRecord) {
@@ -201,7 +207,7 @@ export const generateSessionTitle = action({
     // Get first 2 messages from the session
     const messages = await ctx.runQuery(
       internal.noraSessions._getFirstMessages,
-      { sessionId, limit: 2 }
+      { sessionId, limit: 2 },
     );
 
     if (messages.length === 0) return;
@@ -211,9 +217,7 @@ export const generateSessionTitle = action({
       .join("\n");
 
     const apiKey =
-      process.env.OPENAI_API_KEY_NEW_NORA ||
-      process.env.OPENAI_API_KEY ||
-      "";
+      process.env.OPENAI_API_KEY_NEW_NORA || process.env.OPENAI_API_KEY || "";
 
     if (!apiKey) {
       // Fallback: use first 6 words of user's first message
@@ -252,15 +256,14 @@ export const generateSessionTitle = action({
 
       if (res.ok) {
         const data = await res.json();
-        const title =
-          data.choices?.[0]?.message?.content?.trim() || "New Chat";
+        const title = data.choices?.[0]?.message?.content?.trim() || "New Chat";
         await ctx.runMutation(internal.noraSessions._updateSessionTitle, {
           sessionId,
           title: title.length > 50 ? title.slice(0, 47) + "..." : title,
         });
       }
-    } catch (e) {
-      console.error("Failed to generate session title:", e);
+    } catch {
+      // Failed to generate session title
     }
   },
 });

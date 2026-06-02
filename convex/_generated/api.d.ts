@@ -10,7 +10,9 @@
 
 import type * as achievements from "../achievements.js";
 import type * as aiInsights from "../aiInsights.js";
+import type * as appConfig from "../appConfig.js";
 import type * as crons from "../crons.js";
+import type * as ebooks from "../ebooks.js";
 import type * as focusSessions from "../focusSessions.js";
 import type * as friends from "../friends.js";
 import type * as http from "../http.js";
@@ -26,6 +28,7 @@ import type * as noraOnboarding from "../noraOnboarding.js";
 import type * as noraSessions from "../noraSessions.js";
 import type * as onboarding from "../onboarding.js";
 import type * as patrickChat from "../patrickChat.js";
+import type * as promoCodes from "../promoCodes.js";
 import type * as quizBulkLoad from "../quizBulkLoad.js";
 import type * as quizNoraIntegration from "../quizNoraIntegration.js";
 import type * as quizQuestionData from "../quizQuestionData.js";
@@ -52,7 +55,9 @@ import type {
 declare const fullApi: ApiFromModules<{
   achievements: typeof achievements;
   aiInsights: typeof aiInsights;
+  appConfig: typeof appConfig;
   crons: typeof crons;
+  ebooks: typeof ebooks;
   focusSessions: typeof focusSessions;
   friends: typeof friends;
   http: typeof http;
@@ -68,6 +73,7 @@ declare const fullApi: ApiFromModules<{
   noraSessions: typeof noraSessions;
   onboarding: typeof onboarding;
   patrickChat: typeof patrickChat;
+  promoCodes: typeof promoCodes;
   quizBulkLoad: typeof quizBulkLoad;
   quizNoraIntegration: typeof quizNoraIntegration;
   quizQuestionData: typeof quizQuestionData;

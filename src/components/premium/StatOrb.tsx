@@ -5,21 +5,32 @@
  * floating animation, and haptic feedback.
  */
 
-import React, { useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Pressable } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../../context/ThemeContext';
+import React, { useCallback } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Pressable,
+} from "react-native";
+import Animated, { FadeIn } from "react-native-reanimated";
+import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../../context/ThemeContext";
 import {
   useCounterAnimation,
   useFloatingAnimation,
   useButtonPressAnimation,
   triggerHaptic,
-} from '../../utils/animationUtils';
-import { Typography, Spacing, Shadows, BorderRadius } from '../../theme/premiumTheme';
+} from "../../utils/animationUtils";
+import {
+  Typography,
+  Spacing,
+  Shadows,
+  BorderRadius,
+} from "../../theme/premiumTheme";
 
-type StatType = 'streak' | 'focus' | 'tasks';
+type StatType = "streak" | "focus" | "tasks";
 
 interface StatOrbProps {
   type: StatType;
@@ -31,25 +42,28 @@ interface StatOrbProps {
   delay?: number;
 }
 
-const STAT_CONFIG: Record<StatType, {
-  icon: keyof typeof Ionicons.glyphMap;
-  gradient: string[];
-  iconColor: string;
-}> = {
+const STAT_CONFIG: Record<
+  StatType,
+  {
+    icon: keyof typeof Ionicons.glyphMap;
+    gradient: [string, string, ...string[]];
+    iconColor: string;
+  }
+> = {
   streak: {
-    icon: 'flame',
-    gradient: ['#F97316', '#EC4899'],
-    iconColor: '#FFF',
+    icon: "flame",
+    gradient: ["#F97316", "#EC4899"],
+    iconColor: "#FFF",
   },
   focus: {
-    icon: 'time',
-    gradient: ['#06B6D4', '#3B82F6'],
-    iconColor: '#FFF',
+    icon: "time",
+    gradient: ["#06B6D4", "#3B82F6"],
+    iconColor: "#FFF",
   },
   tasks: {
-    icon: 'checkmark-circle',
-    gradient: ['#22C55E', '#16A34A'],
-    iconColor: '#FFF',
+    icon: "checkmark-circle",
+    gradient: ["#22C55E", "#16A34A"],
+    iconColor: "#FFF",
   },
 };
 
@@ -58,7 +72,7 @@ export const StatOrb: React.FC<StatOrbProps> = ({
   value,
   label,
   sublabel,
-  unit = '',
+  unit = "",
   onPress,
   delay = 0,
 }) => {
@@ -72,17 +86,20 @@ export const StatOrb: React.FC<StatOrbProps> = ({
   const floatingStyle = useFloatingAnimation();
 
   // Button press animation
-  const { animatedStyle: pressStyle, onPressIn, onPressOut } = useButtonPressAnimation();
+  const {
+    animatedStyle: pressStyle,
+    onPressIn,
+    onPressOut,
+  } = useButtonPressAnimation();
 
   const handlePress = useCallback(() => {
-    triggerHaptic('buttonPress');
+    triggerHaptic("buttonPress");
     onPress?.();
   }, [onPress]);
 
   // Format value for display
-  const formattedValue = type === 'focus'
-    ? displayValue.toFixed(1)
-    : displayValue.toString();
+  const formattedValue =
+    type === "focus" ? displayValue.toFixed(1) : displayValue.toString();
 
   return (
     <Animated.View
@@ -128,8 +145,8 @@ export const StatOrb: React.FC<StatOrbProps> = ({
                 styles.sublabelContainer,
                 {
                   backgroundColor: isDark
-                    ? 'rgba(255, 255, 255, 0.08)'
-                    : 'rgba(0, 0, 0, 0.05)',
+                    ? "rgba(255, 255, 255, 0.08)"
+                    : "rgba(0, 0, 0, 0.05)",
                 },
               ]}
             >
@@ -147,34 +164,34 @@ export const StatOrb: React.FC<StatOrbProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    alignItems: 'center',
+    alignItems: "center",
   },
   orbWrapper: {
-    alignItems: 'center',
+    alignItems: "center",
   },
   orb: {
     width: 100,
     height: 110,
     borderRadius: BorderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.xs,
   },
   value: {
     ...Typography.statSmall,
-    color: '#FFF',
+    color: "#FFF",
     marginTop: Spacing.xxs,
   },
   unit: {
     fontSize: 12,
-    fontWeight: '400',
+    fontWeight: "400",
   },
   label: {
     ...Typography.caption,
-    color: 'rgba(255, 255, 255, 0.9)',
+    color: "rgba(255, 255, 255, 0.9)",
     marginTop: 2,
-    textAlign: 'center',
+    textAlign: "center",
   },
   sublabelContainer: {
     marginTop: Spacing.xs,

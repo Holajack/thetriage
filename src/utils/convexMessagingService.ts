@@ -5,25 +5,10 @@
  * Convex useQuery in the components. The subscribe* functions are no-ops
  * that return empty cleanup functions for backward compatibility.
  */
-import { ConvexReactClient } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
-
-// We need a reference to the Convex client for imperative calls.
-// Components should prefer useMutation hooks, but service functions
-// called outside of React need the client directly.
-let _convexClient: ConvexReactClient | null = null;
-
-export function setConvexClient(client: ConvexReactClient) {
-  _convexClient = client;
-}
-
-function getClient(): ConvexReactClient {
-  if (!_convexClient) {
-    throw new Error("Convex client not initialized. Call setConvexClient first.");
-  }
-  return _convexClient;
-}
+import { getConvexClient } from "./convexClient";
+export { setConvexClient } from "./convexClient";
 
 // Re-export interfaces for backward compatibility
 export interface Message {
@@ -60,10 +45,10 @@ export interface Conversation {
 export async function sendMessage(
   recipientId: string,
   content: string,
-  messageType: "text" | "image" | "file" = "text"
+  messageType: "text" | "image" | "file" = "text",
 ): Promise<{ success: boolean; error?: string; data?: Message }> {
   try {
-    const client = getClient();
+    const client = getConvexClient();
     const msgId = await client.mutation(api.messages.send, {
       recipientId: recipientId as Id<"users">,
       content,
@@ -91,10 +76,10 @@ export async function sendMessage(
  * Mark messages as read from a specific sender
  */
 export async function markMessagesAsRead(
-  senderId: string
+  senderId: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const client = getClient();
+    const client = getConvexClient();
     await client.mutation(api.messages.markConversationRead, {
       otherUserId: senderId as Id<"users">,
     });
@@ -111,7 +96,7 @@ export async function markMessagesAsRead(
  */
 export function subscribeToConversation(
   _otherUserId: string,
-  _callback: (message: Message) => void
+  _callback: (message: Message) => void,
 ): () => void {
   // No-op: Convex useQuery is reactive
   return () => {};
@@ -123,7 +108,7 @@ export function subscribeToConversation(
  */
 export function subscribeToMessageNotifications(
   _userId: string,
-  _callback: (notification: any) => void
+  _callback: (notification: any) => void,
 ): () => void {
   // No-op: Convex useQuery is reactive
   return () => {};
@@ -137,10 +122,10 @@ export function subscribeToMessageNotifications(
  * Get messages for a specific conversation
  */
 export async function getConversation(
-  otherUserId: string
+  otherUserId: string,
 ): Promise<{ success: boolean; error?: string; data?: Message[] }> {
   try {
-    const client = getClient();
+    const client = getConvexClient();
     const messages = await client.query(api.messages.getConversation, {
       otherUserId: otherUserId as Id<"users">,
     });
@@ -157,7 +142,7 @@ export async function getConversation(
     }));
     return { success: true, data: adapted };
   } catch (error: any) {
-    console.error("Error fetching conversation:", error);
+    // Error fetching conversation
     return { success: false, error: error.message };
   }
 }
@@ -168,8 +153,11 @@ export async function getConversations(): Promise<{
   data?: Conversation[];
 }> {
   try {
-    const client = getClient();
-    const conversations = await client.query(api.messages.listConversations, {});
+    const client = getConvexClient();
+    const conversations = await client.query(
+      api.messages.listConversations,
+      {},
+    );
 
     if (!conversations) {
       return { success: true, data: [] };
@@ -200,8 +188,12 @@ export async function getConversations(): Promise<{
                 | "image"
                 | "file",
               is_read: conv.lastMessage.isRead ?? false,
-              created_at: new Date(conv.lastMessage._creationTime).toISOString(),
-              updated_at: new Date(conv.lastMessage._creationTime).toISOString(),
+              created_at: new Date(
+                conv.lastMessage._creationTime,
+              ).toISOString(),
+              updated_at: new Date(
+                conv.lastMessage._creationTime,
+              ).toISOString(),
             }
           : undefined,
         unread_count: conv.unreadCount,
@@ -210,7 +202,17 @@ export async function getConversations(): Promise<{
 
     return { success: true, data: enrichedConversations };
   } catch (error: any) {
-    console.error("Error fetching conversations:", error);
+    // Error fetching conversations
     return { success: false, error: error.message };
+  }
+}
+
+export async function getUnreadMessageCount(): Promise<number> {
+  try {
+    const client = getConvexClient();
+    const count = await client.query((api as any).messages.getUnreadCount, {});
+    return count ?? 0;
+  } catch {
+    return 0;
   }
 }

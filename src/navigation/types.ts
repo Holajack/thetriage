@@ -1,4 +1,4 @@
-import { NavigatorScreenParams } from '@react-navigation/native';
+import { NavigatorScreenParams } from "@react-navigation/native";
 
 export type AuthStackParamList = {
   Login: { showSignupTab?: boolean } | undefined;
@@ -12,8 +12,15 @@ export type AuthStackParamList = {
 
 export type OnboardingStackParamList = {
   AccountCreation: undefined;
-  EmailVerification: { email: string; password?: string; username?: string; fullName?: string };
-  ProfileCreation: { email?: string; username?: string; fullName?: string } | undefined;
+  EmailVerification: {
+    email: string;
+    password?: string;
+    username?: string;
+    fullName?: string;
+  };
+  ProfileCreation:
+    | { email?: string; username?: string; fullName?: string }
+    | undefined;
   TrailBuddyOnboarding: undefined;
   FocusSoundSetup: undefined;
   FocusMethodIntro: undefined;
@@ -25,48 +32,63 @@ export type OnboardingStackParamList = {
 export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
-  Main: { showWalkthrough?: boolean } | undefined;
-  BreakTimerScreen: {
-    sessionData?: {
-      duration: number;
-      task: string;
-      focusRating: number;
-      productivityRating: number;
-      notes?: string;
-      completedFullSession: boolean;
-      sessionType: 'auto' | 'manual';
-      subject: string;
-      plannedDuration: number;
-    };
-  } | undefined;
-  StudySessionScreen: {
-    task?: Task;
-    group?: boolean;
-    room?: any;
-    autoStart?: boolean;
-    selectedTask?: any;
-    manualSelection?: boolean;
-    selectionMode?: 'auto' | 'manual';
-    focusMode?: 'basecamp' | 'summit';
-    tasks?: any[];
-    duration?: number;
-    breakDuration?: number;
-    autoProgress?: boolean;
-    currentTaskIndex?: number;
-    completedTasksData?: any[];
-    sessionType?: 'deep_work' | 'balanced' | 'sprint';
-  } | undefined;
-  SessionReportScreen: {
-    sessionDuration: number;
-    breakDuration: number;
-    taskCompleted: boolean;
-    focusRating: number;
-    notes?: string;
-    sessionType: 'auto' | 'manual';
-    subject: string;
-    plannedDuration: number;
-    productivity: number;
-  } | undefined;
+  Main: { showWalkthrough?: boolean; screen?: string } | undefined;
+  BreakTimerScreen:
+    | {
+        sessionData?: {
+          duration: number;
+          task: string;
+          focusRating: number;
+          productivityRating: number;
+          notes?: string;
+          completedFullSession: boolean;
+          sessionType: "auto" | "manual";
+          subject: string;
+          plannedDuration: number;
+        };
+        focusMode?: "basecamp" | "summit";
+        tasks?: any[];
+        nextTaskIndex?: number;
+        completedTasksData?: any[];
+        duration?: number;
+        autoProgress?: boolean;
+        breakDuration?: number;
+      }
+    | undefined;
+  StudySessionScreen:
+    | {
+        task?: Task;
+        group?: boolean;
+        room?: any;
+        autoStart?: boolean;
+        selectedTask?: any;
+        manualSelection?: boolean;
+        selectionMode?: "auto" | "manual";
+        focusMode?: "basecamp" | "summit";
+        tasks?: any[];
+        duration?: number;
+        breakDuration?: number;
+        autoProgress?: boolean;
+        currentTaskIndex?: number;
+        completedTasksData?: any[];
+        sessionType?: "deep_work" | "balanced" | "sprint";
+      }
+    | undefined;
+  SessionReportScreen:
+    | {
+        sessionDuration: number;
+        breakDuration: number;
+        taskCompleted: boolean;
+        focusRating: number;
+        notes?: string;
+        sessionType: "auto" | "manual";
+        subject: string;
+        plannedDuration: number;
+        productivity: number;
+        focusMode?: "basecamp" | "summit";
+        completedTasksData?: any[];
+      }
+    | undefined;
   SessionHistory: undefined;
   NoraSpeak: {
     initialMessage?: string;
@@ -78,6 +100,9 @@ export type RootStackParamList = {
       fileSize?: number;
     };
   };
+  PatrickSpeak: { initialMessage?: string } | undefined;
+  MessageScreen: { contact: MessageContact } | undefined;
+  StudyRoomScreen: { room: any } | undefined;
   QuizPrompt?: undefined;
   HistoryPrompt?: undefined;
   EBooks?: undefined;
@@ -106,7 +131,16 @@ export type RootStackParamList = {
 export type MainTabParamList = {
   Home: undefined;
   Community: { initialTab?: string } | undefined;
-  Nora: undefined;
+  Nora:
+    | {
+        initialMessage?: string;
+        pdfContext?: {
+          title: string;
+          url: string;
+          fileSize?: number;
+        };
+      }
+    | undefined;
   Bonuses: undefined;
   Results: undefined;
   Leaderboard: undefined;
@@ -131,6 +165,31 @@ export type MainTabParamList = {
       fileSize?: number;
     };
   };
+  Patrick: undefined;
+  PatrickSpeak: { initialMessage?: string } | undefined;
+  MessageScreen: { contact: MessageContact } | undefined;
+  StudyRoomScreen: { room: any } | undefined;
+  SessionHistory: undefined;
+  FocusPreparation: undefined;
+  StudySessionScreen:
+    | {
+        task?: Task;
+        group?: boolean;
+        room?: any;
+        autoStart?: boolean;
+        selectedTask?: any;
+        manualSelection?: boolean;
+        selectionMode?: "auto" | "manual";
+        focusMode?: "basecamp" | "summit";
+        tasks?: any[];
+        duration?: number;
+        breakDuration?: number;
+        autoProgress?: boolean;
+        currentTaskIndex?: number;
+        completedTasksData?: any[];
+        sessionType?: "deep_work" | "balanced" | "sprint";
+      }
+    | undefined;
   QuizPrompt?: undefined;
   HistoryPrompt?: undefined;
   EBooks?: undefined;
@@ -138,14 +197,6 @@ export type MainTabParamList = {
     url: string;
     title: string;
     bookData: any;
-  };
-  Nora: {
-    initialMessage?: string;
-    pdfContext?: {
-      title: string;
-      url: string;
-      fileSize?: number;
-    };
   };
   Achievements: undefined;
   SelfDiscoveryQuiz: undefined;
@@ -171,7 +222,7 @@ export interface Task {
   id: string;
   title: string;
   description?: string;
-  priority: 'High' | 'Medium' | 'Low';
+  priority: "High" | "Medium" | "Low";
   subject?: string;
   created_at: string;
   completed?: boolean;

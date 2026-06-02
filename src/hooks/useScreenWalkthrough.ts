@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { View } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { LayoutRect } from '../components/InteractiveWalkthrough';
+import { useState, useEffect, useCallback, useRef } from "react";
+import { View } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { LayoutRect } from "../components/InteractiveWalkthrough";
 
-const STORAGE_PREFIX = '@walkthrough_done_';
+const STORAGE_PREFIX = "@walkthrough_done_";
 
 interface UseScreenWalkthroughOptions {
   /** Force-show the walkthrough regardless of AsyncStorage */
@@ -16,12 +16,14 @@ interface UseScreenWalkthroughOptions {
 
 export function useScreenWalkthrough(
   screenId: string,
-  refs: Record<string, React.RefObject<View>>,
-  options: UseScreenWalkthroughOptions = {}
+  refs: Record<string, React.RefObject<View | null>>,
+  options: UseScreenWalkthroughOptions = {},
 ) {
   const { forceShow = false, delay = 800, ready = true } = options;
   const [visible, setVisible] = useState(false);
-  const [measurements, setMeasurements] = useState<Record<string, LayoutRect>>({});
+  const [measurements, setMeasurements] = useState<Record<string, LayoutRect>>(
+    {},
+  );
   const hasChecked = useRef(false);
 
   useEffect(() => {
@@ -31,7 +33,7 @@ export function useScreenWalkthrough(
     const check = async () => {
       if (!forceShow) {
         const done = await AsyncStorage.getItem(`${STORAGE_PREFIX}${screenId}`);
-        if (done === 'true') return;
+        if (done === "true") return;
       }
 
       // Wait for layout to settle, then measure
@@ -98,7 +100,7 @@ export function useScreenWalkthrough(
 
   const complete = useCallback(async () => {
     setVisible(false);
-    await AsyncStorage.setItem(`${STORAGE_PREFIX}${screenId}`, 'true');
+    await AsyncStorage.setItem(`${STORAGE_PREFIX}${screenId}`, "true");
   }, [screenId]);
 
   const reset = useCallback(async () => {
@@ -117,7 +119,7 @@ export async function resetWalkthrough(screenId: string) {
 /** Reset all walkthroughs */
 export async function resetAllWalkthroughs() {
   const keys = await AsyncStorage.getAllKeys();
-  const walkthroughKeys = keys.filter(k => k.startsWith(STORAGE_PREFIX));
+  const walkthroughKeys = keys.filter((k) => k.startsWith(STORAGE_PREFIX));
   if (walkthroughKeys.length > 0) {
     await AsyncStorage.multiRemove(walkthroughKeys);
   }

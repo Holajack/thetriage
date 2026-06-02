@@ -1,0 +1,63 @@
+{
+  "runId": "9b62cbc0-47c8-4305-aaa7-8a1ca599d9af",
+  "themeInput": "Aurora_night",
+  "themeResolved": "Aurora_night",
+  "runMode": "all",
+  "quality": "high",
+  "providerMode": "api",
+  "providerPreference": "replicate_openai_gpt_image_1_5",
+  "apiProvider": "replicate_openai_gpt_image_1_5",
+  "generationMode": "preset",
+  "sceneDescription": "The Northern Lights dancing across an arctic sky — vivid green and purple aurora curtains over frozen ice landscape",
+  "artStyle": "pixel",
+  "status": "completed",
+  "startedAt": "2026-02-14T16:26:46.844Z",
+  "progress": {
+    "total": 4,
+    "completed": 4,
+    "failed": 0
+  },
+  "artifacts": {
+    "runDirectory": "/Users/jackenholland/App Development/parallax-theme-studio/output/runs/9b62cbc0-47c8-4305-aaa7-8a1ca599d9af",
+    "generatedDirectory": "/Users/jackenholland/App Development/parallax-theme-studio/output/runs/9b62cbc0-47c8-4305-aaa7-8a1ca599d9af/generated"
+  },
+  "layers": {
+    "sky": {
+      "layer": "sky",
+      "fileName": "sunset_colors.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparentRequired": false,
+      "outputPath": "/Users/jackenholland/App Development/parallax-theme-studio/output/runs/9b62cbc0-47c8-4305-aaa7-8a1ca599d9af/generated/sunset_colors.png"
+    },
+    "mountain": {
+      "layer": "mountain",
+      "fileName": "rocky_mountain.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparentRequired": true,
+      "transparencyBorderOpaqueRatio": 0,
+      "outputPath": "/Users/jackenholland/App Development/parallax-theme-studio/output/runs/9b62cbc0-47c8-4305-aaa7-8a1ca599d9af/generated/rocky_mountain.png"
+    },
+    "tree": {
+      "layer": "tree",
+      "fileName": "evergreen_tree.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparentRequired": true,
+      "transparencyBorderOpaqueRatio": 0,
+      "outputPath": "/Users/jackenholland/App Development/parallax-theme-studio/output/runs/9b62cbc0-47c8-4305-aaa7-8a1ca599d9af/generated/evergreen_tree.png"
+    },
+    "ground": {
+      "layer": "ground",
+      "fileName": "path_animation.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparentRequired": true,
+      "transparencyBorderOpaqueRatio": 0,
+      "outputPath": "/Users/jackenholland/App Development/parallax-theme-studio/output/runs/9b62cbc0-47c8-4305-aaa7-8a1ca599d9af/generated/path_animation.png"
+    }
+  },
+  "errors": [],
+  "completedAt": "2026-02-14T16:30:56.890Z"
+}

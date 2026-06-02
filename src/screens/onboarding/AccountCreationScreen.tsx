@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -8,23 +8,36 @@ import {
   Alert,
   Platform,
   ScrollView,
-  ActivityIndicator
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { OnboardingStackParamList } from '../../navigation/types';
-import { useSignUp } from '@clerk/clerk-expo';
-import Animated, { FadeIn, FadeInRight, withSequence, withSpring, useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
-import { AnimatedButton } from '../../components/premium/AnimatedButton';
-import { StaggeredItem } from '../../components/premium/StaggeredList';
-import { useEntranceAnimation, useProgressAnimation } from '../../utils/animationUtils';
-import { createInitialUserData } from '../../utils/createUserData';
+  ActivityIndicator,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { OnboardingStackParamList } from "../../navigation/types";
+import { useSignUp } from "@clerk/clerk-expo";
+import Animated, {
+  FadeIn,
+  FadeInRight,
+  withSequence,
+  withSpring,
+  useSharedValue,
+  useAnimatedStyle,
+} from "react-native-reanimated";
+import * as Haptics from "expo-haptics";
+import { AnimatedButton } from "../../components/premium/AnimatedButton";
+import { StaggeredItem } from "../../components/premium/StaggeredList";
+import {
+  useEntranceAnimation,
+  useProgressAnimation,
+} from "../../utils/animationUtils";
+import { createInitialUserData } from "../../utils/createUserData";
 
-type AccountCreationNavigationProp = NativeStackNavigationProp<OnboardingStackParamList, 'AccountCreation'>;
+type AccountCreationNavigationProp = NativeStackNavigationProp<
+  OnboardingStackParamList,
+  "AccountCreation"
+>;
 
 export default function AccountCreationScreen() {
   const navigation = useNavigation<AccountCreationNavigationProp>();
@@ -32,15 +45,16 @@ export default function AccountCreationScreen() {
   const headerAnimation = useEntranceAnimation(0);
   const progressAnimation = useProgressAnimation(1 / 5); // Step 1 of 5
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [username, setUsername] = useState('');
-  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [username, setUsername] = useState("");
+  const [fullName, setFullName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-  const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
-  const [error, setError] = useState('');
+  const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] =
+    useState(false);
+  const [error, setError] = useState("");
   const [validationStates, setValidationStates] = useState({
     fullName: false,
     username: false,
@@ -51,74 +65,86 @@ export default function AccountCreationScreen() {
 
   const validateEmail = (email: string) => {
     const isValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-    setValidationStates(prev => ({ ...prev, email: isValid }));
+    setValidationStates((prev) => ({ ...prev, email: isValid }));
     return isValid;
-  }
+  };
 
   const validatePassword = (password: string) => {
     const isValid = password.length >= 6;
-    setValidationStates(prev => ({ ...prev, password: isValid }));
+    setValidationStates((prev) => ({ ...prev, password: isValid }));
     return isValid;
-  }
+  };
 
   const handleFullNameChange = (text: string) => {
     setFullName(text);
-    setValidationStates(prev => ({ ...prev, fullName: text.trim().length > 0 }));
-  }
+    setValidationStates((prev) => ({
+      ...prev,
+      fullName: text.trim().length > 0,
+    }));
+  };
 
   const handleUsernameChange = (text: string) => {
     setUsername(text);
-    setValidationStates(prev => ({ ...prev, username: text.trim().length > 0 }));
-  }
+    setValidationStates((prev) => ({
+      ...prev,
+      username: text.trim().length > 0,
+    }));
+  };
 
   const handleEmailChange = (text: string) => {
     setEmail(text);
     if (text.trim()) validateEmail(text);
-  }
+  };
 
   const handlePasswordChange = (text: string) => {
     setPassword(text);
     if (text) validatePassword(text);
     if (confirmPassword) {
-      setValidationStates(prev => ({ ...prev, confirmPassword: text === confirmPassword }));
+      setValidationStates((prev) => ({
+        ...prev,
+        confirmPassword: text === confirmPassword,
+      }));
     }
-  }
+  };
 
   const handleConfirmPasswordChange = (text: string) => {
     setConfirmPassword(text);
-    setValidationStates(prev => ({ ...prev, confirmPassword: text === password && text.length > 0 }));
-  }
+    setValidationStates((prev) => ({
+      ...prev,
+      confirmPassword: text === password && text.length > 0,
+    }));
+  };
 
   const handleSignUp = useCallback(async () => {
     if (!isLoaded || !signUp) {
-      setError('Authentication is not ready. Please try again.');
+      setError("Authentication is not ready. Please try again.");
       return;
     }
 
-    setError('');
+    setError("");
     if (!fullName.trim()) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setError('Please enter your full name.');
+      setError("Please enter your full name.");
       return;
     }
     if (!username.trim()) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setError('Please enter a username.');
+      setError("Please enter a username.");
       return;
     }
     if (!validateEmail(email)) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setError('Please enter a valid email address.');
+      setError("Please enter a valid email address.");
       return;
     }
     if (!validatePassword(password)) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setError('Password must be at least 6 characters long.');
+      setError("Password must be at least 6 characters long.");
       return;
     }
     if (password !== confirmPassword) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setError('Passwords do not match.');
+      setError("Passwords do not match.");
       return;
     }
 
@@ -126,19 +152,10 @@ export default function AccountCreationScreen() {
     setIsLoading(true);
 
     try {
-      console.log('📝 [AccountCreation] Creating signup...');
-
       // Split full name into first and last name for Clerk
-      const nameParts = fullName.trim().split(' ');
-      const firstName = nameParts[0] || '';
-      const lastName = nameParts.slice(1).join(' ') || '';
-
-      console.log('📝 [AccountCreation] Signup params:', {
-        emailAddress: email,
-        username: username,
-        firstName,
-        lastName,
-      });
+      const nameParts = fullName.trim().split(" ");
+      const firstName = nameParts[0] || "";
+      const lastName = nameParts.slice(1).join(" ") || "";
 
       // Create the signup with Clerk - username must be top-level field if required
       const createResult = await signUp.create({
@@ -151,22 +168,15 @@ export default function AccountCreationScreen() {
           full_name: fullName, // Keep original full name for reference
         },
       });
-      console.log('📝 [AccountCreation] Signup created, status:', createResult.status);
-      console.log('📝 [AccountCreation] Missing fields:', createResult.missingFields);
-      console.log('📝 [AccountCreation] Unverified fields:', createResult.unverifiedFields);
-      console.log('📝 [AccountCreation] SignUp ID:', signUp.id);
-
       // Prepare email verification
-      console.log('📝 [AccountCreation] Preparing email verification...');
-      const prepareResult = await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
-      console.log('📝 [AccountCreation] Verification prepared, status:', prepareResult.status);
-      console.log('📝 [AccountCreation] SignUp after prepare:', signUp.status);
+      const prepareResult = await signUp.prepareEmailAddressVerification({
+        strategy: "email_code",
+      });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      console.log('📝 [AccountCreation] Navigating to EmailVerification...');
       // Navigate to email verification screen
-      navigation.navigate('EmailVerification', {
+      navigation.navigate("EmailVerification", {
         email: email,
         password: password,
         username: username,
@@ -174,18 +184,30 @@ export default function AccountCreationScreen() {
       });
     } catch (err: any) {
       // Handle Clerk errors
-      const errorMessage = err?.errors?.[0]?.message || err?.message || 'Sign up failed. Please try again.';
+      const errorMessage =
+        err?.errors?.[0]?.message ||
+        err?.message ||
+        "Sign up failed. Please try again.";
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setError(errorMessage);
-      Alert.alert('Sign Up Failed', errorMessage);
+      Alert.alert("Sign Up Failed", errorMessage);
     } finally {
       setIsLoading(false);
     }
-  }, [isLoaded, signUp, email, password, confirmPassword, fullName, username, navigation]);
+  }, [
+    isLoaded,
+    signUp,
+    email,
+    password,
+    confirmPassword,
+    fullName,
+    username,
+    navigation,
+  ]);
 
   return (
     <LinearGradient
-      colors={['#0F2419', '#1B4A3A', '#2E5D4F', '#1B4A3A']}
+      colors={["#0F2419", "#1B4A3A", "#2E5D4F", "#1B4A3A"]}
       locations={[0, 0.3, 0.7, 1]}
       style={styles.container}
     >
@@ -195,7 +217,7 @@ export default function AccountCreationScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           keyboardDismissMode="on-drag"
-          automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+          automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
           contentInsetAdjustmentBehavior="automatic"
         >
           <Animated.View style={[styles.header, headerAnimation]}>
@@ -226,8 +248,15 @@ export default function AccountCreationScreen() {
                     autoCapitalize="words"
                   />
                   {validationStates.fullName && fullName.trim() && (
-                    <Animated.View entering={FadeIn.duration(200)} style={styles.validationIcon}>
-                      <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                    <Animated.View
+                      entering={FadeIn.duration(200)}
+                      style={styles.validationIcon}
+                    >
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={20}
+                        color="#4CAF50"
+                      />
                     </Animated.View>
                   )}
                 </View>
@@ -247,8 +276,15 @@ export default function AccountCreationScreen() {
                     autoCapitalize="none"
                   />
                   {validationStates.username && username.trim() && (
-                    <Animated.View entering={FadeIn.duration(200)} style={styles.validationIcon}>
-                      <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                    <Animated.View
+                      entering={FadeIn.duration(200)}
+                      style={styles.validationIcon}
+                    >
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={20}
+                        color="#4CAF50"
+                      />
                     </Animated.View>
                   )}
                 </View>
@@ -269,8 +305,15 @@ export default function AccountCreationScreen() {
                     autoCapitalize="none"
                   />
                   {validationStates.email && email.trim() && (
-                    <Animated.View entering={FadeIn.duration(200)} style={styles.validationIcon}>
-                      <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                    <Animated.View
+                      entering={FadeIn.duration(200)}
+                      style={styles.validationIcon}
+                    >
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={20}
+                        color="#4CAF50"
+                      />
                     </Animated.View>
                   )}
                 </View>
@@ -290,15 +333,33 @@ export default function AccountCreationScreen() {
                     secureTextEntry={!isPasswordVisible}
                   />
                   {validationStates.password && password && (
-                    <Animated.View entering={FadeIn.duration(200)} style={styles.validationIconPassword}>
-                      <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                    <Animated.View
+                      entering={FadeIn.duration(200)}
+                      style={styles.validationIconPassword}
+                    >
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={20}
+                        color="#4CAF50"
+                      />
                     </Animated.View>
                   )}
-                  <TouchableOpacity onPress={() => setIsPasswordVisible(!isPasswordVisible)} style={styles.showPasswordButton}>
-                    <Ionicons name={isPasswordVisible ? "eye-off-outline" : "eye-outline"} size={24} color="#B8E6C1" />
+                  <TouchableOpacity
+                    onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+                    style={styles.showPasswordButton}
+                  >
+                    <Ionicons
+                      name={
+                        isPasswordVisible ? "eye-off-outline" : "eye-outline"
+                      }
+                      size={24}
+                      color="#B8E6C1"
+                    />
                   </TouchableOpacity>
                 </View>
-                <Text style={styles.passwordHint}>Must be at least 6 characters.</Text>
+                <Text style={styles.passwordHint}>
+                  Must be at least 6 characters.
+                </Text>
               </View>
             </StaggeredItem>
 
@@ -315,12 +376,32 @@ export default function AccountCreationScreen() {
                     secureTextEntry={!isConfirmPasswordVisible}
                   />
                   {validationStates.confirmPassword && confirmPassword && (
-                    <Animated.View entering={FadeIn.duration(200)} style={styles.validationIconPassword}>
-                      <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                    <Animated.View
+                      entering={FadeIn.duration(200)}
+                      style={styles.validationIconPassword}
+                    >
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={20}
+                        color="#4CAF50"
+                      />
                     </Animated.View>
                   )}
-                  <TouchableOpacity onPress={() => setIsConfirmPasswordVisible(!isConfirmPasswordVisible)} style={styles.showPasswordButton}>
-                    <Ionicons name={isConfirmPasswordVisible ? "eye-off-outline" : "eye-outline"} size={24} color="#B8E6C1" />
+                  <TouchableOpacity
+                    onPress={() =>
+                      setIsConfirmPasswordVisible(!isConfirmPasswordVisible)
+                    }
+                    style={styles.showPasswordButton}
+                  >
+                    <Ionicons
+                      name={
+                        isConfirmPasswordVisible
+                          ? "eye-off-outline"
+                          : "eye-outline"
+                      }
+                      size={24}
+                      color="#B8E6C1"
+                    />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -338,7 +419,7 @@ export default function AccountCreationScreen() {
             title="Create Account & Continue"
             onPress={handleSignUp}
             gradient={true}
-            gradientColors={['#4CAF50', '#66BB6A', '#4CAF50']}
+            gradientColors={["#4CAF50", "#66BB6A", "#4CAF50"]}
             size="large"
             fullWidth={true}
             loading={isLoading}
@@ -374,124 +455,124 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: 30,
-    alignItems: 'center', // Center header content
+    alignItems: "center", // Center header content
   },
   backButton: {
-    position: 'absolute',
+    position: "absolute",
     top: 0, // Adjust as needed
     left: 0, // Adjust as needed
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 10, // Add some padding for easier touch
   },
   backButtonText: {
-    color: '#E8F5E9',
+    color: "#E8F5E9",
     fontSize: 16,
     marginLeft: 6,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   headerTitle: {
     fontSize: 28,
-    fontWeight: 'bold',
-    color: '#E8F5E9',
-    textAlign: 'center',
+    fontWeight: "bold",
+    color: "#E8F5E9",
+    textAlign: "center",
     marginTop: 40, // Add margin if back button is absolutely positioned
     marginBottom: 8,
   },
   headerSubtitle: {
     fontSize: 16,
-    color: '#B8E6C1',
-    textAlign: 'center',
+    color: "#B8E6C1",
+    textAlign: "center",
     lineHeight: 22,
     paddingHorizontal: 10,
   },
   formContainer: {
-    width: '100%',
+    width: "100%",
     marginBottom: 20,
   },
   inputLabel: {
     fontSize: 16,
-    fontWeight: '500',
-    color: '#E8F5E9',
+    fontWeight: "500",
+    color: "#E8F5E9",
     marginBottom: 8,
     marginTop: 16,
   },
   inputWrapper: {
-    position: 'relative',
-    width: '100%',
+    position: "relative",
+    width: "100%",
   },
   input: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    color: '#E8F5E9',
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    color: "#E8F5E9",
     paddingVertical: 15,
     paddingHorizontal: 20,
     borderRadius: 12,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: 'rgba(232, 245, 233, 0.2)',
-    width: '100%',
+    borderColor: "rgba(232, 245, 233, 0.2)",
+    width: "100%",
   },
   validationIcon: {
-    position: 'absolute',
+    position: "absolute",
     right: 15,
-    top: '50%',
+    top: "50%",
     marginTop: -10,
   },
   passwordInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    position: 'relative',
-    width: '100%',
+    flexDirection: "row",
+    alignItems: "center",
+    position: "relative",
+    width: "100%",
   },
   validationIconPassword: {
-    position: 'absolute',
+    position: "absolute",
     right: 50,
-    top: '50%',
+    top: "50%",
     marginTop: -10,
   },
   showPasswordButton: {
-    position: 'absolute',
+    position: "absolute",
     right: 15,
-    height: '100%',
-    justifyContent: 'center',
+    height: "100%",
+    justifyContent: "center",
     paddingHorizontal: 5,
   },
   passwordHint: {
     fontSize: 13,
-    color: '#B8E6C1',
+    color: "#B8E6C1",
     marginTop: 6,
     marginLeft: 4, // Align with input text
   },
   errorText: {
-    color: '#FF6B6B', // A common error color
+    color: "#FF6B6B", // A common error color
     fontSize: 14,
-    textAlign: 'center',
+    textAlign: "center",
     marginTop: 15,
     marginBottom: 10,
-    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+    backgroundColor: "rgba(255, 107, 107, 0.1)",
     paddingVertical: 10,
     paddingHorizontal: 15,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 107, 107, 0.3)',
+    borderColor: "rgba(255, 107, 107, 0.3)",
   },
   bottomContainer: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 25,
-    backgroundColor: 'rgba(15, 36, 25, 0.8)',
+    backgroundColor: "rgba(15, 36, 25, 0.8)",
     borderTopWidth: 1,
-    borderTopColor: 'rgba(232, 245, 233, 0.1)',
+    borderTopColor: "rgba(232, 245, 233, 0.1)",
     gap: 20,
   },
   progressIndicator: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center', // Align dots vertically
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center", // Align dots vertically
     gap: 10, // Increased gap
     height: 10, // Explicit height for the container
   },
@@ -499,10 +580,10 @@ const styles = StyleSheet.create({
     width: 10, // Larger dots
     height: 10,
     borderRadius: 5,
-    backgroundColor: 'rgba(232, 245, 233, 0.3)',
+    backgroundColor: "rgba(232, 245, 233, 0.3)",
   },
   progressDotActive: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: "#4CAF50",
     width: 12, // Slightly larger active dot
     height: 12,
     borderRadius: 6,

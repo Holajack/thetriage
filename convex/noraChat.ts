@@ -9,7 +9,12 @@
  * Conversation continuity via `previous_response_id` chaining.
  */
 import { v } from "convex/values";
-import { action, query, internalMutation, internalQuery } from "./_generated/server";
+import {
+  action,
+  query,
+  internalMutation,
+  internalQuery,
+} from "./_generated/server";
 import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 
@@ -52,45 +57,6 @@ export const _getUserContext = internalQuery({
   },
 });
 
-/** DEV: Debug rate limit check by clerkId (remove before production) */
-export const debugRateLimit = query({
-  args: { clerkId: v.string() },
-  handler: async (ctx, { clerkId }) => {
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerkId", (q) => q.eq("clerkId", clerkId))
-      .unique();
-    if (!user) return { error: "User not found" };
-
-    const tier = user.subscriptionTier || "free";
-    const today = new Date().toISOString().slice(0, 10);
-    const usage = await ctx.db
-      .query("aiUsageTracking")
-      .withIndex("by_userId_aiType_date", (q) =>
-        q.eq("userId", user._id).eq("aiType", "nora").eq("date", today)
-      )
-      .unique();
-
-    const noraStatus = await ctx.db
-      .query("noraOnboardingStatus")
-      .withIndex("by_userId", (q) => q.eq("userId", user._id))
-      .unique();
-
-    return {
-      userId: user._id,
-      tier,
-      subscriptionTier: user.subscriptionTier,
-      messagesSentToday: usage?.messagesSent ?? 0,
-      date: today,
-      noraOnboarding: noraStatus ? {
-        completedAt: noraStatus.completedAt,
-        acceptedPoliciesAt: noraStatus.acceptedPoliciesAt,
-        version: noraStatus.version,
-      } : null,
-    };
-  },
-});
-
 /** Check rate limit for the user */
 export const _checkRateLimit = internalQuery({
   args: { userId: v.id("users"), aiType: v.string() },
@@ -100,7 +66,10 @@ export const _checkRateLimit = internalQuery({
 
     // Nora is available for trial (limited) and Elite tiers
     // Trial users get a taste of Nora, then must upgrade when trial ends
-    const limits: Record<string, { enabled: boolean; perDay: number; maxLen: number }> = {
+    const limits: Record<
+      string,
+      { enabled: boolean; perDay: number; maxLen: number }
+    > = {
       free: { enabled: false, perDay: 0, maxLen: 500 },
       trial: { enabled: true, perDay: 10, maxLen: 2000 },
       premium: { enabled: false, perDay: 0, maxLen: 500 },
@@ -110,9 +79,10 @@ export const _checkRateLimit = internalQuery({
     const tierLimits = limits[tier] || limits.free;
 
     if (!tierLimits.enabled) {
-      const reason = tier === "premium"
-        ? "Nora AI is an Elite-exclusive feature. You're already on Premium — upgrade to Elite to unlock web research, document analysis, and advanced study support!"
-        : "Nora AI is available for Elite members. Upgrade to Elite to unlock web research, document analysis, and advanced study support!";
+      const reason =
+        tier === "premium"
+          ? "Nora AI is an Elite-exclusive feature. You're already on Premium — upgrade to Elite to unlock web research, document analysis, and advanced study support!"
+          : "Nora AI is available for Elite members. Upgrade to Elite to unlock web research, document analysis, and advanced study support!";
       return {
         allowed: false,
         tier,
@@ -126,7 +96,7 @@ export const _checkRateLimit = internalQuery({
     const usage = await ctx.db
       .query("aiUsageTracking")
       .withIndex("by_userId_aiType_date", (q) =>
-        q.eq("userId", userId).eq("aiType", aiType).eq("date", today)
+        q.eq("userId", userId).eq("aiType", aiType).eq("date", today),
       )
       .unique();
 
@@ -164,7 +134,7 @@ export const _logUsage = internalMutation({
     const existing = await ctx.db
       .query("aiUsageTracking")
       .withIndex("by_userId_aiType_date", (q) =>
-        q.eq("userId", userId).eq("aiType", aiType).eq("date", today)
+        q.eq("userId", userId).eq("aiType", aiType).eq("date", today),
       )
       .unique();
 
@@ -199,7 +169,13 @@ export const _saveMessage = internalMutation({
     metadata: v.optional(v.any()),
   },
   handler: async (ctx, { userId, sessionId, role, content, metadata }) => {
-    await ctx.db.insert("noraChat", { userId, sessionId, role, content, metadata });
+    await ctx.db.insert("noraChat", {
+      userId,
+      sessionId,
+      role,
+      content,
+      metadata,
+    });
   },
 });
 
@@ -214,7 +190,7 @@ export const _getLastResponseId = internalQuery({
       const record = await ctx.db
         .query("noraResponseIds")
         .withIndex("by_userId_sessionId", (q) =>
-          q.eq("userId", userId).eq("sessionId", sessionId)
+          q.eq("userId", userId).eq("sessionId", sessionId),
         )
         .unique();
       return record?.responseId ?? null;
@@ -240,14 +216,18 @@ export const _saveResponseId = internalMutation({
       const existing = await ctx.db
         .query("noraResponseIds")
         .withIndex("by_userId_sessionId", (q) =>
-          q.eq("userId", userId).eq("sessionId", sessionId)
+          q.eq("userId", userId).eq("sessionId", sessionId),
         )
         .unique();
 
       if (existing) {
         await ctx.db.patch(existing._id, { responseId });
       } else {
-        await ctx.db.insert("noraResponseIds", { userId, sessionId, responseId });
+        await ctx.db.insert("noraResponseIds", {
+          userId,
+          sessionId,
+          responseId,
+        });
       }
     } else {
       // Fallback for backward compatibility
@@ -285,26 +265,83 @@ function resolveAutoMode(message: string): "quick" | "deep" | "research" {
 
   // Quick signals: very short greetings and simple conversational messages
   const quickSignals = [
-    "hi", "hey", "hello", "thanks", "thank you", "ok", "okay",
-    "yes", "no", "sure", "got it", "cool", "nice", "good",
-    "bye", "goodbye", "see you", "gm", "gn", "sup", "yo",
+    "hi",
+    "hey",
+    "hello",
+    "thanks",
+    "thank you",
+    "ok",
+    "okay",
+    "yes",
+    "no",
+    "sure",
+    "got it",
+    "cool",
+    "nice",
+    "good",
+    "bye",
+    "goodbye",
+    "see you",
+    "gm",
+    "gn",
+    "sup",
+    "yo",
   ];
   // If the entire message (trimmed) is just a greeting/conversational phrase
-  if (lower.length < 30 && quickSignals.some(kw => lower === kw || lower === kw + "!" || lower === kw + ".")) {
+  if (
+    lower.length < 30 &&
+    quickSignals.some(
+      (kw) => lower === kw || lower === kw + "!" || lower === kw + ".",
+    )
+  ) {
     return "quick";
   }
 
   // Research signals: user wants web info, current events, sources, resources
   const researchSignals = [
-    "research", "find", "search", "look up", "what is", "who is",
-    "sources", "latest", "news", "recent", "current", "trending",
-    "statistics", "data on", "studies show", "according to",
-    "website", "resource", "tutorial", "guide", "course",
-    "recommend", "suggestion", "where can i", "best way to learn",
-    "link", "url", "article", "blog", "video", "youtube",
-    "study material", "practice problem", "cheat sheet",
-    "show me", "give me", "list", "top", "best",
-    "help me find", "help me study", "how to", "what are",
+    "research",
+    "find",
+    "search",
+    "look up",
+    "what is",
+    "who is",
+    "sources",
+    "latest",
+    "news",
+    "recent",
+    "current",
+    "trending",
+    "statistics",
+    "data on",
+    "studies show",
+    "according to",
+    "website",
+    "resource",
+    "tutorial",
+    "guide",
+    "course",
+    "recommend",
+    "suggestion",
+    "where can i",
+    "best way to learn",
+    "link",
+    "url",
+    "article",
+    "blog",
+    "video",
+    "youtube",
+    "study material",
+    "practice problem",
+    "cheat sheet",
+    "show me",
+    "give me",
+    "list",
+    "top",
+    "best",
+    "help me find",
+    "help me study",
+    "how to",
+    "what are",
   ];
   for (const kw of researchSignals) {
     if (lower.includes(kw)) return "research";
@@ -312,11 +349,27 @@ function resolveAutoMode(message: string): "quick" | "deep" | "research" {
 
   // Deep analysis signals: user wants thorough reasoning or code
   const deepSignals = [
-    "analyze", "explain in detail", "compare", "contrast",
-    "calculate", "step by step", "break down", "why does",
-    "how does", "code", "implement", "debug", "solve",
-    "in depth", "thoroughly", "comprehensive", "explain",
-    "understand", "elaborate", "teach me", "walk me through",
+    "analyze",
+    "explain in detail",
+    "compare",
+    "contrast",
+    "calculate",
+    "step by step",
+    "break down",
+    "why does",
+    "how does",
+    "code",
+    "implement",
+    "debug",
+    "solve",
+    "in depth",
+    "thoroughly",
+    "comprehensive",
+    "explain",
+    "understand",
+    "elaborate",
+    "teach me",
+    "walk me through",
   ];
   for (const kw of deepSignals) {
     if (lower.includes(kw)) return "deep";
@@ -335,7 +388,13 @@ function resolveAutoMode(message: string): "quick" | "deep" | "research" {
   return "quick";
 }
 
-function buildInstructions(userCtx: any, pdfContext: any, memories?: any[], thinkingMode?: string, quizInsights?: any[]): string {
+function buildInstructions(
+  userCtx: any,
+  pdfContext: any,
+  memories?: any[],
+  thinkingMode?: string,
+  quizInsights?: any[],
+): string {
   const userName = userCtx?.user?.fullName?.split(" ")[0] || "there";
   const focusMethod = userCtx?.onboarding?.focusMethod || "Balanced Focus";
   const weeklyGoal = userCtx?.onboarding?.weeklyFocusGoal || 5;
@@ -352,7 +411,8 @@ function buildInstructions(userCtx: any, pdfContext: any, memories?: any[], thin
   const sessions = userCtx?.sessions;
   let sessionBlock = "";
   if (sessions?.length) {
-    const totalMin = sessions.reduce((s: number, x: any) => s + (x.duration || 0), 0) / 60;
+    const totalMin =
+      sessions.reduce((s: number, x: any) => s + (x.duration || 0), 0) / 60;
     sessionBlock = `\n**Recent Activity:** ${sessions.length} sessions, ${Math.round(totalMin)} min total`;
   }
 
@@ -415,7 +475,9 @@ function buildInstructions(userCtx: any, pdfContext: any, memories?: any[], thin
 
   // Inject learned memories about the student
   if (memories && memories.length > 0) {
-    const memoryLines = memories.map((m: any) => `- ${m.key}: ${m.value}`).join("\n");
+    const memoryLines = memories
+      .map((m: any) => `- ${m.key}: ${m.value}`)
+      .join("\n");
     instructions += `\n\n**What You've Learned About ${userName}:**
 ${memoryLines}
 
@@ -424,9 +486,15 @@ Use this knowledge naturally in conversation. Don't repeat it back unless asked.
 
   // Inject quiz-based self-discovery insights
   if (quizInsights && quizInsights.length > 0) {
-    const profileInsights = quizInsights.filter((i: any) => i.type === "quiz_profile");
-    const strengthInsights = quizInsights.filter((i: any) => i.type === "quiz_strength");
-    const growthInsights = quizInsights.filter((i: any) => i.type === "quiz_growth");
+    const profileInsights = quizInsights.filter(
+      (i: any) => i.type === "quiz_profile",
+    );
+    const strengthInsights = quizInsights.filter(
+      (i: any) => i.type === "quiz_strength",
+    );
+    const growthInsights = quizInsights.filter(
+      (i: any) => i.type === "quiz_growth",
+    );
 
     instructions += `\n\n**Self-Discovery Quiz Insights:**`;
 
@@ -518,7 +586,11 @@ When the student asks about this document, use file_search to retrieve specific 
 }
 
 // Fallback template response when OpenAI is unavailable
-function fallbackResponse(message: string, userCtx: any, pdfContext: any): string {
+function fallbackResponse(
+  message: string,
+  userCtx: any,
+  pdfContext: any,
+): string {
   const userName = userCtx?.user?.fullName?.split(" ")[0] || "there";
   const focusMethod = userCtx?.onboarding?.focusMethod || "Balanced Focus";
   const weeklyGoal = userCtx?.onboarding?.weeklyFocusGoal || 5;
@@ -548,18 +620,23 @@ export const sendMessage = action({
     message: v.string(),
     thinkingMode: v.optional(v.string()), // 'quick' | 'deep' | 'research'
     sessionId: v.optional(v.id("noraChatSessions")),
-    conversationHistory: v.optional(v.array(v.object({ role: v.string(), content: v.string() }))),
+    conversationHistory: v.optional(
+      v.array(v.object({ role: v.string(), content: v.string() })),
+    ),
     userSettings: v.optional(v.any()),
     pdfContext: v.optional(
       v.union(
         v.object({ title: v.string(), file_path: v.optional(v.string()) }),
-        v.null()
-      )
+        v.null(),
+      ),
     ),
     screenContext: v.optional(v.any()),
     vectorStoreId: v.optional(v.string()),
   },
-  handler: async (ctx, args): Promise<{
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{
     error?: string;
     response?: string;
     success?: boolean;
@@ -571,11 +648,14 @@ export const sendMessage = action({
     sources?: Array<{ title: string; url: string }>;
   }> => {
     // 1. Authenticate
-    const currentUser: any = await ctx.runQuery(internal.noraChat._getCurrentUser);
+    const currentUser: any = await ctx.runQuery(
+      internal.noraChat._getCurrentUser,
+    );
     if (!currentUser) {
       return {
         error: "Authentication failed",
-        response: "I couldn't verify your identity. Please try signing in again.",
+        response:
+          "I couldn't verify your identity. Please try signing in again.",
       };
     }
     const userId = currentUser._id as Id<"users">;
@@ -583,20 +663,24 @@ export const sendMessage = action({
     // 2. Policy acceptance check (REQUIRED)
     const policyAccepted: boolean = await ctx.runQuery(
       internal.noraOnboarding._checkPolicyAccepted,
-      { userId }
+      { userId },
     );
     if (!policyAccepted) {
       return {
         error: "POLICY_NOT_ACCEPTED",
-        response: "Please complete the Nora onboarding and accept the usage policies before chatting.",
+        response:
+          "Please complete the Nora onboarding and accept the usage policies before chatting.",
       };
     }
 
     // 3. Rate limit check
-    const rateLimit: any = await ctx.runQuery(internal.noraChat._checkRateLimit, {
-      userId,
-      aiType: "nora",
-    });
+    const rateLimit: any = await ctx.runQuery(
+      internal.noraChat._checkRateLimit,
+      {
+        userId,
+        aiType: "nora",
+      },
+    );
     if (!rateLimit.allowed) {
       return {
         error: "ACCESS_DENIED",
@@ -627,14 +711,20 @@ export const sendMessage = action({
     }
 
     // 6. Get user context + memories + quiz insights
-    const userCtx: any = await ctx.runQuery(internal.noraChat._getUserContext, { userId });
-    const memories: any[] = await ctx.runQuery(internal.noraMemory._getTopMemories, {
+    const userCtx: any = await ctx.runQuery(internal.noraChat._getUserContext, {
       userId,
-      limit: 20,
     });
-    const quizInsights: any[] = await ctx.runQuery(internal.quizNoraIntegration.getQuizInsightsForNora, {
-      userId,
-    }) || [];
+    const memories: any[] = await ctx.runQuery(
+      internal.noraMemory._getTopMemories,
+      {
+        userId,
+        limit: 20,
+      },
+    );
+    const quizInsights: any[] =
+      (await ctx.runQuery(internal.quizNoraIntegration.getQuizInsightsForNora, {
+        userId,
+      })) || [];
 
     // 7. Save user message (tagged to session)
     await ctx.runMutation(internal.noraChat._saveMessage, {
@@ -645,13 +735,20 @@ export const sendMessage = action({
     });
 
     // 8. Build the Responses API call
-    const apiKey = process.env.OPENAI_API_KEY_NEW_NORA || process.env.OPENAI_API_KEY || "";
+    const apiKey =
+      process.env.OPENAI_API_KEY_NEW_NORA || process.env.OPENAI_API_KEY || "";
     const rawMode = args.thinkingMode || "quick";
     const thinkingMode: "quick" | "deep" | "research" =
-      rawMode === "auto" ? resolveAutoMode(sanitized) : (rawMode as "quick" | "deep" | "research");
+      rawMode === "auto"
+        ? resolveAutoMode(sanitized)
+        : (rawMode as "quick" | "deep" | "research");
 
     if (!apiKey) {
-      const responseText = fallbackResponse(sanitized, userCtx, args.pdfContext);
+      const responseText = fallbackResponse(
+        sanitized,
+        userCtx,
+        args.pdfContext,
+      );
       await ctx.runMutation(internal.noraChat._saveMessage, {
         userId,
         sessionId,
@@ -659,7 +756,9 @@ export const sendMessage = action({
         content: responseText,
       });
       // Update session metadata
-      await ctx.runMutation(internal.noraSessions._updateSessionAfterMessage, { sessionId });
+      await ctx.runMutation(internal.noraSessions._updateSessionAfterMessage, {
+        sessionId,
+      });
       return {
         response: responseText,
         success: true,
@@ -676,7 +775,7 @@ export const sendMessage = action({
       // Get last response ID for conversation continuity (per session)
       const previousResponseId: string | null = await ctx.runQuery(
         internal.noraChat._getLastResponseId,
-        { userId, sessionId }
+        { userId, sessionId },
       );
 
       // Build tools array based on thinking mode
@@ -702,15 +801,23 @@ export const sendMessage = action({
       }
 
       // Build instructions with memories, quiz insights, and mode context
-      const instructions = buildInstructions(userCtx, args.pdfContext, memories, thinkingMode, quizInsights);
+      const instructions = buildInstructions(
+        userCtx,
+        args.pdfContext,
+        memories,
+        thinkingMode,
+        quizInsights,
+      );
 
       // Choose model and temperature based on thinking mode
-      const modeConfig: Record<string, { model: string; temperature: number }> = {
-        quick: { model: "gpt-4o-mini", temperature: 0.7 },
-        deep: { model: "gpt-4o", temperature: 0.8 },
-        research: { model: "gpt-4o", temperature: 0.5 },
-      };
-      const { model, temperature } = modeConfig[thinkingMode] || modeConfig.quick;
+      const modeConfig: Record<string, { model: string; temperature: number }> =
+        {
+          quick: { model: "gpt-4o-mini", temperature: 0.7 },
+          deep: { model: "gpt-4o", temperature: 0.8 },
+          research: { model: "gpt-4o", temperature: 0.5 },
+        };
+      const { model, temperature } =
+        modeConfig[thinkingMode] || modeConfig.quick;
 
       // For research/deep modes, wrap the input to strongly signal search intent
       let apiInput = sanitized;
@@ -748,11 +855,8 @@ export const sendMessage = action({
 
       if (!res.ok) {
         const errorBody = await res.text();
-        console.error("OpenAI Responses API error:", res.status, errorBody);
-
         // If previous_response_id is invalid (expired/deleted), retry without it
         if (res.status === 400 && previousResponseId) {
-          console.log("Retrying without previous_response_id...");
           delete requestBody.previous_response_id;
           const retryRes = await fetch("https://api.openai.com/v1/responses", {
             method: "POST",
@@ -779,17 +883,8 @@ export const sendMessage = action({
       } else {
         const data = await res.json();
 
-        // Debug: log output item types to verify web_search is being called
-        if (Array.isArray(data.output)) {
-          const itemTypes = data.output.map((item: any) => item.type);
-          console.log(`[Nora][${thinkingMode}] API output items:`, itemTypes);
-          const searchCalls = data.output.filter((item: any) => item.type === "web_search_call");
-          console.log(`[Nora][${thinkingMode}] Web search calls:`, searchCalls.length);
-        }
-
         responseText = extractResponseText(data);
         responseSources = extractSources(data);
-        console.log(`[Nora][${thinkingMode}] Sources extracted:`, responseSources.length, responseSources.map((s: any) => s.url).slice(0, 3));
 
         // Save response ID for conversation continuity (per session)
         if (data.id) {
@@ -808,17 +903,17 @@ export const sendMessage = action({
             tokensUsed: data.usage.total_tokens || 0,
             costEstimate: estimateCost(
               data.usage.input_tokens || 0,
-              data.usage.output_tokens || 0
+              data.usage.output_tokens || 0,
             ),
           });
         }
       }
     } catch (e: any) {
-      console.error("Responses API call failed:", e?.message || e);
-      console.error("Full error:", JSON.stringify(e, null, 2));
-      const isQuota = e?.message?.includes("429") || e?.message?.includes("quota");
+      const isQuota =
+        e?.message?.includes("429") || e?.message?.includes("quota");
       if (isQuota) {
-        responseText = "I'm temporarily unable to process your request due to API usage limits. Please try again in a few minutes, or switch to **Quick** mode which uses fewer resources. I apologize for the inconvenience!";
+        responseText =
+          "I'm temporarily unable to process your request due to API usage limits. Please try again in a few minutes, or switch to **Quick** mode which uses fewer resources. I apologize for the inconvenience!";
       } else {
         responseText = fallbackResponse(sanitized, userCtx, args.pdfContext);
       }
@@ -833,7 +928,9 @@ export const sendMessage = action({
     });
 
     // 10. Update session metadata
-    await ctx.runMutation(internal.noraSessions._updateSessionAfterMessage, { sessionId });
+    await ctx.runMutation(internal.noraSessions._updateSessionAfterMessage, {
+      sessionId,
+    });
 
     // 11. Extract memories asynchronously (fire-and-forget)
     await ctx.scheduler.runAfter(0, internal.noraMemory.extractMemories, {
@@ -919,17 +1016,16 @@ function extractSources(data: any): Array<{ title: string; url: string }> {
 
   if (Array.isArray(data.output)) {
     for (const item of data.output) {
-      console.log("[extractSources] output item type:", item.type);
-
       if (item.type === "message" && Array.isArray(item.content)) {
         for (const content of item.content) {
           if (content.type === "output_text") {
-            const annotationCount = Array.isArray(content.annotations) ? content.annotations.length : 0;
-            console.log("[extractSources] output_text annotations:", annotationCount);
-
             if (Array.isArray(content.annotations)) {
               for (const ann of content.annotations) {
-                if (ann.type === "url_citation" && ann.url && !seenUrls.has(ann.url)) {
+                if (
+                  ann.type === "url_citation" &&
+                  ann.url &&
+                  !seenUrls.has(ann.url)
+                ) {
                   seenUrls.add(ann.url);
                   sources.push({ title: ann.title || ann.url, url: ann.url });
                 }
@@ -953,7 +1049,6 @@ function extractSources(data: any): Array<{ title: string; url: string }> {
     }
   }
 
-  console.log("[extractSources] total sources found:", sources.length);
   return sources;
 }
 
@@ -961,7 +1056,9 @@ function extractSources(data: any): Array<{ title: string; url: string }> {
  * Fallback: extract sources from markdown links [title](url) in response text.
  * Filters out non-http links and deduplicates by URL.
  */
-function extractSourcesFromText(text: string): Array<{ title: string; url: string }> {
+function extractSourcesFromText(
+  text: string,
+): Array<{ title: string; url: string }> {
   const sources: Array<{ title: string; url: string }> = [];
   const seenUrls = new Set<string>();
   const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;

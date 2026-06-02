@@ -1,11 +1,22 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Network from 'expo-network';
-import { scheduleWeeklyGoalChecks } from '../utils/weeklyGoalNotifications';
-import { useAuth as useClerkAuth } from '@clerk/clerk-expo';
-import { useQuery, useMutation } from 'convex/react';
-import { api } from '../../convex/_generated/api';
-import { identifyUser as rcIdentifyUser, logOutRevenueCat } from '../services/revenuecat';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Network from "expo-network";
+import { scheduleWeeklyGoalChecks } from "../utils/weeklyGoalNotifications";
+import { useAuth as useClerkAuth } from "@clerk/clerk-expo";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import {
+  identifyUser as rcIdentifyUser,
+  logOutRevenueCat,
+} from "../services/revenuecat";
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -22,7 +33,11 @@ interface AuthContextType {
   setHasSeenSplashAnimation: (seen: boolean) => Promise<void>;
   clearJustLoggedIn: () => void;
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
-  signUp: (email: string, password: string, userData: any) => Promise<{ error?: string }>;
+  signUp: (
+    email: string,
+    password: string,
+    userData: any,
+  ) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
   updateOnboarding: (data: any) => Promise<void>;
   refreshUserData: () => Promise<void>;
@@ -38,60 +53,60 @@ const EMPTY_ARGS = {} as Record<string, never>;
 
 // TEST_MODE bypass for Maestro E2E testing
 // When EXPO_PUBLIC_TEST_MODE=true, bypasses Clerk auth and uses mock admin user
-const isTestMode = process.env.EXPO_PUBLIC_TEST_MODE === 'true';
+const isTestMode = process.env.EXPO_PUBLIC_TEST_MODE === "true";
 
 // Mock admin user for test mode (matches seeded admin from Convex)
 const TEST_MODE_USER = {
-  id: 'test-admin-user',
-  email: 'admin@hikewise.test',
-  username: 'test_admin',
-  full_name: 'Test Admin',
-  first_name: 'Test',
-  last_name: 'Admin',
+  id: "test-admin-user",
+  email: "admin@hikewise.test",
+  username: "test_admin",
+  full_name: "Test Admin",
+  first_name: "Test",
+  last_name: "Admin",
   avatar_url: null,
-  bio: 'Automated test admin account',
-  university: 'Test University',
-  major: 'Computer Science',
-  location: 'Test City',
-  classes: ['CS101', 'CS201'],
+  bio: "Automated test admin account",
+  university: "Test University",
+  major: "Computer Science",
+  location: "Test City",
+  classes: ["CS101", "CS201"],
   website: null,
-  time_zone: 'America/Chicago',
-  status: 'active',
-  sound_preference: 'nature',
+  time_zone: "America/Chicago",
+  status: "active",
+  sound_preference: "nature",
   weekly_focus_goal: 600,
   focus_duration: 25,
   break_duration: 5,
-  subscription_tier: 'elite', // Full access for testing
-  trail_buddy_type: 'owl',
-  trail_buddy_name: 'Testy',
+  subscription_tier: "elite", // Full access for testing
+  trail_buddy_type: "owl",
+  trail_buddy_name: "Testy",
   flint_currency: 10000,
   first_session_bonus_claimed: true,
 };
 
 const TEST_MODE_ONBOARDING = {
-  id: 'test-onboarding',
-  user_id: 'test-admin-user',
+  id: "test-onboarding",
+  user_id: "test-admin-user",
   is_onboarding_complete: true,
   weekly_focus_goal: 600,
   welcome_completed: true,
   goals_set: true,
   first_session_completed: true,
   profile_customized: true,
-  bio: 'Test admin account',
+  bio: "Test admin account",
   allow_direct_messages: true,
   avatar_url: null,
-  focus_method: 'pomodoro',
-  education_level: 'university',
-  university: 'Test University',
-  major: 'Computer Science',
-  location: 'Test City',
-  timezone: 'America/Chicago',
+  focus_method: "pomodoro",
+  education_level: "university",
+  university: "Test University",
+  major: "Computer Science",
+  location: "Test City",
+  timezone: "America/Chicago",
   completed_at: new Date().toISOString(),
 };
 
 const TEST_MODE_LEADERBOARD = {
-  id: 'test-leaderboard',
-  user_id: 'test-admin-user',
+  id: "test-leaderboard",
+  user_id: "test-admin-user",
   total_focus_time: 36000,
   weekly_focus_time: 3600,
   monthly_focus_time: 14400,
@@ -104,14 +119,15 @@ const TEST_MODE_LEADERBOARD = {
   achievements_earned: 25,
 };
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Log test mode status on mount (only in development)
-  if (isTestMode && __DEV__) {
-    console.log('[AuthContext] TEST_MODE enabled - using mock admin user for Maestro testing');
-  }
-
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   // Clerk auth state (skipped in test mode)
-  const { isSignedIn, isLoaded: clerkLoaded, signOut: clerkSignOut } = useClerkAuth();
+  const {
+    isSignedIn,
+    isLoaded: clerkLoaded,
+    signOut: clerkSignOut,
+  } = useClerkAuth();
 
   // Convex queries (reactive, auto-updating) — skip when not signed in
   const queryArgs = isSignedIn ? EMPTY_ARGS : ("skip" as const);
@@ -121,12 +137,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Convex mutations
   const updateOnboardingMutation = useMutation(api.onboarding.update);
-  const initializeUserMutation = useMutation(api.initUser.initializeCurrentUser);
+  const initializeUserMutation = useMutation(
+    api.initUser.initializeCurrentUser,
+  );
 
   // Local state
   const [justLoggedIn, setJustLoggedIn] = useState(false);
   const [hasSeenLanding, setHasSeenLandingState] = useState(false);
-  const [hasSeenSplashAnimation, setHasSeenSplashAnimationState] = useState(false);
+  const [hasSeenSplashAnimation, setHasSeenSplashAnimationState] =
+    useState(false);
   const [isOffline, setIsOffline] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
@@ -140,32 +159,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (isTestMode) {
       return TEST_MODE_USER;
     }
-    return convexUser ? {
-      id: convexUser._id,
-      email: convexUser.email,
-      username: convexUser.username,
-      full_name: convexUser.fullName,
-      first_name: convexUser.firstName,
-      last_name: convexUser.lastName,
-      avatar_url: convexUser.avatarUrl,
-      bio: convexUser.bio,
-      university: convexUser.university,
-      major: convexUser.major,
-      location: convexUser.location,
-      classes: convexUser.classes,
-      website: convexUser.website,
-      time_zone: convexUser.timeZone,
-      status: convexUser.status,
-      sound_preference: convexUser.soundPreference,
-      weekly_focus_goal: convexUser.weeklyFocusGoal,
-      focus_duration: convexUser.focusDuration,
-      break_duration: convexUser.breakDuration,
-      subscription_tier: convexUser.subscriptionTier,
-      trail_buddy_type: convexUser.trailBuddyType,
-      trail_buddy_name: convexUser.trailBuddyName,
-      flint_currency: convexUser.flintCurrency,
-      first_session_bonus_claimed: convexUser.firstSessionBonusClaimed,
-    } : null;
+    return convexUser
+      ? {
+          id: convexUser._id,
+          email: convexUser.email,
+          username: convexUser.username,
+          full_name: convexUser.fullName,
+          first_name: convexUser.firstName,
+          last_name: convexUser.lastName,
+          avatar_url: convexUser.avatarUrl,
+          bio: convexUser.bio,
+          university: convexUser.university,
+          major: convexUser.major,
+          location: convexUser.location,
+          classes: convexUser.classes,
+          website: convexUser.website,
+          time_zone: convexUser.timeZone,
+          status: convexUser.status,
+          sound_preference: convexUser.soundPreference,
+          weekly_focus_goal: convexUser.weeklyFocusGoal,
+          focus_duration: convexUser.focusDuration,
+          break_duration: convexUser.breakDuration,
+          subscription_tier: convexUser.subscriptionTier,
+          trail_buddy_type: convexUser.trailBuddyType,
+          trail_buddy_name: convexUser.trailBuddyName,
+          flint_currency: convexUser.flintCurrency,
+          first_session_bonus_claimed: convexUser.firstSessionBonusClaimed,
+        }
+      : null;
   }, [convexUser]);
 
   // Map Convex onboarding to match legacy interface (memoized)
@@ -174,26 +195,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (isTestMode) {
       return TEST_MODE_ONBOARDING;
     }
-    return convexOnboarding ? {
-      id: convexOnboarding._id,
-      user_id: convexOnboarding.userId,
-      is_onboarding_complete: convexOnboarding.isOnboardingComplete,
-      weekly_focus_goal: convexOnboarding.weeklyFocusGoal,
-      welcome_completed: convexOnboarding.welcomeCompleted,
-      goals_set: convexOnboarding.goalsSet,
-      first_session_completed: convexOnboarding.firstSessionCompleted,
-      profile_customized: convexOnboarding.profileCustomized,
-      bio: convexOnboarding.bio,
-      allow_direct_messages: convexOnboarding.allowDirectMessages,
-      avatar_url: convexOnboarding.avatarUrl,
-      focus_method: convexOnboarding.focusMethod,
-      education_level: convexOnboarding.educationLevel,
-      university: convexOnboarding.university,
-      major: convexOnboarding.major,
-      location: convexOnboarding.location,
-      timezone: convexOnboarding.timezone,
-      completed_at: convexOnboarding.completedAt,
-    } : null;
+    return convexOnboarding
+      ? {
+          id: convexOnboarding._id,
+          user_id: convexOnboarding.userId,
+          is_onboarding_complete: convexOnboarding.isOnboardingComplete,
+          weekly_focus_goal: convexOnboarding.weeklyFocusGoal,
+          welcome_completed: convexOnboarding.welcomeCompleted,
+          goals_set: convexOnboarding.goalsSet,
+          first_session_completed: convexOnboarding.firstSessionCompleted,
+          profile_customized: convexOnboarding.profileCustomized,
+          bio: convexOnboarding.bio,
+          allow_direct_messages: convexOnboarding.allowDirectMessages,
+          avatar_url: convexOnboarding.avatarUrl,
+          focus_method: convexOnboarding.focusMethod,
+          education_level: convexOnboarding.educationLevel,
+          university: convexOnboarding.university,
+          major: convexOnboarding.major,
+          location: convexOnboarding.location,
+          timezone: convexOnboarding.timezone,
+          completed_at: convexOnboarding.completedAt,
+        }
+      : null;
   }, [convexOnboarding]);
 
   // Map Convex leaderboard to match legacy interface (memoized)
@@ -202,29 +225,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (isTestMode) {
       return TEST_MODE_LEADERBOARD;
     }
-    return convexLeaderboard ? {
-      id: convexLeaderboard._id,
-      user_id: convexLeaderboard.userId,
-      total_focus_time: convexLeaderboard.totalFocusTime,
-      weekly_focus_time: convexLeaderboard.weeklyFocusTime,
-      monthly_focus_time: convexLeaderboard.monthlyFocusTime,
-      level: convexLeaderboard.level,
-      points: convexLeaderboard.points,
-      current_streak: convexLeaderboard.currentStreak,
-      longest_streak: convexLeaderboard.longestStreak,
-      sessions_completed: convexLeaderboard.sessionsCompleted,
-      total_sessions: convexLeaderboard.totalSessions,
-      achievements_earned: convexLeaderboard.achievementsEarned,
-    } : null;
+    return convexLeaderboard
+      ? {
+          id: convexLeaderboard._id,
+          user_id: convexLeaderboard.userId,
+          total_focus_time: convexLeaderboard.totalFocusTime,
+          weekly_focus_time: convexLeaderboard.weeklyFocusTime,
+          monthly_focus_time: convexLeaderboard.monthlyFocusTime,
+          level: convexLeaderboard.level,
+          points: convexLeaderboard.points,
+          current_streak: convexLeaderboard.currentStreak,
+          longest_streak: convexLeaderboard.longestStreak,
+          sessions_completed: convexLeaderboard.sessionsCompleted,
+          total_sessions: convexLeaderboard.totalSessions,
+          achievements_earned: convexLeaderboard.achievementsEarned,
+        }
+      : null;
   }, [convexLeaderboard]);
 
   // Landing page state management (stable reference)
   const setHasSeenLanding = useCallback(async (seen: boolean) => {
     try {
-      await AsyncStorage.setItem('hasSeenLanding', JSON.stringify(seen));
+      await AsyncStorage.setItem("hasSeenLanding", JSON.stringify(seen));
       setHasSeenLandingState(seen);
-    } catch (error) {
-      console.error('Failed to update hasSeenLanding in AsyncStorage:', error);
+    } catch {
       setHasSeenLandingState(seen);
     }
   }, []);
@@ -232,10 +256,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Splash animation state management (stable reference)
   const setHasSeenSplashAnimation = useCallback(async (seen: boolean) => {
     try {
-      await AsyncStorage.setItem('hasSeenSplashAnimation', JSON.stringify(seen));
+      await AsyncStorage.setItem(
+        "hasSeenSplashAnimation",
+        JSON.stringify(seen),
+      );
       setHasSeenSplashAnimationState(seen);
-    } catch (error) {
-      console.error('Failed to update hasSeenSplashAnimation in AsyncStorage:', error);
+    } catch {
       setHasSeenSplashAnimationState(seen);
     }
   }, []);
@@ -243,7 +269,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Check if user's last login was within 24 hours (stable reference)
   const isRecentLogin = useCallback(async (): Promise<boolean> => {
     try {
-      const lastLoginTime = await AsyncStorage.getItem('lastLoginTime');
+      const lastLoginTime = await AsyncStorage.getItem("lastLoginTime");
       if (!lastLoginTime) return false;
 
       const lastLogin = new Date(lastLoginTime);
@@ -252,8 +278,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const hoursDiff = timeDiff / (1000 * 60 * 60);
 
       return hoursDiff < 24;
-    } catch (error) {
-      console.error('Failed to check recent login:', error);
+    } catch {
       return false;
     }
   }, []);
@@ -261,68 +286,69 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Set last login time (stable reference)
   const setLastLoginTime = useCallback(async () => {
     try {
-      await AsyncStorage.setItem('lastLoginTime', new Date().toISOString());
-    } catch (error) {
-      console.error('Failed to set last login time:', error);
+      await AsyncStorage.setItem("lastLoginTime", new Date().toISOString());
+    } catch {
+      // Failed to set last login time
     }
   }, []);
 
   const loadHasSeenLanding = async () => {
     try {
-      const stored = await AsyncStorage.getItem('hasSeenLanding');
+      const stored = await AsyncStorage.getItem("hasSeenLanding");
       if (stored !== null) {
         setHasSeenLandingState(JSON.parse(stored));
       }
-    } catch (error) {
-      console.error('Failed to load hasSeenLanding from AsyncStorage:', error);
+    } catch {
+      // Failed to load hasSeenLanding
     }
   };
 
   const loadHasSeenSplashAnimation = async () => {
     try {
-      const stored = await AsyncStorage.getItem('hasSeenSplashAnimation');
+      const stored = await AsyncStorage.getItem("hasSeenSplashAnimation");
       if (stored !== null) {
         setHasSeenSplashAnimationState(JSON.parse(stored));
       }
-    } catch (error) {
-      console.error('Failed to load hasSeenSplashAnimation from AsyncStorage:', error);
+    } catch {
+      // Failed to load hasSeenSplashAnimation
     }
   };
 
   // Sign in function - now a no-op since auth screens use Clerk directly
-  const signIn = async (email: string, password: string): Promise<{ error?: string }> => {
-    console.warn('AuthContext.signIn is deprecated - auth screens should use Clerk directly');
-    return { error: 'Please use Clerk authentication directly' };
+  const signIn = async (
+    _email: string,
+    _password: string,
+  ): Promise<{ error?: string }> => {
+    return { error: "Please use Clerk authentication directly" };
   };
 
   // Sign up function - now a no-op since auth screens use Clerk directly
-  const signUp = async (email: string, password: string, userData: any): Promise<{ error?: string }> => {
-    console.warn('AuthContext.signUp is deprecated - auth screens should use Clerk directly');
-    return { error: 'Please use Clerk authentication directly' };
+  const signUp = async (
+    _email: string,
+    _password: string,
+    _userData: any,
+  ): Promise<{ error?: string }> => {
+    return { error: "Please use Clerk authentication directly" };
   };
 
   // Sign out (stable reference)
   // In test mode, sign out is a no-op
   const signOut = useCallback(async () => {
     if (isTestMode) {
-      console.log('[TEST_MODE] Sign out skipped - maintaining test session');
       return;
     }
     try {
       await logOutRevenueCat().catch(() => {});
       await clerkSignOut();
       setJustLoggedIn(false);
-      console.log('User signed out successfully');
-    } catch (error) {
-      console.error('Sign out error:', error);
+    } catch {
+      // Sign out error
     }
   }, [clerkSignOut]);
 
   // Update onboarding using Convex mutation
   const updateOnboarding = async (data: any) => {
     try {
-      console.log('Updating onboarding with data:', data);
-
       // Map snake_case to camelCase for Convex
       const convexData: any = {};
 
@@ -380,19 +406,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Update local state if completion status changed
       if (data.is_onboarding_complete !== undefined) {
         setHasCompletedOnboarding(data.is_onboarding_complete);
-        console.log('Onboarding completion status updated:', data.is_onboarding_complete);
       }
-
-      console.log('Onboarding data updated successfully');
     } catch (error) {
-      console.error('Update onboarding error:', error);
       throw error;
     }
   };
 
   // Refresh user data - Convex queries are reactive, so this is mostly a no-op (stable reference)
   const refreshUserData = useCallback(async () => {
-    console.log('User data auto-refreshes with Convex reactivity');
     // Convex queries automatically update when data changes
     // This function exists for backward compatibility
   }, []);
@@ -407,8 +428,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const networkState = await Network.getNetworkStateAsync();
       setIsOffline(!networkState.isConnected);
-    } catch (error) {
-      console.error('Failed to check network connectivity:', error);
+    } catch {
       setIsOffline(false);
     }
   };
@@ -438,11 +458,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!hasInitializedUser.current) {
           hasInitializedUser.current = true;
           try {
-            console.log('Initializing user data in Convex...');
             await initializeUserMutation();
-            console.log('User data initialized successfully');
-          } catch (error) {
-            console.error('Failed to initialize user data:', error);
+          } catch {
             hasInitializedUser.current = false; // Allow retry on error
           }
         }
@@ -452,14 +469,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           hasScheduledGoals.current = true;
           try {
             await scheduleWeeklyGoalChecks(convexUser._id);
-            console.log('Weekly goal notifications initialized');
-          } catch (error) {
-            console.error('Failed to initialize weekly goal notifications:', error);
+          } catch {
+            // Failed to initialize weekly goal notifications
           }
           // Identify user with RevenueCat for cross-platform purchase sync
-          rcIdentifyUser(String(convexUser._id)).catch((e) =>
-            console.warn('RevenueCat identify skipped:', e)
-          );
+          rcIdentifyUser(String(convexUser._id)).catch(() => {});
         }
       }
     };
@@ -476,7 +490,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
     const newValue = convexOnboarding?.isOnboardingComplete || false;
-    setHasCompletedOnboarding(prev => {
+    setHasCompletedOnboarding((prev) => {
       if (prev === newValue) return prev; // No change, skip update
       return newValue;
     });
@@ -512,62 +526,63 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   // In test mode, skip waiting for Clerk to load
-  const isInitialLoading = isTestMode ? isInitializing : (isInitializing || !clerkLoaded);
+  const isInitialLoading = isTestMode
+    ? isInitializing
+    : isInitializing || !clerkLoaded;
 
-  const value = useMemo(() => ({
-    isAuthenticated,
-    user,
-    onboarding,
-    leaderboard,
-    hasCompletedOnboarding,
-    setHasCompletedOnboarding,
-    justLoggedIn,
-    isInitialLoading,
-    hasSeenLanding,
-    setHasSeenLanding,
-    hasSeenSplashAnimation,
-    setHasSeenSplashAnimation,
-    clearJustLoggedIn,
-    signIn,
-    signUp,
-    signOut,
-    updateOnboarding,
-    refreshUserData,
-    isRecentLogin,
-    setLastLoginTime,
-    isOffline,
-  }), [
-    isAuthenticated,
-    user,
-    onboarding,
-    leaderboard,
-    hasCompletedOnboarding,
-    justLoggedIn,
-    isInitialLoading,
-    hasSeenLanding,
-    hasSeenSplashAnimation,
-    clearJustLoggedIn,
-    signOut,
-    isRecentLogin,
-    setLastLoginTime,
-    isOffline,
-    setHasSeenLanding,
-    setHasSeenSplashAnimation,
-    refreshUserData,
-    // signIn, signUp, updateOnboarding are inline but rarely change
-  ]);
-
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo(
+    () => ({
+      isAuthenticated,
+      user,
+      onboarding,
+      leaderboard,
+      hasCompletedOnboarding,
+      setHasCompletedOnboarding,
+      justLoggedIn,
+      isInitialLoading,
+      hasSeenLanding,
+      setHasSeenLanding,
+      hasSeenSplashAnimation,
+      setHasSeenSplashAnimation,
+      clearJustLoggedIn,
+      signIn,
+      signUp,
+      signOut,
+      updateOnboarding,
+      refreshUserData,
+      isRecentLogin,
+      setLastLoginTime,
+      isOffline,
+    }),
+    [
+      isAuthenticated,
+      user,
+      onboarding,
+      leaderboard,
+      hasCompletedOnboarding,
+      justLoggedIn,
+      isInitialLoading,
+      hasSeenLanding,
+      hasSeenSplashAnimation,
+      clearJustLoggedIn,
+      signOut,
+      isRecentLogin,
+      setLastLoginTime,
+      isOffline,
+      setHasSeenLanding,
+      setHasSeenSplashAnimation,
+      refreshUserData,
+      // signIn, signUp, updateOnboarding are inline but rarely change
+    ],
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };

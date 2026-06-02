@@ -1,16 +1,20 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { View, StyleSheet, LayoutChangeEvent } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useFocusEffect, StackActions } from '@react-navigation/native';
-import { useTheme } from '../context/ThemeContext';
-import { AnimatedTabIcon } from './premium/AnimatedTabIcon';
-import { TAB_ORDER } from '../navigation/MainNavigator';
+import React, { useEffect, useState, useRef, useCallback } from "react";
+import { View, StyleSheet, LayoutChangeEvent } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import {
+  useNavigation,
+  useFocusEffect,
+  StackActions,
+} from "@react-navigation/native";
+import { useTheme } from "../context/ThemeContext";
+import { AnimatedTabIcon } from "./premium/AnimatedTabIcon";
+import { TAB_ORDER, setPendingSlideLeft } from "../navigation/MainNavigator";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
   Easing,
-} from 'react-native-reanimated';
+} from "react-native-reanimated";
 
 // Global state to persist position across screens
 let globalLastIndex = -1;
@@ -34,44 +38,44 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({ currentRoute }) => {
 
   const tabs: TabConfig[] = [
     {
-      name: 'Profile',
-      icon: 'person',
-      outlineIcon: 'person-outline',
-      label: 'Profile',
-      route: 'Profile',
+      name: "Profile",
+      icon: "person",
+      outlineIcon: "person-outline",
+      label: "Profile",
+      route: "Profile",
     },
     {
-      name: 'History',
-      icon: 'document-text',
-      outlineIcon: 'document-text-outline',
-      label: 'History',
-      route: 'SessionHistory',
+      name: "History",
+      icon: "document-text",
+      outlineIcon: "document-text-outline",
+      label: "History",
+      route: "SessionHistory",
     },
     {
-      name: 'Stats',
-      icon: 'stats-chart',
-      outlineIcon: 'stats-chart-outline',
-      label: 'Stats',
-      route: 'Results',
+      name: "Stats",
+      icon: "stats-chart",
+      outlineIcon: "stats-chart-outline",
+      label: "Stats",
+      route: "Results",
     },
     {
-      name: 'Bonuses',
-      icon: 'trophy',
-      outlineIcon: 'trophy-outline',
-      label: 'Bonuses',
-      route: 'Bonuses',
+      name: "Bonuses",
+      icon: "trophy",
+      outlineIcon: "trophy-outline",
+      label: "Bonuses",
+      route: "Bonuses",
     },
     {
-      name: 'Community',
-      icon: 'people',
-      outlineIcon: 'people-outline',
-      label: 'Community',
-      route: 'Community',
+      name: "Community",
+      icon: "people",
+      outlineIcon: "people-outline",
+      label: "Community",
+      route: "Community",
     },
   ];
 
   // Find the index of the active tab
-  const activeIndex = tabs.findIndex(tab => tab.route === currentRoute);
+  const activeIndex = tabs.findIndex((tab) => tab.route === currentRoute);
   const numTabs = tabs.length;
   const HORIZONTAL_PADDING = 16; // Must match paddingHorizontal in container style
   const INDICATOR_INSET = 4; // Inset from tab edges for the indicator
@@ -81,16 +85,19 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({ currentRoute }) => {
   const [containerWidth, setContainerWidth] = useState(0);
 
   // Simple calculation: tabs are evenly distributed with flex: 1
-  const innerWidth = containerWidth - (HORIZONTAL_PADDING * 2);
+  const innerWidth = containerWidth - HORIZONTAL_PADDING * 2;
   const tabWidth = innerWidth / numTabs;
-  const indicatorWidth = tabWidth - (INDICATOR_INSET * 2);
+  const indicatorWidth = tabWidth - INDICATOR_INSET * 2;
 
   // Calculate target X position for the active tab
-  const getTargetX = useCallback((index: number, width: number) => {
-    const inner = width - (HORIZONTAL_PADDING * 2);
-    const tw = inner / numTabs;
-    return HORIZONTAL_PADDING + INDICATOR_INSET + (index * tw);
-  }, [numTabs]);
+  const getTargetX = useCallback(
+    (index: number, width: number) => {
+      const inner = width - HORIZONTAL_PADDING * 2;
+      const tw = inner / numTabs;
+      return HORIZONTAL_PADDING + INDICATOR_INSET + index * tw;
+    },
+    [numTabs],
+  );
 
   // Animate when screen comes into focus
   useFocusEffect(
@@ -116,7 +123,7 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({ currentRoute }) => {
         globalLastIndex = activeIndex;
         globalLastX = targetX;
       }
-    }, [activeIndex, containerWidth, getTargetX])
+    }, [activeIndex, containerWidth, getTargetX]),
   );
 
   // Also set position when containerWidth is first measured
@@ -144,13 +151,20 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({ currentRoute }) => {
 
   const handleTabPress = (route: string) => {
     // Determine slide direction based on tab order
-    const fromOrder = TAB_ORDER[currentRoute ?? ''] ?? -1;
+    const fromOrder = TAB_ORDER[currentRoute ?? ""] ?? -1;
     const toOrder = TAB_ORDER[route] ?? -1;
     const goingLeft = fromOrder >= 0 && toOrder >= 0 && toOrder < fromOrder;
 
+    // Set the direction flag synchronously so the navigator picks it up in
+    // screenOptions on the very next render. Route params alone aren't reliable
+    // for replace() because they sometimes arrive after the first transition frame.
+    setPendingSlideLeft(goingLeft);
+
     if (fromOrder >= 0) {
       // Tab-to-tab: use replace() so a fresh screen is created with correct animation
-      navigation.dispatch(StackActions.replace(route, { _slideLeft: goingLeft }));
+      navigation.dispatch(
+        StackActions.replace(route, { _slideLeft: goingLeft }),
+      );
     } else {
       // Non-tab to tab (e.g., from Home): push normally
       navigation.dispatch(StackActions.push(route, { _slideLeft: goingLeft }));
@@ -165,12 +179,7 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({ currentRoute }) => {
       >
         {/* Sliding shadow indicator behind active tab */}
         {containerWidth > 0 && indicatorWidth > 0 && (
-          <Animated.View
-            style={[
-              styles.slidingIndicator,
-              indicatorStyle,
-            ]}
-          />
+          <Animated.View style={[styles.slidingIndicator, indicatorStyle]} />
         )}
 
         {/* Tab icons - each wrapped in flex:1 container for equal widths */}
@@ -199,40 +208,40 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({ currentRoute }) => {
 
 const styles = StyleSheet.create({
   floatingContainer: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 20,
     left: 20,
     right: 20,
-    alignItems: 'center',
+    alignItems: "center",
     zIndex: 1000,
   },
   container: {
-    flexDirection: 'row',
-    justifyContent: 'space-evenly',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-evenly",
+    alignItems: "center",
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 28,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 12,
     elevation: 15,
-    width: '100%',
+    width: "100%",
     maxWidth: 400,
-    position: 'relative',
-    overflow: 'hidden',
+    position: "relative",
+    overflow: "hidden",
   },
   slidingIndicator: {
-    position: 'absolute',
+    position: "absolute",
     top: 8,
     left: 0, // Actual position controlled by translateX in indicatorStyle
     bottom: 8,
     borderRadius: 16,
     // Lighter background behind active tab
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
     // Prominent shadow for the "shadowy rounded box" effect
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
@@ -240,12 +249,12 @@ const styles = StyleSheet.create({
   },
   tabWrapper: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   tabButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 4,
     paddingHorizontal: 4,
     flex: 1,
@@ -253,8 +262,8 @@ const styles = StyleSheet.create({
   },
   tabLabel: {
     fontSize: 9,
-    fontWeight: '600',
+    fontWeight: "600",
     marginTop: 4,
-    textAlign: 'center',
+    textAlign: "center",
   },
 });

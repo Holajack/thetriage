@@ -1,22 +1,10 @@
 /**
  * Convex-based friend request service — replaces friendRequestService.ts
  */
-import { ConvexReactClient } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
-
-let _convexClient: ConvexReactClient | null = null;
-
-export function setConvexClient(client: ConvexReactClient) {
-  _convexClient = client;
-}
-
-function getClient(): ConvexReactClient {
-  if (!_convexClient) {
-    throw new Error("Convex client not initialized. Call setConvexClient first.");
-  }
-  return _convexClient;
-}
+import { getConvexClient } from "./convexClient";
+export { setConvexClient } from "./convexClient";
 
 // Re-export interfaces
 export interface FriendRequest {
@@ -27,8 +15,18 @@ export interface FriendRequest {
   message?: string;
   created_at: string;
   responded_at?: string;
-  sender?: { id: string; username?: string; full_name?: string; avatar_url?: string };
-  recipient?: { id: string; username?: string; full_name?: string; avatar_url?: string };
+  sender?: {
+    id: string;
+    username?: string;
+    full_name?: string;
+    avatar_url?: string;
+  };
+  recipient?: {
+    id: string;
+    username?: string;
+    full_name?: string;
+    avatar_url?: string;
+  };
 }
 
 export interface Friend {
@@ -36,7 +34,12 @@ export interface Friend {
   user_id: string;
   friend_id: string;
   created_at: string;
-  friend_profile?: { id: string; username?: string; full_name?: string; avatar_url?: string };
+  friend_profile?: {
+    id: string;
+    username?: string;
+    full_name?: string;
+    avatar_url?: string;
+  };
 }
 
 /**
@@ -44,10 +47,10 @@ export interface Friend {
  */
 export async function sendFriendRequest(
   recipientId: string,
-  message?: string
+  message?: string,
 ): Promise<{ success: boolean; error?: string; data?: FriendRequest }> {
   try {
-    const client = getClient();
+    const client = getConvexClient();
     const requestId = await client.mutation(api.friends.sendRequest, {
       recipientId: recipientId as Id<"users">,
       message,
@@ -73,10 +76,10 @@ export async function sendFriendRequest(
  */
 export async function respondToFriendRequest(
   requestId: string,
-  response: "accepted" | "declined"
+  response: "accepted" | "declined",
 ): Promise<{ success: boolean; error?: string; data?: FriendRequest }> {
   try {
-    const client = getClient();
+    const client = getConvexClient();
     if (response === "accepted") {
       await client.mutation(api.friends.acceptRequest, {
         requestId: requestId as Id<"friendRequests">,
@@ -101,7 +104,7 @@ export async function getPendingFriendRequests(): Promise<{
   data?: FriendRequest[];
 }> {
   try {
-    const client = getClient();
+    const client = getConvexClient();
     const requests = await client.query(api.friends.listRequests, {
       type: "incoming",
     });
@@ -111,7 +114,9 @@ export async function getPendingFriendRequests(): Promise<{
       recipient_id: r.recipientId,
       status: r.status as "pending" | "accepted" | "declined",
       message: r.message,
-      created_at: r._creationTime ? new Date(r._creationTime).toISOString() : "",
+      created_at: r._creationTime
+        ? new Date(r._creationTime).toISOString()
+        : "",
       responded_at: r.respondedAt,
       sender: r.sender
         ? {
@@ -149,7 +154,7 @@ export async function getSentFriendRequests(): Promise<{
   data?: FriendRequest[];
 }> {
   try {
-    const client = getClient();
+    const client = getConvexClient();
     const requests = await client.query(api.friends.listRequests, {
       type: "outgoing",
     });
@@ -159,7 +164,9 @@ export async function getSentFriendRequests(): Promise<{
       recipient_id: r.recipientId,
       status: r.status as "pending" | "accepted" | "declined",
       message: r.message,
-      created_at: r._creationTime ? new Date(r._creationTime).toISOString() : "",
+      created_at: r._creationTime
+        ? new Date(r._creationTime).toISOString()
+        : "",
       responded_at: r.respondedAt,
       sender: r.sender
         ? {
@@ -197,13 +204,15 @@ export async function getFriendsList(): Promise<{
   data?: Friend[];
 }> {
   try {
-    const client = getClient();
+    const client = getConvexClient();
     const friends = await client.query(api.friends.listFriends);
-    const adapted = (friends ?? []).map((f) => ({
+    const adapted = (friends ?? []).map((f: any) => ({
       id: f._id,
       user_id: f._id,
       friend_id: f._id,
-      created_at: f._creationTime ? new Date(f._creationTime).toISOString() : "",
+      created_at: f._creationTime
+        ? new Date(f._creationTime).toISOString()
+        : "",
       friend_profile: {
         id: f._id,
         username: f.username,
@@ -221,10 +230,10 @@ export async function getFriendsList(): Promise<{
  * Remove a friend
  */
 export async function removeFriend(
-  friendId: string
+  friendId: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const client = getClient();
+    const client = getConvexClient();
     await client.mutation(api.friends.removeFriend, {
       friendId: friendId as Id<"users">,
     });
@@ -238,10 +247,19 @@ export async function removeFriend(
  * Get a user profile by ID
  */
 export async function getUserProfile(
-  userId: string
-): Promise<{ success: boolean; error?: string; profile?: { id: string; username?: string; full_name?: string; avatar_url?: string } }> {
+  userId: string,
+): Promise<{
+  success: boolean;
+  error?: string;
+  profile?: {
+    id: string;
+    username?: string;
+    full_name?: string;
+    avatar_url?: string;
+  };
+}> {
   try {
-    const client = getClient();
+    const client = getConvexClient();
     const user = await client.query(api.users.getUser, {
       userId: userId as Id<"users">,
     });
@@ -267,14 +285,14 @@ export async function getUserProfile(
  * Searches by username or full name.
  */
 export async function searchUsers(
-  query: string
+  query: string,
 ): Promise<{ success: boolean; error?: string; data?: any[] }> {
   if (!query || query.trim().length < 2) {
     return { success: true, data: [] };
   }
 
   try {
-    const client = getClient();
+    const client = getConvexClient();
     const results = await client.query(api.users.searchUsers, {
       query: query.trim(),
     });
@@ -291,7 +309,7 @@ export async function searchUsers(
 
     return { success: true, data: adapted };
   } catch (error: any) {
-    console.error("User search error:", error);
+    // User search error
     return { success: false, error: error.message };
   }
 }

@@ -67,7 +67,10 @@ export const _checkRateLimit = internalQuery({
     const tier = user?.subscriptionTier || "free";
 
     // Patrick is available for premium+ tiers
-    const limits: Record<string, { enabled: boolean; perDay: number; maxLen: number }> = {
+    const limits: Record<
+      string,
+      { enabled: boolean; perDay: number; maxLen: number }
+    > = {
       free: { enabled: false, perDay: 0, maxLen: 500 },
       trial: { enabled: true, perDay: 15, maxLen: 1500 },
       premium: { enabled: true, perDay: 40, maxLen: 2000 },
@@ -79,7 +82,8 @@ export const _checkRateLimit = internalQuery({
       return {
         allowed: false,
         tier,
-        reason: "Patrick AI is available for Premium and Pro members. Upgrade to unlock your personal study coach!",
+        reason:
+          "Patrick AI is available for Premium and Pro members. Upgrade to unlock your personal study coach!",
         remaining: 0,
         maxLen: tierLimits.maxLen,
       };
@@ -89,7 +93,7 @@ export const _checkRateLimit = internalQuery({
     const usage = await ctx.db
       .query("aiUsageTracking")
       .withIndex("by_userId_aiType_date", (q) =>
-        q.eq("userId", userId).eq("aiType", aiType).eq("date", today)
+        q.eq("userId", userId).eq("aiType", aiType).eq("date", today),
       )
       .unique();
 
@@ -126,7 +130,7 @@ export const _logUsage = internalMutation({
     const existing = await ctx.db
       .query("aiUsageTracking")
       .withIndex("by_userId_aiType_date", (q) =>
-        q.eq("userId", userId).eq("aiType", aiType).eq("date", today)
+        q.eq("userId", userId).eq("aiType", aiType).eq("date", today),
       )
       .unique();
 
@@ -215,7 +219,10 @@ function buildSystemPrompt(userCtx: any): string {
   let sessionBlock = "";
   const sessions = userCtx?.sessions;
   if (sessions?.length) {
-    const totalMin = sessions.reduce((s: number, x: any) => s + ((x.durationSeconds || 0) / 60), 0);
+    const totalMin = sessions.reduce(
+      (s: number, x: any) => s + (x.durationSeconds || 0) / 60,
+      0,
+    );
     sessionBlock = `\n- Recent Activity: ${sessions.length} sessions, ${Math.round(totalMin)} minutes total`;
   }
 
@@ -269,7 +276,11 @@ function fallbackResponse(message: string, userCtx: any): string {
   if (lower.includes("motivation") || lower.includes("procrastination")) {
     return `I hear you, ${userName}. Here's what works: pick the smallest possible next step for your task. Not "write the essay" — just "open the document and write one sentence." Once you start, your brain shifts from resistance to flow. What's the task you're putting off?`;
   }
-  if (lower.includes("hello") || lower.includes("hi") || lower.includes("hey")) {
+  if (
+    lower.includes("hello") ||
+    lower.includes("hi") ||
+    lower.includes("hey")
+  ) {
     return `Hey ${userName}! I'm Patrick, your study coach. I'm here to help with study planning, focus techniques, time management, and keeping you on track. What are you working on today?`;
   }
   return `Hey ${userName}! I'd love to help with that. I'm best at study planning, focus techniques, time management, and motivation. Could you tell me a bit more about what you're working on?`;
@@ -287,20 +298,26 @@ export const sendMessage = action({
   },
   handler: async (ctx, args) => {
     // 1. Authenticate
-    const currentUser: any = await ctx.runQuery(internal.patrickChat._getCurrentUser);
+    const currentUser: any = await ctx.runQuery(
+      internal.patrickChat._getCurrentUser,
+    );
     if (!currentUser) {
       return {
         error: "Authentication failed",
-        response: "I couldn't verify your identity. Please try signing in again.",
+        response:
+          "I couldn't verify your identity. Please try signing in again.",
       };
     }
     const userId = currentUser._id as Id<"users">;
 
     // 2. Rate limit check
-    const rateLimit: any = await ctx.runQuery(internal.patrickChat._checkRateLimit, {
-      userId,
-      aiType: "patrick",
-    });
+    const rateLimit: any = await ctx.runQuery(
+      internal.patrickChat._checkRateLimit,
+      {
+        userId,
+        aiType: "patrick",
+      },
+    );
     if (!rateLimit.allowed) {
       return {
         error: "ACCESS_DENIED",
@@ -334,7 +351,10 @@ export const sendMessage = action({
     }
 
     // 5. Get user context for personalized responses
-    const userCtx: any = await ctx.runQuery(internal.patrickChat._getUserContext, { userId });
+    const userCtx: any = await ctx.runQuery(
+      internal.patrickChat._getUserContext,
+      { userId },
+    );
 
     // 6. Save user message
     await ctx.runMutation(internal.patrickChat._saveMessage, {
@@ -354,7 +374,7 @@ export const sendMessage = action({
         // Get recent conversation history for context
         const recentHistory: any[] = await ctx.runQuery(
           internal.patrickChat._getRecentHistory,
-          { userId, limit: 10 }
+          { userId, limit: 10 },
         );
 
         const systemPrompt = buildSystemPrompt(userCtx);
@@ -390,12 +410,13 @@ export const sendMessage = action({
 
         if (!res.ok) {
           const errorText = await res.text();
-          console.error("OpenAI Chat Completions error:", res.status, errorText);
           throw new Error(`OpenAI error: ${res.status}`);
         }
 
         const data = await res.json();
-        responseText = data.choices?.[0]?.message?.content || fallbackResponse(sanitized, userCtx);
+        responseText =
+          data.choices?.[0]?.message?.content ||
+          fallbackResponse(sanitized, userCtx);
 
         // Log actual token usage
         if (data.usage) {
@@ -405,12 +426,11 @@ export const sendMessage = action({
             tokensUsed: data.usage.total_tokens || 0,
             costEstimate: estimateCost(
               data.usage.prompt_tokens || 0,
-              data.usage.completion_tokens || 0
+              data.usage.completion_tokens || 0,
             ),
           });
         }
-      } catch (e) {
-        console.error("Patrick GPT-4o-mini call failed:", e);
+      } catch {
         responseText = fallbackResponse(sanitized, userCtx);
       }
     }

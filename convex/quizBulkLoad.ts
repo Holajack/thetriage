@@ -7,10 +7,7 @@
 import { v } from "convex/values";
 import { mutation, internalMutation } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
-import {
-  ALL_QUESTION_SETS,
-  getOptionsForFormat,
-} from "./quizQuestionData";
+import { ALL_QUESTION_SETS, getOptionsForFormat } from "./quizQuestionData";
 
 // Mapping from question set keys to category slugs
 const CATEGORY_SLUG_MAP: Record<string, string> = {
@@ -78,7 +75,9 @@ export const loadAllQuestions = mutation({
     const results: Record<string, number> = {};
     let totalLoaded = 0;
 
-    for (const [categoryKey, questionSets] of Object.entries(ALL_QUESTION_SETS)) {
+    for (const [categoryKey, questionSets] of Object.entries(
+      ALL_QUESTION_SETS,
+    )) {
       const categorySlug = CATEGORY_SLUG_MAP[categoryKey];
 
       // Get category ID
@@ -88,14 +87,15 @@ export const loadAllQuestions = mutation({
         .unique();
 
       if (!category) {
-        console.log(`Category not found: ${categorySlug}`);
+        // Category not found, skip
         continue;
       }
 
       let categoryCount = 0;
 
       for (const [subDimKey, questions] of Object.entries(questionSets)) {
-        const subDimSlug = SUB_DIMENSION_MAP[categoryKey]?.[subDimKey] || subDimKey;
+        const subDimSlug =
+          SUB_DIMENSION_MAP[categoryKey]?.[subDimKey] || subDimKey;
 
         // Get sub-dimension ID
         const subDimensions = await ctx.db
@@ -106,7 +106,7 @@ export const loadAllQuestions = mutation({
         const subDim = subDimensions.find((sd) => sd.slug === subDimSlug);
 
         if (!subDim) {
-          console.log(`Sub-dimension not found: ${subDimSlug} in ${categorySlug}`);
+          // Sub-dimension not found, skip
           continue;
         }
 
@@ -163,7 +163,7 @@ export const loadAllQuestions = mutation({
         const allQuestions = await ctx.db
           .query("quizQuestions")
           .withIndex("by_categoryId_isActive", (q) =>
-            q.eq("categoryId", category._id).eq("isActive", true)
+            q.eq("categoryId", category._id).eq("isActive", true),
           )
           .collect();
 
@@ -186,7 +186,7 @@ export const loadQuestionsForCategory = mutation({
   args: { categorySlug: v.string() },
   handler: async (ctx, args) => {
     const categoryKey = Object.entries(CATEGORY_SLUG_MAP).find(
-      ([_, slug]) => slug === args.categorySlug
+      ([_, slug]) => slug === args.categorySlug,
     )?.[0];
 
     if (!categoryKey) {
@@ -212,7 +212,8 @@ export const loadQuestionsForCategory = mutation({
     const now = new Date().toISOString();
 
     for (const [subDimKey, questions] of Object.entries(questionSets)) {
-      const subDimSlug = SUB_DIMENSION_MAP[categoryKey]?.[subDimKey] || subDimKey;
+      const subDimSlug =
+        SUB_DIMENSION_MAP[categoryKey]?.[subDimKey] || subDimKey;
 
       // Get sub-dimension ID
       const subDimensions = await ctx.db
@@ -223,7 +224,7 @@ export const loadQuestionsForCategory = mutation({
       const subDim = subDimensions.find((sd) => sd.slug === subDimSlug);
 
       if (!subDim) {
-        console.log(`Sub-dimension not found: ${subDimSlug}`);
+        // Sub-dimension not found, skip
         continue;
       }
 
@@ -267,7 +268,7 @@ export const loadQuestionsForCategory = mutation({
     const allQuestions = await ctx.db
       .query("quizQuestions")
       .withIndex("by_categoryId_isActive", (q) =>
-        q.eq("categoryId", category._id).eq("isActive", true)
+        q.eq("categoryId", category._id).eq("isActive", true),
       )
       .collect();
 
@@ -292,13 +293,16 @@ export const getQuestionStats = mutation({
       .withIndex("by_isActive", (q) => q.eq("isActive", true))
       .collect();
 
-    const stats: Record<string, { total: number; bySubDimension: Record<string, number> }> = {};
+    const stats: Record<
+      string,
+      { total: number; bySubDimension: Record<string, number> }
+    > = {};
 
     for (const category of categories) {
       const questions = await ctx.db
         .query("quizQuestions")
         .withIndex("by_categoryId_isActive", (q) =>
-          q.eq("categoryId", category._id).eq("isActive", true)
+          q.eq("categoryId", category._id).eq("isActive", true),
         )
         .collect();
 
@@ -310,7 +314,7 @@ export const getQuestionStats = mutation({
       const bySubDim: Record<string, number> = {};
       for (const subDim of subDimensions) {
         bySubDim[subDim.slug] = questions.filter(
-          (q) => q.subDimensionId.toString() === subDim._id.toString()
+          (q) => q.subDimensionId.toString() === subDim._id.toString(),
         ).length;
       }
 

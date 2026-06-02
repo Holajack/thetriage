@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useEffect } from "react";
+import { View, Text, StyleSheet } from "react-native";
 import Animated, {
   FadeIn,
   FadeInUp,
@@ -10,36 +10,42 @@ import Animated, {
   withDelay,
   withRepeat,
   withTiming,
-} from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { AnimatedButton } from '../../../components/premium/AnimatedButton';
-import { useTheme } from '../../../context/ThemeContext';
-import { Typography, Spacing, BorderRadius, AnimationConfig, PremiumColors, Shadows } from '../../../theme/premiumTheme';
+} from "react-native-reanimated";
+import * as Haptics from "expo-haptics";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { AnimatedButton } from "../../../components/premium/AnimatedButton";
+import { useTheme } from "../../../context/ThemeContext";
+import {
+  Typography,
+  Spacing,
+  BorderRadius,
+  AnimationConfig,
+  PremiumColors,
+  Shadows,
+} from "../../../theme/premiumTheme";
 
 interface EliteCelebrationViewProps {
   onManageSubscription: () => void;
 }
 
 const ELITE_FEATURES = [
-  'Nora AI Study Assistant',
-  'Voice Interaction & PDF Analysis',
-  'Personalized Study Plans',
-  'Brain Mapping & Motivation Profile',
-  'Self-Discovery Quizzes',
-  'eBooks Library Access',
-  'Session Reports & Analytics',
-  'App/Website Blocking',
-  'Unlimited AI-Powered Insights',
-  'Soundscapes for Focus',
-  'Calendar Integration',
-  'Elite Badge in Leaderboard',
-  'Early Access to New Features',
-  'Priority Support',
+  "Nora Advanced AI Study Assistant",
+  "Voice Interaction & PDF Analysis",
+  "All sound albums & themes",
+  "Exclusive Lion Trail Buddy",
+  "Unlimited Study Rooms",
+  "Full Brain Mapping",
+  "All Bonus Quizzes (incl. In-Depth)",
+  "AI Insights & Personalized Plans",
+  "Elite Badge & Name Color",
+  "Early Access to New Features",
+  "Exclusive in-app gift with purchase",
 ];
 
-const EliteCelebrationView: React.FC<EliteCelebrationViewProps> = ({ onManageSubscription }) => {
+const EliteCelebrationView: React.FC<EliteCelebrationViewProps> = ({
+  onManageSubscription,
+}) => {
   const { theme } = useTheme();
   const badgeScale = useSharedValue(0.5);
   const glowOpacity = useSharedValue(0);
@@ -49,16 +55,18 @@ const EliteCelebrationView: React.FC<EliteCelebrationViewProps> = ({ onManageSub
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     // Badge entrance: scale bounce
-    badgeScale.value = withDelay(200,
+    badgeScale.value = withDelay(
+      200,
       withSequence(
         withSpring(1.15, AnimationConfig.bouncy),
         withSpring(0.95, AnimationConfig.quick),
         withSpring(1, AnimationConfig.standard),
-      )
+      ),
     );
 
     // Glow pulse
-    glowOpacity.value = withDelay(600,
+    glowOpacity.value = withDelay(
+      600,
       withRepeat(
         withSequence(
           withTiming(1, { duration: 1500 }),
@@ -66,11 +74,12 @@ const EliteCelebrationView: React.FC<EliteCelebrationViewProps> = ({ onManageSub
         ),
         -1,
         true,
-      )
+      ),
     );
 
     // Gentle float
-    floatY.value = withDelay(800,
+    floatY.value = withDelay(
+      800,
       withRepeat(
         withSequence(
           withTiming(-6, { duration: 2000 }),
@@ -78,15 +87,12 @@ const EliteCelebrationView: React.FC<EliteCelebrationViewProps> = ({ onManageSub
         ),
         -1,
         true,
-      )
+      ),
     );
   }, []);
 
   const badgeAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { scale: badgeScale.value },
-      { translateY: floatY.value },
-    ],
+    transform: [{ scale: badgeScale.value }, { translateY: floatY.value }],
   }));
 
   const glowAnimatedStyle = useAnimatedStyle(() => ({
@@ -97,9 +103,17 @@ const EliteCelebrationView: React.FC<EliteCelebrationViewProps> = ({ onManageSub
     <View style={styles.container}>
       {/* Badge */}
       <Animated.View style={[styles.badgeWrapper, badgeAnimatedStyle]}>
-        <Animated.View style={[styles.glowRing, glowAnimatedStyle, { ...Shadows.glow('#8B5CF6') }]} />
+        <Animated.View
+          style={[
+            styles.glowRing,
+            glowAnimatedStyle,
+            { ...Shadows.glow("#8B5CF6") },
+          ]}
+        />
         <LinearGradient
-          colors={PremiumColors.gradients.premium as [string, string, ...string[]]}
+          colors={
+            PremiumColors.gradients.premium as [string, string, ...string[]]
+          }
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.badgeGradient}
@@ -120,15 +134,24 @@ const EliteCelebrationView: React.FC<EliteCelebrationViewProps> = ({ onManageSub
       </Animated.View>
 
       {/* Feature List */}
-      <Animated.View entering={FadeIn.delay(700).duration(400)} style={styles.featuresList}>
+      <Animated.View
+        entering={FadeIn.delay(700).duration(400)}
+        style={styles.featuresList}
+      >
         {ELITE_FEATURES.map((feature, i) => (
           <Animated.View
             key={feature}
             entering={FadeInUp.delay(800 + i * 40).duration(300)}
             style={styles.featureRow}
           >
-            <Ionicons name="checkmark-circle" size={18} color={PremiumColors.success.main} />
-            <Text style={[styles.featureText, { color: theme.text }]}>{feature}</Text>
+            <Ionicons
+              name="checkmark-circle"
+              size={18}
+              color={PremiumColors.success.main}
+            />
+            <Text style={[styles.featureText, { color: theme.text }]}>
+              {feature}
+            </Text>
           </Animated.View>
         ))}
       </Animated.View>
@@ -141,7 +164,9 @@ const EliteCelebrationView: React.FC<EliteCelebrationViewProps> = ({ onManageSub
           variant="outline"
           size="large"
           fullWidth
-          icon={<Ionicons name="settings-outline" size={20} color={theme.primary} />}
+          icon={
+            <Ionicons name="settings-outline" size={20} color={theme.primary} />
+          }
           iconPosition="left"
         />
       </Animated.View>
@@ -151,51 +176,51 @@ const EliteCelebrationView: React.FC<EliteCelebrationViewProps> = ({ onManageSub
 
 const styles = StyleSheet.create({
   container: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: Spacing.xl,
   },
   badgeWrapper: {
     marginBottom: Spacing.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   glowRing: {
-    position: 'absolute',
+    position: "absolute",
     width: 140,
     height: 140,
     borderRadius: 70,
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    backgroundColor: "rgba(139, 92, 246, 0.15)",
   },
   badgeGradient: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   badgeTitle: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
     marginTop: 4,
   },
   congratsTitle: {
     ...Typography.h1,
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: 4,
   },
   congratsSubtitle: {
     ...Typography.body,
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: Spacing.xl,
   },
   featuresList: {
-    width: '100%',
+    width: "100%",
     marginBottom: Spacing.xl,
   },
   featureRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
     marginBottom: 10,
     paddingHorizontal: Spacing.md,

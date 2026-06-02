@@ -1,0 +1,41 @@
+{
+  "biome": "Desert",
+  "model": "openai/gpt-image-1.5",
+  "quality": "high",
+  "startedAt": 1780355787207,
+  "elapsedSeconds": 50,
+  "results": [
+    {
+      "layerKey": "trees__foreground_trunk_bend_right",
+      "fileName": "foreground_trunk_bend_right.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0,
+      "contentRatio": 0.16065470377604166
+    },
+    {
+      "layerKey": "trees__foreground_trunk_s",
+      "fileName": "foreground_trunk_s.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0,
+      "contentRatio": 0.15981292724609375
+    },
+    {
+      "layerKey": "bushes__thick_moss_bush",
+      "fileName": "thick_moss_bush.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0,
+      "contentRatio": 0.07724380493164062
+    },
+    {
+      "layerKey": "ground__damp_moss_path",
+      "fileName": "damp_moss_path.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0,
+      "contentRatio": 0.12881787618001303
+    }
+  ]
+}

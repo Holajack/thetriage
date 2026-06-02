@@ -10,43 +10,52 @@
  * 2. Set redirect URI to: thetriage://spotify-callback
  * 3. Add EXPO_PUBLIC_SPOTIFY_CLIENT_ID to .env.local
  */
-import * as AuthSession from 'expo-auth-session';
-import * as SecureStore from 'expo-secure-store';
-import { Alert, Linking, Platform } from 'react-native';
-import type { AudioSource, MusicProvider, TrackInfo, PlaybackState, PlaylistInfo } from '../musicProviders/types';
+import * as AuthSession from "expo-auth-session";
+import * as SecureStore from "expo-secure-store";
+import { Alert, Linking, Platform } from "react-native";
+import type {
+  AudioSource,
+  MusicProvider,
+  TrackInfo,
+  PlaybackState,
+  PlaylistInfo,
+} from "../musicProviders/types";
 
-const CLIENT_ID = process.env.EXPO_PUBLIC_SPOTIFY_CLIENT_ID || '';
-const REDIRECT_URI = AuthSession.makeRedirectUri({ scheme: 'hikewise', path: 'spotify-callback' });
+const CLIENT_ID = process.env.EXPO_PUBLIC_SPOTIFY_CLIENT_ID || "";
+const REDIRECT_URI = AuthSession.makeRedirectUri({
+  scheme: "hikewise",
+  path: "spotify-callback",
+});
 const SCOPES = [
-  'user-read-playback-state',
-  'user-modify-playback-state',
-  'user-read-currently-playing',
-  'playlist-read-private',
-  'playlist-read-collaborative',
-  'streaming',
-].join(' ');
+  "user-read-playback-state",
+  "user-modify-playback-state",
+  "user-read-currently-playing",
+  "playlist-read-private",
+  "playlist-read-collaborative",
+  "streaming",
+].join(" ");
 
-const AUTH_ENDPOINT = 'https://accounts.spotify.com/authorize';
-const TOKEN_ENDPOINT = 'https://accounts.spotify.com/api/token';
-const API_BASE = 'https://api.spotify.com/v1';
+const AUTH_ENDPOINT = "https://accounts.spotify.com/authorize";
+const TOKEN_ENDPOINT = "https://accounts.spotify.com/api/token";
+const API_BASE = "https://api.spotify.com/v1";
 
 const SECURE_STORE_KEYS = {
-  accessToken: 'spotify_access_token',
-  refreshToken: 'spotify_refresh_token',
-  expiresAt: 'spotify_expires_at',
+  accessToken: "spotify_access_token",
+  refreshToken: "spotify_refresh_token",
+  expiresAt: "spotify_expires_at",
 };
 
 type StateCallback<T> = (value: T) => void;
 
 class SpotifyService implements MusicProvider {
-  readonly source: AudioSource = 'spotify';
+  readonly source: AudioSource = "spotify";
 
   private accessToken: string | null = null;
   private refreshToken: string | null = null;
   private expiresAt: number = 0;
   private connected: boolean = false;
   private currentTrackInfo: TrackInfo | null = null;
-  private playbackState: PlaybackState = 'idle';
+  private playbackState: PlaybackState = "idle";
   private stateCallbacks: StateCallback<PlaybackState>[] = [];
   private trackCallbacks: StateCallback<TrackInfo | null>[] = [];
   private pollingInterval: ReturnType<typeof setInterval> | null = null;
@@ -56,8 +65,8 @@ class SpotifyService implements MusicProvider {
   async connect(): Promise<boolean> {
     if (!CLIENT_ID) {
       Alert.alert(
-        'Spotify Not Configured',
-        'Add EXPO_PUBLIC_SPOTIFY_CLIENT_ID to your .env.local file. Get one from developer.spotify.com/dashboard'
+        "Spotify Not Configured",
+        "Add EXPO_PUBLIC_SPOTIFY_CLIENT_ID to your .env.local file. Get one from developer.spotify.com/dashboard",
       );
       return false;
     }
@@ -79,7 +88,7 @@ class SpotifyService implements MusicProvider {
 
       const request = new AuthSession.AuthRequest({
         clientId: CLIENT_ID,
-        scopes: SCOPES.split(' '),
+        scopes: SCOPES.split(" "),
         redirectUri: REDIRECT_URI,
         usePKCE: true,
         responseType: AuthSession.ResponseType.Code,
@@ -87,8 +96,7 @@ class SpotifyService implements MusicProvider {
 
       const result = await request.promptAsync(discovery);
 
-      if (result.type !== 'success' || !result.params.code) {
-        console.log('Spotify auth cancelled or failed:', result.type);
+      if (result.type !== "success" || !result.params.code) {
         return false;
       }
 
@@ -100,7 +108,7 @@ class SpotifyService implements MusicProvider {
           redirectUri: REDIRECT_URI,
           extraParams: { code_verifier: request.codeVerifier! },
         },
-        discovery
+        discovery,
       );
 
       this.accessToken = tokenResponse.accessToken;
@@ -111,11 +119,12 @@ class SpotifyService implements MusicProvider {
       await this.saveTokens();
       this.startPolling();
 
-      console.log('Spotify connected successfully');
       return true;
     } catch (error) {
-      console.error('Spotify connect error:', error);
-      Alert.alert('Spotify Error', 'Failed to connect to Spotify. Please try again.');
+      Alert.alert(
+        "Spotify Error",
+        "Failed to connect to Spotify. Please try again.",
+      );
       return false;
     }
   }
@@ -128,15 +137,14 @@ class SpotifyService implements MusicProvider {
     this.expiresAt = 0;
     this.connected = false;
     this.currentTrackInfo = null;
-    this.playbackState = 'idle';
+    this.playbackState = "idle";
 
     await SecureStore.deleteItemAsync(SECURE_STORE_KEYS.accessToken);
     await SecureStore.deleteItemAsync(SECURE_STORE_KEYS.refreshToken);
     await SecureStore.deleteItemAsync(SECURE_STORE_KEYS.expiresAt);
 
-    this.notifyStateChange('idle');
+    this.notifyStateChange("idle");
     this.notifyTrackChange(null);
-    console.log('Spotify disconnected');
   }
 
   isConnected(): boolean {
@@ -145,20 +153,24 @@ class SpotifyService implements MusicProvider {
 
   // --- Playback control ---
 
-  async play(options: { category?: string; playlistId?: string; trackId?: string }): Promise<void> {
+  async play(options: {
+    category?: string;
+    playlistId?: string;
+    trackId?: string;
+  }): Promise<void> {
     await this.ensureToken();
 
     try {
       // Check for active device
-      const devices = await this.apiGet('/me/player/devices');
+      const devices = await this.apiGet("/me/player/devices");
       if (!devices.devices || devices.devices.length === 0) {
         Alert.alert(
-          'Open Spotify',
-          'Please open the Spotify app first so we can control playback.',
+          "Open Spotify",
+          "Please open the Spotify app first so we can control playback.",
           [
-            { text: 'Open Spotify', onPress: () => this.openSpotifyApp() },
-            { text: 'Cancel', style: 'cancel' },
-          ]
+            { text: "Open Spotify", onPress: () => this.openSpotifyApp() },
+            { text: "Cancel", style: "cancel" },
+          ],
         );
         return;
       }
@@ -170,15 +182,16 @@ class SpotifyService implements MusicProvider {
         body.context_uri = `spotify:playlist:${options.playlistId}`;
       }
 
-      await this.apiPut('/me/player/play', body);
-      this.playbackState = 'playing';
-      this.notifyStateChange('playing');
+      await this.apiPut("/me/player/play", body);
+      this.playbackState = "playing";
+      this.notifyStateChange("playing");
     } catch (error: any) {
       if (error.status === 404) {
-        Alert.alert('Open Spotify', 'Please open the Spotify app to start playback.');
+        Alert.alert(
+          "Open Spotify",
+          "Please open the Spotify app to start playback.",
+        );
         this.openSpotifyApp();
-      } else {
-        console.error('Spotify play error:', error);
       }
     }
   }
@@ -186,30 +199,30 @@ class SpotifyService implements MusicProvider {
   async pause(): Promise<void> {
     await this.ensureToken();
     try {
-      await this.apiPut('/me/player/pause');
-      this.playbackState = 'paused';
-      this.notifyStateChange('paused');
+      await this.apiPut("/me/player/pause");
+      this.playbackState = "paused";
+      this.notifyStateChange("paused");
     } catch (error) {
-      console.error('Spotify pause error:', error);
+      // Pause failed
     }
   }
 
   async resume(): Promise<void> {
     await this.ensureToken();
     try {
-      await this.apiPut('/me/player/play');
-      this.playbackState = 'playing';
-      this.notifyStateChange('playing');
+      await this.apiPut("/me/player/play");
+      this.playbackState = "playing";
+      this.notifyStateChange("playing");
     } catch (error) {
-      console.error('Spotify resume error:', error);
+      // Resume failed
     }
   }
 
   async stop(): Promise<void> {
     try {
       await this.pause();
-      this.playbackState = 'stopped';
-      this.notifyStateChange('stopped');
+      this.playbackState = "stopped";
+      this.notifyStateChange("stopped");
     } catch {
       // Ignore stop errors
     }
@@ -218,18 +231,18 @@ class SpotifyService implements MusicProvider {
   async nextTrack(): Promise<void> {
     await this.ensureToken();
     try {
-      await this.apiPost('/me/player/next');
+      await this.apiPost("/me/player/next");
     } catch (error) {
-      console.error('Spotify next error:', error);
+      // Skip next failed
     }
   }
 
   async previousTrack(): Promise<void> {
     await this.ensureToken();
     try {
-      await this.apiPost('/me/player/previous');
+      await this.apiPost("/me/player/previous");
     } catch (error) {
-      console.error('Spotify previous error:', error);
+      // Skip previous failed
     }
   }
 
@@ -239,7 +252,7 @@ class SpotifyService implements MusicProvider {
     try {
       await this.apiPut(`/me/player/volume?volume_percent=${percent}`);
     } catch (error) {
-      console.error('Spotify volume error:', error);
+      // Volume change failed
     }
   }
 
@@ -258,16 +271,15 @@ class SpotifyService implements MusicProvider {
   async getPlaylists(): Promise<PlaylistInfo[]> {
     await this.ensureToken();
     try {
-      const data = await this.apiGet('/me/playlists?limit=50');
+      const data = await this.apiGet("/me/playlists?limit=50");
       return (data.items || []).map((p: any) => ({
         id: p.id,
         name: p.name,
         trackCount: p.tracks?.total || 0,
         imageUrl: p.images?.[0]?.url,
-        source: 'spotify' as AudioSource,
+        source: "spotify" as AudioSource,
       }));
     } catch (error) {
-      console.error('Spotify playlists error:', error);
       return [];
     }
   }
@@ -275,10 +287,11 @@ class SpotifyService implements MusicProvider {
   async searchTracks(query: string): Promise<TrackInfo[]> {
     await this.ensureToken();
     try {
-      const data = await this.apiGet(`/search?q=${encodeURIComponent(query)}&type=track&limit=20`);
+      const data = await this.apiGet(
+        `/search?q=${encodeURIComponent(query)}&type=track&limit=20`,
+      );
       return (data.tracks?.items || []).map((t: any) => this.mapTrack(t));
     } catch (error) {
-      console.error('Spotify search error:', error);
       return [];
     }
   }
@@ -288,14 +301,14 @@ class SpotifyService implements MusicProvider {
   onStateChange(callback: StateCallback<PlaybackState>): () => void {
     this.stateCallbacks.push(callback);
     return () => {
-      this.stateCallbacks = this.stateCallbacks.filter(cb => cb !== callback);
+      this.stateCallbacks = this.stateCallbacks.filter((cb) => cb !== callback);
     };
   }
 
   onTrackChange(callback: StateCallback<TrackInfo | null>): () => void {
     this.trackCallbacks.push(callback);
     return () => {
-      this.trackCallbacks = this.trackCallbacks.filter(cb => cb !== callback);
+      this.trackCallbacks = this.trackCallbacks.filter((cb) => cb !== callback);
     };
   }
 
@@ -315,10 +328,10 @@ class SpotifyService implements MusicProvider {
 
   private async apiPut(path: string, body?: any): Promise<void> {
     await fetch(`${API_BASE}${path}`, {
-      method: 'PUT',
+      method: "PUT",
       headers: {
         Authorization: `Bearer ${this.accessToken}`,
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: body ? JSON.stringify(body) : undefined,
     });
@@ -326,10 +339,10 @@ class SpotifyService implements MusicProvider {
 
   private async apiPost(path: string, body?: any): Promise<void> {
     await fetch(`${API_BASE}${path}`, {
-      method: 'POST',
+      method: "POST",
       headers: {
         Authorization: `Bearer ${this.accessToken}`,
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: body ? JSON.stringify(body) : undefined,
     });
@@ -339,24 +352,41 @@ class SpotifyService implements MusicProvider {
     return {
       id: t.id,
       name: t.name,
-      artist: t.artists?.map((a: any) => a.name).join(', ') || 'Unknown',
+      artist: t.artists?.map((a: any) => a.name).join(", ") || "Unknown",
       albumArt: t.album?.images?.[0]?.url,
       durationMs: t.duration_ms || 0,
-      source: 'spotify',
+      source: "spotify",
     };
   }
 
   private async saveTokens(): Promise<void> {
-    if (this.accessToken) await SecureStore.setItemAsync(SECURE_STORE_KEYS.accessToken, this.accessToken);
-    if (this.refreshToken) await SecureStore.setItemAsync(SECURE_STORE_KEYS.refreshToken, this.refreshToken);
-    await SecureStore.setItemAsync(SECURE_STORE_KEYS.expiresAt, String(this.expiresAt));
+    if (this.accessToken)
+      await SecureStore.setItemAsync(
+        SECURE_STORE_KEYS.accessToken,
+        this.accessToken,
+      );
+    if (this.refreshToken)
+      await SecureStore.setItemAsync(
+        SECURE_STORE_KEYS.refreshToken,
+        this.refreshToken,
+      );
+    await SecureStore.setItemAsync(
+      SECURE_STORE_KEYS.expiresAt,
+      String(this.expiresAt),
+    );
   }
 
   private async restoreTokens(): Promise<boolean> {
     try {
-      const accessToken = await SecureStore.getItemAsync(SECURE_STORE_KEYS.accessToken);
-      const refreshToken = await SecureStore.getItemAsync(SECURE_STORE_KEYS.refreshToken);
-      const expiresAtStr = await SecureStore.getItemAsync(SECURE_STORE_KEYS.expiresAt);
+      const accessToken = await SecureStore.getItemAsync(
+        SECURE_STORE_KEYS.accessToken,
+      );
+      const refreshToken = await SecureStore.getItemAsync(
+        SECURE_STORE_KEYS.refreshToken,
+      );
+      const expiresAtStr = await SecureStore.getItemAsync(
+        SECURE_STORE_KEYS.expiresAt,
+      );
 
       if (!accessToken) return false;
 
@@ -374,7 +404,7 @@ class SpotifyService implements MusicProvider {
 
       // Verify token still works
       try {
-        await this.apiGet('/me');
+        await this.apiGet("/me");
         return true;
       } catch {
         if (this.refreshToken) {
@@ -392,10 +422,10 @@ class SpotifyService implements MusicProvider {
 
     try {
       const response = await fetch(TOKEN_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
-          grant_type: 'refresh_token',
+          grant_type: "refresh_token",
           refresh_token: this.refreshToken,
           client_id: CLIENT_ID,
         }).toString(),
@@ -421,19 +451,22 @@ class SpotifyService implements MusicProvider {
         const refreshed = await this.refreshAccessToken();
         if (!refreshed) {
           this.connected = false;
-          throw new Error('Spotify token expired');
+          throw new Error("Spotify token expired");
         }
       }
     }
   }
 
   private openSpotifyApp(): void {
-    const url = Platform.OS === 'ios' ? 'spotify://' : 'spotify://';
-    Linking.canOpenURL(url).then(canOpen => {
+    const url = Platform.OS === "ios" ? "spotify://" : "spotify://";
+    Linking.canOpenURL(url).then((canOpen) => {
       if (canOpen) {
         Linking.openURL(url);
       } else {
-        Alert.alert('Spotify Not Installed', 'Please install the Spotify app from the App Store.');
+        Alert.alert(
+          "Spotify Not Installed",
+          "Please install the Spotify app from the App Store.",
+        );
       }
     });
   }
@@ -456,9 +489,9 @@ class SpotifyService implements MusicProvider {
 
     try {
       await this.ensureToken();
-      const data = await this.apiGet('/me/player');
+      const data = await this.apiGet("/me/player");
 
-      const newState: PlaybackState = data.is_playing ? 'playing' : 'paused';
+      const newState: PlaybackState = data.is_playing ? "playing" : "paused";
       if (newState !== this.playbackState) {
         this.playbackState = newState;
         this.notifyStateChange(newState);
@@ -477,11 +510,11 @@ class SpotifyService implements MusicProvider {
   }
 
   private notifyStateChange(state: PlaybackState): void {
-    this.stateCallbacks.forEach(cb => cb(state));
+    this.stateCallbacks.forEach((cb) => cb(state));
   }
 
   private notifyTrackChange(track: TrackInfo | null): void {
-    this.trackCallbacks.forEach(cb => cb(track));
+    this.trackCallbacks.forEach((cb) => cb(track));
   }
 }
 

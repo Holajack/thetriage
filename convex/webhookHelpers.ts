@@ -148,7 +148,6 @@ export const updateUserByClerkId = internalMutation({
       .unique();
 
     if (!user) {
-      console.error(`[webhookHelpers] User not found for clerkId: ${clerkId}`);
       return;
     }
 

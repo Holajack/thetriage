@@ -1,0 +1,239 @@
+{
+  "biome": "Forest",
+  "model": "openai/gpt-image-1.5",
+  "quality": "high",
+  "startedAt": 1780364988543,
+  "elapsedSeconds": 357,
+  "results": [
+    {
+      "layerKey": "sky",
+      "fileName": "sky_gradient.png",
+      "status": "completed",
+      "attempts": 1
+    },
+    {
+      "layerKey": "sun",
+      "fileName": "sun.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0,
+      "contentRatio": 0.11406644185384114
+    },
+    {
+      "layerKey": "clouds__fluffy_cloud",
+      "fileName": "fluffy_cloud.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0,
+      "contentRatio": 0.10950660705566406
+    },
+    {
+      "layerKey": "clouds__dense_layered_cloud",
+      "fileName": "dense_layered_cloud.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0,
+      "contentRatio": 0.09170150756835938
+    },
+    {
+      "layerKey": "clouds__small_cloud",
+      "fileName": "small_cloud.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0,
+      "contentRatio": 0.04170926411946615
+    },
+    {
+      "layerKey": "clouds__thin_wisp_cloud",
+      "fileName": "thin_wisp_cloud.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0,
+      "contentRatio": 0.028729756673177082
+    },
+    {
+      "layerKey": "clouds__wide_cloud",
+      "fileName": "wide_cloud.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0,
+      "contentRatio": 0.07648913065592448
+    },
+    {
+      "layerKey": "far_mountains",
+      "fileName": "far_mountain_range.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0.08913213448006255,
+      "contentRatio": 0.16940943400065103
+    },
+    {
+      "layerKey": "mid_mountains",
+      "fileName": "mid_mountain_range.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0.13623924941360438,
+      "contentRatio": 0.2570018768310547
+    },
+    {
+      "layerKey": "midground",
+      "fileName": "mid_jungle_layer.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0.127443315089914,
+      "contentRatio": 0.2321904500325521
+    },
+    {
+      "layerKey": "trees__foreground_tree",
+      "fileName": "foreground_tree.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0,
+      "contentRatio": 0.2365392049153646
+    },
+    {
+      "layerKey": "trees__foreground_tall_tree",
+      "fileName": "foreground_tall_tree.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0,
+      "contentRatio": 0.20073636372884116
+    },
+    {
+      "layerKey": "trees__foreground_left_lean_tree",
+      "fileName": "foreground_left_lean_tree.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0,
+      "contentRatio": 0.1355616251627604
+    },
+    {
+      "layerKey": "trees__foreground_right_lean_tree",
+      "fileName": "foreground_right_lean_tree.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0,
+      "contentRatio": 0.22038586934407553
+    },
+    {
+      "layerKey": "trees__foreground_right_trunk_bend_left",
+      "fileName": "foreground_right_trunk_bend_left.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0,
+      "contentRatio": 0.24441973368326822
+    },
+    {
+      "layerKey": "trees__foreground_trunk_bend_right",
+      "fileName": "foreground_trunk_bend_right.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0,
+      "contentRatio": 0.17957115173339844
+    },
+    {
+      "layerKey": "trees__foreground_trunk_s",
+      "fileName": "foreground_trunk_s.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0,
+      "contentRatio": 0.18045425415039062
+    },
+    {
+      "layerKey": "trees__foreground_long_vine_tree",
+      "fileName": "foreground_long_vine_tree.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0,
+      "contentRatio": 0.2478618621826172
+    },
+    {
+      "layerKey": "trees__foreground_vines_tree",
+      "fileName": "foreground_vines_tree.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0,
+      "contentRatio": 0.3052724202473958
+    },
+    {
+      "layerKey": "bushes__jungle_bush",
+      "fileName": "jungle_bush.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0,
+      "contentRatio": 0.11932690938313802
+    },
+    {
+      "layerKey": "bushes__tall_bush",
+      "fileName": "tall_bush.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0,
+      "contentRatio": 0.13275019327799478
+    },
+    {
+      "layerKey": "bushes__wide_low_bush",
+      "fileName": "wide_low_bush.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0,
+      "contentRatio": 0.10546366373697917
+    },
+    {
+      "layerKey": "bushes__thick_moss_bush",
+      "fileName": "thick_moss_bush.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0,
+      "contentRatio": 0.1401208241780599
+    },
+    {
+      "layerKey": "ground__regular_path",
+      "fileName": "regular_path.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0.07877247849882721,
+      "contentRatio": 0.1592534383138021
+    },
+    {
+      "layerKey": "ground__mossy_jungl_path",
+      "fileName": "mossy_jungl_path.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0.09519155590304926,
+      "contentRatio": 0.1840235392252604
+    },
+    {
+      "layerKey": "ground__grassy_path",
+      "fileName": "grassy_path.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0,
+      "contentRatio": 0.10447947184244792
+    },
+    {
+      "layerKey": "ground__damp_moss_path",
+      "fileName": "damp_moss_path.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0.09245504300234558,
+      "contentRatio": 0.17263221740722656
+    },
+    {
+      "layerKey": "ground__flower_jungl_path",
+      "fileName": "flower_jungl_path.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0.09538702111024237,
+      "contentRatio": 0.17479578653971353
+    },
+    {
+      "layerKey": "ground__stones_pebbles_path",
+      "fileName": "stones_pebbles_path.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0,
+      "contentRatio": 0.15372403462727866
+    }
+  ]
+}

@@ -1,23 +1,13 @@
-import { ConvexReactClient } from "convex/react";
 import { api } from "../../convex/_generated/api";
-
-let _convexClient: ConvexReactClient | null = null;
-
-export function setConvexClient(client: ConvexReactClient) {
-  _convexClient = client;
-}
-
-function getClient(): ConvexReactClient {
-  if (!_convexClient) throw new Error("Convex client not initialized");
-  return _convexClient;
-}
+import { getConvexClient } from "./convexClient";
+export { setConvexClient } from "./convexClient";
 
 export interface InventoryItem {
   id: string;
   userId: string;
   itemId: string;
   itemName: string;
-  itemCategory: 'gear' | 'shelter' | 'trail';
+  itemCategory: "gear" | "shelter" | "trail";
   itemIcon: string;
   purchasedAt: string;
 }
@@ -25,7 +15,7 @@ export interface InventoryItem {
 export interface EquippedItem {
   id: string;
   userId: string;
-  itemCategory: 'gear' | 'shelter' | 'trail';
+  itemCategory: "gear" | "shelter" | "trail";
   itemId: string;
   itemName: string;
   itemIcon: string;
@@ -38,11 +28,11 @@ export interface EquippedItem {
 export async function addToInventory(
   itemId: string,
   itemName: string,
-  itemCategory: 'gear' | 'shelter' | 'trail',
-  itemIcon: string
+  itemCategory: "gear" | "shelter" | "trail",
+  itemIcon: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const client = getClient();
+    const client = getConvexClient();
     await client.mutation(api.inventory.purchaseItem, {
       itemId,
       itemName,
@@ -52,8 +42,8 @@ export async function addToInventory(
     });
     return { success: true };
   } catch (error: any) {
-    if (error.message?.includes('already owned')) {
-      return { success: false, error: 'You already own this item!' };
+    if (error.message?.includes("already owned")) {
+      return { success: false, error: "You already own this item!" };
     }
     return { success: false, error: error.message };
   }
@@ -65,11 +55,11 @@ export async function addToInventory(
 export async function equipItem(
   itemId: string,
   itemName: string,
-  itemCategory: 'gear' | 'shelter' | 'trail',
-  itemIcon: string
+  itemCategory: "gear" | "shelter" | "trail",
+  itemIcon: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const client = getClient();
+    const client = getConvexClient();
     await client.mutation(api.inventory.equipItem, {
       itemId,
       itemName,
@@ -91,7 +81,7 @@ export async function getUserInventory(): Promise<{
   error?: string;
 }> {
   try {
-    const client = getClient();
+    const client = getConvexClient();
     const items = await client.query(api.inventory.listItems, {});
 
     // Convert Convex format to expected format
@@ -120,7 +110,7 @@ export async function getEquippedItems(): Promise<{
   error?: string;
 }> {
   try {
-    const client = getClient();
+    const client = getConvexClient();
     const items = await client.query(api.inventory.getEquipped, {});
 
     // Convert Convex format to expected format
@@ -145,7 +135,7 @@ export async function getEquippedItems(): Promise<{
  */
 export async function ownsItem(itemId: string): Promise<boolean> {
   try {
-    const client = getClient();
+    const client = getConvexClient();
     const items = await client.query(api.inventory.listItems, {});
     return (items || []).some((item: any) => item.itemId === itemId);
   } catch (error) {
@@ -158,7 +148,7 @@ export async function ownsItem(itemId: string): Promise<boolean> {
  */
 export async function isItemEquipped(itemId: string): Promise<boolean> {
   try {
-    const client = getClient();
+    const client = getConvexClient();
     const items = await client.query(api.inventory.getEquipped, {});
     return (items || []).some((item: any) => item.itemId === itemId);
   } catch (error) {
@@ -170,10 +160,10 @@ export async function isItemEquipped(itemId: string): Promise<boolean> {
  * Unequip an item
  */
 export async function unequipItem(
-  itemCategory: 'gear' | 'shelter' | 'trail'
+  itemCategory: "gear" | "shelter" | "trail",
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const client = getClient();
+    const client = getConvexClient();
     await client.mutation(api.inventory.unequipItem, {
       itemCategory,
     });

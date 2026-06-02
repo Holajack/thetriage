@@ -8,8 +8,14 @@
  * - Matches theme colors
  */
 
-import React, { useEffect } from 'react';
-import { StyleSheet, View, ViewStyle, Dimensions } from 'react-native';
+import React, { useEffect } from "react";
+import {
+  StyleSheet,
+  View,
+  ViewStyle,
+  Dimensions,
+  DimensionValue,
+} from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -17,28 +23,31 @@ import Animated, {
   withTiming,
   Easing,
   interpolate,
-} from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme } from '../../context/ThemeContext';
-import { BorderRadius, Spacing } from '../../theme/premiumTheme';
+} from "react-native-reanimated";
+import { LinearGradient } from "expo-linear-gradient";
+import { useTheme } from "../../context/ThemeContext";
+import { BorderRadius, Spacing } from "../../theme/premiumTheme";
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 interface ShimmerLoaderProps {
-  width?: number | string;
+  width?: DimensionValue;
   height?: number;
+  size?: number;
   borderRadius?: number;
   style?: ViewStyle;
-  variant?: 'text' | 'circle' | 'card' | 'button' | 'custom';
+  variant?: "text" | "circle" | "card" | "button" | "custom";
 }
 
 export const ShimmerLoader: React.FC<ShimmerLoaderProps> = ({
-  width = '100%',
-  height = 20,
+  width = "100%",
+  height: heightProp = 20,
+  size,
   borderRadius,
   style,
-  variant = 'custom',
+  variant = "custom",
 }) => {
+  const height = size ?? heightProp;
   const { theme } = useTheme();
   const shimmerPosition = useSharedValue(-1);
 
@@ -46,24 +55,28 @@ export const ShimmerLoader: React.FC<ShimmerLoaderProps> = ({
     shimmerPosition.value = withRepeat(
       withTiming(2, { duration: 1500, easing: Easing.linear }),
       -1,
-      false
+      false,
     );
   }, []);
 
   // Get variant-specific dimensions
   const getVariantStyle = (): ViewStyle => {
     switch (variant) {
-      case 'text':
+      case "text":
         return { width: width, height: 16, borderRadius: BorderRadius.xs };
-      case 'circle':
-        const size = typeof height === 'number' ? height : 48;
+      case "circle":
+        const size = typeof height === "number" ? height : 48;
         return { width: size, height: size, borderRadius: size / 2 };
-      case 'card':
-        return { width: '100%', height: 120, borderRadius: BorderRadius.lg };
-      case 'button':
+      case "card":
+        return { width: "100%", height: 120, borderRadius: BorderRadius.lg };
+      case "button":
         return { width: width, height: 48, borderRadius: BorderRadius.lg };
       default:
-        return { width: width, height: height, borderRadius: borderRadius || BorderRadius.sm };
+        return {
+          width: width,
+          height: height,
+          borderRadius: borderRadius || BorderRadius.sm,
+        };
     }
   };
 
@@ -71,7 +84,7 @@ export const ShimmerLoader: React.FC<ShimmerLoaderProps> = ({
     const translateX = interpolate(
       shimmerPosition.value,
       [-1, 2],
-      [-SCREEN_WIDTH, SCREEN_WIDTH * 2]
+      [-SCREEN_WIDTH, SCREEN_WIDTH * 2],
     );
 
     return {
@@ -79,14 +92,25 @@ export const ShimmerLoader: React.FC<ShimmerLoaderProps> = ({
     };
   });
 
-  const baseColor = theme.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
-  const highlightColor = theme.isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.03)';
+  const baseColor = theme.isDark
+    ? "rgba(255,255,255,0.08)"
+    : "rgba(0,0,0,0.08)";
+  const highlightColor = theme.isDark
+    ? "rgba(255,255,255,0.15)"
+    : "rgba(0,0,0,0.03)";
 
   return (
-    <View style={[styles.container, getVariantStyle(), { backgroundColor: baseColor }, style]}>
+    <View
+      style={[
+        styles.container,
+        getVariantStyle(),
+        { backgroundColor: baseColor },
+        style,
+      ]}
+    >
       <Animated.View style={[styles.shimmer, shimmerStyle]}>
         <LinearGradient
-          colors={['transparent', highlightColor, 'transparent']}
+          colors={["transparent", highlightColor, "transparent"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={styles.gradient}
@@ -101,14 +125,14 @@ interface SkeletonRowProps {
   lines?: number;
   lineHeight?: number;
   spacing?: number;
-  lastLineWidth?: number | string;
+  lastLineWidth?: DimensionValue;
 }
 
 export const SkeletonText: React.FC<SkeletonRowProps> = ({
   lines = 3,
   lineHeight = 16,
   spacing = Spacing.xs,
-  lastLineWidth = '60%',
+  lastLineWidth = "60%",
 }) => {
   return (
     <View>
@@ -117,7 +141,7 @@ export const SkeletonText: React.FC<SkeletonRowProps> = ({
           key={index}
           variant="text"
           height={lineHeight}
-          width={index === lines - 1 ? lastLineWidth : '100%'}
+          width={index === lines - 1 ? lastLineWidth : "100%"}
           style={index < lines - 1 ? { marginBottom: spacing } : undefined}
         />
       ))}
@@ -142,13 +166,25 @@ export const SkeletonCard: React.FC<SkeletonCardProps> = ({
   const { theme } = useTheme();
 
   return (
-    <View style={[styles.cardContainer, { backgroundColor: theme.card }, style]}>
+    <View
+      style={[styles.cardContainer, { backgroundColor: theme.card }, style]}
+    >
       {showImage && (
-        <ShimmerLoader variant="custom" width="100%" height={160} style={styles.cardImage} />
+        <ShimmerLoader
+          variant="custom"
+          width="100%"
+          height={160}
+          style={styles.cardImage}
+        />
       )}
       <View style={styles.cardContent}>
         {showTitle && (
-          <ShimmerLoader variant="text" width="70%" height={20} style={styles.cardTitle} />
+          <ShimmerLoader
+            variant="text"
+            width="70%"
+            height={20}
+            style={styles.cardTitle}
+          />
         )}
         {showDescription && <SkeletonText lines={2} lastLineWidth="80%" />}
       </View>
@@ -157,12 +193,19 @@ export const SkeletonCard: React.FC<SkeletonCardProps> = ({
 };
 
 // Avatar with text skeleton
-export const SkeletonAvatarRow: React.FC<{ avatarSize?: number }> = ({ avatarSize = 48 }) => {
+export const SkeletonAvatarRow: React.FC<{ avatarSize?: number }> = ({
+  avatarSize = 48,
+}) => {
   return (
     <View style={styles.avatarRow}>
       <ShimmerLoader variant="circle" height={avatarSize} />
       <View style={styles.avatarTextContainer}>
-        <ShimmerLoader variant="text" width="60%" height={18} style={{ marginBottom: 8 }} />
+        <ShimmerLoader
+          variant="text"
+          width="60%"
+          height={18}
+          style={{ marginBottom: 8 }}
+        />
         <ShimmerLoader variant="text" width="40%" height={14} />
       </View>
     </View>
@@ -170,12 +213,19 @@ export const SkeletonAvatarRow: React.FC<{ avatarSize?: number }> = ({ avatarSiz
 };
 
 // Stats grid skeleton
-export const SkeletonStatsGrid: React.FC<{ columns?: number }> = ({ columns = 3 }) => {
+export const SkeletonStatsGrid: React.FC<{ columns?: number }> = ({
+  columns = 3,
+}) => {
   return (
     <View style={styles.statsGrid}>
       {Array.from({ length: columns }).map((_, index) => (
         <View key={index} style={styles.statItem}>
-          <ShimmerLoader variant="custom" width={50} height={32} style={{ marginBottom: 8 }} />
+          <ShimmerLoader
+            variant="custom"
+            width={50}
+            height={32}
+            style={{ marginBottom: 8 }}
+          />
           <ShimmerLoader variant="text" width={60} height={12} />
         </View>
       ))}
@@ -185,7 +235,7 @@ export const SkeletonStatsGrid: React.FC<{ columns?: number }> = ({ columns = 3 
 
 const styles = StyleSheet.create({
   container: {
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   shimmer: {
     ...StyleSheet.absoluteFillObject,
@@ -197,7 +247,7 @@ const styles = StyleSheet.create({
   },
   cardContainer: {
     borderRadius: BorderRadius.lg,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   cardImage: {
     borderRadius: 0,
@@ -209,19 +259,19 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   avatarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   avatarTextContainer: {
     flex: 1,
     marginLeft: Spacing.md,
   },
   statsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
+    flexDirection: "row",
+    justifyContent: "space-around",
   },
   statItem: {
-    alignItems: 'center',
+    alignItems: "center",
   },
 });
 

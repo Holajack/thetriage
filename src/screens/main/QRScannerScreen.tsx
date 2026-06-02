@@ -1,15 +1,26 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Modal, Image } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import * as ImagePicker from 'expo-image-picker';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { useTheme } from '../../context/ThemeContext';
-import { UnifiedHeader } from '../../components/UnifiedHeader';
-import { sendQRFriendRequest, waitForQRAcceptance } from '../../utils/qrAcceptanceService';
-import { getUserProfile } from '../../utils/convexFriendRequestService';
-import { ShimmerLoader } from '../../components/premium/ShimmerLoader';
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Alert,
+  Modal,
+  Image,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { CameraView, useCameraPermissions } from "expo-camera";
+import * as ImagePicker from "expo-image-picker";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import { useTheme } from "../../context/ThemeContext";
+import { UnifiedHeader } from "../../components/UnifiedHeader";
+import {
+  sendQRFriendRequest,
+  waitForQRAcceptance,
+} from "../../utils/qrAcceptanceService";
+import { getUserProfile } from "../../utils/convexFriendRequestService";
+import { ShimmerLoader } from "../../components/premium/ShimmerLoader";
 
 interface ScannedUser {
   userId: string;
@@ -21,7 +32,7 @@ interface ScannedUser {
 }
 
 const QRScannerScreen = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const { theme } = useTheme();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
@@ -41,12 +52,8 @@ const QRScannerScreen = () => {
   // Reset scanner state when screen loses focus
   useFocusEffect(
     useCallback(() => {
-      // Screen is focused
-      console.log('🎥 QR Scanner screen focused');
-
       return () => {
         // Screen is unfocused - cleanup
-        console.log('👋 QR Scanner screen unfocused - resetting scanner');
         setScanned(false);
         setShowPreview(false);
         setScannedUser(null);
@@ -55,7 +62,7 @@ const QRScannerScreen = () => {
         setWaitingForAcceptance(false);
         setIsFromGallery(false);
       };
-    }, [])
+    }, []),
   );
 
   const handleBarCodeScanned = async ({ data }: { data: string }) => {
@@ -73,9 +80,9 @@ const QRScannerScreen = () => {
         userId = qrData.userId;
       } catch (jsonError) {
         // If JSON parse fails, check if it's a deep link URL
-        if (data.startsWith('hikewise://profile/')) {
-          userId = data.replace('hikewise://profile/', '');
-        } else if (data.includes('profile/')) {
+        if (data.startsWith("hikewise://profile/")) {
+          userId = data.replace("hikewise://profile/", "");
+        } else if (data.includes("profile/")) {
           // Handle other URL formats
           const match = data.match(/profile\/([a-zA-Z0-9-]+)/);
           if (match) {
@@ -85,33 +92,37 @@ const QRScannerScreen = () => {
       }
 
       if (!userId) {
-        console.log('❌ Invalid QR code data:', data.substring(0, 50));
-        Alert.alert('Invalid QR Code', 'This QR code does not contain valid user information.');
+        Alert.alert(
+          "Invalid QR Code",
+          "This QR code does not contain valid user information.",
+        );
         setScanned(false);
         return;
       }
 
-      console.log('✅ QR code scanned, user ID:', userId);
       // Fetch user profile
       await fetchUserProfile(userId);
     } catch (error) {
-      console.error('Error processing QR code:', error);
-      Alert.alert('Error', 'Could not process this QR code. Please try again.');
+      Alert.alert("Error", "Could not process this QR code. Please try again.");
       setScanned(false);
     }
   };
 
   const handlePickImage = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
 
-      if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'We need access to your photos to scan QR codes.');
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission Denied",
+          "We need access to your photos to scan QR codes.",
+        );
         return;
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: ["images"],
         allowsEditing: false,
         quality: 1,
       });
@@ -120,14 +131,13 @@ const QRScannerScreen = () => {
         // Note: Scanning QR from images requires additional library like jsQR
         // For now, show a message that this feature is coming soon
         Alert.alert(
-          'Upload QR Code',
-          'QR code scanning from images is coming soon! For now, please use the camera to scan QR codes.',
-          [{ text: 'OK' }]
+          "Upload QR Code",
+          "QR code scanning from images is coming soon! For now, please use the camera to scan QR codes.",
+          [{ text: "OK" }],
         );
       }
     } catch (error) {
-      console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to pick image. Please try again.');
+      Alert.alert("Error", "Failed to pick image. Please try again.");
     }
   };
 
@@ -138,28 +148,25 @@ const QRScannerScreen = () => {
       const result = await getUserProfile(userId);
 
       if (!result.success || !result.profile) {
-        console.log('❌ User not found:', userId);
-        Alert.alert('User Not Found', 'This user does not exist.');
+        Alert.alert("User Not Found", "This user does not exist.");
         setScanned(false);
         setLoading(false);
         return;
       }
 
-      const profileData = result.profile;
-      console.log('✅ User profile fetched:', profileData.username);
+      const profileData = result.profile as any;
 
       setScannedUser({
         userId: profileData.id || profileData.user_id,
-        username: profileData.username || 'user',
-        fullName: profileData.full_name || 'User',
+        username: profileData.username || "user",
+        fullName: profileData.full_name || "User",
         avatarUrl: profileData.avatar_url,
         university: profileData.university,
         bio: profileData.major ? `${profileData.major}` : undefined,
       });
       setShowPreview(true);
     } catch (error) {
-      console.error('Error fetching user profile:', error);
-      Alert.alert('Error', 'Failed to load user profile. Please try again.');
+      Alert.alert("Error", "Failed to load user profile. Please try again.");
       setScanned(false);
     } finally {
       setLoading(false);
@@ -172,10 +179,13 @@ const QRScannerScreen = () => {
     setSending(true);
     try {
       // Send QR friend request
-      const result = await sendQRFriendRequest(scannedUser.userId, isFromGallery);
+      const result = await sendQRFriendRequest(
+        scannedUser.userId,
+        isFromGallery,
+      );
 
       if (!result.success) {
-        Alert.alert('Error', result.error || 'Failed to send friend request.');
+        Alert.alert("Error", result.error || "Failed to send friend request.");
         setScanned(false);
         setSending(false);
         return;
@@ -185,7 +195,6 @@ const QRScannerScreen = () => {
 
       // If this requires waiting (live scan, not gallery), wait for immediate acceptance
       if (result.requiresWait) {
-        console.log('⏳ Waiting for QR owner to accept...');
         setWaitingForAcceptance(true);
         setSending(false);
 
@@ -197,72 +206,71 @@ const QRScannerScreen = () => {
         if (acceptance.accepted) {
           // Immediate acceptance!
           Alert.alert(
-            'Connected! 🎉',
+            "Connected! 🎉",
             `You and ${scannedUser.fullName} are now trail buddies!`,
             [
               {
-                text: 'Awesome!',
+                text: "Awesome!",
                 onPress: () => {
                   setShowPreview(false);
                   setScannedUser(null);
                   navigation.goBack();
-                }
-              }
-            ]
+                },
+              },
+            ],
           );
         } else if (acceptance.error) {
           // Request was declined
           Alert.alert(
-            'Request Declined',
+            "Request Declined",
             `${scannedUser.fullName} declined the friend request.`,
             [
               {
-                text: 'OK',
+                text: "OK",
                 onPress: () => {
                   setShowPreview(false);
                   setScannedUser(null);
                   setScanned(false);
-                }
-              }
-            ]
+                },
+              },
+            ],
           );
         } else {
           // Timeout - went to pending
           Alert.alert(
-            'Request Sent 📬',
+            "Request Sent 📬",
             `${scannedUser.fullName} will review your request later. You'll be notified when they respond!`,
             [
               {
-                text: 'OK',
+                text: "OK",
                 onPress: () => {
                   setShowPreview(false);
                   setScannedUser(null);
                   navigation.goBack();
-                }
-              }
-            ]
+                },
+              },
+            ],
           );
         }
       } else {
         // Gallery upload - just send as pending request
         Alert.alert(
-          'Friend Request Sent! 📬',
+          "Friend Request Sent! 📬",
           `Your friend request has been sent to ${scannedUser.fullName}.`,
           [
             {
-              text: 'OK',
+              text: "OK",
               onPress: () => {
                 setShowPreview(false);
                 setScannedUser(null);
                 navigation.goBack();
-              }
-            }
-          ]
+              },
+            },
+          ],
         );
       }
     } catch (error) {
-      console.error('Error sending friend request:', error);
-      Alert.alert('Error', 'Failed to send friend request. Please try again.');
+      Alert.alert("Error", "Failed to send friend request. Please try again.");
       setScanned(false);
       setWaitingForAcceptance(false);
     } finally {
@@ -278,11 +286,20 @@ const QRScannerScreen = () => {
 
   if (!permission) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-        <UnifiedHeader title="Scan QR Code" onClose={() => navigation.navigate('Community' as any, { initialTab: 'friends' })} />
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.background }]}
+      >
+        <UnifiedHeader
+          title="Scan QR Code"
+          onClose={() =>
+            navigation.navigate("Community" as any, { initialTab: "friends" })
+          }
+        />
         <View style={styles.centerContainer}>
-          <ShimmerLoader variant="circular" size={48} />
-          <Text style={[styles.messageText, { color: theme.text }]}>Requesting camera permission...</Text>
+          <ShimmerLoader variant="circle" size={48} />
+          <Text style={[styles.messageText, { color: theme.text }]}>
+            Requesting camera permission...
+          </Text>
         </View>
       </SafeAreaView>
     );
@@ -290,16 +307,32 @@ const QRScannerScreen = () => {
 
   if (!permission.granted) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-        <UnifiedHeader title="Scan QR Code" onClose={() => navigation.navigate('Community' as any, { initialTab: 'friends' })} />
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.background }]}
+      >
+        <UnifiedHeader
+          title="Scan QR Code"
+          onClose={() =>
+            navigation.navigate("Community" as any, { initialTab: "friends" })
+          }
+        />
         <View style={styles.centerContainer}>
-          <Ionicons name="camera-outline" size={80} color={theme.textSecondary} />
-          <Text style={[styles.permissionTitle, { color: theme.text }]}>Camera Permission Required</Text>
+          <Ionicons
+            name="camera-outline"
+            size={80}
+            color={theme.textSecondary}
+          />
+          <Text style={[styles.permissionTitle, { color: theme.text }]}>
+            Camera Permission Required
+          </Text>
           <Text style={[styles.permissionText, { color: theme.textSecondary }]}>
             We need access to your camera to scan QR codes.
           </Text>
           <TouchableOpacity
-            style={[styles.permissionButton, { backgroundColor: theme.primary }]}
+            style={[
+              styles.permissionButton,
+              { backgroundColor: theme.primary },
+            ]}
             onPress={requestPermission}
           >
             <Text style={styles.permissionButtonText}>Grant Permission</Text>
@@ -310,8 +343,15 @@ const QRScannerScreen = () => {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <UnifiedHeader title="Scan QR Code" onClose={() => navigation.navigate('Community' as any, { initialTab: 'friends' })} />
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.background }]}
+    >
+      <UnifiedHeader
+        title="Scan QR Code"
+        onClose={() =>
+          navigation.navigate("Community" as any, { initialTab: "friends" })
+        }
+      />
 
       {/* Camera View */}
       <View style={styles.cameraContainer}>
@@ -320,7 +360,7 @@ const QRScannerScreen = () => {
           facing="back"
           onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
           barcodeScannerSettings={{
-            barcodeTypes: ['qr'],
+            barcodeTypes: ["qr"],
           }}
         >
           {/* Scanning Overlay */}
@@ -348,7 +388,7 @@ const QRScannerScreen = () => {
           {/* Instructions */}
           <View style={styles.instructionsContainer}>
             <Text style={styles.instructionsText}>
-              {scanned ? 'Processing...' : 'Position QR code within the frame'}
+              {scanned ? "Processing..." : "Position QR code within the frame"}
             </Text>
           </View>
         </CameraView>
@@ -357,20 +397,33 @@ const QRScannerScreen = () => {
       {/* Action Buttons */}
       <View style={[styles.actionsContainer, { backgroundColor: theme.card }]}>
         <TouchableOpacity
-          style={[styles.actionButton, { backgroundColor: theme.primary + '20', borderColor: theme.primary }]}
+          style={[
+            styles.actionButton,
+            {
+              backgroundColor: theme.primary + "20",
+              borderColor: theme.primary,
+            },
+          ]}
           onPress={handlePickImage}
         >
           <Ionicons name="image-outline" size={24} color={theme.primary} />
-          <Text style={[styles.actionButtonText, { color: theme.primary }]}>Upload from Gallery</Text>
+          <Text style={[styles.actionButtonText, { color: theme.primary }]}>
+            Upload from Gallery
+          </Text>
         </TouchableOpacity>
 
         {scanned && (
           <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
+            style={[
+              styles.actionButton,
+              { backgroundColor: theme.surface, borderColor: theme.border },
+            ]}
             onPress={() => setScanned(false)}
           >
             <Ionicons name="refresh-outline" size={24} color={theme.text} />
-            <Text style={[styles.actionButtonText, { color: theme.text }]}>Scan Again</Text>
+            <Text style={[styles.actionButtonText, { color: theme.text }]}>
+              Scan Again
+            </Text>
           </TouchableOpacity>
         )}
       </View>
@@ -393,20 +446,34 @@ const QRScannerScreen = () => {
 
             {loading ? (
               <View style={styles.loadingContainer}>
-                <ShimmerLoader variant="circular" size={48} />
-                <Text style={[styles.loadingText, { color: theme.text }]}>Loading profile...</Text>
+                <ShimmerLoader variant="circle" size={48} />
+                <Text style={[styles.loadingText, { color: theme.text }]}>
+                  Loading profile...
+                </Text>
               </View>
             ) : scannedUser ? (
               <>
-                <Text style={[styles.previewTitle, { color: theme.text }]}>Add Hiker?</Text>
+                <Text style={[styles.previewTitle, { color: theme.text }]}>
+                  Add Hiker?
+                </Text>
 
                 {/* User Avatar */}
                 <View style={styles.avatarContainer}>
                   {scannedUser.avatarUrl ? (
-                    <Image source={{ uri: scannedUser.avatarUrl }} style={styles.avatar} />
+                    <Image
+                      source={{ uri: scannedUser.avatarUrl }}
+                      style={styles.avatar}
+                    />
                   ) : (
-                    <View style={[styles.avatarPlaceholder, { backgroundColor: theme.primary + '20' }]}>
-                      <Text style={[styles.avatarText, { color: theme.primary }]}>
+                    <View
+                      style={[
+                        styles.avatarPlaceholder,
+                        { backgroundColor: theme.primary + "20" },
+                      ]}
+                    >
+                      <Text
+                        style={[styles.avatarText, { color: theme.primary }]}
+                      >
                         {scannedUser.fullName.charAt(0).toUpperCase()}
                       </Text>
                     </View>
@@ -414,28 +481,49 @@ const QRScannerScreen = () => {
                 </View>
 
                 {/* User Info */}
-                <Text style={[styles.userName, { color: theme.text }]}>{scannedUser.fullName}</Text>
-                <Text style={[styles.userUsername, { color: theme.textSecondary }]}>@{scannedUser.username}</Text>
+                <Text style={[styles.userName, { color: theme.text }]}>
+                  {scannedUser.fullName}
+                </Text>
+                <Text
+                  style={[styles.userUsername, { color: theme.textSecondary }]}
+                >
+                  @{scannedUser.username}
+                </Text>
 
                 {scannedUser.university && (
                   <View style={styles.infoRow}>
-                    <Ionicons name="school-outline" size={16} color={theme.textSecondary} />
-                    <Text style={[styles.infoText, { color: theme.text }]}>{scannedUser.university}</Text>
+                    <Ionicons
+                      name="school-outline"
+                      size={16}
+                      color={theme.textSecondary}
+                    />
+                    <Text style={[styles.infoText, { color: theme.text }]}>
+                      {scannedUser.university}
+                    </Text>
                   </View>
                 )}
 
                 {scannedUser.bio && (
-                  <Text style={[styles.bioText, { color: theme.textSecondary }]}>{scannedUser.bio}</Text>
+                  <Text
+                    style={[styles.bioText, { color: theme.textSecondary }]}
+                  >
+                    {scannedUser.bio}
+                  </Text>
                 )}
 
                 {/* Waiting State */}
                 {waitingForAcceptance && (
                   <View style={styles.waitingContainer}>
-                    <ShimmerLoader variant="circular" size={48} />
+                    <ShimmerLoader variant="circle" size={48} />
                     <Text style={[styles.waitingTitle, { color: theme.text }]}>
                       Waiting for {scannedUser.fullName}...
                     </Text>
-                    <Text style={[styles.waitingText, { color: theme.textSecondary }]}>
+                    <Text
+                      style={[
+                        styles.waitingText,
+                        { color: theme.textSecondary },
+                      ]}
+                    >
                       They'll see a popup to accept you immediately!
                     </Text>
                   </View>
@@ -445,24 +533,43 @@ const QRScannerScreen = () => {
                 {!waitingForAcceptance && (
                   <View style={styles.buttonRow}>
                     <TouchableOpacity
-                      style={[styles.cancelButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                      style={[
+                        styles.cancelButton,
+                        {
+                          backgroundColor: theme.surface,
+                          borderColor: theme.border,
+                        },
+                      ]}
                       onPress={handleCancelPreview}
                       disabled={sending}
                     >
-                      <Text style={[styles.cancelButtonText, { color: theme.text }]}>Cancel</Text>
+                      <Text
+                        style={[styles.cancelButtonText, { color: theme.text }]}
+                      >
+                        Cancel
+                      </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                      style={[styles.sendButton, { backgroundColor: theme.primary }]}
+                      style={[
+                        styles.sendButton,
+                        { backgroundColor: theme.primary },
+                      ]}
                       onPress={handleSendFriendRequest}
                       disabled={sending}
                     >
                       {sending ? (
-                        <ShimmerLoader variant="circular" size={20} />
+                        <ShimmerLoader variant="circle" size={20} />
                       ) : (
                         <>
-                          <Ionicons name="person-add" size={20} color="#FFFFFF" />
-                          <Text style={styles.sendButtonText}>Send Request</Text>
+                          <Ionicons
+                            name="person-add"
+                            size={20}
+                            color="#FFFFFF"
+                          />
+                          <Text style={styles.sendButtonText}>
+                            Send Request
+                          </Text>
                         </>
                       )}
                     </TouchableOpacity>
@@ -483,8 +590,8 @@ const styles = StyleSheet.create({
   },
   centerContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     padding: 20,
   },
   messageText: {
@@ -493,13 +600,13 @@ const styles = StyleSheet.create({
   },
   permissionTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginTop: 16,
     marginBottom: 8,
   },
   permissionText: {
     fontSize: 16,
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: 24,
   },
   permissionButton: {
@@ -508,13 +615,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   permissionButtonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   cameraContainer: {
     flex: 1,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   camera: {
     flex: 1,
@@ -524,26 +631,26 @@ const styles = StyleSheet.create({
   },
   maskTop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
   },
   middleRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     height: 300,
   },
   maskSide: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
   },
   scannerFrame: {
     width: 300,
     height: 300,
-    position: 'relative',
+    position: "relative",
   },
   corner: {
-    position: 'absolute',
+    position: "absolute",
     width: 40,
     height: 40,
-    borderColor: '#FFFFFF',
+    borderColor: "#FFFFFF",
   },
   cornerTopLeft: {
     top: 0,
@@ -571,20 +678,20 @@ const styles = StyleSheet.create({
   },
   maskBottom: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
   },
   instructionsContainer: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 100,
     left: 0,
     right: 0,
-    alignItems: 'center',
+    alignItems: "center",
   },
   instructionsText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: '600',
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    fontWeight: "600",
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 20,
@@ -594,9 +701,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     padding: 16,
     borderRadius: 12,
     borderWidth: 2,
@@ -604,29 +711,29 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   previewModal: {
-    width: '90%',
+    width: "90%",
     maxWidth: 400,
     borderRadius: 20,
     padding: 24,
-    alignItems: 'center',
+    alignItems: "center",
   },
   closeButton: {
-    position: 'absolute',
+    position: "absolute",
     top: 16,
     right: 16,
     zIndex: 1,
   },
   loadingContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: 40,
   },
   loadingText: {
@@ -635,7 +742,7 @@ const styles = StyleSheet.create({
   },
   previewTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginTop: 8,
     marginBottom: 24,
   },
@@ -651,16 +758,16 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   avatarText: {
     fontSize: 40,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   userName: {
     fontSize: 22,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 4,
   },
   userUsername: {
@@ -668,8 +775,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     marginBottom: 12,
   },
@@ -678,57 +785,57 @@ const styles = StyleSheet.create({
   },
   bioText: {
     fontSize: 14,
-    textAlign: 'center',
+    textAlign: "center",
     marginTop: 8,
     marginBottom: 24,
     paddingHorizontal: 16,
   },
   waitingContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: 32,
     paddingHorizontal: 24,
-    width: '100%',
+    width: "100%",
   },
   waitingTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: "600",
     marginTop: 16,
     marginBottom: 8,
-    textAlign: 'center',
+    textAlign: "center",
   },
   waitingText: {
     fontSize: 14,
-    textAlign: 'center',
+    textAlign: "center",
   },
   buttonRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 12,
-    width: '100%',
+    width: "100%",
   },
   cancelButton: {
     flex: 1,
     paddingVertical: 14,
     borderRadius: 12,
-    alignItems: 'center',
+    alignItems: "center",
     borderWidth: 1,
   },
   cancelButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   sendButton: {
     flex: 1,
-    flexDirection: 'row',
+    flexDirection: "row",
     paddingVertical: 14,
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
   },
   sendButtonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 });
 

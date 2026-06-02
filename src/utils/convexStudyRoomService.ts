@@ -4,22 +4,10 @@
  * Real-time subscriptions are automatic with Convex useQuery.
  * The subscribeToStudyRoomMessages function is a no-op.
  */
-import { ConvexReactClient } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
-
-let _convexClient: ConvexReactClient | null = null;
-
-export function setConvexClient(client: ConvexReactClient) {
-  _convexClient = client;
-}
-
-function getClient(): ConvexReactClient {
-  if (!_convexClient) {
-    throw new Error("Convex client not initialized. Call setConvexClient first.");
-  }
-  return _convexClient;
-}
+import { getConvexClient } from "./convexClient";
+export { setConvexClient } from "./convexClient";
 
 // Re-export interfaces for backward compat
 export interface StudyRoom {
@@ -37,7 +25,12 @@ export interface StudyRoom {
   is_active: boolean;
   created_at: string;
   updated_at: string;
-  owner?: { id: string; username?: string; full_name?: string; avatar_url?: string };
+  owner?: {
+    id: string;
+    username?: string;
+    full_name?: string;
+    avatar_url?: string;
+  };
   participants?: StudyRoomParticipant[];
 }
 
@@ -49,7 +42,12 @@ export interface StudyRoomParticipant {
   left_at?: string;
   is_active: boolean;
   role: "owner" | "moderator" | "participant";
-  user?: { id: string; username?: string; full_name?: string; avatar_url?: string };
+  user?: {
+    id: string;
+    username?: string;
+    full_name?: string;
+    avatar_url?: string;
+  };
 }
 
 export interface StudyRoomInvitation {
@@ -62,7 +60,12 @@ export interface StudyRoomInvitation {
   created_at: string;
   responded_at?: string;
   room?: StudyRoom;
-  sender?: { id: string; username?: string; full_name?: string; avatar_url?: string };
+  sender?: {
+    id: string;
+    username?: string;
+    full_name?: string;
+    avatar_url?: string;
+  };
 }
 
 export interface StudyRoomMessage {
@@ -72,7 +75,12 @@ export interface StudyRoomMessage {
   content: string;
   message_type: "text" | "system" | "join" | "leave";
   created_at: string;
-  sender?: { id: string; username?: string; full_name?: string; avatar_url?: string };
+  sender?: {
+    id: string;
+    username?: string;
+    full_name?: string;
+    avatar_url?: string;
+  };
 }
 
 /**
@@ -88,7 +96,7 @@ export async function createStudyRoom(roomData: {
   break_duration?: number;
 }): Promise<{ success: boolean; error?: string; data?: StudyRoom }> {
   try {
-    const client = getClient();
+    const client = getConvexClient();
     const roomId = await client.mutation(api.studyRooms.create, {
       name: roomData.name,
       description: roomData.description,
@@ -126,10 +134,10 @@ export async function createStudyRoom(roomData: {
  * Join a study room
  */
 export async function joinStudyRoom(
-  roomIdOrCode: string
+  roomIdOrCode: string,
 ): Promise<{ success: boolean; error?: string; data?: StudyRoom }> {
   try {
-    const client = getClient();
+    const client = getConvexClient();
     // Try as room code first
     const room = await client.query(api.studyRooms.getByCode, {
       roomCode: roomIdOrCode,
@@ -146,10 +154,10 @@ export async function joinStudyRoom(
  * Leave a study room
  */
 export async function leaveStudyRoom(
-  roomId: string
+  roomId: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const client = getClient();
+    const client = getConvexClient();
     await client.mutation(api.studyRooms.leave, {
       roomId: roomId as Id<"studyRooms">,
     });
@@ -164,10 +172,10 @@ export async function leaveStudyRoom(
  */
 export async function sendStudyRoomMessage(
   roomId: string,
-  content: string
+  content: string,
 ): Promise<{ success: boolean; error?: string; data?: StudyRoomMessage }> {
   try {
-    const client = getClient();
+    const client = getConvexClient();
     const msgId = await client.mutation(api.studyRooms.sendMessage, {
       roomId: roomId as Id<"studyRooms">,
       content,
@@ -195,7 +203,7 @@ export async function sendStudyRoomMessage(
  */
 export function subscribeToStudyRoomMessages(
   _roomId: string,
-  _callback: (message: StudyRoomMessage) => void
+  _callback: (message: StudyRoomMessage) => void,
 ): () => void {
   return () => {};
 }
@@ -209,7 +217,7 @@ export async function getPublicStudyRooms(): Promise<{
   data?: StudyRoom[];
 }> {
   try {
-    const client = getClient();
+    const client = getConvexClient();
     const rooms = await client.query(api.studyRooms.list, { onlyActive: true });
     const adapted = (rooms ?? []).map((r) => ({
       id: r._id,
@@ -224,7 +232,9 @@ export async function getPublicStudyRooms(): Promise<{
       session_duration: r.sessionDuration ?? 25,
       break_duration: r.breakDuration ?? 5,
       is_active: r.isActive ?? false,
-      created_at: r._creationTime ? new Date(r._creationTime).toISOString() : "",
+      created_at: r._creationTime
+        ? new Date(r._creationTime).toISOString()
+        : "",
       updated_at: "",
     }));
     return { success: true, data: adapted as StudyRoom[] };
@@ -237,10 +247,14 @@ export async function getPublicStudyRooms(): Promise<{
  * Get study room members
  */
 export async function getStudyRoomMembers(
-  roomId: string
-): Promise<{ success: boolean; error?: string; data?: StudyRoomParticipant[] }> {
+  roomId: string,
+): Promise<{
+  success: boolean;
+  error?: string;
+  data?: StudyRoomParticipant[];
+}> {
   try {
-    const client = getClient();
+    const client = getConvexClient();
     const participants = await client.query(api.studyRooms.getParticipants, {
       roomId: roomId as Id<"studyRooms">,
     });
@@ -272,10 +286,10 @@ export async function getStudyRoomMembers(
  */
 export async function getStudyRoomMessages(
   roomId: string,
-  _limit: number = 50
+  _limit: number = 50,
 ): Promise<{ success: boolean; error?: string; data?: StudyRoomMessage[] }> {
   try {
-    const client = getClient();
+    const client = getConvexClient();
     const messages = await client.query(api.studyRooms.getMessages, {
       roomId: roomId as Id<"studyRooms">,
     });
@@ -284,8 +298,14 @@ export async function getStudyRoomMessages(
       room_id: m.roomId,
       sender_id: m.senderId,
       content: m.content,
-      message_type: (m.messageType ?? "text") as "text" | "system" | "join" | "leave",
-      created_at: m._creationTime ? new Date(m._creationTime).toISOString() : "",
+      message_type: (m.messageType ?? "text") as
+        | "text"
+        | "system"
+        | "join"
+        | "leave",
+      created_at: m._creationTime
+        ? new Date(m._creationTime).toISOString()
+        : "",
       sender: m.sender
         ? {
             id: m.sender._id,
@@ -296,6 +316,84 @@ export async function getStudyRoomMessages(
         : undefined,
     }));
     return { success: true, data: adapted };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function getPendingStudyRoomInvitations(): Promise<{
+  success: boolean;
+  data?: any[];
+}> {
+  try {
+    const client = getConvexClient();
+    const invitations = await client.query(
+      (api as any).studyRooms.getPendingInvitations,
+      {},
+    );
+    return { success: true, data: invitations ?? [] };
+  } catch {
+    return { success: true, data: [] };
+  }
+}
+
+export async function respondToStudyRoomInvitation(
+  invitationId: string,
+  response: "accepted" | "declined",
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const client = getConvexClient();
+    await client.mutation((api as any).studyRooms.respondToInvitation, {
+      invitationId: invitationId as Id<"studyRoomInvitations">,
+      response,
+    });
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function sendStudyRoomInvitation(
+  roomId: string,
+  recipientId: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const client = getConvexClient();
+    await client.mutation((api as any).studyRooms.sendInvitation, {
+      roomId: roomId as Id<"studyRooms">,
+      recipientId: recipientId as Id<"users">,
+    });
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function removeMemberFromStudyRoom(
+  roomId: string,
+  userId: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const client = getConvexClient();
+    await client.mutation((api as any).studyRooms.removeMember, {
+      roomId: roomId as Id<"studyRooms">,
+      userId: userId as Id<"users">,
+    });
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function deleteStudyRoom(
+  roomId: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const client = getConvexClient();
+    await client.mutation((api as any).studyRooms.deleteRoom, {
+      roomId: roomId as Id<"studyRooms">,
+    });
+    return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
   }

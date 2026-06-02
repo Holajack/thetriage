@@ -1,19 +1,10 @@
-import { ConvexReactClient } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { sendFriendRequest, respondToFriendRequest } from './convexFriendRequestService';
-
-let _convexClient: ConvexReactClient | null = null;
-
-export function setConvexClient(client: ConvexReactClient) {
-  _convexClient = client;
-}
-
-function getClient(): ConvexReactClient {
-  if (!_convexClient) {
-    throw new Error("Convex client not initialized. Call setConvexClient first.");
-  }
-  return _convexClient;
-}
+import {
+  sendFriendRequest,
+  respondToFriendRequest,
+} from "./convexFriendRequestService";
+import { getConvexClient } from "./convexClient";
+export { setConvexClient } from "./convexClient";
 
 export interface QRScanNotification {
   requestId: string;
@@ -34,7 +25,7 @@ export interface QRScanNotification {
  */
 export async function sendQRFriendRequest(
   recipientId: string,
-  isGalleryUpload: boolean = false
+  isGalleryUpload: boolean = false,
 ): Promise<{
   success: boolean;
   error?: string;
@@ -51,7 +42,7 @@ export async function sendQRFriendRequest(
 
     const requestId = result.data?.id;
     if (!requestId) {
-      return { success: false, error: 'Request created but ID not returned' };
+      return { success: false, error: "Request created but ID not returned" };
     }
 
     // For live scanning (not gallery), wait for immediate acceptance
@@ -60,7 +51,7 @@ export async function sendQRFriendRequest(
     return {
       success: true,
       requestId,
-      requiresWait
+      requiresWait,
     };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -74,50 +65,43 @@ export async function sendQRFriendRequest(
  */
 export async function waitForQRAcceptance(
   requestId: string,
-  timeoutSeconds: number = 30
+  timeoutSeconds: number = 30,
 ): Promise<{ accepted: boolean; error?: string }> {
   const startTime = Date.now();
   const timeoutMs = timeoutSeconds * 1000;
   const pollIntervalMs = 2000; // Poll every 2 seconds
-
-  console.log(`⏳ Waiting up to ${timeoutSeconds}s for QR acceptance...`);
 
   return new Promise((resolve) => {
     const checkInterval = setInterval(async () => {
       try {
         // Check if we've exceeded the timeout
         if (Date.now() - startTime > timeoutMs) {
-          console.log('⏰ QR acceptance timeout - falling back to pending request');
           clearInterval(checkInterval);
           resolve({ accepted: false });
           return;
         }
 
         // Check the friend request status via Convex
-        const client = getClient();
+        const client = getConvexClient();
         const result = await client.query(api.friends.getRequestStatus, {
           requestId: requestId as any,
         });
 
         if (!result) {
-          console.error('Request not found');
           clearInterval(checkInterval);
-          resolve({ accepted: false, error: 'Request not found' });
+          resolve({ accepted: false, error: "Request not found" });
           return;
         }
 
-        if (result.status === 'accepted') {
-          console.log('✅ QR request accepted immediately!');
+        if (result.status === "accepted") {
           clearInterval(checkInterval);
           resolve({ accepted: true });
-        } else if (result.status === 'declined') {
-          console.log('❌ QR request declined');
+        } else if (result.status === "declined") {
           clearInterval(checkInterval);
-          resolve({ accepted: false, error: 'Request declined' });
+          resolve({ accepted: false, error: "Request declined" });
         }
         // If still pending, continue polling
       } catch (error: any) {
-        console.error('Error in polling loop:', error);
         clearInterval(checkInterval);
         resolve({ accepted: false, error: error.message });
       }
@@ -135,18 +119,9 @@ export async function waitForQRAcceptance(
  * This is called by the QR owner when they see the acceptance popup
  */
 export async function acceptQRRequest(
-  requestId: string
+  requestId: string,
 ): Promise<{ success: boolean; error?: string }> {
-  console.log('🤝 Accepting QR friend request:', requestId);
-
-  const result = await respondToFriendRequest(requestId, 'accepted');
-
-  if (result.success) {
-    console.log('✅ QR friend request accepted!');
-  } else {
-    console.error('❌ Failed to accept QR request:', result.error);
-  }
-
+  const result = await respondToFriendRequest(requestId, "accepted");
   return result;
 }
 
@@ -154,12 +129,9 @@ export async function acceptQRRequest(
  * Decline a QR scan friend request
  */
 export async function declineQRRequest(
-  requestId: string
+  requestId: string,
 ): Promise<{ success: boolean; error?: string }> {
-  console.log('👋 Declining QR friend request:', requestId);
-
-  const result = await respondToFriendRequest(requestId, 'declined');
-
+  const result = await respondToFriendRequest(requestId, "declined");
   return result;
 }
 
@@ -169,14 +141,14 @@ export async function declineQRRequest(
  */
 export function subscribeToPendingQRRequests(
   userId: string,
-  onNewRequest: (notification: QRScanNotification) => void
+  onNewRequest: (notification: QRScanNotification) => void,
 ): { unsubscribe: () => void } {
   let pollInterval: NodeJS.Timeout;
   let lastCheckTime = Date.now();
 
   const checkForNewRequests = async () => {
     try {
-      const client = getClient();
+      const client = getConvexClient();
 
       // Get all pending incoming requests
       const requests = await client.query(api.friends.listRequests, {
@@ -188,7 +160,7 @@ export function subscribeToPendingQRRequests(
       }
 
       // Filter for new requests since last check
-      const newRequests = requests.filter(req => {
+      const newRequests = requests.filter((req) => {
         const creationTime = req._creationTime || 0;
         return creationTime > lastCheckTime;
       });
@@ -202,30 +174,31 @@ export function subscribeToPendingQRRequests(
             });
 
             if (senderProfile) {
-              console.log('📬 New QR scan request from:', senderProfile.username);
               onNewRequest({
                 requestId: request._id,
                 scannerId: request.senderId,
                 scannerProfile: {
-                  username: senderProfile.username || 'user',
-                  full_name: senderProfile.fullName || 'User',
+                  username: senderProfile.username || "user",
+                  full_name: senderProfile.fullName || "User",
                   avatar_url: senderProfile.avatarUrl,
                   university: senderProfile.university,
                   major: senderProfile.major,
                 },
-                timestamp: new Date(request._creationTime || Date.now()).toISOString(),
+                timestamp: new Date(
+                  request._creationTime || Date.now(),
+                ).toISOString(),
               });
             }
-          } catch (error) {
-            console.error('Error fetching sender profile:', error);
+          } catch {
+            // Error fetching sender profile
           }
         }
 
         // Update last check time to now
         lastCheckTime = Date.now();
       }
-    } catch (error) {
-      console.error('Error in QR request subscription:', error);
+    } catch {
+      // Error in QR request subscription
     }
   };
 
@@ -239,7 +212,6 @@ export function subscribeToPendingQRRequests(
     unsubscribe: () => {
       if (pollInterval) {
         clearInterval(pollInterval);
-        console.log('🔕 Unsubscribed from QR request notifications');
       }
     },
   };

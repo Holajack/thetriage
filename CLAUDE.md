@@ -1,91 +1,142 @@
-# Agent Instructions
+# CLAUDE.md — HikeWise
 
-> This file is mirrored across CLAUDE.md, AGENTS.md, and GEMINI.md so the same instructions load in any AI environment.
+> This file is instructions for Claude when working in this repo.
+> It's a living document. When Claude makes a mistake, we add a rule so it doesn't repeat.
+> Keep this file under ~150 lines. If it grows past that, split concerns into `.claude/rules/*.md`.
 
-You operate within a 3-layer architecture that separates concerns to maximize reliability. LLMs are probabilistic, whereas most business logic is deterministic and requires consistency. This system fixes that mismatch.
+---
 
-## The 3-Layer Architecture
+## 1. Project Overview
 
-**Layer 1: Directive (What to do)**
-- Basically just SOPs written in Markdown, live in `directives/`
-- Define the goals, inputs, tools/scripts to use, outputs, and edge cases
-- Natural language instructions, like you'd give a mid-level employee
+HikeWise is a student productivity app co-founded with Nikolai.
 
-**Layer 2: Orchestration (Decision making)**
-- This is you. Your job: intelligent routing.
-- Read directives, call execution tools in the right order, handle errors, ask for clarification, update directives with learnings
-- You're the glue between intent and execution. E.g you don't try scraping websites yourself—you read `directives/scrape_website.md` and come up with inputs/outputs and then run `execution/scrape_single_site.py`
+- Public presence: https://hikewise.app
+- Platform: [fill in — iOS/Android/web/all three]
+- Stage: Pre-launch, preparing for app store submission
 
-**Layer 3: Execution (Doing the work)**
-- Deterministic Python scripts in `execution/`
-- Environment variables, api tokens, etc are stored in `.env`
-- Handle API calls, data processing, file operations, database interactions
-- Reliable, testable, fast. Use scripts instead of manual work. Commented well.
+## 2. Tech Stack
 
-**Why this works:** if you do everything yourself, errors compound. 90% accuracy per step = 59% success over 5 steps. The solution is push complexity into deterministic code. That way you just focus on decision-making.
+- **Frontend:** React / Next.js (web), React Native or Expo (mobile)
+- **Backend:** [fill in — Node? Python? Supabase? Firebase?]
+- **Database:** [fill in]
+- **Auth:** [fill in]
+- **Hosting:** Vercel (web)
+- **Package manager:** [npm / pnpm / yarn — pick one and stick to it]
 
-## Operating Principles
+## 3. Task Management Protocol
 
-**1. Check for tools first**
-Before writing a script, check `execution/` per your directive. Only create new scripts if none exist.
+Before writing code for any non-trivial change, Claude must:
 
-**2. Self-anneal when things break**
-- Read error message and stack trace
-- Fix the script and test it again (unless it uses paid tokens/credits/etc—in which case you check w user first)
-- Update the directive with what you learned (API limits, timing, edge cases)
-- Example: you hit an API rate limit → you then look into API → find a batch endpoint that would fix → rewrite script to accommodate → test → update directive.
+1. **Plan first.** Write the plan to `tasks/todo.md` with numbered steps.
+2. **Verify the plan.** Check in with the user before starting implementation.
+3. **Track progress.** Mark items complete as you go.
+4. **Explain changes.** Give a high-level summary after each step.
+5. **Document results.** Add a review section to `tasks/todo.md`.
+6. **Capture lessons.** If a correction happens, add the rule to `lessons.md` and (if it's a repo-wide pattern) to this CLAUDE.md.
 
-**3. Update directives as you learn**
-Directives are living documents. When you discover API constraints, better approaches, common errors, or timing expectations—update the directive. But don't create or overwrite directives without asking unless explicitly told to. Directives are your instruction set and must be preserved (and improved upon over time, not extemporaneously used and then discarded).
+For small changes (single-file edits, typo fixes, minor refactors), skip the plan and just do it.
 
-## Self-annealing loop
+## 4. Core Principles
 
-Errors are learning opportunities. When something breaks:
-1. Fix it
-2. Update the tool
-3. Test tool, make sure it works
-4. Update directive to include new flow
-5. System is now stronger
+- **Simplicity first.** Make every change as simple as possible. Fewer lines, fewer abstractions, fewer dependencies.
+- **Root causes, not band-aids.** No `setTimeout` to hide race conditions. No `try/catch` to swallow errors. Fix the actual problem.
+- **Minimal impact.** Only touch what the task requires. Don't "helpfully" refactor adjacent code.
+- **Match the codebase.** Use the patterns already in this repo, even if you prefer others.
 
-## File Organization
+## 5. Code Quality — Hard Bans
 
-**Deliverables vs Intermediates:**
-- **Deliverables**: Google Sheets, Google Slides, or other cloud-based outputs that the user can access
-- **Intermediates**: Temporary files needed during processing
+These are not suggestions. They block review.
 
-**Directory structure:**
-- `.tmp/` - All intermediate files (dossiers, scraped data, temp exports). Never commit, always regenerated.
-- `execution/` - Python scripts (the deterministic tools)
-- `directives/` - SOPs in Markdown (the instruction set)
-- `.env` - Environment variables and API keys
-- `credentials.json`, `token.json` - Google OAuth credentials (required files, in `.gitignore`)
+- ✗ **Never** use `any` in TypeScript to silence type errors. Fix the type or use `unknown` + a narrowing check.
+- ✗ **Never** leave `console.log`, `print()`, or `debugger` statements in committed code.
+- ✗ **Never** use `setTimeout` / `setInterval` to paper over a timing or race condition bug.
+- ✗ **Never** catch an error and do nothing with it (no `catch (e) {}` or bare `except: pass`).
+- ✗ **Never** duplicate a function across files. If you need it twice, extract it.
+- ✗ **Never** add comments that just restate the code (`// increment counter` above `counter++`).
+- ✗ **Never** hardcode API keys, URLs with tokens, passwords, or connection strings. Use environment variables.
+- ✗ **Never** concatenate strings into SQL queries. Use parameterized queries or an ORM.
+- ✗ **Never** delete a test to make a build pass.
+- ✗ **Never** cast something to a permissive type (`as any`, `@ts-ignore`) to ship faster.
 
-**Key principle:** Local files are only for processing. Deliverables live in cloud services (Google Sheets, Slides, etc.) where the user can access them. Everything in `.tmp/` can be deleted and regenerated.
+## 6. Code Quality — Preferred Patterns
 
-## Creating New Agents
+- ✓ Small, focused functions (ideally under 30 lines, doing one thing).
+- ✓ Descriptive names over comments. `getActiveUserSubscriptions()` beats `// get subs` + `getSubs()`.
+- ✓ Error handling that does something: log with context, surface to the user, or retry with backoff.
+- ✓ Validation at trust boundaries (where user input enters your system, where API responses arrive).
+- ✓ Tests that check behavior, not implementation. "When I submit the form, the user is redirected" — not "the handler function was called once."
 
-To create a new agent capability:
+## 7. Naming Conventions
 
-1. **Create a directive** in `directives/[agent_name].md`:
-   - Define the goal clearly
-   - List required inputs
-   - Specify which execution scripts to use
-   - Define expected outputs
-   - Document edge cases and error handling
+- **Files:** `kebab-case.ts` for modules, `PascalCase.tsx` for React components.
+- **Functions / variables:** `camelCase`.
+- **Constants:** `SCREAMING_SNAKE_CASE` only for true constants (config values, magic strings).
+- **Types / interfaces / components:** `PascalCase`.
+- **Boolean variables:** start with `is`, `has`, `should`, `can` (`isLoading`, `hasAccess`).
+- **Event handlers:** start with `handle` or `on` (`handleSubmit`, `onClose`).
 
-2. **Create execution scripts** in `execution/`:
-   - One script per atomic operation
-   - Load config from `.env`
-   - Write outputs to `.tmp/`
-   - Return structured JSON for orchestration layer
+## 8. File Structure
 
-3. **Test the pipeline**:
-   - Run the directive manually
-   - Fix any errors (self-anneal)
-   - Update directive with learnings
+```
+src/
+├── components/       # Reusable UI components
+├── screens/ or pages/ # Top-level views / routes
+├── hooks/            # Custom React hooks
+├── lib/ or utils/    # Shared utilities (pure functions)
+├── services/         # API clients, external integrations
+├── types/            # TypeScript types/interfaces
+├── constants/        # App-wide constants
+└── __tests__/        # Tests mirroring the structure above
+```
 
-## Summary
+Keep files under 300 lines. If a component file grows past that, it probably needs splitting.
 
-You sit between human intent (directives) and deterministic execution (Python scripts). Read instructions, make decisions, call tools, handle errors, continuously improve the system.
+## 9. Security Requirements
 
-Be pragmatic. Be reliable. Self-anneal.
+- Secrets go in `.env.local` (never committed). Document required keys in `.env.example`.
+- All user input is validated server-side, even if validated on the client. Client validation is UX; server validation is security.
+- Never trust URL params, request bodies, or form data without schema validation (use Zod or similar).
+- Use HTTPS everywhere. Set `Secure` and `HttpOnly` flags on cookies.
+- Authentication checks happen on every protected route, not once at the edge.
+- Don't log PII (emails, user IDs are fine; names, addresses, phone numbers are not).
+
+## 10. Before Writing Code — Pre-flight Checklist
+
+Claude must do these before writing a single line for a non-trivial change:
+
+1. Read 2-3 existing files in the same area to understand the patterns.
+2. Check if a similar utility already exists (`grep` for keywords, search for similar function names).
+3. Confirm the approach with the user if any assumption feels shaky.
+
+## 11. After Writing Code — Self-Review Checklist
+
+Before saying "done," Claude must:
+
+1. Run the formatter: `npm run format` (or `ruff format .` for Python).
+2. Run the linter: `npm run lint` (or `ruff check .`).
+3. Run the tests: `npm test`.
+4. Re-read the diff and ask: "Would a senior engineer roll their eyes at any of this?"
+5. Remove any debug statements, commented-out code, or TODO markers added during development.
+
+## 12. Commands
+
+(Fill these in for your project. Claude will use them.)
+
+- Install deps: `npm install`
+- Run dev: `npm run dev`
+- Run tests: `npm test`
+- Run a single test: `npm test -- path/to/test.ts`
+- Lint: `npm run lint`
+- Format: `npm run format`
+- Type-check: `npm run typecheck`
+- Build: `npm run build`
+
+## 13. Lessons Learned
+
+When Claude does something wrong, add a rule here so it doesn't happen again.
+Start fresh with each project. Examples of what goes here:
+
+- ~~Claude tried to install `moment` — we use `date-fns` in this repo.~~
+- ~~Claude created a new `formatCurrency` util when one already exists in `lib/formatters.ts`.~~
+
+(Empty to start. Grow this file over time.)

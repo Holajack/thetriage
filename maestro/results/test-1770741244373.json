@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-02-10T16:34:07.046Z",
+  "flow": "discovery/explore-all-screens.yaml",
+  "exitCode": 1,
+  "passed": false,
+  "output": "\n\u001b[31m> Unknown Property: env\n\n/Users/jackenholland/AppDev/thetriage/maestro/flows/discovery/explore-all-screens.yaml:19\n╭──────────────────────────────────────────╮\n│ 17 |       EXPO_PUBLIC_TEST_MODE: \"true\" │\n│ 18 |                                     │\n│ 19 | - extendedWaitUntil:                │\n│     ^                                    │\n│ ╭──────────────────────────────────────╮ │\n│ │ The property `env` is not recognized │ │\n│ ╰──────────────────────────────────────╯ │\n│ 20 |     visible: \"Home\"                 │\n│ 21 |     timeout: 15000                  │\n╰──────────────────────────────────────────╯\u001b[39m\u001b[0m\n"
+}

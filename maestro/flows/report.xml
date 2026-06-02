@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<testsuites>
+  <testsuite name="Test Suite" device="iPhone 16 Pro Max - iOS 18.5 - AFE85668-108C-4F7D-9620-5EB2ECF135D6" tests="1" failures="1" time="20.0">
+    <testcase id="Explore All Screens" name="Explore All Screens" classname="Explore All Screens" time="20.0" status="ERROR">
+      <properties/>
+      <failure>Element not found: Text matching regex: Analytics</failure>
+    </testcase>
+  </testsuite>
+</testsuites>

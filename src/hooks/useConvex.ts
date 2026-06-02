@@ -80,7 +80,7 @@ export const useConvexTasks = () => {
     title: string,
     description: string = "",
     priority: string = "Medium",
-    subject: string = "General"
+    subject: string = "General",
   ) => {
     const id = await createTask({
       title,
@@ -88,25 +88,43 @@ export const useConvexTasks = () => {
       priority,
       category: subject,
     });
-    return { _id: id, id: id, title, description, priority, category: subject, status: "pending" };
+    return {
+      _id: id,
+      id: id,
+      title,
+      description,
+      priority,
+      category: subject,
+      status: "pending",
+    };
   };
 
   const updateTask = async (taskId: string, updates: Record<string, any>) => {
     const convexUpdates: Record<string, any> = {};
     // Map snake_case fields to camelCase Convex fields
     if (updates.title !== undefined) convexUpdates.title = updates.title;
-    if (updates.description !== undefined) convexUpdates.description = updates.description;
-    if (updates.priority !== undefined) convexUpdates.priority = updates.priority;
+    if (updates.description !== undefined)
+      convexUpdates.description = updates.description;
+    if (updates.priority !== undefined)
+      convexUpdates.priority = updates.priority;
     if (updates.status !== undefined) convexUpdates.status = updates.status;
-    if (updates.category !== undefined) convexUpdates.category = updates.category;
-    if (updates.due_date !== undefined) convexUpdates.dueDate = updates.due_date;
+    if (updates.category !== undefined)
+      convexUpdates.category = updates.category;
+    if (updates.due_date !== undefined)
+      convexUpdates.dueDate = updates.due_date;
     if (updates.dueDate !== undefined) convexUpdates.dueDate = updates.dueDate;
-    if (updates.estimated_minutes !== undefined) convexUpdates.estimatedMinutes = updates.estimated_minutes;
-    if (updates.estimatedMinutes !== undefined) convexUpdates.estimatedMinutes = updates.estimatedMinutes;
-    if (updates.actual_minutes !== undefined) convexUpdates.actualMinutes = updates.actual_minutes;
-    if (updates.actualMinutes !== undefined) convexUpdates.actualMinutes = updates.actualMinutes;
-    if (updates.completed_at !== undefined) convexUpdates.completedAt = updates.completed_at;
-    if (updates.completedAt !== undefined) convexUpdates.completedAt = updates.completedAt;
+    if (updates.estimated_minutes !== undefined)
+      convexUpdates.estimatedMinutes = updates.estimated_minutes;
+    if (updates.estimatedMinutes !== undefined)
+      convexUpdates.estimatedMinutes = updates.estimatedMinutes;
+    if (updates.actual_minutes !== undefined)
+      convexUpdates.actualMinutes = updates.actual_minutes;
+    if (updates.actualMinutes !== undefined)
+      convexUpdates.actualMinutes = updates.actualMinutes;
+    if (updates.completed_at !== undefined)
+      convexUpdates.completedAt = updates.completed_at;
+    if (updates.completedAt !== undefined)
+      convexUpdates.completedAt = updates.completedAt;
 
     await updateTaskMutation({
       taskId: taskId as Id<"tasks">,
@@ -206,44 +224,58 @@ export const useConvexLeaderboardWithFriends = () => {
   const currentUser = useQuery(api.users.me);
   const loading = globalData === undefined || friendsData === undefined;
 
-  const formatEntry = useCallback((entry: any, isCurrentUser: boolean) => ({
-    ...entry,
-    id: entry._id,
-    user_id: entry.userId,
-    is_current_user: isCurrentUser,
-    display_name: isCurrentUser
-      ? "You"
-      : entry.user?.fullName || entry.user?.username || "Unknown User",
-    avatar_url: entry.user?.avatarUrl,
-    subscription_tier: entry.user?.subscriptionTier || "free",
-    total_focus_time: entry.totalFocusTime ?? 0,
-    weekly_focus_time: entry.weeklyFocusTime ?? 0,
-    monthly_focus_time: entry.monthlyFocusTime ?? 0,
-    current_streak: entry.currentStreak ?? 0,
-    longest_streak: entry.longestStreak ?? 0,
-    total_sessions: entry.totalSessions ?? 0,
-    points: entry.points ?? 0,
-    level: entry.level ?? 1,
-  }), []);
+  const formatEntry = useCallback(
+    (entry: any, isCurrentUser: boolean) => ({
+      ...entry,
+      id: entry._id,
+      user_id: entry.userId,
+      is_current_user: isCurrentUser,
+      display_name: isCurrentUser
+        ? "You"
+        : entry.user?.fullName || entry.user?.username || "Unknown User",
+      avatar_url: entry.user?.avatarUrl,
+      subscription_tier: entry.user?.subscriptionTier || "free",
+      total_focus_time: entry.totalFocusTime ?? 0,
+      weekly_focus_time: entry.weeklyFocusTime ?? 0,
+      monthly_focus_time: entry.monthlyFocusTime ?? 0,
+      current_streak: entry.currentStreak ?? 0,
+      longest_streak: entry.longestStreak ?? 0,
+      total_sessions: entry.totalSessions ?? 0,
+      points: entry.points ?? 0,
+      level: entry.level ?? 1,
+    }),
+    [],
+  );
 
   const globalLeaderboard = useMemo(
-    () => (globalData ?? []).map((entry) =>
-      formatEntry(entry, currentUser ? entry.userId === currentUser._id : false)
-    ),
-    [globalData, currentUser, formatEntry]
+    () =>
+      (globalData ?? []).map((entry) =>
+        formatEntry(
+          entry,
+          currentUser ? entry.userId === currentUser._id : false,
+        ),
+      ),
+    [globalData, currentUser, formatEntry],
   );
 
   const friendsLeaderboard = useMemo(
-    () => (friendsData ?? []).map((entry) =>
-      formatEntry(entry, currentUser ? entry.userId === currentUser._id : false)
-    ),
-    [friendsData, currentUser, formatEntry]
+    () =>
+      (friendsData ?? []).map((entry) =>
+        formatEntry(
+          entry,
+          currentUser ? entry.userId === currentUser._id : false,
+        ),
+      ),
+    [friendsData, currentUser, formatEntry],
   );
 
-  const data = useMemo(() => ({
-    friendsLeaderboard,
-    globalLeaderboard,
-  }), [friendsLeaderboard, globalLeaderboard]);
+  const data = useMemo(
+    () => ({
+      friendsLeaderboard,
+      globalLeaderboard,
+    }),
+    [friendsLeaderboard, globalLeaderboard],
+  );
 
   return {
     data,
@@ -284,7 +316,7 @@ export const useConvexAchievements = () => {
 export const useConvexSubtasks = (taskId: string) => {
   const subtasks = useQuery(
     api.subtasks.listByTask,
-    taskId ? { taskId: taskId as Id<"tasks"> } : "skip"
+    taskId ? { taskId: taskId as Id<"tasks"> } : "skip",
   );
   const loading = subtasks === undefined;
 
@@ -363,19 +395,25 @@ export const useConvexStudyRooms = () => {
   const loading = rooms === undefined;
 
   // Memoize adapted array to prevent infinite loop from new array reference on every render
-  const adapted = useMemo(() => (rooms ?? []).map((r) => ({
-    ...r,
-    id: r._id,
-    creator_id: r.ownerId,
-    room_code: r.roomCode,
-    is_public: r.isPublic,
-    max_participants: r.maxParticipants,
-    current_participants: r.currentParticipants,
-    is_active: r.isActive,
-    session_duration: r.sessionDuration,
-    break_duration: r.breakDuration,
-    created_at: r._creationTime ? new Date(r._creationTime).toISOString() : "",
-  })), [rooms]);
+  const adapted = useMemo(
+    () =>
+      (rooms ?? []).map((r) => ({
+        ...r,
+        id: r._id,
+        creator_id: r.ownerId,
+        room_code: r.roomCode,
+        is_public: r.isPublic,
+        max_participants: r.maxParticipants,
+        current_participants: r.currentParticipants,
+        is_active: r.isActive,
+        session_duration: r.sessionDuration,
+        break_duration: r.breakDuration,
+        created_at: r._creationTime
+          ? new Date(r._creationTime).toISOString()
+          : "",
+      })),
+    [rooms],
+  );
 
   return {
     rooms: adapted,
@@ -401,9 +439,14 @@ export const useConvexFocusSession = () => {
 
   const startSession = async (
     roomId?: string,
-    sessionType: "individual" | "group" | "deep_work" | "balanced" | "sprint" = "individual",
+    sessionType:
+      | "individual"
+      | "group"
+      | "deep_work"
+      | "balanced"
+      | "sprint" = "individual",
     subject?: string,
-    taskId?: string
+    taskId?: string,
   ) => {
     const sessionId = await startMutation({
       sessionType,
@@ -436,8 +479,10 @@ export const useConvexFocusSession = () => {
     const endTime = new Date().toISOString();
     const duration = Math.floor(
       (new Date(endTime).getTime() -
-        new Date(currentSession.start_time || currentSession.startTime).getTime()) /
-        1000
+        new Date(
+          currentSession.start_time || currentSession.startTime,
+        ).getTime()) /
+        1000,
     );
 
     // Don't save sessions under 5 minutes
@@ -456,7 +501,8 @@ export const useConvexFocusSession = () => {
 
     try {
       await endMutation({
-        sessionId: (currentSession.id || currentSession._id) as Id<"focusSessions">,
+        sessionId: (currentSession.id ||
+          currentSession._id) as Id<"focusSessions">,
       });
 
       // Award Flint currency (1 per minute)
@@ -466,15 +512,13 @@ export const useConvexFocusSession = () => {
         try {
           // We need the user's current data to update flint
           // This is handled via a separate call since we can't query inside a callback
-          console.log(
-            `Flint to award: ${flintEarned} for ${minutesCompleted.toFixed(0)} minutes`
-          );
+          // Flint to award tracked internally
         } catch (flintError) {
-          console.error("Error awarding Flint:", flintError);
+          // Error awarding Flint
         }
       }
     } catch (error) {
-      console.error("Error ending session:", error);
+      // Error ending session
     }
 
     const result = {
@@ -495,7 +539,8 @@ export const useConvexFocusSession = () => {
   const pauseSession = async () => {
     if (!currentSession) return;
     await pauseMutation({
-      sessionId: (currentSession.id || currentSession._id) as Id<"focusSessions">,
+      sessionId: (currentSession.id ||
+        currentSession._id) as Id<"focusSessions">,
     });
     setIsSessionActive(false);
     setCurrentSession({ ...currentSession, status: "paused" });
@@ -505,7 +550,8 @@ export const useConvexFocusSession = () => {
   const resumeSession = async () => {
     if (!currentSession) return;
     await resumeMutation({
-      sessionId: (currentSession.id || currentSession._id) as Id<"focusSessions">,
+      sessionId: (currentSession.id ||
+        currentSession._id) as Id<"focusSessions">,
     });
     setIsSessionActive(true);
     setCurrentSession({ ...currentSession, status: "active" });
@@ -610,23 +656,31 @@ export const useConvexProfile = () => {
   };
 
   // Adapt to match profile shape (memoized to prevent infinite re-render loops)
-  const profile = useMemo(() => user
-    ? {
-        ...user,
-        id: user._id,
-        user_id: user._id,
-        full_name: user.fullName,
-        avatar_url: user.avatarUrl,
-        subscription_tier: user.subscriptionTier,
-        trail_buddy_type: user.trailBuddyType,
-        trail_buddy_name: user.trailBuddyName,
-        flint_currency: user.flintCurrency,
-        first_session_bonus_claimed: user.firstSessionBonusClaimed,
-        environment_theme: user.environmentTheme,
-        created_at: user._creationTime ? new Date(user._creationTime).toISOString() : "",
-        updated_at: user._creationTime ? new Date(user._creationTime).toISOString() : "",
-      }
-    : null, [user]);
+  const profile = useMemo(
+    () =>
+      user
+        ? {
+            ...user,
+            id: user._id,
+            user_id: user._id,
+            full_name: user.fullName,
+            avatar_url: user.avatarUrl,
+            subscription_tier: user.subscriptionTier,
+            trail_buddy_type: user.trailBuddyType,
+            trail_buddy_name: user.trailBuddyName,
+            flint_currency: user.flintCurrency,
+            first_session_bonus_claimed: user.firstSessionBonusClaimed,
+            environment_theme: user.environmentTheme,
+            created_at: user._creationTime
+              ? new Date(user._creationTime).toISOString()
+              : "",
+            updated_at: user._creationTime
+              ? new Date(user._creationTime).toISOString()
+              : "",
+          }
+        : null,
+    [user],
+  );
 
   return {
     profile,

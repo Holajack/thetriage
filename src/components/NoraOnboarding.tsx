@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -6,17 +6,23 @@ import {
   Pressable,
   ScrollView,
   Linking,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../context/ThemeContext';
-import { useMutation } from 'convex/react';
-import { api } from '../../convex/_generated/api';
-import { LiquidGlassCard } from './premium/LiquidGlass';
-import { StaggeredItem } from './premium/StaggeredList';
-import { Typography, Spacing, BorderRadius, AnimationConfig, TimingConfig } from '../theme/premiumTheme';
-import * as Haptics from 'expo-haptics';
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
+import { useMutation } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import { LiquidGlassCard } from "./premium/LiquidGlass";
+import { StaggeredItem } from "./premium/StaggeredList";
+import {
+  Typography,
+  Spacing,
+  BorderRadius,
+  AnimationConfig,
+  TimingConfig,
+} from "../theme/premiumTheme";
+import * as Haptics from "expo-haptics";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -24,7 +30,7 @@ import Animated, {
   withSpring,
   withDelay,
   runOnJS,
-} from 'react-native-reanimated';
+} from "react-native-reanimated";
 
 interface NoraOnboardingProps {
   visible: boolean;
@@ -54,7 +60,11 @@ function GroupedCard({
 }) {
   const { theme } = useTheme();
   return (
-    <LiquidGlassCard intensity="subtle" borderRadius={BorderRadius.lg} padding={0}>
+    <LiquidGlassCard
+      intensity="subtle"
+      borderRadius={BorderRadius.lg}
+      padding={0}
+    >
       {title && (
         <>
           <Pressable
@@ -62,26 +72,56 @@ function GroupedCard({
             disabled={!onTitlePress}
             style={groupStyles.titleRow}
           >
-            <Text style={[groupStyles.titleText, { color: onTitlePress ? theme.primary : theme.text }]}>
+            <Text
+              style={[
+                groupStyles.titleText,
+                { color: onTitlePress ? theme.primary : theme.text },
+              ]}
+            >
               {title}
             </Text>
             {titleIcon && (
-              <Ionicons name={titleIcon as any} size={16} color={theme.primary} />
+              <Ionicons
+                name={titleIcon as any}
+                size={16}
+                color={theme.primary}
+              />
             )}
           </Pressable>
-          <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.border ?? 'rgba(0,0,0,0.08)' }} />
+          <View
+            style={{
+              height: StyleSheet.hairlineWidth,
+              backgroundColor: theme.border ?? "rgba(0,0,0,0.08)",
+            }}
+          />
         </>
       )}
       {items.map((item, index) => (
         <React.Fragment key={index}>
           {index > 0 && (
-            <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.border ?? 'rgba(0,0,0,0.08)' }} />
+            <View
+              style={{
+                height: StyleSheet.hairlineWidth,
+                backgroundColor: theme.border ?? "rgba(0,0,0,0.08)",
+              }}
+            />
           )}
           <View style={groupStyles.itemRow}>
-            <View style={[groupStyles.iconCircle, { backgroundColor: item.iconBgColor }]}>
-              <Ionicons name={item.icon as any} size={20} color={item.iconColor} />
+            <View
+              style={[
+                groupStyles.iconCircle,
+                { backgroundColor: item.iconBgColor },
+              ]}
+            >
+              <Ionicons
+                name={item.icon as any}
+                size={20}
+                color={item.iconColor}
+              />
             </View>
-            <Text style={[groupStyles.itemText, { color: theme.text }]}>{item.text}</Text>
+            <Text style={[groupStyles.itemText, { color: theme.text }]}>
+              {item.text}
+            </Text>
           </View>
         </React.Fragment>
       ))}
@@ -91,20 +131,20 @@ function GroupedCard({
 
 const groupStyles = StyleSheet.create({
   titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm + 2,
   },
   titleText: {
     fontSize: 15,
-    fontWeight: '600' as const,
+    fontWeight: "600" as const,
     letterSpacing: -0.1,
   },
   itemRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     gap: Spacing.sm,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
@@ -113,13 +153,13 @@ const groupStyles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     flexShrink: 0,
   },
   itemText: {
     fontSize: 16,
-    fontWeight: '500' as const,
+    fontWeight: "500" as const,
     lineHeight: 24,
     letterSpacing: -0.1,
     flex: 1,
@@ -142,18 +182,26 @@ function AcknowledgedBadge() {
   }));
 
   return (
-    <Animated.View style={[badgeStyles.container, { backgroundColor: theme.primary + '20' }, animStyle]}>
+    <Animated.View
+      style={[
+        badgeStyles.container,
+        { backgroundColor: theme.primary + "20" },
+        animStyle,
+      ]}
+    >
       <Ionicons name="checkmark-circle" size={16} color={theme.primary} />
-      <Text style={[badgeStyles.text, { color: theme.primary }]}>Acknowledged</Text>
+      <Text style={[badgeStyles.text, { color: theme.primary }]}>
+        Acknowledged
+      </Text>
     </Animated.View>
   );
 }
 
 const badgeStyles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "center",
     paddingVertical: Spacing.xs,
     paddingHorizontal: Spacing.sm,
     borderRadius: BorderRadius.full,
@@ -162,44 +210,44 @@ const badgeStyles = StyleSheet.create({
   },
   text: {
     ...Typography.caption,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 });
 
 // ── Policy items ──
 const POLICY_ITEMS: CardItem[] = [
   {
-    icon: 'shield-checkmark',
-    iconColor: '#3B82F6',
-    iconBgColor: 'rgba(96,165,250,0.19)',
-    text: 'Your conversations may be reviewed to keep things safe and improve Nora. Avoid sharing sensitive info like passwords or SSNs.',
+    icon: "shield-checkmark",
+    iconColor: "#3B82F6",
+    iconBgColor: "rgba(96,165,250,0.19)",
+    text: "Your conversations may be reviewed to keep things safe and improve Nora. Avoid sharing sensitive info like passwords or SSNs.",
   },
   {
-    icon: 'eye-outline',
-    iconColor: '#F59E0B',
-    iconBgColor: 'rgba(252,211,77,0.19)',
-    text: 'Flagged conversations may be reviewed by our team. We use these interactions to make Nora better over time.',
+    icon: "eye-outline",
+    iconColor: "#F59E0B",
+    iconBgColor: "rgba(252,211,77,0.19)",
+    text: "Flagged conversations may be reviewed by our team. We use these interactions to make Nora better over time.",
   },
 ];
 
 const DISCLAIMER_ITEMS: CardItem[] = [
   {
-    icon: 'alert-circle',
-    iconColor: '#F59E0B',
-    iconBgColor: 'rgba(252,211,77,0.19)',
-    text: 'I can make mistakes — always double-check important information.',
+    icon: "alert-circle",
+    iconColor: "#F59E0B",
+    iconBgColor: "rgba(252,211,77,0.19)",
+    text: "I can make mistakes — always double-check important information.",
   },
   {
-    icon: 'school-outline',
-    iconColor: '#3B82F6',
-    iconBgColor: 'rgba(96,165,250,0.19)',
+    icon: "school-outline",
+    iconColor: "#3B82F6",
+    iconBgColor: "rgba(96,165,250,0.19)",
     text: "I'm a study tool, not a replacement for professional academic, medical, or legal advice. Don't rely on me alone without doing your own research.",
   },
   {
-    icon: 'construct-outline',
-    iconColor: '#D97706',
-    iconBgColor: '#FEF3C7',
-    text: 'My features and capabilities may change as I\'m updated and improved.',
+    icon: "construct-outline",
+    iconColor: "#D97706",
+    iconBgColor: "#FEF3C7",
+    text: "My features and capabilities may change as I'm updated and improved.",
   },
 ];
 
@@ -229,8 +277,8 @@ export default function NoraOnboarding({
   const disclaimerTranslateY = useSharedValue(30);
 
   const getFirstName = useCallback(() => {
-    if (!user?.full_name) return 'there';
-    return user.full_name.split(/[_\s]/)[0] || 'there';
+    if (!user?.full_name) return "there";
+    return user.full_name.split(/[_\s]/)[0] || "there";
   }, [user?.full_name]);
 
   // Entrance / exit
@@ -243,11 +291,17 @@ export default function NoraOnboarding({
       stepTranslateX.value = 0;
       disclaimerOpacity.value = 0;
       disclaimerTranslateY.value = 30;
-      containerOpacity.value = withTiming(1, { duration: TimingConfig.entrance });
-    } else if (isRendered) {
-      containerOpacity.value = withTiming(0, { duration: TimingConfig.fast }, () => {
-        runOnJS(setIsRendered)(false);
+      containerOpacity.value = withTiming(1, {
+        duration: TimingConfig.entrance,
       });
+    } else if (isRendered) {
+      containerOpacity.value = withTiming(
+        0,
+        { duration: TimingConfig.fast },
+        () => {
+          runOnJS(setIsRendered)(false);
+        },
+      );
     }
   }, [visible]);
 
@@ -295,8 +349,14 @@ export default function NoraOnboarding({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       // Animate disclaimers in
-      disclaimerOpacity.value = withDelay(200, withTiming(1, { duration: 400 }));
-      disclaimerTranslateY.value = withDelay(200, withSpring(0, AnimationConfig.gentle));
+      disclaimerOpacity.value = withDelay(
+        200,
+        withTiming(1, { duration: 400 }),
+      );
+      disclaimerTranslateY.value = withDelay(
+        200,
+        withSpring(0, AnimationConfig.gentle),
+      );
 
       // Auto-scroll down to show disclaimers
       setTimeout(() => {
@@ -307,11 +367,17 @@ export default function NoraOnboarding({
       try {
         await completeOnboarding();
       } catch (e) {
-        console.error('[NoraOnboarding] Failed to complete:', e);
+        // Failed to complete onboarding
       }
       onComplete();
     }
-  }, [currentStep, hasAcknowledged, animateToStep, completeOnboarding, onComplete]);
+  }, [
+    currentStep,
+    hasAcknowledged,
+    animateToStep,
+    completeOnboarding,
+    onComplete,
+  ]);
 
   const handleButtonPressIn = useCallback(() => {
     buttonScale.value = withSpring(0.97, AnimationConfig.snappy);
@@ -325,8 +391,8 @@ export default function NoraOnboarding({
 
   // ── Button text & state ──
   const getButtonText = () => {
-    if (currentStep === 0) return 'Continue';
-    if (!hasAcknowledged) return 'Acknowledge & Continue';
+    if (currentStep === 0) return "Continue";
+    if (!hasAcknowledged) return "Acknowledge & Continue";
     return "Sounds Good, Let's Begin";
   };
 
@@ -339,9 +405,15 @@ export default function NoraOnboarding({
             Hi {getFirstName()}, I'm Nora.
           </Text>
           <Text style={[styles.body, { color: theme.text }]}>
-            I'm your AI study companion — here to help you understand tricky topics, build study plans, and stay on track with your goals.
+            I'm your AI study companion — here to help you understand tricky
+            topics, build study plans, and stay on track with your goals.
           </Text>
-          <Text style={[styles.body, { color: theme.textSecondary ?? '#888', marginTop: Spacing.lg }]}>
+          <Text
+            style={[
+              styles.body,
+              { color: theme.textSecondary ?? "#888", marginTop: Spacing.lg },
+            ]}
+          >
             Let's get a couple things out of the way first.
           </Text>
         </>
@@ -354,8 +426,14 @@ export default function NoraOnboarding({
         <Text style={[styles.heading, { color: theme.text }]}>
           A few things to know
         </Text>
-        <Text style={[styles.body, { color: theme.textSecondary ?? '#888', marginBottom: Spacing.lg }]}>
-          Your privacy matters. Here's how we handle your data when you chat with Nora.
+        <Text
+          style={[
+            styles.body,
+            { color: theme.textSecondary ?? "#888", marginBottom: Spacing.lg },
+          ]}
+        >
+          Your privacy matters. Here's how we handle your data when you chat
+          with Nora.
         </Text>
 
         {/* Policies grouped card */}
@@ -363,7 +441,7 @@ export default function NoraOnboarding({
           <GroupedCard
             title="Privacy & Acceptable Use"
             titleIcon="open-outline"
-            onTitlePress={() => Linking.openURL('https://hikewise.app/privacy')}
+            onTitlePress={() => Linking.openURL("https://hikewise.app/privacy")}
             items={POLICY_ITEMS}
           />
         </StaggeredItem>
@@ -393,15 +471,20 @@ export default function NoraOnboarding({
       ]}
     >
       {/* Progress dots (2 steps) */}
-      <View style={[styles.progressRow, { marginTop: insets.top + Spacing.md }]}>
+      <View
+        style={[styles.progressRow, { marginTop: insets.top + Spacing.md }]}
+      >
         {[0, 1].map((i) => (
           <View
             key={i}
             style={[
               styles.dot,
-              { backgroundColor: theme.border ?? '#E0E0E0' },
-              i === currentStep && { width: 20, backgroundColor: theme.primary },
-              i < currentStep && { backgroundColor: theme.primary + '99' },
+              { backgroundColor: theme.border ?? "#E0E0E0" },
+              i === currentStep && {
+                width: 20,
+                backgroundColor: theme.primary,
+              },
+              i < currentStep && { backgroundColor: theme.primary + "99" },
             ]}
           />
         ))}
@@ -409,8 +492,15 @@ export default function NoraOnboarding({
 
       {/* Skip button (only when not first time) */}
       {!isFirstTime && (
-        <Pressable onPress={onSkip} style={[styles.skipButton, { top: insets.top + Spacing.sm }]}>
-          <Text style={[styles.skipText, { color: theme.textSecondary ?? '#888' }]}>Skip</Text>
+        <Pressable
+          onPress={onSkip}
+          style={[styles.skipButton, { top: insets.top + Spacing.sm }]}
+        >
+          <Text
+            style={[styles.skipText, { color: theme.textSecondary ?? "#888" }]}
+          >
+            Skip
+          </Text>
         </Pressable>
       )}
 
@@ -421,13 +511,13 @@ export default function NoraOnboarding({
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 140 }]}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View style={stepStyle}>
-          {renderStep()}
-        </Animated.View>
+        <Animated.View style={stepStyle}>{renderStep()}</Animated.View>
       </ScrollView>
 
       {/* Footer button */}
-      <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.lg }]}>
+      <View
+        style={[styles.footer, { paddingBottom: insets.bottom + Spacing.lg }]}
+      >
         <Animated.View style={buttonAnimStyle}>
           <Pressable
             onPress={handleContinue}
@@ -437,7 +527,12 @@ export default function NoraOnboarding({
           >
             <Text style={styles.buttonText}>{getButtonText()}</Text>
             {hasAcknowledged && currentStep === 1 && (
-              <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={{ marginLeft: 8 }} />
+              <Ionicons
+                name="arrow-forward"
+                size={18}
+                color="#FFFFFF"
+                style={{ marginLeft: 8 }}
+              />
             )}
           </Pressable>
         </Animated.View>
@@ -448,9 +543,9 @@ export default function NoraOnboarding({
 
 const styles = StyleSheet.create({
   progressRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
     gap: 8,
     marginBottom: Spacing.sm,
   },
@@ -460,13 +555,13 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   skipButton: {
-    position: 'absolute',
+    position: "absolute",
     right: Spacing.lg,
     zIndex: 10,
   },
   skipText: {
     ...Typography.body,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   scrollView: {
     flex: 1,
@@ -485,7 +580,7 @@ const styles = StyleSheet.create({
   },
   body: {
     fontSize: 18,
-    fontWeight: '500' as const,
+    fontWeight: "500" as const,
     lineHeight: 28,
     letterSpacing: -0.1,
   },
@@ -494,15 +589,15 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.md,
   },
   button: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
     paddingVertical: Spacing.md,
     borderRadius: BorderRadius.lg,
   },
   buttonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 17,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 });

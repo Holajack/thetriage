@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, internalMutation } from "./_generated/server";
+import { internalMutation } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 
 // ============================================================
@@ -7,7 +7,7 @@ import { Id } from "./_generated/dataModel";
 // ============================================================
 
 /** Seed all quiz categories */
-export const seedCategories = mutation({
+export const seedCategories = internalMutation({
   args: {},
   handler: async (ctx) => {
     // Check if categories already exist
@@ -70,7 +70,8 @@ export const seedCategories = mutation({
         color: "#00BCD4",
         order: 5,
         isActive: true,
-        researchBasis: "Locke & Latham Goal Setting Theory, Implementation Intentions",
+        researchBasis:
+          "Locke & Latham Goal Setting Theory, Implementation Intentions",
       },
       {
         slug: "stress_anxiety",
@@ -81,7 +82,8 @@ export const seedCategories = mutation({
         color: "#E91E63",
         order: 6,
         isActive: true,
-        researchBasis: "Test Anxiety Inventory, STAI, Academic Buoyancy Research",
+        researchBasis:
+          "Test Anxiety Inventory, STAI, Academic Buoyancy Research",
       },
     ];
 
@@ -105,7 +107,7 @@ export const seedCategories = mutation({
 /** Helper to seed sub-dimensions for all categories */
 async function seedSubDimensions(
   ctx: any,
-  categoryIds: Record<string, Id<"quizCategories">>
+  categoryIds: Record<string, Id<"quizCategories">>,
 ) {
   const subDimensions = [
     // STUDY HABITS
@@ -424,7 +426,7 @@ async function seedSubDimensions(
 }
 
 /** Seed sample questions for testing */
-export const seedTestQuestions = mutation({
+export const seedTestQuestions = internalMutation({
   args: { categorySlug: v.string() },
   handler: async (ctx, args) => {
     // Get category
@@ -466,7 +468,7 @@ export const seedTestQuestions = mutation({
         category.slug,
         subDim.slug,
         category._id,
-        subDim._id
+        subDim._id,
       );
 
       for (const q of questions) {
@@ -493,7 +495,7 @@ function generateSampleQuestions(
   categorySlug: string,
   subDimSlug: string,
   categoryId: Id<"quizCategories">,
-  subDimensionId: Id<"quizSubDimensions">
+  subDimensionId: Id<"quizSubDimensions">,
 ): any[] {
   // Likert 5-point options
   const likertOptions = [
@@ -765,7 +767,7 @@ function generateSampleQuestions(
 }
 
 /** Seed all test questions for all categories */
-export const seedAllTestQuestions = mutation({
+export const seedAllTestQuestions = internalMutation({
   args: {},
   handler: async (ctx) => {
     const categories = await ctx.db
@@ -804,7 +806,7 @@ export const seedAllTestQuestions = mutation({
           category.slug,
           subDim.slug,
           category._id,
-          subDim._id
+          subDim._id,
         );
 
         for (const q of questions) {
@@ -828,7 +830,7 @@ export const seedAllTestQuestions = mutation({
 });
 
 /** Update category icons to valid Ionicons */
-export const updateCategoryIcons = mutation({
+export const updateCategoryIcons = internalMutation({
   args: {},
   handler: async (ctx) => {
     const iconMap: Record<string, string> = {
@@ -859,11 +861,13 @@ export const updateCategoryIcons = mutation({
 });
 
 /** Reset all quiz data (for development) */
-export const resetQuizData = mutation({
+export const resetQuizData = internalMutation({
   args: { confirmReset: v.boolean() },
   handler: async (ctx, args) => {
     if (!args.confirmReset) {
-      return { message: "Reset cancelled. Pass confirmReset: true to proceed." };
+      return {
+        message: "Reset cancelled. Pass confirmReset: true to proceed.",
+      };
     }
 
     // Delete in order to respect foreign keys
