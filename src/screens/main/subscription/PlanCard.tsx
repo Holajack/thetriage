@@ -1,12 +1,18 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { AnimatedButton } from '../../../components/premium/AnimatedButton';
-import { useTheme } from '../../../context/ThemeContext';
-import { Typography, Spacing, BorderRadius, Shadows, PremiumColors } from '../../../theme/premiumTheme';
-import type { BillingPeriod } from './BillingToggle';
+import React from "react";
+import { View, Text, StyleSheet } from "react-native";
+import Animated, { FadeIn } from "react-native-reanimated";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { AnimatedButton } from "../../../components/premium/AnimatedButton";
+import { useTheme } from "../../../context/ThemeContext";
+import {
+  Typography,
+  Spacing,
+  BorderRadius,
+  Shadows,
+  PremiumColors,
+} from "../../../theme/premiumTheme";
+import type { BillingPeriod } from "./BillingToggle";
 
 export interface PlanFeature {
   text: string;
@@ -16,11 +22,11 @@ export interface PlanFeature {
 
 export interface PlanTier {
   name: string;
-  tier: 'premium' | 'elite';
+  tier: "basic" | "premium" | "elite";
   monthlyPrice: number;
   annualPrice: number;
   annualMonthlyEquivalent: number;
-  badge: string | null;
+  badge?: string | null;
   tagline: string;
   features: PlanFeature[];
   gradient: string[];
@@ -47,28 +53,45 @@ const PlanCard: React.FC<PlanCardProps> = ({
 }) => {
   const { theme } = useTheme();
 
-  const price = billingPeriod === 'monthly' ? plan.monthlyPrice : plan.annualPrice;
-  const priceLabel = billingPeriod === 'monthly'
-    ? `$${price.toFixed(2)}/mo`
-    : `$${price.toFixed(2)}/yr`;
-  const monthlyEquivalent = billingPeriod === 'annual'
-    ? `$${plan.annualMonthlyEquivalent.toFixed(2)}/mo`
-    : null;
+  const price =
+    billingPeriod === "monthly" ? plan.monthlyPrice : plan.annualPrice;
+  const priceLabel =
+    billingPeriod === "monthly"
+      ? `$${price.toFixed(2)}/mo`
+      : `$${price.toFixed(2)}/yr`;
+  const monthlyEquivalent =
+    billingPeriod === "annual"
+      ? `$${plan.annualMonthlyEquivalent.toFixed(2)}/mo`
+      : null;
 
   return (
-    <View style={[
-      styles.card,
-      { backgroundColor: theme.card, borderColor: theme.border },
-      isRecommended && { ...Shadows.lg, borderColor: plan.gradient[0], borderWidth: 2 },
-      isCurrent && { opacity: 0.7 },
-    ]}>
+    <View
+      style={[
+        styles.card,
+        { backgroundColor: theme.card, borderColor: theme.border },
+        isRecommended && {
+          ...Shadows.lg,
+          borderColor: plan.gradient[0],
+          borderWidth: 2,
+        },
+        isCurrent && { opacity: 0.7 },
+      ]}
+    >
       {/* Badge */}
       {plan.badge && (
-        <Animated.View entering={FadeIn.delay(300)} style={styles.badgeContainer}>
+        <Animated.View
+          entering={FadeIn.delay(300)}
+          style={styles.badgeContainer}
+        >
           <LinearGradient
-            colors={isRecommended
-              ? (PremiumColors.gradients.premium as [string, string, ...string[]])
-              : (PremiumColors.gradients.gold as [string, string])
+            colors={
+              isRecommended
+                ? (PremiumColors.gradients.premium as [
+                    string,
+                    string,
+                    ...string[],
+                  ])
+                : (PremiumColors.gradients.gold as [string, string])
             }
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
@@ -81,15 +104,21 @@ const PlanCard: React.FC<PlanCardProps> = ({
 
       {/* Header */}
       <View style={styles.header}>
-        <Text style={[styles.planName, { color: plan.gradient[0] }]}>{plan.name}</Text>
-        <Text style={[styles.tagline, { color: theme.textSecondary }]}>{plan.tagline}</Text>
+        <Text style={[styles.planName, { color: plan.gradient[0] }]}>
+          {plan.name}
+        </Text>
+        <Text style={[styles.tagline, { color: theme.textSecondary }]}>
+          {plan.tagline}
+        </Text>
       </View>
 
       {/* Price */}
       <View style={styles.priceContainer}>
         <Text style={[styles.price, { color: theme.text }]}>{priceLabel}</Text>
         {monthlyEquivalent && (
-          <Text style={[styles.monthlyEquivalent, { color: theme.textSecondary }]}>
+          <Text
+            style={[styles.monthlyEquivalent, { color: theme.textSecondary }]}
+          >
             ({monthlyEquivalent} billed annually)
           </Text>
         )}
@@ -100,16 +129,18 @@ const PlanCard: React.FC<PlanCardProps> = ({
         {plan.features.map((feature, i) => (
           <View key={i} style={styles.featureRow}>
             <Ionicons
-              name={feature.highlight ? 'sparkles' : 'checkmark-circle'}
+              name={feature.highlight ? "sparkles" : "checkmark-circle"}
               size={18}
-              color={feature.highlight ? '#8B5CF6' : PremiumColors.success.main}
+              color={feature.highlight ? "#8B5CF6" : PremiumColors.success.main}
               style={{ marginRight: 8 }}
             />
-            <Text style={[
-              styles.featureText,
-              { color: theme.text },
-              feature.highlight && styles.featureHighlight,
-            ]}>
+            <Text
+              style={[
+                styles.featureText,
+                { color: theme.text },
+                feature.highlight && styles.featureHighlight,
+              ]}
+            >
               {feature.text}
             </Text>
           </View>
@@ -119,8 +150,14 @@ const PlanCard: React.FC<PlanCardProps> = ({
       {/* CTA */}
       {isCurrent ? (
         <View style={[styles.currentBadge, { borderColor: theme.border }]}>
-          <Ionicons name="checkmark-circle" size={20} color={PremiumColors.success.main} />
-          <Text style={[styles.currentText, { color: theme.textSecondary }]}>Current Plan</Text>
+          <Ionicons
+            name="checkmark-circle"
+            size={20}
+            color={PremiumColors.success.main}
+          />
+          <Text style={[styles.currentText, { color: theme.textSecondary }]}>
+            Current Plan
+          </Text>
         </View>
       ) : (
         <AnimatedButton
@@ -149,12 +186,12 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   badgeContainer: {
-    position: 'absolute',
+    position: "absolute",
     top: -14,
-    alignSelf: 'center',
+    alignSelf: "center",
     left: 0,
     right: 0,
-    alignItems: 'center',
+    alignItems: "center",
     zIndex: 2,
   },
   badge: {
@@ -163,9 +200,9 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
   },
   badgeText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
     letterSpacing: 0.5,
   },
   header: {
@@ -184,7 +221,7 @@ const styles = StyleSheet.create({
   },
   price: {
     fontSize: 32,
-    fontWeight: '800',
+    fontWeight: "800",
     letterSpacing: -0.5,
   },
   monthlyEquivalent: {
@@ -195,8 +232,8 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
   },
   featureRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 10,
   },
   featureText: {
@@ -204,13 +241,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   featureHighlight: {
-    fontWeight: '600',
-    color: '#8B5CF6',
+    fontWeight: "600",
+    color: "#8B5CF6",
   },
   currentBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     paddingVertical: 14,
     borderRadius: BorderRadius.md,
@@ -218,7 +255,7 @@ const styles = StyleSheet.create({
   },
   currentText: {
     ...Typography.label,
-    textTransform: 'none',
+    textTransform: "none",
     fontSize: 16,
   },
 });

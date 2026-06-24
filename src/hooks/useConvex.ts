@@ -163,7 +163,7 @@ export const useConvexTasks = () => {
 // ============================================================
 // 2. useConvexInsightsInsights
 // ============================================================
-export const useConvexInsights = () => {
+const useConvexInsights = () => {
   const insights = useQuery(api.aiInsights.list, { limit: 3 });
   const loading = insights === undefined;
 
@@ -313,7 +313,7 @@ export const useConvexAchievements = () => {
 // ============================================================
 // 6. useConvexSubtasksSubtasks
 // ============================================================
-export const useConvexSubtasks = (taskId: string) => {
+const useConvexSubtasks = (taskId: string) => {
   const subtasks = useQuery(
     api.subtasks.listByTask,
     taskId ? { taskId: taskId as Id<"tasks"> } : "skip",
@@ -339,7 +339,7 @@ export const useConvexSubtasks = (taskId: string) => {
 // ============================================================
 // 7. useConvexSubjectsSubjects
 // ============================================================
-export const useConvexSubjects = () => {
+const useConvexSubjects = () => {
   const subjects = useQuery(api.subjects.list);
   const createSubject = useMutation(api.subjects.create);
   const loading = subjects === undefined;
@@ -367,7 +367,7 @@ export const useConvexSubjects = () => {
 // ============================================================
 // 8. useConvexFriendsFriends
 // ============================================================
-export const useConvexFriends = () => {
+const useConvexFriends = () => {
   const friends = useQuery(api.friends.listFriends);
   const loading = friends === undefined;
 
@@ -572,7 +572,7 @@ export const useConvexFocusSession = () => {
 // ============================================================
 // 11. useConvexFocusSessionHistory — replaces useFocusSessionHistory
 // ============================================================
-export const useConvexFocusSessionHistory = () => {
+const useConvexFocusSessionHistory = () => {
   const sessions = useQuery(api.focusSessions.list, { limit: 50 });
   const loading = sessions === undefined;
 
@@ -696,7 +696,7 @@ export const useConvexProfile = () => {
 // ============================================================
 // 13. useConvexUserAppData — replaces useUserAppData
 // ============================================================
-export const useConvexUserAppData = () => {
+const useConvexUserAppData = () => {
   const profile = useQuery(api.users.me);
   const onboarding = useQuery(api.onboarding.get);
   const settings = useQuery(api.settings.get);

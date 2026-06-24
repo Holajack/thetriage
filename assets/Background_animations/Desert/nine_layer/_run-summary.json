@@ -2,40 +2,56 @@
   "biome": "Desert",
   "model": "openai/gpt-image-1.5",
   "quality": "high",
-  "startedAt": 1780355787207,
-  "elapsedSeconds": 50,
+  "startedAt": 1780656710997,
+  "elapsedSeconds": 197,
   "results": [
     {
-      "layerKey": "trees__foreground_trunk_bend_right",
-      "fileName": "foreground_trunk_bend_right.png",
+      "layerKey": "ground__regular_path",
+      "fileName": "regular_path.png",
       "status": "completed",
-      "attempts": 1,
-      "transparencyBorderOpaqueRatio": 0,
-      "contentRatio": 0.16065470377604166
+      "attempts": 2,
+      "transparencyBorderOpaqueRatio": 0.10027365129007036,
+      "contentRatio": 0.18058395385742188
     },
     {
-      "layerKey": "trees__foreground_trunk_s",
-      "fileName": "foreground_trunk_s.png",
+      "layerKey": "ground__mossy_jungl_path",
+      "fileName": "mossy_jungl_path.png",
       "status": "completed",
       "attempts": 1,
-      "transparencyBorderOpaqueRatio": 0,
-      "contentRatio": 0.15981292724609375
+      "transparencyBorderOpaqueRatio": 0.09323690383111806,
+      "contentRatio": 0.17412185668945312
     },
     {
-      "layerKey": "bushes__thick_moss_bush",
-      "fileName": "thick_moss_bush.png",
+      "layerKey": "ground__grassy_path",
+      "fileName": "grassy_path.png",
       "status": "completed",
       "attempts": 1,
-      "transparencyBorderOpaqueRatio": 0,
-      "contentRatio": 0.07724380493164062
+      "transparencyBorderOpaqueRatio": 0.0807271305707584,
+      "contentRatio": 0.13104248046875
     },
     {
       "layerKey": "ground__damp_moss_path",
       "fileName": "damp_moss_path.png",
       "status": "completed",
       "attempts": 1,
-      "transparencyBorderOpaqueRatio": 0,
-      "contentRatio": 0.12881787618001303
+      "transparencyBorderOpaqueRatio": 0.17474589523064896,
+      "contentRatio": 0.280575434366862
+    },
+    {
+      "layerKey": "ground__flower_jungl_path",
+      "fileName": "flower_jungl_path.png",
+      "status": "completed",
+      "attempts": 2,
+      "transparencyBorderOpaqueRatio": 0.10535574667709148,
+      "contentRatio": 0.1811211903889974
+    },
+    {
+      "layerKey": "ground__stones_pebbles_path",
+      "fileName": "stones_pebbles_path.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0.08795934323690383,
+      "contentRatio": 0.16025416056315103
     }
   ]
 }

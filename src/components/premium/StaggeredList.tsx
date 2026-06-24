@@ -37,6 +37,7 @@ import {
   StaggerDelay,
   Spacing,
 } from "../../theme/premiumTheme";
+import { useTheme } from "../../context/ThemeContext";
 
 // Subtle stagger delays - faster and less noticeable
 const SubtleStaggerDelay = {
@@ -65,6 +66,19 @@ export const StaggeredItem: React.FC<StaggeredItemProps> = ({
   style,
   subtle = true, // Default to subtle animations
 }) => {
+  let reduceMotion = false;
+  try {
+    const ctx = useTheme();
+    reduceMotion = ctx.reduceMotion === true;
+  } catch {
+    // Outside ThemeProvider — animate normally
+  }
+
+  // When reduce motion is on, render without any entering animation.
+  if (reduceMotion) {
+    return <Animated.View style={style}>{children}</Animated.View>;
+  }
+
   // Use subtle delays for a more refined feel
   const staggerDelay = SubtleStaggerDelay[delay] * Math.min(index, 10); // Cap at 10 to prevent too long delays
 
@@ -193,17 +207,27 @@ interface CardListItemProps {
   onPress?: () => void;
 }
 
-export const CardListItem: React.FC<CardListItemProps> = ({
+const CardListItem: React.FC<CardListItemProps> = ({
   index,
   children,
   style,
   onPress,
 }) => {
+  let reduceMotion = false;
+  try {
+    const ctx = useTheme();
+    reduceMotion = ctx.reduceMotion === true;
+  } catch {
+    // Outside ThemeProvider — animate normally
+  }
+
   const staggerDelay = 40 * Math.min(index, 8); // Subtle delay, capped
 
   return (
     <Animated.View
-      entering={FadeIn.delay(staggerDelay).duration(250)}
+      entering={
+        reduceMotion ? undefined : FadeIn.delay(staggerDelay).duration(250)
+      }
       style={[styles.cardItem, style]}
     >
       {children}
@@ -222,7 +246,7 @@ interface StaggeredGridProps {
   style?: ViewStyle;
 }
 
-export const StaggeredGrid: React.FC<StaggeredGridProps> = ({
+const StaggeredGrid: React.FC<StaggeredGridProps> = ({
   children,
   columns = 2,
   gap = Spacing.md,
@@ -263,7 +287,7 @@ interface StaggeredSectionProps {
   style?: ViewStyle;
 }
 
-export const StaggeredSection: React.FC<StaggeredSectionProps> = ({
+const StaggeredSection: React.FC<StaggeredSectionProps> = ({
   title,
   children,
   delay = "normal",
@@ -271,11 +295,23 @@ export const StaggeredSection: React.FC<StaggeredSectionProps> = ({
   contentStyle,
   style,
 }) => {
+  let reduceMotion = false;
+  try {
+    const ctx = useTheme();
+    reduceMotion = ctx.reduceMotion === true;
+  } catch {
+    // Outside ThemeProvider — animate normally
+  }
+
   return (
     <View style={[styles.section, style]}>
       {title && (
         <Animated.Text
-          entering={FadeIn.delay(0).duration(TimingConfig.entrance)}
+          entering={
+            reduceMotion
+              ? undefined
+              : FadeIn.delay(0).duration(TimingConfig.entrance)
+          }
           style={[styles.sectionTitle, titleStyle]}
         >
           {title}
@@ -320,5 +356,3 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
 });
-
-export default StaggeredList;

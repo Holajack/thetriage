@@ -3,7 +3,6 @@ import * as Notifications from "expo-notifications";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api } from "../../convex/_generated/api";
 import { getConvexClient } from "./convexClient";
-export { setConvexClient } from "./convexClient";
 
 /**
  * Do Not Disturb Utility
@@ -23,7 +22,7 @@ let originalNotificationHandler: any = null;
 /**
  * Check if user has Auto DND enabled in settings
  */
-export const isAutoDNDEnabled = async (): Promise<boolean> => {
+const isAutoDNDEnabled = async (): Promise<boolean> => {
   try {
     const client = getConvexClient();
     const settings = await client.query(api.settings.get, {});
@@ -36,7 +35,7 @@ export const isAutoDNDEnabled = async (): Promise<boolean> => {
 /**
  * Enable Focus Mode (suppress notifications)
  */
-export const enableFocusMode = async () => {
+const enableFocusMode = async () => {
   if (isDNDActive) return;
 
   try {
@@ -62,7 +61,7 @@ export const enableFocusMode = async () => {
 /**
  * Disable Focus Mode (restore notifications)
  */
-export const disableFocusMode = async () => {
+const disableFocusMode = async () => {
   if (!isDNDActive) return;
 
   try {
@@ -85,7 +84,7 @@ export const disableFocusMode = async () => {
 /**
  * Show reminder to enable system DND mode
  */
-export const showDNDReminder = () => {
+const showDNDReminder = () => {
   Alert.alert(
     "🔕 Enable Do Not Disturb",
     "For the best focus experience, enable Do Not Disturb mode on your device.\n\nWould you like to open settings?",
@@ -176,6 +175,6 @@ export const endFocusSessionWithDND = async () => {
 /**
  * Get current DND state
  */
-export const isDNDModeActive = (): boolean => {
+const isDNDModeActive = (): boolean => {
   return isDNDActive;
 };

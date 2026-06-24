@@ -779,38 +779,6 @@ export const PatrickSpeakScreen = ({
 };
 
 // Placeholder for QuizzesScreen
-export const QuizzesScreen = () => (
-  <View
-    style={{
-      flex: 1,
-      backgroundColor: "#FAFAF6",
-      justifyContent: "center",
-      alignItems: "center",
-    }}
-  >
-    <Text
-      style={{
-        fontSize: 22,
-        fontWeight: "bold",
-        color: "#1B5E20",
-        marginBottom: 12,
-      }}
-    >
-      My Quizzes
-    </Text>
-    <Text
-      style={{
-        color: "#388E3C",
-        fontSize: 16,
-        textAlign: "center",
-        marginHorizontal: 24,
-      }}
-    >
-      Here you can search for and manage quizzes you've created. (Feature coming
-      soon!)
-    </Text>
-  </View>
-);
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#FAFAF6", paddingHorizontal: 0 },
@@ -981,5 +949,3 @@ const speakStyles = StyleSheet.create({
     padding: 4,
   },
 });
-
-export default PatrickScreen;

@@ -30,7 +30,7 @@ repos:
       - id: check-merge-conflict # catches unresolved merge markers
       - id: check-case-conflict # catches files that conflict on case-insensitive filesystems (macOS/Windows)
       - id: check-added-large-files # blocks accidentally committing huge files
-        args: ["--maxkb=1000"] # 1MB limit — tune as needed
+        args: ["--maxkb=1500"] # 1.5MB — fits the largest optimized .webp game assets
       - id: detect-private-key # blocks committing SSH/SSL private keys
       - id: mixed-line-ending # normalizes line endings (LF vs CRLF)
 

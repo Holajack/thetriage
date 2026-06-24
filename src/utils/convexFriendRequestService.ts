@@ -4,7 +4,6 @@
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { getConvexClient } from "./convexClient";
-export { setConvexClient } from "./convexClient";
 
 // Re-export interfaces
 export interface FriendRequest {
@@ -229,7 +228,7 @@ export async function getFriendsList(): Promise<{
 /**
  * Remove a friend
  */
-export async function removeFriend(
+async function removeFriend(
   friendId: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
@@ -246,9 +245,7 @@ export async function removeFriend(
 /**
  * Get a user profile by ID
  */
-export async function getUserProfile(
-  userId: string,
-): Promise<{
+export async function getUserProfile(userId: string): Promise<{
   success: boolean;
   error?: string;
   profile?: {

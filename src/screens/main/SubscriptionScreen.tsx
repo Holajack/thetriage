@@ -29,7 +29,7 @@ import BillingToggle, { BillingPeriod } from "./subscription/BillingToggle";
 import PlanCard, { PlanTier } from "./subscription/PlanCard";
 import NoraShowcase from "./subscription/NoraShowcase";
 import FeatureComparisonTable from "./subscription/FeatureComparisonTable";
-import SocialProofBar from "./subscription/SocialProofBar";
+// SocialProofBar removed — no real stats to show yet
 import EliteCelebrationView from "./subscription/EliteCelebrationView";
 
 import {
@@ -43,17 +43,38 @@ import {
   isRevenueCatInitialized,
   PurchasesPackage,
 } from "../../services/revenuecat";
+import { useConvexProfile } from "../../hooks/useConvex";
 
 // ============================================
 // PLAN DATA
 // ============================================
 
+const BASIC_PLAN: PlanTier = {
+  name: "Basic",
+  tier: "basic",
+  monthlyPrice: 2.99,
+  annualPrice: 28.99,
+  annualMonthlyEquivalent: 2.41,
+  badge: undefined,
+  tagline: "Get started with the essentials",
+  features: [
+    { text: "Forest trail", included: true },
+    { text: "Default theme", included: true },
+    { text: "Bear trail buddy", included: true },
+    { text: "Lo-Fi sound album", included: true },
+    { text: "Basecamp Focus Mode", included: true },
+    { text: "Basic session history", included: true },
+    { text: "Leaderboard access", included: true },
+  ],
+  gradient: ["#22C55E", "#16A34A"],
+};
+
 const PREMIUM_PLAN: PlanTier = {
   name: "Pro",
   tier: "premium",
   monthlyPrice: 14.99,
-  annualPrice: 107.99,
-  annualMonthlyEquivalent: 8.99,
+  annualPrice: 143.99,
+  annualMonthlyEquivalent: 11.99,
   badge: "Most Popular",
   tagline: "Level up your study sessions",
   features: [
@@ -74,8 +95,8 @@ const ELITE_PLAN: PlanTier = {
   name: "Elite",
   tier: "elite",
   monthlyPrice: 29.99,
-  annualPrice: 215.99,
-  annualMonthlyEquivalent: 17.99,
+  annualPrice: 287.99,
+  annualMonthlyEquivalent: 23.99,
   badge: "Best Value",
   tagline: "The ultimate study companion with Nora AI",
   features: [
@@ -105,13 +126,17 @@ const ELITE_PLAN: PlanTier = {
 
 // RevenueCat product identifiers — match these in App Store Connect
 const PLAN_PRODUCTS: Record<string, Record<BillingPeriod, string>> = {
+  basic: {
+    monthly: "hikewise_basic_monthly",
+    annual: "hikewise_basic_yearly",
+  },
   premium: {
-    monthly: "hikewise_premium_monthly", // $14.99/mo
-    annual: "hikewise_premium_yearly", // $107.99/yr
+    monthly: "hikewise_premium_monthly",
+    annual: "hikewise_premium_yearly",
   },
   elite: {
-    monthly: "hikewise_elite_monthly", // $29.99/mo
-    annual: "hikewise_elite_yearly", // $215.99/yr
+    monthly: "hikewise_elite_monthly",
+    annual: "hikewise_elite_yearly",
   },
 };
 
@@ -133,10 +158,11 @@ function findPackageForPlan(
 const SubscriptionScreen = () => {
   const { theme } = useTheme();
   const navigation = useNavigation<any>();
+  const { profile } = useConvexProfile();
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>("monthly");
-  const [currentTier, setCurrentTier] = useState<"free" | "premium" | "elite">(
-    "free",
-  );
+  const [currentTier, setCurrentTier] = useState<
+    "free" | "basic" | "premium" | "elite"
+  >("free");
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingTier, setProcessingTier] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
@@ -149,26 +175,42 @@ const SubscriptionScreen = () => {
       try {
         setLoadingPackages(true);
 
+        let resolvedTier: "free" | "basic" | "premium" | "elite" = "free";
+
         if (isRevenueCatInitialized()) {
-          const [tier, availablePackages] = await Promise.all([
+          const [rcTier, availablePackages] = await Promise.all([
             getCurrentTier(),
             getAvailablePackages(),
           ]);
-          setCurrentTier(tier);
+          resolvedTier = rcTier;
           setPackages(availablePackages);
-        } else {
-          // SDK not initialized yet — default to free
-          setCurrentTier("free");
         }
-      } catch (error) {
-        // Error loading subscription data
+
+        const convexTier = profile?.subscriptionTier as string | undefined;
+        if (convexTier && convexTier !== "free") {
+          const tierRank: Record<string, number> = {
+            free: 0,
+            basic: 1,
+            premium: 2,
+            pro: 2,
+            elite: 3,
+          };
+          if ((tierRank[convexTier] ?? 0) > (tierRank[resolvedTier] ?? 0)) {
+            resolvedTier = (
+              convexTier === "pro" ? "premium" : convexTier
+            ) as typeof resolvedTier;
+          }
+        }
+
+        setCurrentTier(resolvedTier);
+      } catch {
         setCurrentTier("free");
       } finally {
         setLoadingPackages(false);
       }
     };
     loadSubscriptionData();
-  }, []);
+  }, [profile?.subscriptionTier]);
 
   // Present RevenueCat Paywall (recommended approach)
   const handlePresentPaywall = useCallback(async () => {
@@ -387,7 +429,13 @@ const SubscriptionScreen = () => {
                   YOUR CURRENT PLAN
                 </Text>
                 <Text style={[styles.currentPlanTier, { color: theme.text }]}>
-                  {isEliteUser ? "Elite" : isPremiumUser ? "Premium" : "Free"}
+                  {isEliteUser
+                    ? "Elite"
+                    : isPremiumUser
+                      ? "Premium"
+                      : currentTier === "basic"
+                        ? "Basic"
+                        : "Free"}
                 </Text>
               </View>
               {!isFreeUser && (
@@ -416,7 +464,7 @@ const SubscriptionScreen = () => {
           <BillingToggle
             billingPeriod={billingPeriod}
             onToggle={setBillingPeriod}
-            savingsPercent={40}
+            savingsPercent={20}
           />
         )}
 
@@ -468,10 +516,26 @@ const SubscriptionScreen = () => {
             </StaggeredItem>
           </View>
         ) : (
-          /* --- Free User: Both Plan Cards --- */
+          /* --- Free/Basic User: All Plan Cards --- */
           <View>
             <StaggeredItem
               index={0}
+              delay="slow"
+              direction="up"
+              style={styles.cardContainer}
+            >
+              <PlanCard
+                plan={BASIC_PLAN}
+                isCurrent={currentTier === "basic"}
+                billingPeriod={billingPeriod}
+                onUpgrade={() => handleUpgrade(BASIC_PLAN)}
+                isProcessing={isProcessing && processingTier === "basic"}
+                disabled={isProcessing || loadingPackages}
+              />
+            </StaggeredItem>
+
+            <StaggeredItem
+              index={1}
               delay="slow"
               direction="up"
               style={styles.cardContainer}
@@ -487,7 +551,7 @@ const SubscriptionScreen = () => {
             </StaggeredItem>
 
             <StaggeredItem
-              index={1}
+              index={2}
               delay="slow"
               direction="up"
               style={styles.cardContainer}
@@ -523,10 +587,7 @@ const SubscriptionScreen = () => {
           </View>
         )}
 
-        {/* ============================================ */}
-        {/* SOCIAL PROOF */}
-        {/* ============================================ */}
-        <SocialProofBar />
+        {/* Social proof removed — no real stats yet */}
 
         {/* ============================================ */}
         {/* RESTORE + LEGAL FOOTER */}

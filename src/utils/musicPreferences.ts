@@ -1,6 +1,5 @@
 import { api } from "../../convex/_generated/api";
 import { getConvexClient } from "./convexClient";
-export { setConvexClient } from "./convexClient";
 
 export interface MusicPreferences {
   sound_preference: string;
@@ -9,7 +8,7 @@ export interface MusicPreferences {
 }
 
 // Centralized music preference management
-export const getMusicPreferences = async (
+const getMusicPreferences = async (
   userId: string,
 ): Promise<MusicPreferences> => {
   try {
@@ -92,26 +91,23 @@ export const saveMusicPreferences = async (
 // Helper function to get just the sound preference string
 export const getSoundPreference = (userData: any): string => {
   return (
-    userData?.onboarding?.sound_preference ||
-    userData?.profile?.soundpreference ||
-    userData?.profile?.sound_preference ||
+    userData?.onboarding?.soundPreference ||
+    userData?.onboarding?.focusMethod ||
+    userData?.profile?.soundPreference ||
     "Lo-Fi"
   );
 };
 
 // Helper function to get auto-play setting
 export const getAutoPlaySetting = (userData: any): boolean => {
-  // If user has a sound preference set but no explicit auto_play_sound setting,
-  // default to true for better user experience
-  const hasExplicitAutoPlay =
-    userData?.onboarding?.auto_play_sound !== undefined;
+  const hasExplicitAutoPlay = userData?.settings?.autoPlaySound !== undefined;
   const hasSoundPreference =
-    userData?.onboarding?.sound_preference ||
-    userData?.profile?.soundpreference;
+    userData?.onboarding?.soundPreference ||
+    userData?.onboarding?.focusMethod ||
+    userData?.profile?.soundPreference;
 
   return (
-    userData?.onboarding?.auto_play_sound ||
-    userData?.settings?.sound_enabled ||
+    userData?.settings?.autoPlaySound ||
     (!hasExplicitAutoPlay &&
       hasSoundPreference &&
       hasSoundPreference !== "Silence") ||
@@ -120,6 +116,6 @@ export const getAutoPlaySetting = (userData: any): boolean => {
 };
 
 // Helper function to get music volume
-export const getMusicVolume = (userData: any): number => {
+const getMusicVolume = (userData: any): number => {
   return 0.7; // Default volume since it's not stored in database
 };

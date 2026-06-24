@@ -15,7 +15,7 @@ const { useUserAppData } = require("../../utils/userAppData");
 import { useBackgroundMusic } from "../../hooks/useBackgroundMusic";
 import { useTheme } from "../../context/ThemeContext";
 
-export const SessionReportScreen = () => {
+const SessionReportScreen = () => {
   const { data: userData } = useUserAppData();
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();

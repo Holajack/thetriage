@@ -19,22 +19,10 @@ const OBJBrain3D = React.lazy(() => import("../../components/OBJBrain3D"));
 import {
   generateBrainVisualizationData,
   Brain3DRegion,
+  BrainActivity,
 } from "../../utils/brain3DData";
 import ReAnimated, { FadeIn, FadeInUp } from "react-native-reanimated";
 import { useFocusAnimationKey } from "../../utils/animationUtils";
-
-export interface BrainActivity {
-  id: string;
-  subject: string;
-  region: string;
-  description: string;
-  activity: number; // 0-1 scale
-  color: string;
-  coordinates: { x: number; y: number };
-  icon: string;
-  lastActive: string;
-  studyTime: number; // in minutes
-}
 
 const BRAIN_ACTIVITIES: BrainActivity[] = [
   {

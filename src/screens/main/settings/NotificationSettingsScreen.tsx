@@ -14,7 +14,10 @@ import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../../context/ThemeContext";
 import { useConvexProfile } from "../../../hooks/useConvex";
 import { useAuth as useClerkAuth } from "@clerk/clerk-expo";
-import { updateUserSettings } from "../../../utils/userSettings";
+import {
+  getUserSettings,
+  updateUserSettings,
+} from "../../../utils/userSettings";
 import * as Notifications from "expo-notifications";
 import { Typography, Spacing, BorderRadius } from "../../../theme/premiumTheme";
 import { StaggeredItem } from "../../../components/premium/StaggeredList";
@@ -56,6 +59,20 @@ const NotificationSettingsScreen = () => {
 
   useEffect(() => {
     checkNotificationPermission();
+    // Load persisted notification settings
+    getUserSettings().then((settings) => {
+      if (settings) {
+        if (settings.notifications_enabled !== undefined) {
+          setNotifications(settings.notifications_enabled);
+        }
+        if (settings.daily_reminder) {
+          setDailyReminder(settings.daily_reminder);
+        }
+        if (settings.session_end_reminder !== undefined) {
+          setSessionEndReminder(settings.session_end_reminder);
+        }
+      }
+    });
   }, []);
 
   const checkNotificationPermission = async () => {

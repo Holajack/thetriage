@@ -41,7 +41,7 @@ interface QRAcceptanceContextType {
 
 const QRAcceptanceContext = createContext<QRAcceptanceContextType>({});
 
-export const useQRAcceptance = () => useContext(QRAcceptanceContext);
+const useQRAcceptance = () => useContext(QRAcceptanceContext);
 
 export const QRAcceptanceProvider: React.FC<{ children: React.ReactNode }> = ({
   children,

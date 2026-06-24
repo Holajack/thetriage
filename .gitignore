@@ -3,6 +3,9 @@
 # =========================================================================
 # Rule: if it's generated, secret, or machine-specific, it doesn't belong in git.
 
+# Graphify knowledge-graph output (generated locally, regenerated on demand)
+graphify-out/
+
 # -------------------------------------------------------------------------
 # Secrets — the most important section. Never commit these.
 # -------------------------------------------------------------------------

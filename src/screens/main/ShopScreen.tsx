@@ -54,8 +54,6 @@ import {
   equipItem,
   getUserInventory,
   getEquippedItems,
-  ownsItem,
-  isItemEquipped,
   type InventoryItem,
   type EquippedItem,
 } from "../../utils/inventoryService";
@@ -79,14 +77,14 @@ interface ShopItem {
 // shows the actual environment rather than an emoji that may render as "tofu" on devices
 // without the matching glyph.
 const TRAIL_IMAGES: Record<string, any> = {
-  forest: require("../../../assets/Background_animations/Forest/path_animation.png"),
-  beach: require("../../../assets/Background_animations/Beach/beach_path.png"),
-  desert: require("../../../assets/Background_animations/Desert/desert_background.png"),
-  jungle: require("../../../assets/Background_animations/Jungle/generated/path_animation.png"),
-  snow: require("../../../assets/Background_animations/Snow/generated/path_animation.png"),
-  canyon: require("../../../assets/Background_animations/Canyon/generated/path_animation.png"),
-  volcano: require("../../../assets/Background_animations/Volcano/generated/path_animation.png"),
-  northern: require("../../../assets/Background_animations/Northern/generated/path_animation.png"),
+  forest: require("../../../assets/Background_animations/Forest/path_animation.webp"),
+  beach: require("../../../assets/Background_animations/Beach/beach_path.webp"),
+  desert: require("../../../assets/Background_animations/Desert/desert_background.webp"),
+  jungle: require("../../../assets/Background_animations/Jungle/generated/path_animation.webp"),
+  snow: require("../../../assets/Background_animations/Snow/generated/path_animation.webp"),
+  canyon: require("../../../assets/Background_animations/Canyon/generated/path_animation.webp"),
+  volcano: require("../../../assets/Background_animations/Volcano/generated/path_animation.webp"),
+  northern: require("../../../assets/Background_animations/Northern/generated/path_animation.webp"),
   // galaxy: no thumbnail yet — falls back to emoji
 };
 
@@ -310,14 +308,15 @@ const TRAIL_ACCENT_COLORS: Record<string, string> = {
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
+type ShopTab = "shop" | "gear";
+
 const ShopScreen = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<MainTabParamList>>();
   const { theme } = useTheme();
   const { user } = useAuth();
   const { profile, updateProfile } = useConvexProfile();
-  // The 'gear' (accessories) category is hidden until images are ready.
-  // Default to 'trail' so users land on the most visual section first.
+  const [activeTab, setActiveTab] = useState<ShopTab>("shop");
   const [selectedCategory, setSelectedCategory] =
     useState<ShopCategory>("trail");
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
@@ -570,275 +569,484 @@ const ShopScreen = () => {
           </View>
         </Animated.View>
 
-        {/* Category Tabs */}
+        {/* Top-level Shop / Your Gear tabs */}
         <Animated.View
-          entering={FadeInUp.delay(80).duration(300)}
-          style={[styles.categoryTabs, { backgroundColor: theme.surface }]}
+          entering={FadeInUp.delay(70).duration(300)}
+          style={[styles.topTabs, { backgroundColor: theme.surface }]}
         >
-          {/* Trail Gear (accessories) tab hidden — accessories will return when art is ready. */}
-
           <TouchableOpacity
             style={[
-              styles.categoryTab,
-              selectedCategory === "shelter" && styles.categoryTabActive,
-              selectedCategory === "shelter" && { backgroundColor: theme.card },
+              styles.topTab,
+              activeTab === "shop" && styles.topTabActive,
+              activeTab === "shop" && { backgroundColor: theme.card },
             ]}
             onPress={() => {
               Haptics.selectionAsync();
-              setSelectedCategory("shelter");
+              setActiveTab("shop");
             }}
           >
+            <Ionicons
+              name="storefront-outline"
+              size={16}
+              color={activeTab === "shop" ? theme.primary : theme.textSecondary}
+              style={{ marginRight: 6 }}
+            />
             <Text
               style={[
-                styles.categoryTabText,
+                styles.topTabText,
                 {
                   color:
-                    selectedCategory === "shelter"
-                      ? theme.primary
-                      : theme.textSecondary,
+                    activeTab === "shop" ? theme.primary : theme.textSecondary,
                 },
               ]}
             >
-              Shelters
+              Shop
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[
-              styles.categoryTab,
-              selectedCategory === "trail" && styles.categoryTabActive,
-              selectedCategory === "trail" && { backgroundColor: theme.card },
+              styles.topTab,
+              activeTab === "gear" && styles.topTabActive,
+              activeTab === "gear" && { backgroundColor: theme.card },
             ]}
             onPress={() => {
               Haptics.selectionAsync();
-              setSelectedCategory("trail");
+              setActiveTab("gear");
             }}
           >
+            <Ionicons
+              name="cube-outline"
+              size={16}
+              color={activeTab === "gear" ? theme.primary : theme.textSecondary}
+              style={{ marginRight: 6 }}
+            />
             <Text
               style={[
-                styles.categoryTabText,
+                styles.topTabText,
                 {
                   color:
-                    selectedCategory === "trail"
-                      ? theme.primary
-                      : theme.textSecondary,
+                    activeTab === "gear" ? theme.primary : theme.textSecondary,
                 },
               ]}
             >
-              Trails
+              Your Gear
             </Text>
           </TouchableOpacity>
         </Animated.View>
 
-        {/* Shop Items Grid */}
-        <View style={styles.itemsGrid}>
-          {filteredItems.map((item, index) => {
-            const canAfford = flintCurrency >= item.cost;
-            const owned = isOwned(item.id);
-            const equipped = isEquipped(item.id);
-            const isFree = item.cost === 0;
-            const isComingSoon = item.comingSoon === true;
-            // Trail-specific accent color (falls back to green for non-trails)
-            const accentColor = TRAIL_ACCENT_COLORS[item.id] || "#4CAF50";
-
-            return (
-              <StaggeredItem
-                key={item.id}
-                index={index}
-                delay="fast"
-                direction="fade"
-                subtle={true}
-              >
-                <AnimatedTouchable
+        {activeTab === "gear" ? (
+          /* ===== YOUR GEAR TAB ===== */
+          <View style={styles.itemsGrid}>
+            {inventory.length === 0 ? (
+              <View style={styles.emptyGear}>
+                <Ionicons
+                  name="cube-outline"
+                  size={48}
+                  color={theme.textSecondary}
+                />
+                <Text style={[styles.emptyGearTitle, { color: theme.text }]}>
+                  No gear yet
+                </Text>
+                <Text
                   style={[
-                    styles.itemCard,
-                    {
-                      backgroundColor: theme.card,
-                      borderColor: isComingSoon
-                        ? theme.border
-                        : equipped
-                          ? accentColor
-                          : owned
-                            ? accentColor
-                            : isFree
-                              ? accentColor
-                              : canAfford
-                                ? "#FF5700"
-                                : theme.border,
-                    },
-                    (isComingSoon || (!canAfford && !owned && !isFree)) &&
-                      styles.itemCardLocked,
+                    styles.emptyGearSubtitle,
+                    { color: theme.textSecondary },
                   ]}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    handleItemPress(item);
-                  }}
-                  activeOpacity={0.7}
                 >
-                  {/* Icon — prefer image when present, fall back to emoji */}
-                  <View
-                    style={[
-                      styles.itemIconContainer,
-                      { backgroundColor: theme.surface },
-                    ]}
-                  >
-                    {item.image ? (
-                      <Image
-                        source={item.image}
-                        style={styles.itemImage}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <Text style={styles.itemIcon}>{item.icon}</Text>
-                    )}
-                    {isComingSoon && (
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          { backgroundColor: "#888" },
-                        ]}
-                      >
-                        <Ionicons name="time-outline" size={10} color="#FFF" />
-                      </View>
-                    )}
-                    {!isComingSoon && equipped && (
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          { backgroundColor: accentColor },
-                        ]}
-                      >
-                        <Ionicons
-                          name="checkmark-outline"
-                          size={10}
-                          color="#FFF"
-                        />
-                      </View>
-                    )}
-                    {!isComingSoon && owned && !equipped && (
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          { backgroundColor: accentColor },
-                        ]}
-                      >
-                        <Ionicons
-                          name="swap-horizontal-outline"
-                          size={10}
-                          color="#FFF"
-                        />
-                      </View>
-                    )}
-                    {!isComingSoon && !canAfford && !owned && !isFree && (
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          { backgroundColor: "#666" },
-                        ]}
-                      >
-                        <Ionicons
-                          name="lock-closed-outline"
-                          size={10}
-                          color="#FFF"
-                        />
-                      </View>
-                    )}
-                  </View>
+                  Purchase items from the Shop to see them here
+                </Text>
+              </View>
+            ) : (
+              inventory.map((invItem, index) => {
+                const shopItem = SHOP_ITEMS.find(
+                  (s) => s.id === invItem.itemId,
+                );
+                if (!shopItem) return null;
+                const equipped = isEquipped(invItem.itemId);
+                const accentColor =
+                  TRAIL_ACCENT_COLORS[invItem.itemId] || "#4CAF50";
 
-                  {/* Info */}
-                  <Text
-                    style={[styles.itemName, { color: theme.text }]}
-                    numberOfLines={1}
+                return (
+                  <StaggeredItem
+                    key={invItem.itemId}
+                    index={index}
+                    delay="fast"
+                    direction="fade"
+                    subtle={true}
                   >
-                    {item.name}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.itemDescription,
-                      { color: theme.textSecondary },
-                    ]}
-                    numberOfLines={2}
-                  >
-                    {item.description}
-                  </Text>
-
-                  {/* Status/Price */}
-                  {isComingSoon ? (
-                    <View
+                    <AnimatedTouchable
                       style={[
-                        styles.statusTag,
-                        { backgroundColor: "#88888820" },
-                      ]}
-                    >
-                      <Text style={[styles.statusText, { color: "#888" }]}>
-                        Coming Soon
-                      </Text>
-                    </View>
-                  ) : equipped ? (
-                    <View
-                      style={[
-                        styles.statusTag,
-                        { backgroundColor: accentColor + "20" },
-                      ]}
-                    >
-                      <Text style={[styles.statusText, { color: accentColor }]}>
-                        Equipped
-                      </Text>
-                    </View>
-                  ) : owned ? (
-                    <View
-                      style={[
-                        styles.statusTag,
-                        { backgroundColor: accentColor + "20" },
-                      ]}
-                    >
-                      <Text style={[styles.statusText, { color: accentColor }]}>
-                        Tap to Equip
-                      </Text>
-                    </View>
-                  ) : isFree ? (
-                    <View
-                      style={[
-                        styles.statusTag,
-                        { backgroundColor: accentColor + "20" },
-                      ]}
-                    >
-                      <Text style={[styles.statusText, { color: accentColor }]}>
-                        Free
-                      </Text>
-                    </View>
-                  ) : (
-                    <View
-                      style={[
-                        styles.priceTag,
+                        styles.itemCard,
                         {
-                          backgroundColor: canAfford
-                            ? "#FF570015"
-                            : theme.surface,
+                          backgroundColor: theme.card,
+                          borderColor: equipped ? accentColor : theme.border,
                         },
                       ]}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        if (equipped) {
+                          Alert.alert(
+                            "Already Equipped",
+                            `${shopItem.name} is currently equipped!`,
+                          );
+                        } else {
+                          handleEquipFromInventory(shopItem);
+                        }
+                      }}
+                      activeOpacity={0.7}
                     >
-                      <FlintIcon
-                        size={12}
-                        color={canAfford ? "#FF5700" : theme.textSecondary}
-                      />
-                      <Text
+                      <View
                         style={[
-                          styles.itemCost,
-                          {
-                            color: canAfford ? "#FF5700" : theme.textSecondary,
-                          },
+                          styles.itemIconContainer,
+                          { backgroundColor: theme.surface },
                         ]}
                       >
-                        {item.cost}
+                        {shopItem.image ? (
+                          <Image
+                            source={shopItem.image}
+                            style={styles.itemImage}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <Text style={styles.itemIcon}>{shopItem.icon}</Text>
+                        )}
+                        {equipped && (
+                          <View
+                            style={[
+                              styles.statusBadge,
+                              { backgroundColor: accentColor },
+                            ]}
+                          >
+                            <Ionicons
+                              name="checkmark-outline"
+                              size={10}
+                              color="#FFF"
+                            />
+                          </View>
+                        )}
+                      </View>
+                      <Text
+                        style={[styles.itemName, { color: theme.text }]}
+                        numberOfLines={1}
+                      >
+                        {shopItem.name}
                       </Text>
-                    </View>
-                  )}
-                </AnimatedTouchable>
-              </StaggeredItem>
-            );
-          })}
-        </View>
+                      <Text
+                        style={[
+                          styles.itemDescription,
+                          { color: theme.textSecondary },
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {shopItem.description}
+                      </Text>
+                      <View
+                        style={[
+                          styles.statusTag,
+                          { backgroundColor: accentColor + "20" },
+                        ]}
+                      >
+                        <Text
+                          style={[styles.statusText, { color: accentColor }]}
+                        >
+                          {equipped ? "Equipped" : "Tap to Equip"}
+                        </Text>
+                      </View>
+                    </AnimatedTouchable>
+                  </StaggeredItem>
+                );
+              })
+            )}
+          </View>
+        ) : (
+          /* ===== SHOP TAB ===== */
+          <>
+            {/* Category Tabs */}
+            <Animated.View
+              entering={FadeInUp.delay(80).duration(300)}
+              style={[styles.categoryTabs, { backgroundColor: theme.surface }]}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.categoryTab,
+                  selectedCategory === "shelter" && styles.categoryTabActive,
+                  selectedCategory === "shelter" && {
+                    backgroundColor: theme.card,
+                  },
+                ]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setSelectedCategory("shelter");
+                }}
+              >
+                <Text
+                  style={[
+                    styles.categoryTabText,
+                    {
+                      color:
+                        selectedCategory === "shelter"
+                          ? theme.primary
+                          : theme.textSecondary,
+                    },
+                  ]}
+                >
+                  Shelters
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.categoryTab,
+                  selectedCategory === "trail" && styles.categoryTabActive,
+                  selectedCategory === "trail" && {
+                    backgroundColor: theme.card,
+                  },
+                ]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setSelectedCategory("trail");
+                }}
+              >
+                <Text
+                  style={[
+                    styles.categoryTabText,
+                    {
+                      color:
+                        selectedCategory === "trail"
+                          ? theme.primary
+                          : theme.textSecondary,
+                    },
+                  ]}
+                >
+                  Trails
+                </Text>
+              </TouchableOpacity>
+            </Animated.View>
+
+            {/* Shop Items Grid */}
+            <View style={styles.itemsGrid}>
+              {filteredItems.map((item, index) => {
+                const canAfford = flintCurrency >= item.cost;
+                const owned = isOwned(item.id);
+                const equipped = isEquipped(item.id);
+                const isFree = item.cost === 0;
+                const isComingSoon = item.comingSoon === true;
+                // Trail-specific accent color (falls back to green for non-trails)
+                const accentColor = TRAIL_ACCENT_COLORS[item.id] || "#4CAF50";
+
+                return (
+                  <StaggeredItem
+                    key={item.id}
+                    index={index}
+                    delay="fast"
+                    direction="fade"
+                    subtle={true}
+                  >
+                    <AnimatedTouchable
+                      style={[
+                        styles.itemCard,
+                        {
+                          backgroundColor: theme.card,
+                          borderColor: isComingSoon
+                            ? theme.border
+                            : equipped
+                              ? accentColor
+                              : owned
+                                ? accentColor
+                                : isFree
+                                  ? accentColor
+                                  : canAfford
+                                    ? "#FF5700"
+                                    : theme.border,
+                        },
+                        (isComingSoon || (!canAfford && !owned && !isFree)) &&
+                          styles.itemCardLocked,
+                      ]}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        handleItemPress(item);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      {/* Icon — prefer image when present, fall back to emoji */}
+                      <View
+                        style={[
+                          styles.itemIconContainer,
+                          { backgroundColor: theme.surface },
+                        ]}
+                      >
+                        {item.image ? (
+                          <Image
+                            source={item.image}
+                            style={styles.itemImage}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <Text style={styles.itemIcon}>{item.icon}</Text>
+                        )}
+                        {isComingSoon && (
+                          <View
+                            style={[
+                              styles.statusBadge,
+                              { backgroundColor: "#888" },
+                            ]}
+                          >
+                            <Ionicons
+                              name="time-outline"
+                              size={10}
+                              color="#FFF"
+                            />
+                          </View>
+                        )}
+                        {!isComingSoon && equipped && (
+                          <View
+                            style={[
+                              styles.statusBadge,
+                              { backgroundColor: accentColor },
+                            ]}
+                          >
+                            <Ionicons
+                              name="checkmark-outline"
+                              size={10}
+                              color="#FFF"
+                            />
+                          </View>
+                        )}
+                        {!isComingSoon && owned && !equipped && (
+                          <View
+                            style={[
+                              styles.statusBadge,
+                              { backgroundColor: accentColor },
+                            ]}
+                          >
+                            <Ionicons
+                              name="swap-horizontal-outline"
+                              size={10}
+                              color="#FFF"
+                            />
+                          </View>
+                        )}
+                        {!isComingSoon && !canAfford && !owned && !isFree && (
+                          <View
+                            style={[
+                              styles.statusBadge,
+                              { backgroundColor: "#666" },
+                            ]}
+                          >
+                            <Ionicons
+                              name="lock-closed-outline"
+                              size={10}
+                              color="#FFF"
+                            />
+                          </View>
+                        )}
+                      </View>
+
+                      {/* Info */}
+                      <Text
+                        style={[styles.itemName, { color: theme.text }]}
+                        numberOfLines={1}
+                      >
+                        {item.name}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.itemDescription,
+                          { color: theme.textSecondary },
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {item.description}
+                      </Text>
+
+                      {/* Status/Price */}
+                      {isComingSoon ? (
+                        <View
+                          style={[
+                            styles.statusTag,
+                            { backgroundColor: "#88888820" },
+                          ]}
+                        >
+                          <Text style={[styles.statusText, { color: "#888" }]}>
+                            Coming Soon
+                          </Text>
+                        </View>
+                      ) : equipped ? (
+                        <View
+                          style={[
+                            styles.statusTag,
+                            { backgroundColor: accentColor + "20" },
+                          ]}
+                        >
+                          <Text
+                            style={[styles.statusText, { color: accentColor }]}
+                          >
+                            Equipped
+                          </Text>
+                        </View>
+                      ) : owned ? (
+                        <View
+                          style={[
+                            styles.statusTag,
+                            { backgroundColor: accentColor + "20" },
+                          ]}
+                        >
+                          <Text
+                            style={[styles.statusText, { color: accentColor }]}
+                          >
+                            Tap to Equip
+                          </Text>
+                        </View>
+                      ) : isFree ? (
+                        <View
+                          style={[
+                            styles.statusTag,
+                            { backgroundColor: accentColor + "20" },
+                          ]}
+                        >
+                          <Text
+                            style={[styles.statusText, { color: accentColor }]}
+                          >
+                            Free
+                          </Text>
+                        </View>
+                      ) : (
+                        <View
+                          style={[
+                            styles.priceTag,
+                            {
+                              backgroundColor: canAfford
+                                ? "#FF570015"
+                                : theme.surface,
+                            },
+                          ]}
+                        >
+                          <FlintIcon
+                            size={12}
+                            color={canAfford ? "#FF5700" : theme.textSecondary}
+                          />
+                          <Text
+                            style={[
+                              styles.itemCost,
+                              {
+                                color: canAfford
+                                  ? "#FF5700"
+                                  : theme.textSecondary,
+                              },
+                            ]}
+                          >
+                            {item.cost}
+                          </Text>
+                        </View>
+                      )}
+                    </AnimatedTouchable>
+                  </StaggeredItem>
+                );
+              })}
+            </View>
+          </>
+        )}
       </ScrollView>
 
       {/* Purchase & Apply Modal */}
@@ -983,6 +1191,50 @@ const styles = StyleSheet.create({
   },
   balanceHint: {
     fontSize: 12,
+  },
+  topTabs: {
+    flexDirection: "row",
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 12,
+    padding: 4,
+  },
+  topTab: {
+    flex: 1,
+    flexDirection: "row",
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  topTabActive: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  topTabText: {
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  emptyGear: {
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 60,
+    gap: 8,
+  },
+  emptyGearTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    marginTop: 8,
+  },
+  emptyGearSubtitle: {
+    fontSize: 13,
+    textAlign: "center",
+    paddingHorizontal: 32,
   },
   categoryTabs: {
     flexDirection: "row",

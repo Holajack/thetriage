@@ -13,7 +13,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 import { UnifiedHeader } from "../../components/UnifiedHeader";
-import LinearGradient from "react-native-linear-gradient";
 import Animated, { FadeIn, FadeInUp } from "react-native-reanimated";
 import { useFocusAnimationKey } from "../../utils/animationUtils";
 
@@ -102,7 +101,7 @@ const ProTrekkerScreen = () => {
             activeOpacity={0.8}
           >
             <Text style={[styles.priceAmount, { color: theme.text }]}>
-              Premium $4.99/mo
+              Basic $2.99/mo
             </Text>
             <Text
               style={[styles.priceDescription, { color: theme.textSecondary }]}

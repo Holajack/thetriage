@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
+import { createUserIfMissing } from "./users";
 
 /**
  * Internal mutations used by the Clerk webhook handler.
@@ -17,27 +18,7 @@ export const createUser = internalMutation({
     avatarUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    // Check if user already exists
-    const existing = await ctx.db
-      .query("users")
-      .withIndex("by_clerkId", (q) => q.eq("clerkId", args.clerkId))
-      .unique();
-
-    if (existing) return existing._id;
-
-    return await ctx.db.insert("users", {
-      clerkId: args.clerkId,
-      email: args.email,
-      username: args.username,
-      fullName: args.fullName,
-      firstName: args.firstName,
-      lastName: args.lastName,
-      avatarUrl: args.avatarUrl,
-      status: "active",
-      subscriptionTier: "trial",
-      flintCurrency: 0,
-      firstSessionBonusClaimed: false,
-    });
+    return await createUserIfMissing(ctx, args);
   },
 });
 

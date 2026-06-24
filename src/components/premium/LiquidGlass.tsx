@@ -1,14 +1,14 @@
-import React from 'react';
-import { View, StyleSheet, ViewStyle, Platform } from 'react-native';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme } from '../../context/ThemeContext';
+import React from "react";
+import { View, StyleSheet, ViewStyle, Platform } from "react-native";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
+import { useTheme } from "../../context/ThemeContext";
 
 interface LiquidGlassCardProps {
   children: React.ReactNode;
   style?: ViewStyle;
-  intensity?: 'subtle' | 'medium' | 'strong';
-  variant?: 'light' | 'dark' | 'adaptive';
+  intensity?: "subtle" | "medium" | "strong";
+  variant?: "light" | "dark" | "adaptive";
   borderRadius?: number;
   padding?: number;
   showBorder?: boolean;
@@ -24,8 +24,8 @@ interface LiquidGlassCardProps {
 export const LiquidGlassCard: React.FC<LiquidGlassCardProps> = ({
   children,
   style,
-  intensity = 'medium',
-  variant = 'adaptive',
+  intensity = "medium",
+  variant = "adaptive",
   borderRadius = 16,
   padding = 16,
   showBorder = true,
@@ -41,25 +41,23 @@ export const LiquidGlassCard: React.FC<LiquidGlassCardProps> = ({
   }[intensity];
 
   // Determine tint based on variant
-  const tint = variant === 'adaptive'
-    ? (isDark ? 'dark' : 'light')
-    : variant;
+  const tint = variant === "adaptive" ? (isDark ? "dark" : "light") : variant;
 
   // Background colors for the glass effect
   const glassColors = isDark
     ? {
-        background: 'rgba(255, 255, 255, 0.12)',
-        border: 'rgba(255, 255, 255, 0.20)',
-        gradientStart: 'rgba(255, 255, 255, 0.16)',
-        gradientEnd: 'rgba(255, 255, 255, 0.06)',
-        glow: 'rgba(255, 255, 255, 0.15)',
+        background: "rgba(255, 255, 255, 0.12)",
+        border: "rgba(255, 255, 255, 0.20)",
+        gradientStart: "rgba(255, 255, 255, 0.16)",
+        gradientEnd: "rgba(255, 255, 255, 0.06)",
+        glow: "rgba(255, 255, 255, 0.15)",
       }
     : {
-        background: 'rgba(255, 255, 255, 0.7)',
-        border: 'rgba(255, 255, 255, 0.5)',
-        gradientStart: 'rgba(255, 255, 255, 0.9)',
-        gradientEnd: 'rgba(255, 255, 255, 0.6)',
-        glow: 'rgba(255, 255, 255, 0.3)',
+        background: "rgba(255, 255, 255, 0.7)",
+        border: "rgba(255, 255, 255, 0.5)",
+        gradientStart: "rgba(255, 255, 255, 0.9)",
+        gradientEnd: "rgba(255, 255, 255, 0.6)",
+        glow: "rgba(255, 255, 255, 0.3)",
       };
 
   return (
@@ -69,7 +67,7 @@ export const LiquidGlassCard: React.FC<LiquidGlassCardProps> = ({
         {
           borderRadius,
           ...(showGlow && {
-            shadowColor: isDark ? '#FFFFFF' : '#000000',
+            shadowColor: isDark ? "#FFFFFF" : "#000000",
             shadowOffset: { width: 0, height: 0 },
             shadowOpacity: isDark ? 0.15 : 0.1,
             shadowRadius: 20,
@@ -83,10 +81,7 @@ export const LiquidGlassCard: React.FC<LiquidGlassCardProps> = ({
       <BlurView
         intensity={blurIntensity}
         tint={tint}
-        style={[
-          styles.blurView,
-          { borderRadius },
-        ]}
+        style={[styles.blurView, { borderRadius }]}
       />
 
       {/* Glass overlay gradient */}
@@ -94,10 +89,7 @@ export const LiquidGlassCard: React.FC<LiquidGlassCardProps> = ({
         colors={[glassColors.gradientStart, glassColors.gradientEnd]}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
-        style={[
-          styles.gradient,
-          { borderRadius },
-        ]}
+        style={[styles.gradient, { borderRadius }]}
       />
 
       {/* Border overlay */}
@@ -114,9 +106,7 @@ export const LiquidGlassCard: React.FC<LiquidGlassCardProps> = ({
       )}
 
       {/* Content */}
-      <View style={[styles.content, { padding }]}>
-        {children}
-      </View>
+      <View style={[styles.content, { padding }]}>{children}</View>
     </View>
   );
 };
@@ -124,16 +114,16 @@ export const LiquidGlassCard: React.FC<LiquidGlassCardProps> = ({
 interface LiquidGlassButtonProps {
   children: React.ReactNode;
   style?: ViewStyle;
-  intensity?: 'subtle' | 'medium' | 'strong';
+  intensity?: "subtle" | "medium" | "strong";
 }
 
 /**
  * LiquidGlassButton - A button with liquid glass styling
  */
-export const LiquidGlassButton: React.FC<LiquidGlassButtonProps> = ({
+const LiquidGlassButton: React.FC<LiquidGlassButtonProps> = ({
   children,
   style,
-  intensity = 'subtle',
+  intensity = "subtle",
 }) => {
   return (
     <LiquidGlassCard
@@ -157,7 +147,7 @@ interface LiquidGlassHeaderProps {
 /**
  * LiquidGlassHeader - A header bar with liquid glass effect
  */
-export const LiquidGlassHeader: React.FC<LiquidGlassHeaderProps> = ({
+const LiquidGlassHeader: React.FC<LiquidGlassHeaderProps> = ({
   children,
   style,
 }) => {
@@ -167,14 +157,14 @@ export const LiquidGlassHeader: React.FC<LiquidGlassHeaderProps> = ({
     <View style={[styles.headerContainer, style]}>
       <BlurView
         intensity={50}
-        tint={isDark ? 'dark' : 'light'}
+        tint={isDark ? "dark" : "light"}
         style={styles.headerBlur}
       />
       <LinearGradient
         colors={
           isDark
-            ? ['rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.05)']
-            : ['rgba(255, 255, 255, 0.9)', 'rgba(255, 255, 255, 0.7)']
+            ? ["rgba(255, 255, 255, 0.1)", "rgba(255, 255, 255, 0.05)"]
+            : ["rgba(255, 255, 255, 0.9)", "rgba(255, 255, 255, 0.7)"]
         }
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
@@ -185,14 +175,12 @@ export const LiquidGlassHeader: React.FC<LiquidGlassHeaderProps> = ({
           styles.headerBorder,
           {
             borderBottomColor: isDark
-              ? 'rgba(255, 255, 255, 0.1)'
-              : 'rgba(0, 0, 0, 0.1)',
+              ? "rgba(255, 255, 255, 0.1)"
+              : "rgba(0, 0, 0, 0.1)",
           },
         ]}
       />
-      <View style={styles.headerContent}>
-        {children}
-      </View>
+      <View style={styles.headerContent}>{children}</View>
     </View>
   );
 };
@@ -204,10 +192,14 @@ export const LiquidGlassHeader: React.FC<LiquidGlassHeaderProps> = ({
 export const glassStyles = {
   // Subtle glass effect for cards
   subtleCard: (isDark: boolean): ViewStyle => ({
-    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(255, 255, 255, 0.8)',
+    backgroundColor: isDark
+      ? "rgba(255, 255, 255, 0.06)"
+      : "rgba(255, 255, 255, 0.8)",
     borderWidth: 1,
-    borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.5)',
-    shadowColor: isDark ? '#FFFFFF' : '#000000',
+    borderColor: isDark
+      ? "rgba(255, 255, 255, 0.1)"
+      : "rgba(255, 255, 255, 0.5)",
+    shadowColor: isDark ? "#FFFFFF" : "#000000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: isDark ? 0.05 : 0.08,
     shadowRadius: 12,
@@ -216,10 +208,14 @@ export const glassStyles = {
 
   // Medium glass effect
   mediumCard: (isDark: boolean): ViewStyle => ({
-    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.85)',
+    backgroundColor: isDark
+      ? "rgba(255, 255, 255, 0.1)"
+      : "rgba(255, 255, 255, 0.85)",
     borderWidth: 1,
-    borderColor: isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.6)',
-    shadowColor: isDark ? '#FFFFFF' : '#000000',
+    borderColor: isDark
+      ? "rgba(255, 255, 255, 0.15)"
+      : "rgba(255, 255, 255, 0.6)",
+    shadowColor: isDark ? "#FFFFFF" : "#000000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: isDark ? 0.08 : 0.1,
     shadowRadius: 16,
@@ -228,10 +224,14 @@ export const glassStyles = {
 
   // Strong glass effect with glow
   glowCard: (isDark: boolean): ViewStyle => ({
-    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: isDark
+      ? "rgba(255, 255, 255, 0.12)"
+      : "rgba(255, 255, 255, 0.9)",
     borderWidth: 1.5,
-    borderColor: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.7)',
-    shadowColor: isDark ? '#FFFFFF' : '#000000',
+    borderColor: isDark
+      ? "rgba(255, 255, 255, 0.2)"
+      : "rgba(255, 255, 255, 0.7)",
+    shadowColor: isDark ? "#FFFFFF" : "#000000",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: isDark ? 0.15 : 0.12,
     shadowRadius: 24,
@@ -241,8 +241,8 @@ export const glassStyles = {
 
 const styles = StyleSheet.create({
   container: {
-    overflow: 'hidden',
-    position: 'relative',
+    overflow: "hidden",
+    position: "relative",
   },
   blurView: {
     ...StyleSheet.absoluteFillObject,
@@ -255,12 +255,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   content: {
-    position: 'relative',
+    position: "relative",
     zIndex: 1,
   },
   headerContainer: {
-    position: 'relative',
-    overflow: 'hidden',
+    position: "relative",
+    overflow: "hidden",
   },
   headerBlur: {
     ...StyleSheet.absoluteFillObject,
@@ -273,9 +273,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.5,
   },
   headerContent: {
-    position: 'relative',
+    position: "relative",
     zIndex: 1,
   },
 });
-
-export default LiquidGlassCard;

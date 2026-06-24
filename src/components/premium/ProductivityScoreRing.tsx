@@ -5,8 +5,8 @@
  * with tier-based styling and animations.
  */
 
-import React, { useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useEffect, useMemo } from "react";
+import { View, Text, StyleSheet } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedProps,
@@ -15,11 +15,14 @@ import Animated, {
   interpolate,
   Easing,
   FadeIn,
-} from 'react-native-reanimated';
-import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
-import { useTheme } from '../../context/ThemeContext';
-import { useCounterAnimation, useHolographicEffect } from '../../utils/animationUtils';
-import { Typography, Spacing, Shadows } from '../../theme/premiumTheme';
+} from "react-native-reanimated";
+import Svg, { Circle, Defs, LinearGradient, Stop } from "react-native-svg";
+import { useTheme } from "../../context/ThemeContext";
+import {
+  useCounterAnimation,
+  useHolographicEffect,
+} from "../../utils/animationUtils";
+import { Typography, Spacing, Shadows } from "../../theme/premiumTheme";
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -31,20 +34,31 @@ interface ProductivityScoreRingProps {
   strokeWidth?: number;
 }
 
-type Tier = 'common' | 'rare' | 'epic' | 'legendary';
+type Tier = "common" | "rare" | "epic" | "legendary";
 
-const TIER_CONFIG: Record<Tier, { color: string; label: string; gradient: string[] }> = {
-  common: { color: '#9CA3AF', label: 'Common', gradient: ['#9CA3AF', '#6B7280'] },
-  rare: { color: '#3B82F6', label: 'Rare', gradient: ['#60A5FA', '#3B82F6'] },
-  epic: { color: '#8B5CF6', label: 'Epic', gradient: ['#A78BFA', '#8B5CF6'] },
-  legendary: { color: '#F59E0B', label: 'Legendary', gradient: ['#FCD34D', '#F59E0B'] },
+const TIER_CONFIG: Record<
+  Tier,
+  { color: string; label: string; gradient: string[] }
+> = {
+  common: {
+    color: "#9CA3AF",
+    label: "Common",
+    gradient: ["#9CA3AF", "#6B7280"],
+  },
+  rare: { color: "#3B82F6", label: "Rare", gradient: ["#60A5FA", "#3B82F6"] },
+  epic: { color: "#8B5CF6", label: "Epic", gradient: ["#A78BFA", "#8B5CF6"] },
+  legendary: {
+    color: "#F59E0B",
+    label: "Legendary",
+    gradient: ["#FCD34D", "#F59E0B"],
+  },
 };
 
 const MOTIVATIONAL_MESSAGES: Record<Tier, string[]> = {
-  common: ['Every journey starts somewhere!', 'Building momentum...'],
-  rare: ['You\'re making progress!', 'Keep the streak alive!'],
-  epic: ['Impressive dedication!', 'You\'re in the zone!'],
-  legendary: ['You\'re unstoppable!', 'Peak performance!'],
+  common: ["Every journey starts somewhere!", "Building momentum..."],
+  rare: ["You're making progress!", "Keep the streak alive!"],
+  epic: ["Impressive dedication!", "You're in the zone!"],
+  legendary: ["You're unstoppable!", "Peak performance!"],
 };
 
 export const ProductivityScoreRing: React.FC<ProductivityScoreRingProps> = ({
@@ -54,7 +68,7 @@ export const ProductivityScoreRing: React.FC<ProductivityScoreRingProps> = ({
   size = 140,
   strokeWidth = 10,
 }) => {
-  const { theme, isDark } = useTheme();
+  const { theme, isDark, reduceMotion } = useTheme();
   const { holographicStyle } = useHolographicEffect();
 
   // Calculate productivity score (0-100)
@@ -63,15 +77,18 @@ export const ProductivityScoreRing: React.FC<ProductivityScoreRingProps> = ({
     const focusScore = Math.min(focusProgress / 100, 1) * 35;
     const taskScore = Math.min(tasksCompleted / 10, 1) * 20;
     const completionRate = 0.8 * 20; // Assume 80% completion rate for now
-    return Math.min(Math.round(streakScore + focusScore + taskScore + completionRate), 100);
+    return Math.min(
+      Math.round(streakScore + focusScore + taskScore + completionRate),
+      100,
+    );
   }, [streak, focusProgress, tasksCompleted]);
 
   // Determine tier based on score
   const tier: Tier = useMemo(() => {
-    if (score >= 76) return 'legendary';
-    if (score >= 51) return 'epic';
-    if (score >= 26) return 'rare';
-    return 'common';
+    if (score >= 76) return "legendary";
+    if (score >= 51) return "epic";
+    if (score >= 26) return "rare";
+    return "common";
   }, [score]);
 
   const tierConfig = TIER_CONFIG[tier];
@@ -99,7 +116,7 @@ export const ProductivityScoreRing: React.FC<ProductivityScoreRingProps> = ({
       withTiming(score / 100, {
         duration: 1200,
         easing: Easing.bezier(0.33, 1, 0.68, 1),
-      })
+      }),
     );
   }, [score]);
 
@@ -112,14 +129,20 @@ export const ProductivityScoreRing: React.FC<ProductivityScoreRingProps> = ({
 
   return (
     <Animated.View
-      entering={FadeIn.delay(100).duration(400)}
+      entering={reduceMotion ? undefined : FadeIn.delay(100).duration(400)}
       style={styles.container}
     >
       {/* Score Ring */}
       <View style={styles.ringContainer}>
         <Svg width={size} height={size}>
           <Defs>
-            <LinearGradient id="scoreGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <LinearGradient
+              id="scoreGradient"
+              x1="0%"
+              y1="0%"
+              x2="100%"
+              y2="100%"
+            >
               <Stop offset="0%" stopColor={tierConfig.gradient[0]} />
               <Stop offset="100%" stopColor={tierConfig.gradient[1]} />
             </LinearGradient>
@@ -130,7 +153,7 @@ export const ProductivityScoreRing: React.FC<ProductivityScoreRingProps> = ({
             cx={center}
             cy={center}
             r={radius}
-            stroke={isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'}
+            stroke={isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.08)"}
             strokeWidth={strokeWidth}
             fill="none"
           />
@@ -162,7 +185,7 @@ export const ProductivityScoreRing: React.FC<ProductivityScoreRingProps> = ({
         </View>
 
         {/* Legendary glow effect */}
-        {tier === 'legendary' && (
+        {tier === "legendary" && (
           <Animated.View
             style={[
               styles.legendaryGlow,
@@ -203,18 +226,18 @@ export const ProductivityScoreRing: React.FC<ProductivityScoreRingProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: Spacing.md,
   },
   ringContainer: {
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
+    position: "relative",
+    alignItems: "center",
+    justifyContent: "center",
   },
   centerContent: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
+    position: "absolute",
+    alignItems: "center",
+    justifyContent: "center",
   },
   scoreValue: {
     ...Typography.stat,
@@ -226,7 +249,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   legendaryGlow: {
-    position: 'absolute',
+    position: "absolute",
     top: -4,
     left: -4,
     right: -4,
@@ -246,14 +269,12 @@ const styles = StyleSheet.create({
   },
   tierLabel: {
     ...Typography.caption,
-    fontWeight: '600',
+    fontWeight: "600",
     letterSpacing: 1,
   },
   motivationalText: {
     ...Typography.bodySmall,
     marginTop: Spacing.xs,
-    textAlign: 'center',
+    textAlign: "center",
   },
 });
-
-export default ProductivityScoreRing;

@@ -18,6 +18,7 @@ import { useConvexAchievements } from "../../hooks/useConvex";
 import InteractiveWalkthrough from "../../components/InteractiveWalkthrough";
 import { useScreenWalkthrough } from "../../hooks/useScreenWalkthrough";
 import { BONUSES_STEPS } from "../../config/walkthroughSteps";
+import { navigateHomeWithSlide } from "../../navigation/navHelpers";
 
 const BonusesScreen = () => {
   const navigation = useNavigation<any>();
@@ -78,7 +79,7 @@ const BonusesScreen = () => {
     >
       <UnifiedHeader
         title="Bonuses"
-        onClose={() => navigation.navigate("Home")}
+        onClose={() => navigateHomeWithSlide(navigation)}
       />
 
       <ScrollView

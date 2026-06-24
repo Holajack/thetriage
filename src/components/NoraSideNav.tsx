@@ -9,7 +9,7 @@
  * - Liquid-feel menu transitions
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -19,7 +19,7 @@ import {
   Modal,
   Pressable,
   ScrollView,
-} from 'react-native';
+} from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -30,14 +30,14 @@ import Animated, {
   interpolate,
   Easing,
   runOnJS,
-} from 'react-native-reanimated';
-import { BlurView } from 'expo-blur';
-import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
-import { useTheme } from '../context/ThemeContext';
-import { BorderRadius, Spacing, Shadows } from '../theme/premiumTheme';
+} from "react-native-reanimated";
+import { BlurView } from "expo-blur";
+import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import { useTheme } from "../context/ThemeContext";
+import { BorderRadius, Spacing, Shadows } from "../theme/premiumTheme";
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const MENU_WIDTH = 280;
 const ITEM_HEIGHT = 52;
 const INDICATOR_PADDING = 4;
@@ -72,7 +72,7 @@ interface MenuButtonProps {
   isOpen: boolean;
 }
 
-export const MenuButton: React.FC<MenuButtonProps> = ({ onPress, isOpen }) => {
+const MenuButton: React.FC<MenuButtonProps> = ({ onPress, isOpen }) => {
   const { theme } = useTheme();
   const scale = useSharedValue(1);
   const rotation = useSharedValue(0);
@@ -105,12 +105,12 @@ export const MenuButton: React.FC<MenuButtonProps> = ({ onPress, isOpen }) => {
 
   const menuIconStyle = useAnimatedStyle(() => ({
     opacity: iconOpacity1.value,
-    position: 'absolute' as const,
+    position: "absolute" as const,
   }));
 
   const closeIconStyle = useAnimatedStyle(() => ({
     opacity: iconOpacity2.value,
-    position: 'absolute' as const,
+    position: "absolute" as const,
   }));
 
   return (
@@ -146,7 +146,10 @@ interface SlidingIndicatorProps {
   itemCount: number;
 }
 
-const SlidingIndicator: React.FC<SlidingIndicatorProps> = ({ activeIndex, itemCount }) => {
+const SlidingIndicator: React.FC<SlidingIndicatorProps> = ({
+  activeIndex,
+  itemCount,
+}) => {
   const { theme } = useTheme();
   const isDark = theme.isDark;
   const translateY = useSharedValue(activeIndex * ITEM_HEIGHT);
@@ -156,7 +159,7 @@ const SlidingIndicator: React.FC<SlidingIndicatorProps> = ({ activeIndex, itemCo
     // Slight squeeze during movement
     scaleX.value = withSequence(
       withTiming(0.98, { duration: 100 }),
-      withSpring(1, { damping: 20, stiffness: 150 })
+      withSpring(1, { damping: 20, stiffness: 150 }),
     );
     translateY.value = withSpring(activeIndex * ITEM_HEIGHT, {
       damping: 22,
@@ -166,10 +169,7 @@ const SlidingIndicator: React.FC<SlidingIndicatorProps> = ({ activeIndex, itemCo
   }, [activeIndex]);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: translateY.value },
-      { scaleX: scaleX.value },
-    ],
+    transform: [{ translateY: translateY.value }, { scaleX: scaleX.value }],
   }));
 
   return (
@@ -177,8 +177,8 @@ const SlidingIndicator: React.FC<SlidingIndicatorProps> = ({ activeIndex, itemCo
       style={[
         styles.slidingIndicator,
         {
-          backgroundColor: isDark ? '#141414' : 'rgba(0, 0, 0, 0.06)',
-          borderColor: isDark ? '#1F1F1F' : 'rgba(0, 0, 0, 0.08)',
+          backgroundColor: isDark ? "#141414" : "rgba(0, 0, 0, 0.06)",
+          borderColor: isDark ? "#1F1F1F" : "rgba(0, 0, 0, 0.08)",
         },
         animatedStyle,
       ]}
@@ -211,7 +211,10 @@ const NavItemComponent: React.FC<NavItemComponentProps> = ({
   useEffect(() => {
     if (isVisible) {
       const delay = 60 + index * 30;
-      translateX.value = withDelay(delay, withSpring(0, { damping: 22, stiffness: 120 }));
+      translateX.value = withDelay(
+        delay,
+        withSpring(0, { damping: 22, stiffness: 120 }),
+      );
       opacity.value = withDelay(delay, withTiming(1, { duration: 200 }));
     } else {
       translateX.value = 50;
@@ -228,10 +231,7 @@ const NavItemComponent: React.FC<NavItemComponentProps> = ({
   };
 
   const containerStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: translateX.value },
-      { scale: scale.value },
-    ],
+    transform: [{ translateX: translateX.value }, { scale: scale.value }],
     opacity: opacity.value,
   }));
 
@@ -252,23 +252,33 @@ const NavItemComponent: React.FC<NavItemComponentProps> = ({
               styles.iconContainer,
               {
                 backgroundColor: isActive
-                  ? (isDark ? '#4CAF5025' : theme.primary + '20')
-                  : 'transparent',
+                  ? isDark
+                    ? "#4CAF5025"
+                    : theme.primary + "20"
+                  : "transparent",
               },
             ]}
           >
             <Ionicons
               name={item.icon}
               size={20}
-              color={isActive ? '#4CAF50' : (isDark ? '#606060' : theme.textSecondary)}
+              color={
+                isActive ? "#4CAF50" : isDark ? "#606060" : theme.textSecondary
+              }
             />
           </View>
           <Text
             style={[
               styles.navItemLabel,
               {
-                color: isActive ? (isDark ? '#D0D0D0' : theme.text) : (isDark ? '#606060' : theme.textSecondary),
-                fontWeight: isActive ? '600' : '400',
+                color: isActive
+                  ? isDark
+                    ? "#D0D0D0"
+                    : theme.text
+                  : isDark
+                    ? "#606060"
+                    : theme.textSecondary,
+                fontWeight: isActive ? "600" : "400",
               },
             ]}
           >
@@ -277,10 +287,7 @@ const NavItemComponent: React.FC<NavItemComponentProps> = ({
         </View>
         {isActive && (
           <View
-            style={[
-              styles.activeIndicatorDot,
-              { backgroundColor: '#4CAF50' },
-            ]}
+            style={[styles.activeIndicatorDot, { backgroundColor: "#4CAF50" }]}
           />
         )}
       </Pressable>
@@ -313,7 +320,10 @@ const ChatHistoryItem: React.FC<ChatHistoryItemProps> = ({
   useEffect(() => {
     if (isVisible) {
       const delay = 120 + index * 25;
-      translateX.value = withDelay(delay, withSpring(0, { damping: 22, stiffness: 120 }));
+      translateX.value = withDelay(
+        delay,
+        withSpring(0, { damping: 22, stiffness: 120 }),
+      );
       opacity.value = withDelay(delay, withTiming(1, { duration: 180 }));
     } else {
       translateX.value = 30;
@@ -330,16 +340,14 @@ const ChatHistoryItem: React.FC<ChatHistoryItemProps> = ({
   };
 
   const containerStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: translateX.value },
-      { scale: scale.value },
-    ],
+    transform: [{ translateX: translateX.value }, { scale: scale.value }],
     opacity: opacity.value,
   }));
 
-  const summary = session.preview.length > 40
-    ? session.preview.substring(0, 40) + '...'
-    : session.preview;
+  const summary =
+    session.preview.length > 40
+      ? session.preview.substring(0, 40) + "..."
+      : session.preview;
 
   return (
     <Animated.View style={containerStyle}>
@@ -353,28 +361,39 @@ const ChatHistoryItem: React.FC<ChatHistoryItemProps> = ({
         style={[
           styles.chatHistoryItem,
           {
-            backgroundColor: isDark ? '#111111' : 'rgba(0, 0, 0, 0.03)',
+            backgroundColor: isDark ? "#111111" : "rgba(0, 0, 0, 0.03)",
           },
         ]}
       >
-        <View style={[styles.chatHistoryIcon, {
-          backgroundColor: isDark ? '#1A1A1A' : 'rgba(0, 0, 0, 0.06)',
-        }]}>
+        <View
+          style={[
+            styles.chatHistoryIcon,
+            {
+              backgroundColor: isDark ? "#1A1A1A" : "rgba(0, 0, 0, 0.06)",
+            },
+          ]}
+        >
           <Ionicons
             name="chatbubble-outline"
             size={16}
-            color={isDark ? '#505050' : '#666666'}
+            color={isDark ? "#505050" : "#666666"}
           />
         </View>
         <View style={styles.chatHistoryContent}>
           <Text
-            style={[styles.chatHistoryText, { color: isDark ? '#C0C0C0' : '#000000' }]}
+            style={[
+              styles.chatHistoryText,
+              { color: isDark ? "#C0C0C0" : "#000000" },
+            ]}
             numberOfLines={1}
           >
-            {summary || 'New conversation'}
+            {summary || "New conversation"}
           </Text>
           <Text
-            style={[styles.chatHistoryDate, { color: isDark ? '#505050' : '#666666' }]}
+            style={[
+              styles.chatHistoryDate,
+              { color: isDark ? "#505050" : "#666666" },
+            ]}
           >
             {session.date}
           </Text>
@@ -385,15 +404,18 @@ const ChatHistoryItem: React.FC<ChatHistoryItemProps> = ({
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             onDelete();
           }}
-          style={[styles.deleteButton, {
-            backgroundColor: isDark ? '#1A1212' : 'rgba(255, 59, 48, 0.1)',
-          }]}
+          style={[
+            styles.deleteButton,
+            {
+              backgroundColor: isDark ? "#1A1212" : "rgba(255, 59, 48, 0.1)",
+            },
+          ]}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Ionicons
             name="trash-outline"
             size={14}
-            color={isDark ? '#CC5555' : '#FF3B30'}
+            color={isDark ? "#CC5555" : "#FF3B30"}
           />
         </TouchableOpacity>
       </Pressable>
@@ -427,28 +449,32 @@ export const NoraSideNav: React.FC<NoraSideNavProps> = ({
   const activeIndex = items.findIndex((item) => item.id === activeItemId);
 
   // Group sessions by date for section headers
-  const groupSessionsByDate = (sessions: ChatSession[]): { label: string; sessions: ChatSession[] }[] => {
+  const groupSessionsByDate = (
+    sessions: ChatSession[],
+  ): { label: string; sessions: ChatSession[] }[] => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const yesterday = new Date(today.getTime() - 86400000);
     const sevenDaysAgo = new Date(today.getTime() - 7 * 86400000);
 
     const groups: Record<string, ChatSession[]> = {};
-    const order = ['Today', 'Yesterday', 'Previous 7 Days', 'Older'];
+    const order = ["Today", "Yesterday", "Previous 7 Days", "Older"];
 
     for (const session of sessions) {
       const date = new Date(session.date);
       let label: string;
-      if (date >= today) label = 'Today';
-      else if (date >= yesterday) label = 'Yesterday';
-      else if (date >= sevenDaysAgo) label = 'Previous 7 Days';
-      else label = 'Older';
+      if (date >= today) label = "Today";
+      else if (date >= yesterday) label = "Yesterday";
+      else if (date >= sevenDaysAgo) label = "Previous 7 Days";
+      else label = "Older";
 
       if (!groups[label]) groups[label] = [];
       groups[label].push(session);
     }
 
-    return order.filter(l => groups[l]?.length > 0).map(label => ({ label, sessions: groups[label] }));
+    return order
+      .filter((l) => groups[l]?.length > 0)
+      .map((label) => ({ label, sessions: groups[label] }));
   };
 
   // Handle opening/closing animations
@@ -464,10 +490,16 @@ export const NoraSideNav: React.FC<NoraSideNavProps> = ({
         mass: 0.8,
       });
       // Header entrance
-      headerScale.value = withDelay(100, withSpring(1, { damping: 15, stiffness: 200 }));
+      headerScale.value = withDelay(
+        100,
+        withSpring(1, { damping: 15, stiffness: 200 }),
+      );
       headerOpacity.value = withDelay(100, withTiming(1, { duration: 200 }));
       // New chat button entrance
-      newChatScale.value = withDelay(150, withSpring(1, { damping: 15, stiffness: 200 }));
+      newChatScale.value = withDelay(
+        150,
+        withSpring(1, { damping: 15, stiffness: 200 }),
+      );
       newChatOpacity.value = withDelay(150, withTiming(1, { duration: 200 }));
     } else {
       // Quick exit animations
@@ -486,10 +518,13 @@ export const NoraSideNav: React.FC<NoraSideNavProps> = ({
     }
   }, [isOpen]);
 
-  const handleItemPress = useCallback((itemId: string) => {
-    onItemSelect(itemId);
-    setTimeout(() => setIsOpen(false), 150);
-  }, [onItemSelect]);
+  const handleItemPress = useCallback(
+    (itemId: string) => {
+      onItemSelect(itemId);
+      setTimeout(() => setIsOpen(false), 150);
+    },
+    [onItemSelect],
+  );
 
   const handleNewChat = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -497,15 +532,21 @@ export const NoraSideNav: React.FC<NoraSideNavProps> = ({
     onNewChat?.();
   }, [onNewChat]);
 
-  const handleSelectSession = useCallback((session: ChatSession) => {
-    setIsOpen(false);
-    onSelectSession?.(session);
-  }, [onSelectSession]);
+  const handleSelectSession = useCallback(
+    (session: ChatSession) => {
+      setIsOpen(false);
+      onSelectSession?.(session);
+    },
+    [onSelectSession],
+  );
 
-  const handleDeleteSession = useCallback((sessionId: string) => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    onDeleteSession?.(sessionId);
-  }, [onDeleteSession]);
+  const handleDeleteSession = useCallback(
+    (sessionId: string) => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      onDeleteSession?.(sessionId);
+    },
+    [onDeleteSession],
+  );
 
   // Animated styles
   const backdropStyle = useAnimatedStyle(() => ({
@@ -538,14 +579,11 @@ export const NoraSideNav: React.FC<NoraSideNavProps> = ({
         onRequestClose={() => setIsOpen(false)}
       >
         {/* Animated Backdrop */}
-        <Pressable
-          style={styles.backdrop}
-          onPress={() => setIsOpen(false)}
-        >
+        <Pressable style={styles.backdrop} onPress={() => setIsOpen(false)}>
           <Animated.View style={[StyleSheet.absoluteFill, backdropStyle]}>
             <BlurView
               intensity={isDark ? 30 : 20}
-              tint={isDark ? 'dark' : 'light'}
+              tint={isDark ? "dark" : "light"}
               style={StyleSheet.absoluteFill}
             />
             <View
@@ -553,8 +591,8 @@ export const NoraSideNav: React.FC<NoraSideNavProps> = ({
                 StyleSheet.absoluteFill,
                 {
                   backgroundColor: isDark
-                    ? 'rgba(0, 0, 0, 0.4)'
-                    : 'rgba(0, 0, 0, 0.2)',
+                    ? "rgba(0, 0, 0, 0.4)"
+                    : "rgba(0, 0, 0, 0.2)",
                 },
               ]}
             />
@@ -566,15 +604,20 @@ export const NoraSideNav: React.FC<NoraSideNavProps> = ({
           style={[
             styles.menuPanel,
             {
-              backgroundColor: isDark ? '#0A0A0A' : '#FFFFFF',
-              borderLeftColor: isDark ? '#1A1A1A' : 'rgba(0, 0, 0, 0.08)',
+              backgroundColor: isDark ? "#0A0A0A" : "#FFFFFF",
+              borderLeftColor: isDark ? "#1A1A1A" : "rgba(0, 0, 0, 0.08)",
             },
             menuPanelStyle,
           ]}
         >
           {/* Animated Header */}
           <Animated.View style={[styles.menuHeader, headerStyle]}>
-            <Text style={[styles.menuTitle, { color: isDark ? '#E0E0E0' : '#000000' }]}>
+            <Text
+              style={[
+                styles.menuTitle,
+                { color: isDark ? "#E0E0E0" : "#000000" },
+              ]}
+            >
               Nora
             </Text>
             <TouchableOpacity
@@ -582,11 +625,15 @@ export const NoraSideNav: React.FC<NoraSideNavProps> = ({
               style={[
                 styles.closeButton,
                 {
-                  backgroundColor: isDark ? '#1A1A1A' : 'rgba(0, 0, 0, 0.05)',
+                  backgroundColor: isDark ? "#1A1A1A" : "rgba(0, 0, 0, 0.05)",
                 },
               ]}
             >
-              <Ionicons name="close" size={18} color={isDark ? '#707070' : '#666666'} />
+              <Ionicons
+                name="close"
+                size={18}
+                color={isDark ? "#707070" : "#666666"}
+              />
             </TouchableOpacity>
           </Animated.View>
 
@@ -627,12 +674,23 @@ export const NoraSideNav: React.FC<NoraSideNavProps> = ({
 
           {/* Chat History Section with staggered items */}
           <View style={styles.chatHistorySection}>
-            <View style={[
-              styles.chatHistoryHeader,
-              { borderTopColor: isDark ? '#1A1A1A' : 'rgba(0,0,0,0.08)' }
-            ]}>
-              <Ionicons name="time-outline" size={14} color={isDark ? '#404040' : '#666666'} />
-              <Text style={[styles.chatHistorySectionTitle, { color: isDark ? '#404040' : '#666666' }]}>
+            <View
+              style={[
+                styles.chatHistoryHeader,
+                { borderTopColor: isDark ? "#1A1A1A" : "rgba(0,0,0,0.08)" },
+              ]}
+            >
+              <Ionicons
+                name="time-outline"
+                size={14}
+                color={isDark ? "#404040" : "#666666"}
+              />
+              <Text
+                style={[
+                  styles.chatHistorySectionTitle,
+                  { color: isDark ? "#404040" : "#666666" },
+                ]}
+              >
                 Recent Chats
               </Text>
             </View>
@@ -645,7 +703,12 @@ export const NoraSideNav: React.FC<NoraSideNavProps> = ({
               >
                 {groupSessionsByDate(chatSessions || []).map((group) => (
                   <View key={group.label}>
-                    <Text style={[styles.dateGroupHeader, { color: isDark ? '#505050' : '#888888' }]}>
+                    <Text
+                      style={[
+                        styles.dateGroupHeader,
+                        { color: isDark ? "#505050" : "#888888" },
+                      ]}
+                    >
                       {group.label}
                     </Text>
                     {group.sessions.map((session, idx) => (
@@ -663,8 +726,17 @@ export const NoraSideNav: React.FC<NoraSideNavProps> = ({
               </ScrollView>
             ) : (
               <View style={styles.emptyHistoryState}>
-                <Ionicons name="chatbubbles-outline" size={32} color={isDark ? '#303030' : '#999999'} />
-                <Text style={[styles.emptyHistoryText, { color: isDark ? '#303030' : '#999999' }]}>
+                <Ionicons
+                  name="chatbubbles-outline"
+                  size={32}
+                  color={isDark ? "#303030" : "#999999"}
+                />
+                <Text
+                  style={[
+                    styles.emptyHistoryText,
+                    { color: isDark ? "#303030" : "#999999" },
+                  ]}
+                >
                   No chat history yet
                 </Text>
               </View>
@@ -672,8 +744,18 @@ export const NoraSideNav: React.FC<NoraSideNavProps> = ({
           </View>
 
           {/* Footer */}
-          <View style={[styles.menuFooter, { borderTopColor: isDark ? '#1A1A1A' : 'rgba(0,0,0,0.1)' }]}>
-            <Text style={[styles.footerText, { color: isDark ? '#303030' : '#999999' }]}>
+          <View
+            style={[
+              styles.menuFooter,
+              { borderTopColor: isDark ? "#1A1A1A" : "rgba(0,0,0,0.1)" },
+            ]}
+          >
+            <Text
+              style={[
+                styles.footerText,
+                { color: isDark ? "#303030" : "#999999" },
+              ]}
+            >
               Powered by AI
             </Text>
           </View>
@@ -688,15 +770,15 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     ...Shadows.sm,
   },
   backdrop: {
     flex: 1,
   },
   menuPanel: {
-    position: 'absolute',
+    position: "absolute",
     right: 0,
     top: 0,
     bottom: 0,
@@ -708,28 +790,28 @@ const styles = StyleSheet.create({
     ...Shadows.lg,
   },
   menuHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: Spacing.lg,
     paddingHorizontal: Spacing.xs,
   },
   menuTitle: {
     fontSize: 24,
-    fontWeight: '700',
+    fontWeight: "700",
     letterSpacing: -0.5,
   },
   closeButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   newChatButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 12,
     paddingHorizontal: Spacing.md,
     borderRadius: BorderRadius.md,
@@ -738,15 +820,15 @@ const styles = StyleSheet.create({
     ...Shadows.sm,
   },
   newChatText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   navItemsContainer: {
-    position: 'relative',
+    position: "relative",
   },
   slidingIndicator: {
-    position: 'absolute',
+    position: "absolute",
     left: 0,
     right: 0,
     height: ITEM_HEIGHT - INDICATOR_PADDING * 2,
@@ -756,27 +838,27 @@ const styles = StyleSheet.create({
   },
   navItem: {
     height: ITEM_HEIGHT,
-    justifyContent: 'center',
+    justifyContent: "center",
     paddingHorizontal: Spacing.sm,
   },
   navItemContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
   },
   iconContainer: {
     width: 32,
     height: 32,
     borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   navItemLabel: {
     fontSize: 15,
     flex: 1,
   },
   activeIndicatorDot: {
-    position: 'absolute',
+    position: "absolute",
     right: 12,
     width: 6,
     height: 6,
@@ -785,7 +867,7 @@ const styles = StyleSheet.create({
   menuFooter: {
     paddingTop: Spacing.md,
     borderTopWidth: 1,
-    alignItems: 'center',
+    alignItems: "center",
   },
   footerText: {
     fontSize: 12,
@@ -801,8 +883,8 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.sm,
   },
   chatHistoryHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     paddingHorizontal: Spacing.sm,
     paddingTop: Spacing.md,
@@ -811,13 +893,13 @@ const styles = StyleSheet.create({
   },
   chatHistorySectionTitle: {
     fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
+    fontWeight: "600",
+    textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   chatHistoryItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 10,
     paddingHorizontal: Spacing.sm,
     marginHorizontal: 4,
@@ -829,15 +911,15 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   deleteButton: {
     width: 28,
     height: 28,
     borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     marginLeft: 4,
   },
   chatHistoryContent: {
@@ -845,14 +927,14 @@ const styles = StyleSheet.create({
   },
   chatHistoryText: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   chatHistoryDate: {
     fontSize: 11,
     marginTop: 2,
   },
   emptyHistoryState: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: Spacing.xl,
     gap: 8,
   },
@@ -861,13 +943,11 @@ const styles = StyleSheet.create({
   },
   dateGroupHeader: {
     fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'uppercase',
+    fontWeight: "600",
+    textTransform: "uppercase",
     letterSpacing: 0.5,
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 6,
   },
 });
-
-export default NoraSideNav;

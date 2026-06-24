@@ -20,31 +20,15 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 import Animated, {
-  FadeInUp,
   FadeIn,
   useAnimatedStyle,
-  withSpring,
   useSharedValue,
   withSequence,
   withTiming,
-  useAnimatedProps,
 } from "react-native-reanimated";
 import Svg, { Circle as SvgCircle } from "react-native-svg";
-import { AnimatedButton } from "../../components/premium/AnimatedButton";
-import { HolographicBadge } from "../../components/premium/HolographicBadge";
-import {
-  useCounterAnimation,
-  usePulseAnimation,
-  useButtonPressAnimation,
-  useFocusAnimationKey,
-} from "../../utils/animationUtils";
+import { useCounterAnimation } from "../../utils/animationUtils";
 import * as Haptics from "expo-haptics";
-import {
-  AnimationConfig,
-  Spacing,
-  BorderRadius,
-  Shadows,
-} from "../../theme/premiumTheme";
 import { UnifiedHeader } from "../../components/UnifiedHeader";
 import { StaggeredItem } from "../../components/premium/StaggeredList";
 import { ShimmerLoader } from "../../components/premium/ShimmerLoader";
@@ -56,6 +40,8 @@ import { api } from "../../../convex/_generated/api";
 
 // Import useAuth FIRST, before userAppData
 import { useAuth } from "../../context/AuthContext";
+import { navigateHomeWithSlide } from "../../navigation/navHelpers";
+import { BottomTabBar } from "../../components/BottomTabBar";
 
 // Import userAppData functions using CommonJS require
 const {
@@ -84,8 +70,7 @@ const LeaderboardScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const { theme, isDark } = useTheme();
 
-  // Force animations to replay on every screen focus
-  const focusKey = useFocusAnimationKey();
+  // Removed focusKey — replaying all animations on every screen focus caused glitchy re-mounts
 
   // Animated tab indicator - 0 = Friends, 1 = Global
   const tabIndicatorPosition = useSharedValue(0);
@@ -307,21 +292,14 @@ const LeaderboardScreen = () => {
     const rank = index + 1;
     const isTopThree = rank <= 3;
     const isElite = entry.subscription_tier === "elite";
-    const {
-      animatedStyle: pressStyle,
-      onPressIn,
-      onPressOut,
-    } = useButtonPressAnimation();
-    const pulseStyle = usePulseAnimation(entry.is_current_user);
-
-    // Count up animation for numbers
-    const pointsCount = useCounterAnimation(entry.points || 0, 800);
+    // Count up animation for numbers — short duration to avoid JS-thread congestion
+    const pointsCount = useCounterAnimation(entry.points || 0, 400);
     // Convert minutes to hours for display (data stored in minutes)
     const hoursCount = useCounterAnimation(
       (entry.weekly_focus_time || 0) / 60,
-      800,
+      400,
     );
-    const streakCount = useCounterAnimation(entry.current_streak || 0, 800);
+    const streakCount = useCounterAnimation(entry.current_streak || 0, 400);
 
     // Rank change tracking and animation
     const previousRankRef = useRef(rank);
@@ -341,32 +319,29 @@ const LeaderboardScreen = () => {
           setRankChange("down");
         }
 
-        // Trigger indicator animation
+        // Trigger indicator animation — simple timing, no bouncy spring
         rankChangeOpacity.value = 0;
-        rankChangeTranslateY.value = rankChange === "up" ? -10 : 10;
+        rankChangeTranslateY.value = rankChange === "up" ? -6 : 6;
 
         rankChangeOpacity.value = withSequence(
-          withTiming(1, { duration: 300 }),
-          withTiming(1, { duration: 1700 }), // Hold for 1.7s
-          withTiming(0, { duration: 300 }),
+          withTiming(1, { duration: 200 }),
+          withTiming(1, { duration: 1000 }),
+          withTiming(0, { duration: 200 }),
         );
 
-        rankChangeTranslateY.value = withSpring(0, {
-          damping: 15,
-          stiffness: 150,
-        });
+        rankChangeTranslateY.value = withTiming(0, { duration: 200 });
 
         // Background flash animation
         backgroundFlashOpacity.value = withSequence(
-          withTiming(0.2, { duration: 150 }),
-          withTiming(0, { duration: 500 }),
+          withTiming(0.15, { duration: 100 }),
+          withTiming(0, { duration: 300 }),
         );
 
-        // Update ref after animation starts
+        // Update ref after animation completes
         setTimeout(() => {
           previousRankRef.current = rank;
           setRankChange(null);
-        }, 2300);
+        }, 1400);
       }
     }, [rank]);
 
@@ -379,14 +354,11 @@ const LeaderboardScreen = () => {
       opacity: backgroundFlashOpacity.value,
     }));
 
-    // Special glow for top 3
+    // Subtle glow for top 3 — single fade-in, no sequence
     const glowOpacity = useSharedValue(0);
     useEffect(() => {
       if (isTopThree) {
-        glowOpacity.value = withSequence(
-          withTiming(0.6, { duration: 500 }),
-          withTiming(0.3, { duration: 500 }),
-        );
+        glowOpacity.value = withTiming(0.25, { duration: 300 });
       }
     }, [isTopThree]);
 
@@ -394,11 +366,11 @@ const LeaderboardScreen = () => {
       opacity: glowOpacity.value,
     }));
 
-    const staggerDelay = index * 80;
+    const staggerDelay = index * 50;
 
     return (
       <Animated.View
-        entering={FadeIn.delay(staggerDelay).duration(400)}
+        entering={FadeIn.delay(staggerDelay).duration(250)}
         style={[
           styles.leaderboardEntry,
           { backgroundColor: theme.card },
@@ -406,7 +378,6 @@ const LeaderboardScreen = () => {
           entry.is_current_user && {
             backgroundColor: isDark ? "rgba(76, 175, 80, 0.1)" : "#F1F8E9",
           },
-          entry.is_current_user && pulseStyle,
           // Elite member styling - subtle purple border and glow
           isElite &&
             !entry.is_current_user && {
@@ -618,12 +589,11 @@ const LeaderboardScreen = () => {
       {/* Unified Header */}
       <UnifiedHeader
         title="Leaderboard"
-        onClose={() => navigation.navigate("Home")}
+        onClose={() => navigateHomeWithSlide(navigation)}
       />
 
       <Animated.ScrollView
-        key={focusKey}
-        entering={FadeInUp.delay(100).duration(300)}
+        entering={FadeIn.duration(200)}
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 32 }}
         refreshControl={
@@ -900,7 +870,7 @@ const LeaderboardScreen = () => {
                   ]}
                 >
                   <Animated.View
-                    entering={FadeIn.delay(500).duration(800)}
+                    entering={FadeIn.delay(100).duration(300)}
                     style={[
                       styles.goalProgressFill,
                       {
@@ -1343,6 +1313,8 @@ const LeaderboardScreen = () => {
           )}
         </View>
       </Animated.ScrollView>
+
+      <BottomTabBar currentRoute="Leaderboard" />
     </SafeAreaView>
   );
 };

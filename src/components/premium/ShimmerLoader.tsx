@@ -48,16 +48,20 @@ export const ShimmerLoader: React.FC<ShimmerLoaderProps> = ({
   variant = "custom",
 }) => {
   const height = size ?? heightProp;
-  const { theme } = useTheme();
-  const shimmerPosition = useSharedValue(-1);
+  const { theme, reduceMotion } = useTheme();
+  const shimmerPosition = useSharedValue(reduceMotion ? 0 : -1);
 
   useEffect(() => {
+    if (reduceMotion) {
+      shimmerPosition.value = 0;
+      return;
+    }
     shimmerPosition.value = withRepeat(
       withTiming(2, { duration: 1500, easing: Easing.linear }),
       -1,
       false,
     );
-  }, []);
+  }, [reduceMotion]);
 
   // Get variant-specific dimensions
   const getVariantStyle = (): ViewStyle => {
@@ -128,7 +132,7 @@ interface SkeletonRowProps {
   lastLineWidth?: DimensionValue;
 }
 
-export const SkeletonText: React.FC<SkeletonRowProps> = ({
+const SkeletonText: React.FC<SkeletonRowProps> = ({
   lines = 3,
   lineHeight = 16,
   spacing = Spacing.xs,
@@ -193,7 +197,7 @@ export const SkeletonCard: React.FC<SkeletonCardProps> = ({
 };
 
 // Avatar with text skeleton
-export const SkeletonAvatarRow: React.FC<{ avatarSize?: number }> = ({
+const SkeletonAvatarRow: React.FC<{ avatarSize?: number }> = ({
   avatarSize = 48,
 }) => {
   return (
@@ -274,5 +278,3 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 });
-
-export default ShimmerLoader;

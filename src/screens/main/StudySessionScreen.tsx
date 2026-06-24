@@ -22,10 +22,11 @@ import {
   Image,
   Dimensions,
 } from "react-native";
+import { ThemedImage } from "../../components/ThemedImage";
 import {
-  ThemedImage,
-  ThemedImageBackground,
-} from "../../components/ThemedImage";
+  getPathVariantIndex,
+  advancePathVariant,
+} from "../../utils/pathRotation";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 import Svg, {
@@ -140,6 +141,9 @@ export const StudySessionScreen = () => {
   const { user } = useUser();
   const { profile } = useConvexProfile();
   const equippedTrail = useEquippedTrail();
+  // Snapshot the path variant once per session mount; it advances only when a
+  // session completes, so the ground path stays continuous for the whole session.
+  const [pathVariantIndex] = useState(getPathVariantIndex());
   const {
     startPlaylist,
     stopPlayback,
@@ -785,6 +789,9 @@ export const StudySessionScreen = () => {
 
   const handleTimerComplete = async () => {
     try {
+      // Rotate the ground path for the NEXT session now that this one finished.
+      advancePathVariant();
+
       // Exit rest mode if active (timer expired while resting)
       if (isInRestMode) {
         setIsInRestMode(false);
@@ -1570,6 +1577,7 @@ export const StudySessionScreen = () => {
             showTrailBuddy={true}
             animationMode={isInRestMode ? "resting" : "walking"}
             reduceMotion={!!userData?.settings?.reduce_motion}
+            groundVariantIndex={pathVariantIndex}
           />
           <GestureDetector gesture={doubleTapGesture}>
             <View style={styles.newContainer}>

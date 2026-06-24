@@ -1,0 +1,241 @@
+{
+  "sceneName": "Volcano",
+  "layerCount": 10,
+  "layers": [
+    {
+      "slot": "sky",
+      "label": "Sky",
+      "depth": 0,
+      "speed": 0,
+      "defaultOn": true,
+      "opaque": true,
+      "variants": [
+        {
+          "id": "sky_gradient",
+          "file": "sky_gradient.png",
+          "label": "Sky Gradient"
+        }
+      ]
+    },
+    {
+      "slot": "sun",
+      "label": "Sun",
+      "depth": 0.02,
+      "speed": 0.01,
+      "defaultOn": true,
+      "opaque": false,
+      "variants": [
+        {
+          "id": "sun",
+          "file": "sun.png",
+          "label": "Sun"
+        }
+      ]
+    },
+    {
+      "slot": "clouds",
+      "label": "Clouds",
+      "depth": 0.05,
+      "speed": 0.03,
+      "defaultOn": true,
+      "opaque": false,
+      "variants": [
+        {
+          "id": "fluffy_cloud",
+          "file": "fluffy_cloud.png",
+          "label": "Fluffy Cloud"
+        },
+        {
+          "id": "dense_layered_cloud",
+          "file": "dense_layered_cloud.png",
+          "label": "Dense Layered"
+        },
+        {
+          "id": "small_cloud",
+          "file": "small_cloud.png",
+          "label": "Small Cloud"
+        },
+        {
+          "id": "thin_wisp_cloud",
+          "file": "thin_wisp_cloud.png",
+          "label": "Thin Wisp"
+        },
+        {
+          "id": "wide_cloud",
+          "file": "wide_cloud.png",
+          "label": "Wide Cloud"
+        }
+      ]
+    },
+    {
+      "slot": "far_mountains",
+      "label": "Far Mountains",
+      "depth": 0.12,
+      "speed": 0.04,
+      "defaultOn": true,
+      "opaque": false,
+      "variants": [
+        {
+          "id": "far_mountain_range",
+          "file": "far_mountain_range.png",
+          "label": "Far Mountain Range"
+        }
+      ]
+    },
+    {
+      "slot": "mid_mountains",
+      "label": "Mid Mountains",
+      "depth": 0.25,
+      "speed": 0.08,
+      "defaultOn": true,
+      "opaque": false,
+      "variants": [
+        {
+          "id": "mid_mountain_range",
+          "file": "mid_mountain_range.png",
+          "label": "Mid Mountain Range"
+        }
+      ]
+    },
+    {
+      "slot": "midground",
+      "label": "Midground Jungle",
+      "depth": 0.4,
+      "speed": 0.15,
+      "defaultOn": true,
+      "opaque": false,
+      "variants": [
+        {
+          "id": "mid_jungle_layer",
+          "file": "mid_jungle_layer.png",
+          "label": "Jungle Treeline"
+        }
+      ]
+    },
+    {
+      "slot": "trees",
+      "label": "Foreground Tree",
+      "depth": 0.6,
+      "speed": 0.35,
+      "defaultOn": true,
+      "opaque": false,
+      "variants": [
+        {
+          "id": "foreground_tree",
+          "file": "foreground_tree.png",
+          "label": "Standard Tree"
+        },
+        {
+          "id": "foreground_tall_tree",
+          "file": "foreground_tall_tree.png",
+          "label": "Tall Tree"
+        },
+        {
+          "id": "foreground_left_lean_tree",
+          "file": "foreground_left_lean_tree.png",
+          "label": "Left Lean"
+        },
+        {
+          "id": "foreground_right_lean_tree",
+          "file": "foreground_right_lean_tree.png",
+          "label": "Right Lean"
+        },
+        {
+          "id": "foreground_right_trunk_bend_left",
+          "file": "foreground_right_trunk_bend_left.png",
+          "label": "Right Trunk Bend Left"
+        },
+        {
+          "id": "foreground_trunk_bend_right",
+          "file": "foreground_trunk_bend_right.png",
+          "label": "Trunk Bend Right"
+        },
+        {
+          "id": "foreground_trunk_s",
+          "file": "foreground_trunk_s.png",
+          "label": "S-Trunk"
+        },
+        {
+          "id": "foreground_long_vine_tree",
+          "file": "foreground_long_vine_tree.png",
+          "label": "Long Vine Tree"
+        },
+        {
+          "id": "foreground_vines_tree",
+          "file": "foreground_vines_tree.png",
+          "label": "Vines Tree"
+        }
+      ]
+    },
+    {
+      "slot": "bushes",
+      "label": "Bushes",
+      "depth": 0.75,
+      "speed": 0.55,
+      "defaultOn": true,
+      "opaque": false,
+      "variants": [
+        {
+          "id": "jungle_bush",
+          "file": "jungle_bush.png",
+          "label": "Jungle Bush"
+        },
+        {
+          "id": "tall_bush",
+          "file": "tall_bush.png",
+          "label": "Tall Bush"
+        },
+        {
+          "id": "wide_low_bush",
+          "file": "wide_low_bush.png",
+          "label": "Wide Low Bush"
+        },
+        {
+          "id": "thick_moss_bush",
+          "file": "thick_moss_bush.png",
+          "label": "Thick Moss Bush"
+        }
+      ]
+    },
+    {
+      "slot": "ground",
+      "label": "Ground Path",
+      "depth": 0.9,
+      "speed": 0.75,
+      "defaultOn": true,
+      "opaque": false,
+      "variants": [
+        {
+          "id": "regular_path",
+          "file": "regular_path.png",
+          "label": "Regular Path"
+        },
+        {
+          "id": "mossy_jungl_path",
+          "file": "mossy_jungl_path.png",
+          "label": "Mossy Path"
+        },
+        {
+          "id": "grassy_path",
+          "file": "grassy_path.png",
+          "label": "Grassy Path"
+        },
+        {
+          "id": "damp_moss_path",
+          "file": "damp_moss_path.png",
+          "label": "Damp Moss Path"
+        },
+        {
+          "id": "flower_jungl_path",
+          "file": "flower_jungl_path.png",
+          "label": "Flower Path"
+        },
+        {
+          "id": "stones_pebbles_path",
+          "file": "stones_pebbles_path.png",
+          "label": "Stones & Pebbles"
+        }
+      ]
+    }
+  ]
+}

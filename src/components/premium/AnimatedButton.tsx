@@ -9,8 +9,14 @@
  * - Success/error state transitions
  */
 
-import React, { useCallback, useState } from 'react';
-import { StyleSheet, Text, ViewStyle, TextStyle, Pressable } from 'react-native';
+import React, { useCallback, useState } from "react";
+import {
+  StyleSheet,
+  Text,
+  ViewStyle,
+  TextStyle,
+  Pressable,
+} from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -18,23 +24,30 @@ import Animated, {
   withTiming,
   withSequence,
   interpolateColor,
-} from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
-import { LinearGradient } from 'expo-linear-gradient';
-import { AnimationConfig, TimingConfig, Typography, BorderRadius, Shadows, Spacing } from '../../theme/premiumTheme';
-import { useTheme } from '../../context/ThemeContext';
+} from "react-native-reanimated";
+import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
+import {
+  AnimationConfig,
+  TimingConfig,
+  Typography,
+  BorderRadius,
+  Shadows,
+  Spacing,
+} from "../../theme/premiumTheme";
+import { useTheme } from "../../context/ThemeContext";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 interface AnimatedButtonProps {
   title: string;
   onPress: () => void | Promise<void>;
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost';
-  size?: 'small' | 'medium' | 'large';
+  variant?: "primary" | "secondary" | "outline" | "ghost";
+  size?: "small" | "medium" | "large";
   disabled?: boolean;
   loading?: boolean;
   icon?: React.ReactNode;
-  iconPosition?: 'left' | 'right';
+  iconPosition?: "left" | "right";
   gradient?: boolean;
   gradientColors?: string[];
   style?: ViewStyle;
@@ -47,12 +60,12 @@ interface AnimatedButtonProps {
 export const AnimatedButton: React.FC<AnimatedButtonProps> = ({
   title,
   onPress,
-  variant = 'primary',
-  size = 'medium',
+  variant = "primary",
+  size = "medium",
   disabled = false,
   loading = false,
   icon,
-  iconPosition = 'left',
+  iconPosition = "left",
   gradient = false,
   gradientColors,
   style,
@@ -90,7 +103,7 @@ export const AnimatedButton: React.FC<AnimatedButtonProps> = ({
     if (successState) {
       successProgress.value = withSequence(
         withSpring(1.1, AnimationConfig.bouncy),
-        withSpring(1, AnimationConfig.standard)
+        withSpring(1, AnimationConfig.standard),
       );
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
@@ -106,26 +119,42 @@ export const AnimatedButton: React.FC<AnimatedButtonProps> = ({
   // Get styles based on variant and size
   const getContainerStyle = (): ViewStyle => {
     const baseStyle: ViewStyle = {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
       borderRadius: BorderRadius.lg,
       ...Shadows.md,
     };
 
     // Size styles
     const sizeStyles: Record<string, ViewStyle> = {
-      small: { paddingVertical: Spacing.xs, paddingHorizontal: Spacing.md, minHeight: 36 },
-      medium: { paddingVertical: Spacing.sm, paddingHorizontal: Spacing.lg, minHeight: 48 },
-      large: { paddingVertical: Spacing.md, paddingHorizontal: Spacing.xl, minHeight: 56 },
+      small: {
+        paddingVertical: Spacing.xs,
+        paddingHorizontal: Spacing.md,
+        minHeight: 36,
+      },
+      medium: {
+        paddingVertical: Spacing.sm,
+        paddingHorizontal: Spacing.lg,
+        minHeight: 48,
+      },
+      large: {
+        paddingVertical: Spacing.md,
+        paddingHorizontal: Spacing.xl,
+        minHeight: 56,
+      },
     };
 
     // Variant styles
     const variantStyles: Record<string, ViewStyle> = {
       primary: { backgroundColor: theme.primary },
       secondary: { backgroundColor: theme.card },
-      outline: { backgroundColor: 'transparent', borderWidth: 2, borderColor: theme.primary },
-      ghost: { backgroundColor: 'transparent', ...{ shadowOpacity: 0 } },
+      outline: {
+        backgroundColor: "transparent",
+        borderWidth: 2,
+        borderColor: theme.primary,
+      },
+      ghost: { backgroundColor: "transparent", ...{ shadowOpacity: 0 } },
     };
 
     return {
@@ -133,15 +162,15 @@ export const AnimatedButton: React.FC<AnimatedButtonProps> = ({
       ...sizeStyles[size],
       ...variantStyles[variant],
       ...(disabled && { opacity: 0.5 }),
-      ...(fullWidth && { width: '100%' }),
+      ...(fullWidth && { width: "100%" }),
     };
   };
 
   const getTextStyle = (): TextStyle => {
     const baseStyle: TextStyle = {
       ...Typography.label,
-      textTransform: 'none',
-      fontWeight: '600',
+      textTransform: "none",
+      fontWeight: "600",
     };
 
     const sizeStyles: Record<string, TextStyle> = {
@@ -151,7 +180,7 @@ export const AnimatedButton: React.FC<AnimatedButtonProps> = ({
     };
 
     const variantStyles: Record<string, TextStyle> = {
-      primary: { color: '#FFFFFF' },
+      primary: { color: "#FFFFFF" },
       secondary: { color: theme.text },
       outline: { color: theme.primary },
       ghost: { color: theme.primary },
@@ -166,19 +195,26 @@ export const AnimatedButton: React.FC<AnimatedButtonProps> = ({
   // Render content
   const renderContent = () => (
     <>
-      {icon && iconPosition === 'left' && <Animated.View style={styles.iconLeft}>{icon}</Animated.View>}
+      {icon && iconPosition === "left" && (
+        <Animated.View style={styles.iconLeft}>{icon}</Animated.View>
+      )}
       {loading ? (
         <Text style={[computedTextStyle, textStyle]}>Loading...</Text>
       ) : (
         <Text style={[computedTextStyle, textStyle]}>{title}</Text>
       )}
-      {icon && iconPosition === 'right' && <Animated.View style={styles.iconRight}>{icon}</Animated.View>}
+      {icon && iconPosition === "right" && (
+        <Animated.View style={styles.iconRight}>{icon}</Animated.View>
+      )}
     </>
   );
 
   // Gradient button
-  if (gradient && variant === 'primary') {
-    const colors = gradientColors || [theme.primary, adjustColor(theme.primary, -20)];
+  if (gradient && variant === "primary") {
+    const colors = gradientColors || [
+      theme.primary,
+      adjustColor(theme.primary, -20),
+    ];
 
     return (
       <AnimatedPressable
@@ -215,12 +251,12 @@ export const AnimatedButton: React.FC<AnimatedButtonProps> = ({
 
 // Helper to darken/lighten colors
 const adjustColor = (color: string, amount: number): string => {
-  const hex = color.replace('#', '');
+  const hex = color.replace("#", "");
   const num = parseInt(hex, 16);
   const r = Math.min(255, Math.max(0, (num >> 16) + amount));
   const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00ff) + amount));
   const b = Math.min(255, Math.max(0, (num & 0x0000ff) + amount));
-  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
 };
 
 const styles = StyleSheet.create({
@@ -231,8 +267,6 @@ const styles = StyleSheet.create({
     marginLeft: Spacing.xs,
   },
   gradientContainer: {
-    overflow: 'hidden',
+    overflow: "hidden",
   },
 });
-
-export default AnimatedButton;

@@ -268,10 +268,8 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
   const openQuizDetail = (quiz: Quiz) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedQuiz(quiz);
-    // Auto-set mode if there's an in-progress session
-    if (quiz.inProgressMode) {
-      setQuizMode(quiz.inProgressMode);
-    }
+    // Auto-set mode if there's an in-progress session, otherwise reset to quick
+    setQuizMode(quiz.inProgressMode ?? "quick");
     setModalVisible(true);
   };
 

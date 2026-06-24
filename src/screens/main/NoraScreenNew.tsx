@@ -1268,7 +1268,9 @@ const NoraScreenNew: React.FC = () => {
         if (prepareError.message?.includes("Only one Recording")) {
           try {
             await newRecording.stopAndUnloadAsync();
-          } catch (e) {}
+          } catch {
+            // Unload can fail if nothing is loaded; the fresh-recording retry below handles it.
+          }
 
           // Wait a bit longer
           await new Promise((resolve) => setTimeout(resolve, 300));

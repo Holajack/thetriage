@@ -90,11 +90,19 @@ export const useButtonPressAnimation = () => {
 // ENTRANCE ANIMATION (Fade + Slide)
 // ============================================
 export const useEntranceAnimation = (delay: number = 0) => {
-  const opacity = useSharedValue(0);
-  const translateY = useSharedValue(20);
+  const reduceMotion = useReduceMotionFlag();
+  const opacity = useSharedValue(reduceMotion ? 1 : 0);
+  const translateY = useSharedValue(reduceMotion ? 0 : 20);
 
   // Use focus-aware effect so animation triggers when screen becomes visible
   useEffect(() => {
+    if (reduceMotion) {
+      // Show immediately with no motion.
+      opacity.value = 1;
+      translateY.value = 0;
+      return;
+    }
+
     // Reset to initial state
     opacity.value = 0;
     translateY.value = 20;
@@ -117,7 +125,7 @@ export const useEntranceAnimation = (delay: number = 0) => {
       cancelAnimation(opacity);
       cancelAnimation(translateY);
     };
-  }, [delay]);
+  }, [delay, reduceMotion]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
@@ -130,19 +138,25 @@ export const useEntranceAnimation = (delay: number = 0) => {
 // ============================================
 // STAGGERED LIST ENTRANCE
 // ============================================
-export const useStaggeredEntrance = (
+const useStaggeredEntrance = (
   itemCount: number,
   delayType: "fast" | "normal" | "slow" = "normal",
 ) => {
   const baseDelay = StaggerDelay[delayType];
+  const reduceMotion = useReduceMotionFlag();
 
   const getItemAnimation = useCallback(
     (index: number) => {
       const delay = index * baseDelay;
-      const opacity = useSharedValue(0);
-      const translateY = useSharedValue(30);
+      const opacity = useSharedValue(reduceMotion ? 1 : 0);
+      const translateY = useSharedValue(reduceMotion ? 0 : 30);
 
       useEffect(() => {
+        if (reduceMotion) {
+          opacity.value = 1;
+          translateY.value = 0;
+          return;
+        }
         opacity.value = withDelay(
           delay,
           withTiming(1, { duration: TimingConfig.entrance }),
@@ -151,14 +165,14 @@ export const useStaggeredEntrance = (
           delay,
           withSpring(0, AnimationConfig.gentle),
         );
-      }, []);
+      }, [reduceMotion]);
 
       return useAnimatedStyle(() => ({
         opacity: opacity.value,
         transform: [{ translateY: translateY.value }],
       }));
     },
-    [baseDelay],
+    [baseDelay, reduceMotion],
   );
 
   return { getItemAnimation };
@@ -207,7 +221,7 @@ export const usePulseAnimation = (enabled: boolean = true) => {
 // ============================================
 // SHIMMER/SKELETON LOADER
 // ============================================
-export const useShimmerAnimation = () => {
+const useShimmerAnimation = () => {
   const shimmerPosition = useSharedValue(-1);
   const reduceMotion = useReduceMotionFlag();
 
@@ -242,10 +256,13 @@ export const useSuccessAnimation = () => {
   const scale = useSharedValue(1);
   const rotation = useSharedValue(0);
   const opacity = useSharedValue(1);
+  const reduceMotion = useReduceMotionFlag();
 
   const celebrate = useCallback(() => {
-    // Haptic feedback
+    // Haptic feedback always fires (not visual motion)
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    if (reduceMotion) return;
 
     // Bounce + slight rotation
     scale.value = withSequence(
@@ -259,7 +276,7 @@ export const useSuccessAnimation = () => {
       withTiming(5, { duration: 100 }),
       withTiming(0, { duration: 100 }),
     );
-  }, []);
+  }, [reduceMotion]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }, { rotate: `${rotation.value}deg` }],
@@ -272,7 +289,7 @@ export const useSuccessAnimation = () => {
 // ============================================
 // TAB SWITCH ANIMATION
 // ============================================
-export const useTabSwitchAnimation = (isActive: boolean) => {
+const useTabSwitchAnimation = (isActive: boolean) => {
   const scale = useSharedValue(isActive ? 1 : 0.9);
   const opacity = useSharedValue(isActive ? 1 : 0.6);
 
@@ -424,7 +441,7 @@ export const triggerHaptic = (type: keyof typeof HapticPatterns) => {
 // ============================================
 // MODAL/SHEET ANIMATION
 // ============================================
-export const useModalAnimation = (isVisible: boolean) => {
+const useModalAnimation = (isVisible: boolean) => {
   const translateY = useSharedValue(500);
   const opacity = useSharedValue(0);
 

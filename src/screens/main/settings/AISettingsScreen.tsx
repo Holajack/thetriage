@@ -12,6 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../../context/ThemeContext";
 import { useConvexProfile } from "../../../hooks/useConvex";
+import { useSubscriptionTier } from "../../../hooks/useSubscriptionTier";
 import { useAuth as useClerkAuth } from "@clerk/clerk-expo";
 import { updateUserSettings } from "../../../utils/userSettings";
 import { Typography, Spacing, BorderRadius } from "../../../theme/premiumTheme";
@@ -26,11 +27,7 @@ const AISettingsScreen = () => {
   const isDark = theme.isDark;
   const { profile } = useConvexProfile();
   const { userId: clerkUserId } = useClerkAuth();
-
-  const subscriptionTier = profile?.subscription_tier || "free";
-  const isElite = subscriptionTier === "elite";
-  const isPremium = subscriptionTier === "premium";
-  const hasAIAccess = isElite || isPremium;
+  const { isElite, isPremium, hasAIAccess } = useSubscriptionTier();
 
   const [noraEnabled, setNoraEnabled] = useState(true);
   const [patrickEnabled, setPatrickEnabled] = useState(false);

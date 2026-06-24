@@ -10,7 +10,7 @@ export const getActive = query({
     return await ctx.db
       .query("focusSessions")
       .withIndex("by_userId_status", (q) =>
-        q.eq("userId", user._id).eq("status", "active")
+        q.eq("userId", user._id).eq("status", "active"),
       )
       .first();
   },
@@ -70,7 +70,7 @@ export const end = mutation({
     const endTime = new Date();
     const startTime = new Date(session.startTime);
     const durationSeconds = Math.floor(
-      (endTime.getTime() - startTime.getTime()) / 1000
+      (endTime.getTime() - startTime.getTime()) / 1000,
     );
 
     // Calculate flint reward (1 flint per minute)
@@ -106,7 +106,7 @@ export const end = mutation({
     // Helper to calculate streak based on last session date
     const calculateStreak = (
       lastSessionDate: string | undefined,
-      currentStreak: number
+      currentStreak: number,
     ): number => {
       if (!lastSessionDate) {
         // First session ever
@@ -133,11 +133,12 @@ export const end = mutation({
     if (existingStats) {
       const newStreak = calculateStreak(
         existingStats.lastSessionDate,
-        existingStats.currentStreak ?? 0
+        existingStats.currentStreak ?? 0,
       );
 
       // Update existing stats
-      const newTotalFocusTime = (existingStats.totalFocusTime ?? 0) + durationMinutes;
+      const newTotalFocusTime =
+        (existingStats.totalFocusTime ?? 0) + durationMinutes;
       const newLevel = Math.floor(newTotalFocusTime / 180) + 1;
       await ctx.db.patch(existingStats._id, {
         totalFocusTime: newTotalFocusTime,
@@ -196,5 +197,17 @@ export const cancel = mutation({
       status: "cancelled",
       endTime: new Date().toISOString(),
     });
+  },
+});
+
+export const deleteSession = mutation({
+  args: { sessionId: v.id("focusSessions") },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    const session = await ctx.db.get(args.sessionId);
+    if (!session || session.userId !== user._id) {
+      throw new Error("Session not found");
+    }
+    await ctx.db.delete(args.sessionId);
   },
 });

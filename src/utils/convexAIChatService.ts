@@ -6,7 +6,6 @@
  */
 import { api } from "../../convex/_generated/api";
 import { getConvexClient } from "./convexClient";
-export { setConvexClient } from "./convexClient";
 
 // ────────────────────────────────────────────────────
 // Nora Chat

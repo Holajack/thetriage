@@ -46,7 +46,7 @@ export const saveQuizResultLocally = async (
   }
 };
 
-export const getLocalQuizResults = async (
+const getLocalQuizResults = async (
   userId: string,
 ): Promise<StoredQuizResult[]> => {
   try {
@@ -57,7 +57,7 @@ export const getLocalQuizResults = async (
   }
 };
 
-export const getQuizResultsByType = async (
+const getQuizResultsByType = async (
   userId: string,
   quizType: string,
 ): Promise<StoredQuizResult[]> => {
@@ -69,7 +69,7 @@ export const getQuizResultsByType = async (
   }
 };
 
-export const updateQuizProgress = async (
+const updateQuizProgress = async (
   quizId: string,
   userId: string,
 ): Promise<void> => {
@@ -98,7 +98,7 @@ export const updateQuizProgress = async (
   }
 };
 
-export const getQuizProgress = async (
+const getQuizProgress = async (
   userId: string,
 ): Promise<{ [key: string]: QuizProgress }> => {
   try {
@@ -110,7 +110,7 @@ export const getQuizProgress = async (
   }
 };
 
-export const getQuizCompletionStatus = async (
+const getQuizCompletionStatus = async (
   userId: string,
   quizId: string,
 ): Promise<{ completed: boolean; count: number; lastCompleted?: Date }> => {
@@ -136,13 +136,11 @@ export const saveQuizResultToDatabase = async (
   // TODO: Implement Convex-based quiz result storage if needed
 };
 
-export const syncQuizResultsWithDatabase = async (
-  userId: string,
-): Promise<void> => {
+const syncQuizResultsWithDatabase = async (userId: string): Promise<void> => {
   // TODO: Implement Convex-based quiz result sync if needed
 };
 
-export const getQuizHistory = async (
+const getQuizHistory = async (
   userId: string,
   quizType?: string,
 ): Promise<StoredQuizResult[]> => {
@@ -157,7 +155,7 @@ export const getQuizHistory = async (
   }
 };
 
-export const getQuizImprovement = async (
+const getQuizImprovement = async (
   userId: string,
   quizType: string,
 ): Promise<{
@@ -209,7 +207,7 @@ export const getQuizImprovement = async (
 };
 
 // Clear all quiz data (for testing or account deletion)
-export const clearAllQuizData = async (userId: string): Promise<void> => {
+const clearAllQuizData = async (userId: string): Promise<void> => {
   try {
     await AsyncStorage.removeItem(`${QUIZ_RESULTS_KEY}_${userId}`);
     await AsyncStorage.removeItem(`${QUIZ_PROGRESS_KEY}_${userId}`);

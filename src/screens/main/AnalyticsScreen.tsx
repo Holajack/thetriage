@@ -14,10 +14,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 const { useUserAppData } = require("../../utils/userAppData");
 import { BottomTabBar } from "../../components/BottomTabBar";
-import {
-  CircularChart,
-  AnimatedCircularChart,
-} from "../../components/CircularChart";
+import { AnimatedCircularChart } from "../../components/CircularChart";
 import { UnifiedHeader } from "../../components/UnifiedHeader";
 import Svg, { Path, Rect, Defs, LinearGradient, Stop } from "react-native-svg";
 import Animated, {
@@ -62,6 +59,7 @@ import {
   AnimationConfig,
   TimingConfig,
 } from "../../theme/premiumTheme";
+import { navigateHomeWithSlide } from "../../navigation/navHelpers";
 
 const { width } = Dimensions.get("window");
 
@@ -1184,7 +1182,7 @@ const AnalyticsScreen = () => {
       >
         <UnifiedHeader
           title="Analytics"
-          onClose={() => navigation.navigate("Home")}
+          onClose={() => navigateHomeWithSlide(navigation)}
         />
         <ScrollView
           style={{ flex: 1 }}
@@ -1212,7 +1210,7 @@ const AnalyticsScreen = () => {
       {/* Unified Header */}
       <UnifiedHeader
         title="Analytics"
-        onClose={() => navigation.navigate("Home")}
+        onClose={() => navigateHomeWithSlide(navigation)}
       />
 
       <ScrollView

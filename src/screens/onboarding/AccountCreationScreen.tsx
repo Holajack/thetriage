@@ -32,7 +32,6 @@ import {
   useEntranceAnimation,
   useProgressAnimation,
 } from "../../utils/animationUtils";
-import { createInitialUserData } from "../../utils/createUserData";
 
 type AccountCreationNavigationProp = NativeStackNavigationProp<
   OnboardingStackParamList,

@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HikeWise 9-Layer Parallax Tuner</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #111827; color: #e5e7eb; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; display: flex; height: 100vh; overflow: hidden; }
+
+.sidebar { width: 380px; min-width: 380px; background: #1f2937; overflow-y: auto; padding: 16px; border-right: 1px solid #374151; display: flex; flex-direction: column; gap: 12px; }
+.viewport-area { flex: 1; display: flex; align-items: center; justify-content: center; position: relative; background: #0f172a; }
+
+.section { background: #111827; border-radius: 8px; padding: 10px 12px; }
+.section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #9ca3af; margin-bottom: 8px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; }
+
+.btn-row { display: flex; gap: 4px; flex-wrap: wrap; }
+.btn { padding: 5px 10px; border-radius: 6px; border: 1px solid #374151; background: #1f2937; color: #d1d5db; font-size: 12px; cursor: pointer; font-weight: 500; transition: all 0.15s; }
+.btn:hover { background: #374151; }
+.btn.active { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+.btn.sm { padding: 3px 7px; font-size: 10px; }
+
+.layer-panel { background: #111827; border-radius: 8px; padding: 8px 10px; }
+.layer-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; cursor: pointer; }
+.layer-header input[type="checkbox"] { accent-color: #3b82f6; }
+.layer-name { font-size: 12px; font-weight: 600; flex: 1; }
+.layer-badge { font-size: 10px; background: #374151; padding: 2px 6px; border-radius: 4px; color: #9ca3af; }
+
+.slider-row { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+.slider-label { font-size: 10px; color: #9ca3af; width: 50px; text-align: right; }
+.slider-val { font-size: 11px; color: #60a5fa; width: 42px; font-family: 'SF Mono', monospace; }
+.slider-row input[type="range"] { flex: 1; height: 4px; accent-color: #3b82f6; }
+
+.phone-frame { position: relative; overflow: hidden; background: #000; border-radius: 40px; box-shadow: 0 0 0 3px #374151, 0 0 30px rgba(0,0,0,0.5); }
+.phone-screen { position: relative; overflow: hidden; width: 100%; height: 100%; }
+
+.layer-img { position: absolute; }
+.scroll-row { position: absolute; display: flex; will-change: transform; }
+.scroll-row img { flex-shrink: 0; display: block; }
+.static-row { position: absolute; }
+.static-row img { display: block; }
+.sun-container { position: absolute; left: 0; right: 0; display: flex; justify-content: center; pointer-events: none; }
+
+.export-area { margin-top: 8px; }
+.export-btn { width: 100%; padding: 10px; border-radius: 8px; border: none; background: #10b981; color: #fff; font-weight: 700; font-size: 13px; cursor: pointer; }
+.export-btn:hover { background: #059669; }
+.reset-btn { width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #374151; background: transparent; color: #9ca3af; font-size: 12px; cursor: pointer; margin-top: 6px; }
+.reset-btn:hover { background: #1f2937; color: #e5e7eb; }
+
+.info-bar { position: absolute; bottom: 12px; left: 12px; font-size: 11px; color: #6b7280; }
+.play-toggle { position: absolute; top: 12px; right: 12px; }
+
+.guide-line { position: absolute; left: 0; right: 0; height: 1px; pointer-events: none; z-index: 100; }
+.guide-line.bottom { bottom: 0; background: #ef4444; }
+.guide-line.mid { top: 50%; background: rgba(255,255,255,0.1); }
+
+select { background: #1f2937; color: #e5e7eb; border: 1px solid #374151; border-radius: 6px; padding: 5px 8px; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<div class="sidebar" id="sidebar"></div>
+<div class="viewport-area" id="viewportArea">
+  <div class="info-bar" id="infoBar"></div>
+</div>
+
+<script>
+const BIOMES = ['forest','beach','desert','volcano','snow','canyon','northern','galaxy'];
+const BIOME_FOLDERS = { forest:'Forest', beach:'Beach', desert:'Desert', volcano:'Volcano', snow:'Snow', canyon:'Canyon', northern:'Northern', galaxy:'Galaxy' };
+
+const GROUND_NAMES = ['regular_path','mossy_jungl_path','grassy_path','damp_moss_path','flower_jungl_path','stones_pebbles_path'];
+const GROUND_LABELS = ['Regular','Mossy','Grassy','Damp Moss','Flower','Stones'];
+
+const TREE_NAMES = ['foreground_tree','foreground_tall_tree','foreground_left_lean_tree','foreground_right_lean_tree','foreground_right_trunk_bend_left','foreground_trunk_bend_right','foreground_trunk_s','foreground_long_vine_tree','foreground_vines_tree'];
+const BUSH_NAMES = ['jungle_bush','tall_bush','wide_low_bush','thick_moss_bush'];
+const CLOUD_NAMES = ['fluffy_cloud','dense_layered_cloud','small_cloud','thin_wisp_cloud','wide_cloud'];
+
+const DEVICES = {
+  'iPhone SE': { w: 375, h: 667 },
+  'iPhone 14': { w: 390, h: 844 },
+  'iPhone 15 Pro': { w: 393, h: 852 },
+  'iPhone 15 Pro Max': { w: 430, h: 932 },
+  'iPhone 16 Pro': { w: 402, h: 874 },
+  'iPhone 16 Pro Max': { w: 440, h: 956 },
+};
+
+const FRAME_ASPECT = 1024 / 1536;
+const BASE_SPEED = 93;
+
+const LAYER_ORDER = ['ground','bushes','trees','midground','midMountains','farMountains','clouds','sun'];
+const LAYER_LABELS = { ground:'Ground Path', bushes:'Bushes', trees:'Trees', midground:'Midground', midMountains:'Mid Mountains', farMountains:'Far Mountains', clouds:'Clouds', sun:'Sun' };
+const LAYER_ZINDEX = { farMountains:1, midMountains:2, midground:3, trees:4, bushes:5, ground:6, sun:7, clouds:8 };
+const SCROLL_LAYERS = new Set(['ground','bushes','trees','midground','clouds']);
+const STATIC_LAYERS = new Set(['farMountains','midMountains']);
+
+const DEFAULT_CONFIG = {
+  forest: {
+    ground:       { scale: 1.18, offsetY: 0.03, offsetX: 0.00, speed: 0.75 },
+    bushes:       { scale: 0.30, offsetY:-0.11, offsetX:-0.09, speed: 0.55 },
+    trees:        { scale: 0.52, offsetY:-0.07, offsetX: 0.00, speed: 0.35 },
+    midground:    { scale: 1.00, offsetY: 0.14, offsetX: 0.00, speed: 0.15 },
+    midMountains: { scale: 1.00, offsetY: 0.00, offsetX: 0.00, speed: 0 },
+    farMountains: { scale: 1.00, offsetY:-0.01, offsetX: 0.00, speed: 0 },
+    clouds:       { scale: 0.57, offsetY:-0.46, offsetX: 0.00, speed: 0.03 },
+    sun:          { scale: 0.40, offsetY:-0.62, offsetX: 0.00, speed: 0 },
+  },
+  beach: {
+    ground:       { scale: 1.15, offsetY: 0.05, offsetX: 0.00, speed: 0.75 },
+    bushes:       { scale: 0.45, offsetY:-0.05, offsetX:-0.09, speed: 0.55 },
+    trees:        { scale: 0.58, offsetY:-0.08, offsetX: 0.00, speed: 0.35 },
+    midground:    { scale: 1.00, offsetY: 0.30, offsetX: 0.00, speed: 0.15 },
+    midMountains: { scale: 1.00, offsetY: 0.14, offsetX: 0.00, speed: 0 },
+    farMountains: { scale: 1.00, offsetY: 0.02, offsetX: 0.00, speed: 0 },
+    clouds:       { scale: 0.57, offsetY:-0.39, offsetX: 0.00, speed: 0.03 },
+    sun:          { scale: 0.40, offsetY:-0.52, offsetX: 0.00, speed: 0 },
+  },
+  desert: {
+    ground:       { scale: 1.18, offsetY: 0.02, offsetX: 0.00, speed: 0.75 },
+    bushes:       { scale: 0.50, offsetY:-0.10, offsetX:-0.09, speed: 0.55 },
+    trees:        { scale: 0.68, offsetY:-0.11, offsetX: 0.07, speed: 0.35 },
+    midground:    { scale: 1.04, offsetY: 0.18, offsetX: 0.00, speed: 0.15 },
+    midMountains: { scale: 1.13, offsetY: 0.15, offsetX: 0.00, speed: 0 },
+    farMountains: { scale: 1.15, offsetY:-0.10, offsetX: 0.00, speed: 0 },
+    clouds:       { scale: 0.65, offsetY:-0.40, offsetX: 0.00, speed: 0.03 },
+    sun:          { scale: 0.45, offsetY:-0.58, offsetX: 0.00, speed: 0 },
+  },
+  volcano: {
+    ground:       { scale: 1.18, offsetY: 0.07, offsetX: 0.00, speed: 0.75 },
+    bushes:       { scale: 0.49, offsetY:-0.17, offsetX:-0.09, speed: 0.55 },
+    trees:        { scale: 0.67, offsetY:-0.15, offsetX: 0.03, speed: 0.35 },
+    midground:    { scale: 1.00, offsetY: 0.21, offsetX: 0.00, speed: 0.15 },
+    midMountains: { scale: 1.00, offsetY: 0.06, offsetX: 0.00, speed: 0 },
+    farMountains: { scale: 1.00, offsetY:-0.03, offsetX: 0.00, speed: 0 },
+    clouds:       { scale: 0.70, offsetY:-0.39, offsetX: 0.00, speed: 0.03 },
+    sun:          { scale: 0.39, offsetY:-0.62, offsetX: 0.00, speed: 0 },
+  },
+  snow: {
+    ground:       { scale: 1.18, offsetY: 0.07, offsetX: 0.00, speed: 0.75 },
+    bushes:       { scale: 0.49, offsetY:-0.10, offsetX:-0.13, speed: 0.55 },
+    trees:        { scale: 0.59, offsetY:-0.14, offsetX: 0.03, speed: 0.35 },
+    midground:    { scale: 1.00, offsetY: 0.02, offsetX: 0.00, speed: 0.15 },
+    midMountains: { scale: 1.00, offsetY:-0.17, offsetX: 0.00, speed: 0 },
+    farMountains: { scale: 1.01, offsetY:-0.05, offsetX: 0.00, speed: 0 },
+    clouds:       { scale: 0.65, offsetY:-0.44, offsetX: 0.00, speed: 0.03 },
+    sun:          { scale: 0.39, offsetY:-0.66, offsetX: 0.00, speed: 0 },
+  },
+  canyon: {
+    ground:       { scale: 1.18, offsetY: 0.03, offsetX: 0.00, speed: 0.75 },
+    bushes:       { scale: 0.50, offsetY:-0.07, offsetX:-0.09, speed: 0.55 },
+    trees:        { scale: 0.54, offsetY:-0.15, offsetX: 0.07, speed: 0.35 },
+    midground:    { scale: 1.04, offsetY: 0.08, offsetX: 0.00, speed: 0.15 },
+    midMountains: { scale: 1.00, offsetY: 0.09, offsetX: 0.00, speed: 0 },
+    farMountains: { scale: 1.01, offsetY: 0.00, offsetX: 0.00, speed: 0 },
+    clouds:       { scale: 0.82, offsetY:-0.29, offsetX: 0.00, speed: 0.03 },
+    sun:          { scale: 0.44, offsetY:-0.54, offsetX: 0.00, speed: 0 },
+  },
+  northern: {
+    ground:       { scale: 1.18, offsetY: 0.05, offsetX: 0.00, speed: 0.75 },
+    bushes:       { scale: 0.50, offsetY:-0.07, offsetX:-0.09, speed: 0.55 },
+    trees:        { scale: 0.63, offsetY:-0.11, offsetX: 0.07, speed: 0.35 },
+    midground:    { scale: 1.04, offsetY: 0.21, offsetX: 0.00, speed: 0.15 },
+    midMountains: { scale: 1.00, offsetY: 0.05, offsetX: 0.00, speed: 0 },
+    farMountains: { scale: 1.01, offsetY:-0.07, offsetX: 0.00, speed: 0 },
+    clouds:       { scale: 0.65, offsetY:-0.43, offsetX: 0.00, speed: 0.03 },
+    sun:          { scale: 0.47, offsetY:-0.58, offsetX: 0.00, speed: 0 },
+  },
+  galaxy: {
+    ground:       { scale: 1.18, offsetY: 0.11, offsetX: 0.00, speed: 0.75 },
+    bushes:       { scale: 0.50, offsetY:-0.07, offsetX:-0.09, speed: 0.55 },
+    trees:        { scale: 0.68, offsetY:-0.12, offsetX: 0.07, speed: 0.35 },
+    midground:    { scale: 1.04, offsetY: 0.19, offsetX: 0.00, speed: 0.15 },
+    midMountains: { scale: 1.00, offsetY: 0.14, offsetX: 0.00, speed: 0 },
+    farMountains: { scale: 1.01, offsetY: 0.02, offsetX: 0.00, speed: 0 },
+    clouds:       { scale: 0.65, offsetY:-0.43, offsetX: 0.00, speed: 0.03 },
+    sun:          { scale: 0.45, offsetY:-0.53, offsetX: 0.00, speed: 0 },
+  },
+};
+
+// ── State ──
+let currentBiome = 'forest';
+let currentGroundIdx = 0;
+let currentDevice = 'iPhone 15 Pro';
+let playing = true;
+let layerVisibility = {};
+let config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+let groundOverrides = {};
+
+BIOMES.forEach(b => {
+  groundOverrides[b] = {};
+  GROUND_NAMES.forEach((_, i) => { groundOverrides[b][i] = null; });
+});
+
+function saveState() {
+  try {
+    localStorage.setItem('parallax-tuner-config', JSON.stringify(config));
+    localStorage.setItem('parallax-tuner-overrides', JSON.stringify(groundOverrides));
+  } catch(e) {}
+}
+function loadState() {
+  try {
+    const c = localStorage.getItem('parallax-tuner-config');
+    const o = localStorage.getItem('parallax-tuner-overrides');
+    if (c) config = JSON.parse(c);
+    if (o) groundOverrides = JSON.parse(o);
+  } catch(e) {}
+}
+loadState();
+
+LAYER_ORDER.forEach(l => layerVisibility[l] = true);
+layerVisibility['sky'] = true;
+
+function imgPath(biome, filename) {
+  return `../assets/Background_animations/${BIOME_FOLDERS[biome]}/nine_layer/${filename}.webp`;
+}
+
+function getGroundOffsetY(biome, variantIdx) {
+  const ov = groundOverrides[biome][variantIdx];
+  return ov !== null ? ov : config[biome].ground.offsetY;
+}
+
+function setGroundOffsetY(biome, variantIdx, val) {
+  groundOverrides[biome][variantIdx] = val;
+}
+
+// ── Rendering ──
+let phoneEl = null;
+let animationFrames = [];
+
+function getDeviceDims() {
+  return DEVICES[currentDevice];
+}
+
+function getViewportScale() {
+  const area = document.getElementById('viewportArea');
+  const dev = getDeviceDims();
+  const maxH = area.clientHeight - 60;
+  const maxW = area.clientWidth - 60;
+  return Math.min(maxW / dev.w, maxH / dev.h, 1);
+}
+
+function renderViewport() {
+  const area = document.getElementById('viewportArea');
+  const dev = getDeviceDims();
+  const vScale = getViewportScale();
+  const SW = dev.w;
+  const SH = dev.h;
+
+  // Remove old phone
+  if (phoneEl) phoneEl.remove();
+  animationFrames.forEach(id => cancelAnimationFrame(id));
+  animationFrames = [];
+
+  phoneEl = document.createElement('div');
+  phoneEl.className = 'phone-frame';
+  phoneEl.style.width = (SW * vScale) + 'px';
+  phoneEl.style.height = (SH * vScale) + 'px';
+
+  const screen = document.createElement('div');
+  screen.className = 'phone-screen';
+  screen.style.width = SW + 'px';
+  screen.style.height = SH + 'px';
+  screen.style.transform = `scale(${vScale})`;
+  screen.style.transformOrigin = 'top left';
+
+  const layers = config[currentBiome];
+  const groundOffY = getGroundOffsetY(currentBiome, currentGroundIdx);
+
+  // 0 — Sky
+  if (layerVisibility['sky']) {
+    const skyDiv = document.createElement('div');
+    skyDiv.style.cssText = `position:absolute;top:0;left:0;width:${SW}px;height:${SH}px;z-index:0;`;
+    const skyImg = document.createElement('img');
+    skyImg.src = imgPath(currentBiome, 'sky_gradient');
+    skyImg.style.cssText = `width:${SW}px;height:${SH}px;object-fit:cover;`;
+    skyDiv.appendChild(skyImg);
+    screen.appendChild(skyDiv);
+  }
+
+  // Static layers (farMountains, midMountains)
+  ['farMountains','midMountains'].forEach(key => {
+    if (!layerVisibility[key]) return;
+    const lc = layers[key];
+    const scaledH = Math.round(SH * lc.scale);
+    const scaledW = Math.max(Math.round(SH * FRAME_ASPECT * lc.scale), SW + 2);
+    const topOffset = Math.round(SH * lc.offsetY);
+    const viewBottom = topOffset + SH;
+    const viewTop = viewBottom - scaledH;
+    const leftOffset = Math.round(SW * lc.offsetX);
+
+    const row = document.createElement('div');
+    row.className = 'static-row';
+    row.style.cssText = `top:${viewTop}px;left:${leftOffset}px;height:${scaledH}px;z-index:${LAYER_ZINDEX[key]};`;
+    const img = document.createElement('img');
+    img.src = imgPath(currentBiome, key === 'farMountains' ? 'far_mountain_range' : 'mid_mountain_range');
+    img.style.cssText = `width:${scaledW}px;height:${scaledH}px;`;
+    row.appendChild(img);
+    screen.appendChild(row);
+  });
+
+  // Scroll layers
+  const scrollConfigs = [
+    { key: 'midground', files: ['mid_jungle_layer'], overlap: 12 },
+    { key: 'trees',     files: TREE_NAMES, overlap: 12 },
+    { key: 'bushes',    files: BUSH_NAMES, overlap: 12 },
+    { key: 'ground',    files: [GROUND_NAMES[currentGroundIdx]], overlap: 12 },
+    { key: 'clouds',    files: CLOUD_NAMES, overlap: 12 },
+  ];
+
+  scrollConfigs.forEach(({ key, files, overlap }) => {
+    if (!layerVisibility[key]) return;
+    const lc = key === 'ground' ? { ...layers.ground, offsetY: groundOffY } : layers[key];
+    const TILE_OVERLAP = 30;
+    const scaledH = Math.round(SH * lc.scale);
+    const scaledFrameW = Math.round(SH * FRAME_ASPECT * lc.scale);
+    const topOffset = Math.round(SH * lc.offsetY);
+    const viewBottom = topOffset + SH;
+    const viewTop = viewBottom - scaledH;
+    const leftOffset = Math.round(SW * lc.offsetX);
+    const stride = scaledFrameW - TILE_OVERLAP;
+    const period = files.length * stride;
+    const repeats = Math.max(2, Math.ceil((period + SW) / period)) + 1;
+    const pxPerSec = lc.speed * BASE_SPEED;
+
+    const row = document.createElement('div');
+    row.className = 'scroll-row';
+    row.style.cssText = `top:${viewTop}px;left:${leftOffset}px;height:${scaledH}px;z-index:${LAYER_ZINDEX[key]};`;
+
+    for (let r = 0; r < repeats; r++) {
+      for (let i = 0; i < files.length; i++) {
+        const img = document.createElement('img');
+        img.src = imgPath(currentBiome, files[i]);
+        img.style.cssText = `width:${scaledFrameW}px;height:${scaledH}px;margin-right:${-TILE_OVERLAP}px;`;
+        row.appendChild(img);
+      }
+    }
+
+    screen.appendChild(row);
+
+    // Animate
+    if (playing && pxPerSec > 0) {
+      let offset = 0;
+      let lastT = performance.now();
+      function tick(t) {
+        const dt = (t - lastT) / 1000;
+        lastT = t;
+        offset -= pxPerSec * dt;
+        if (offset <= -period) offset += period;
+        row.style.transform = `translateX(${offset}px)`;
+        const id = requestAnimationFrame(tick);
+        animationFrames.push(id);
+      }
+      const id = requestAnimationFrame(tick);
+      animationFrames.push(id);
+    }
+  });
+
+  // Sun
+  if (layerVisibility['sun']) {
+    const sunLc = layers.sun;
+    const sunH = Math.round(SH * sunLc.scale);
+    const sunW = Math.round(sunH * FRAME_ASPECT);
+    const sunContainer = document.createElement('div');
+    sunContainer.className = 'sun-container';
+    sunContainer.style.cssText = `top:${SH * 0.06}px;z-index:${LAYER_ZINDEX.sun};`;
+    const img = document.createElement('img');
+    img.src = imgPath(currentBiome, 'sun');
+    img.style.cssText = `width:${sunW}px;height:${sunH}px;`;
+    sunContainer.appendChild(img);
+    screen.appendChild(sunContainer);
+  }
+
+  // Guide lines
+  const bottomLine = document.createElement('div');
+  bottomLine.className = 'guide-line bottom';
+  screen.appendChild(bottomLine);
+
+  phoneEl.appendChild(screen);
+  area.insertBefore(phoneEl, area.firstChild);
+
+  // Info bar
+  document.getElementById('infoBar').textContent =
+    `${currentDevice} (${dev.w}x${dev.h}) | Scale: ${(vScale*100).toFixed(0)}% | ${currentBiome} / ${GROUND_LABELS[currentGroundIdx]}`;
+}
+
+// ── Sidebar UI ──
+function renderSidebar() {
+  const sb = document.getElementById('sidebar');
+  sb.innerHTML = '';
+
+  // Title
+  const title = document.createElement('div');
+  title.innerHTML = '<div style="font-size:16px;font-weight:700;">9-Layer Parallax Tuner</div>';
+  sb.appendChild(title);
+
+  // Device selector
+  const devSection = document.createElement('div');
+  devSection.className = 'section';
+  devSection.innerHTML = '<div class="section-title">Device</div>';
+  const devSelect = document.createElement('select');
+  devSelect.style.width = '100%';
+  Object.keys(DEVICES).forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d; opt.textContent = `${d} (${DEVICES[d].w}x${DEVICES[d].h})`;
+    if (d === currentDevice) opt.selected = true;
+    devSelect.appendChild(opt);
+  });
+  devSelect.onchange = () => { currentDevice = devSelect.value; renderViewport(); };
+  devSection.appendChild(devSelect);
+  sb.appendChild(devSection);
+
+  // Biome selector
+  const biomeSection = document.createElement('div');
+  biomeSection.className = 'section';
+  biomeSection.innerHTML = '<div class="section-title">Biome</div>';
+  const biomeRow = document.createElement('div');
+  biomeRow.className = 'btn-row';
+  BIOMES.forEach(b => {
+    const btn = document.createElement('button');
+    btn.className = 'btn' + (b === currentBiome ? ' active' : '');
+    btn.textContent = b.charAt(0).toUpperCase() + b.slice(1);
+    btn.onclick = () => { currentBiome = b; renderSidebar(); renderViewport(); };
+    biomeRow.appendChild(btn);
+  });
+  biomeSection.appendChild(biomeRow);
+  sb.appendChild(biomeSection);
+
+  // Ground variant selector
+  const groundSection = document.createElement('div');
+  groundSection.className = 'section';
+  groundSection.innerHTML = '<div class="section-title">Ground Variant</div>';
+  const groundRow = document.createElement('div');
+  groundRow.className = 'btn-row';
+  GROUND_LABELS.forEach((label, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'btn sm' + (i === currentGroundIdx ? ' active' : '');
+    btn.textContent = label;
+    const ov = groundOverrides[currentBiome][i];
+    if (ov !== null) btn.style.borderColor = '#10b981';
+    btn.onclick = () => { currentGroundIdx = i; renderSidebar(); renderViewport(); };
+    groundRow.appendChild(btn);
+  });
+  groundSection.appendChild(groundRow);
+  sb.appendChild(groundSection);
+
+  // Play/Pause + Visibility toggles
+  const ctrlSection = document.createElement('div');
+  ctrlSection.className = 'section';
+  ctrlSection.innerHTML = '<div class="section-title">Controls</div>';
+  const ctrlRow = document.createElement('div');
+  ctrlRow.className = 'btn-row';
+  const playBtn = document.createElement('button');
+  playBtn.className = 'btn' + (playing ? ' active' : '');
+  playBtn.textContent = playing ? 'Pause' : 'Play';
+  playBtn.onclick = () => { playing = !playing; renderSidebar(); renderViewport(); };
+  ctrlRow.appendChild(playBtn);
+
+  const allLayers = ['sky', ...LAYER_ORDER];
+  allLayers.forEach(l => {
+    const btn = document.createElement('button');
+    btn.className = 'btn sm' + (layerVisibility[l] ? ' active' : '');
+    btn.textContent = (l === 'farMountains' ? 'FarMtn' : l === 'midMountains' ? 'MidMtn' : l === 'midground' ? 'Mid' : l.charAt(0).toUpperCase() + l.slice(1));
+    btn.onclick = () => { layerVisibility[l] = !layerVisibility[l]; renderSidebar(); renderViewport(); };
+    ctrlRow.appendChild(btn);
+  });
+  ctrlSection.appendChild(ctrlRow);
+  sb.appendChild(ctrlSection);
+
+  // Layer sliders
+  const layersTunable = ['ground','bushes','trees','midground','midMountains','farMountains','clouds','sun'];
+  layersTunable.forEach(key => {
+    const panel = document.createElement('div');
+    panel.className = 'layer-panel';
+
+    const isGround = key === 'ground';
+    const lc = config[currentBiome][key];
+    const effectiveOffsetY = isGround ? getGroundOffsetY(currentBiome, currentGroundIdx) : lc.offsetY;
+
+    const header = document.createElement('div');
+    header.className = 'layer-header';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.checked = layerVisibility[key];
+    cb.onchange = () => { layerVisibility[key] = cb.checked; renderViewport(); };
+    header.appendChild(cb);
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'layer-name';
+    nameSpan.textContent = LAYER_LABELS[key] + (isGround ? ` [${GROUND_LABELS[currentGroundIdx]}]` : '');
+    header.appendChild(nameSpan);
+    const badge = document.createElement('span');
+    badge.className = 'layer-badge';
+    badge.textContent = `z${LAYER_ZINDEX[key]}`;
+    header.appendChild(badge);
+    panel.appendChild(header);
+
+    // Scale slider
+    const scaleRow = document.createElement('div');
+    scaleRow.className = 'slider-row';
+    scaleRow.innerHTML = `<span class="slider-label">Scale</span>`;
+    const scaleSlider = document.createElement('input');
+    scaleSlider.type = 'range'; scaleSlider.min = '0.10'; scaleSlider.max = '2.00'; scaleSlider.step = '0.01';
+    scaleSlider.value = lc.scale;
+    const scaleVal = document.createElement('span');
+    scaleVal.className = 'slider-val';
+    scaleVal.textContent = lc.scale.toFixed(2);
+    scaleSlider.oninput = () => {
+      const v = parseFloat(scaleSlider.value);
+      config[currentBiome][key].scale = v;
+      scaleVal.textContent = v.toFixed(2);
+      saveState(); renderViewport();
+    };
+    scaleRow.appendChild(scaleSlider);
+    scaleRow.appendChild(scaleVal);
+    panel.appendChild(scaleRow);
+
+    // OffsetY slider
+    const offYRow = document.createElement('div');
+    offYRow.className = 'slider-row';
+    offYRow.innerHTML = `<span class="slider-label">OffsetY</span>`;
+    const offYSlider = document.createElement('input');
+    offYSlider.type = 'range'; offYSlider.min = '-1.00'; offYSlider.max = '1.00'; offYSlider.step = '0.01';
+    offYSlider.value = effectiveOffsetY;
+    const offYVal = document.createElement('span');
+    offYVal.className = 'slider-val';
+    offYVal.textContent = effectiveOffsetY.toFixed(2);
+    offYSlider.oninput = () => {
+      const v = parseFloat(offYSlider.value);
+      if (isGround) {
+        setGroundOffsetY(currentBiome, currentGroundIdx, v);
+      } else {
+        config[currentBiome][key].offsetY = v;
+      }
+      offYVal.textContent = v.toFixed(2);
+      saveState(); renderViewport();
+    };
+    offYRow.appendChild(offYSlider);
+    offYRow.appendChild(offYVal);
+    panel.appendChild(offYRow);
+
+    // OffsetX slider
+    const offXRow = document.createElement('div');
+    offXRow.className = 'slider-row';
+    offXRow.innerHTML = `<span class="slider-label">OffsetX</span>`;
+    const offXSlider = document.createElement('input');
+    offXSlider.type = 'range'; offXSlider.min = '-0.50'; offXSlider.max = '0.50'; offXSlider.step = '0.01';
+    offXSlider.value = lc.offsetX;
+    const offXVal = document.createElement('span');
+    offXVal.className = 'slider-val';
+    offXVal.textContent = lc.offsetX.toFixed(2);
+    offXSlider.oninput = () => {
+      const v = parseFloat(offXSlider.value);
+      config[currentBiome][key].offsetX = v;
+      offXVal.textContent = v.toFixed(2);
+      saveState(); renderViewport();
+    };
+    offXRow.appendChild(offXSlider);
+    offXRow.appendChild(offXVal);
+    panel.appendChild(offXRow);
+
+    sb.appendChild(panel);
+  });
+
+  // Export + Reset
+  const exportSection = document.createElement('div');
+  exportSection.className = 'export-area';
+
+  const exportBtn = document.createElement('button');
+  exportBtn.className = 'export-btn';
+  exportBtn.textContent = 'Copy Config to Clipboard';
+  exportBtn.onclick = exportConfig;
+  exportSection.appendChild(exportBtn);
+
+  const resetBtn = document.createElement('button');
+  resetBtn.className = 'reset-btn';
+  resetBtn.textContent = 'Reset Current Biome';
+  resetBtn.onclick = () => {
+    config[currentBiome] = JSON.parse(JSON.stringify(DEFAULT_CONFIG[currentBiome]));
+    GROUND_NAMES.forEach((_, i) => { groundOverrides[currentBiome][i] = null; });
+    saveState(); renderSidebar(); renderViewport();
+  };
+  exportSection.appendChild(resetBtn);
+
+  const resetAllBtn = document.createElement('button');
+  resetAllBtn.className = 'reset-btn';
+  resetAllBtn.textContent = 'Reset ALL Biomes';
+  resetAllBtn.onclick = () => {
+    config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+    BIOMES.forEach(b => { GROUND_NAMES.forEach((_, i) => { groundOverrides[b][i] = null; }); });
+    saveState(); renderSidebar(); renderViewport();
+  };
+  exportSection.appendChild(resetAllBtn);
+
+  sb.appendChild(exportSection);
+}
+
+function exportConfig() {
+  // Build the export: BIOME_LAYERS + per-variant ground offsets
+  const lines = [];
+  lines.push('// ── BIOME_LAYERS (paste into NineLayerParallax.tsx) ──');
+  lines.push('export const BIOME_LAYERS: Record<NineLayerBiome, BiomeLayers> = {');
+
+  BIOMES.forEach(biome => {
+    const layers = config[biome];
+    lines.push(`  ${biome}: {`);
+    LAYER_ORDER.forEach(key => {
+      const lc = layers[key];
+      const s = lc.scale.toFixed(2).padStart(5);
+      const oy = (lc.offsetY >= 0 ? ' ' : '') + lc.offsetY.toFixed(2);
+      const ox = (lc.offsetX >= 0 ? ' ' : '') + lc.offsetX.toFixed(2);
+      const sp = lc.speed.toFixed(2);
+      const pad = key.padEnd(12);
+      lines.push(`    ${pad}: { scale: ${s},  offsetY: ${oy}, offsetX: ${ox},  speed: ${sp} },`);
+    });
+    lines.push('  },');
+  });
+  lines.push('};');
+
+  // Ground variant overrides
+  lines.push('');
+  lines.push('// ── Per-variant ground offsetY (null = use base value above) ──');
+  lines.push('// Variants: ' + GROUND_LABELS.join(', '));
+  lines.push('export const GROUND_VARIANT_OFFSETS: Record<NineLayerBiome, (number|null)[]> = {');
+  BIOMES.forEach(biome => {
+    const vals = GROUND_NAMES.map((_, i) => {
+      const ov = groundOverrides[biome][i];
+      return ov !== null ? ov.toFixed(2) : 'null';
+    });
+    lines.push(`  ${biome.padEnd(8)}: [${vals.join(', ')}],`);
+  });
+  lines.push('};');
+
+  const text = lines.join('\n');
+  navigator.clipboard.writeText(text).then(() => {
+    alert('Config copied to clipboard!');
+  }).catch(() => {
+    // Fallback: show in a textarea
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;top:10%;left:10%;width:80%;height:80%;z-index:9999;background:#1f2937;color:#e5e7eb;font-family:monospace;font-size:12px;padding:16px;border:2px solid #3b82f6;border-radius:8px;';
+    document.body.appendChild(ta);
+    ta.select();
+    ta.addEventListener('keydown', e => { if (e.key === 'Escape') ta.remove(); });
+  });
+}
+
+// ── Init ──
+window.addEventListener('resize', () => renderViewport());
+renderSidebar();
+renderViewport();
+</script>
+</body>
+</html>

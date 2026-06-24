@@ -76,7 +76,7 @@ export const StatOrb: React.FC<StatOrbProps> = ({
   onPress,
   delay = 0,
 }) => {
-  const { theme, isDark } = useTheme();
+  const { theme, isDark, reduceMotion } = useTheme();
   const config = STAT_CONFIG[type];
 
   // Animated counter
@@ -103,7 +103,7 @@ export const StatOrb: React.FC<StatOrbProps> = ({
 
   return (
     <Animated.View
-      entering={FadeIn.delay(delay).duration(400)}
+      entering={reduceMotion ? undefined : FadeIn.delay(delay).duration(400)}
       style={[styles.container, floatingStyle]}
     >
       <Pressable
@@ -204,5 +204,3 @@ const styles = StyleSheet.create({
     fontSize: 10,
   },
 });
-
-export default StatOrb;

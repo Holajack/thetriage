@@ -88,7 +88,7 @@ const getBreakTypeText = (focusMethod?: string) => {
   }
 };
 
-export const BreakTimerScreen = () => {
+const BreakTimerScreen = () => {
   const { data: userData } = useUserAppData();
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();

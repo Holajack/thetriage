@@ -5,15 +5,15 @@
  * backward compatibility with the legacy local quiz storage.
  */
 
-import { useQuery, useMutation } from 'convex/react';
-import { api } from '../../convex/_generated/api';
-import { Id } from '../../convex/_generated/dataModel';
-import { useAuth } from '../context/AuthContext';
-import { useCallback, useMemo } from 'react';
+import { useQuery, useMutation } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import { Id } from "../../convex/_generated/dataModel";
+import { useAuth } from "../context/AuthContext";
+import { useCallback, useMemo } from "react";
 
 // Types matching Convex schema
 export interface QuizCategory {
-  _id: Id<'quizCategories'>;
+  _id: Id<"quizCategories">;
   slug: string;
   name: string;
   description: string;
@@ -26,8 +26,8 @@ export interface QuizCategory {
 }
 
 export interface QuizSubDimension {
-  _id: Id<'quizSubDimensions'>;
-  categoryId: Id<'quizCategories'>;
+  _id: Id<"quizSubDimensions">;
+  categoryId: Id<"quizCategories">;
   slug: string;
   name: string;
   description: string;
@@ -36,7 +36,7 @@ export interface QuizSubDimension {
 }
 
 export interface QuizQuestion {
-  _id: Id<'quizQuestions'>;
+  _id: Id<"quizQuestions">;
   questionId: string;
   questionText: string;
   questionFormat: string;
@@ -47,27 +47,27 @@ export interface QuizQuestion {
   }>;
   weight: number;
   difficulty: number;
-  subDimensionId: Id<'quizSubDimensions'>;
-  categoryId: Id<'quizCategories'>;
+  subDimensionId: Id<"quizSubDimensions">;
+  categoryId: Id<"quizCategories">;
 }
 
 export interface QuizSession {
-  _id: Id<'quizSessions'>;
-  userId: Id<'users'>;
-  categoryId: Id<'quizCategories'>;
+  _id: Id<"quizSessions">;
+  userId: Id<"users">;
+  categoryId: Id<"quizCategories">;
   sessionType: string;
   educationLevel: string;
   questionsCount: number;
-  questionIds: Id<'quizQuestions'>[];
+  questionIds: Id<"quizQuestions">[];
   status: string;
   currentQuestionIndex: number;
   startedAt: string;
   completedAt?: string;
-  resultId?: Id<'quizResults'>;
+  resultId?: Id<"quizResults">;
 }
 
 export interface SubDimensionScore {
-  subDimensionId: Id<'quizSubDimensions'>;
+  subDimensionId: Id<"quizSubDimensions">;
   slug: string;
   name: string;
   rawScore: number;
@@ -76,10 +76,10 @@ export interface SubDimensionScore {
 }
 
 export interface QuizResult {
-  _id: Id<'quizResults'>;
-  userId: Id<'users'>;
-  sessionId: Id<'quizSessions'>;
-  categoryId: Id<'quizCategories'>;
+  _id: Id<"quizResults">;
+  userId: Id<"users">;
+  sessionId: Id<"quizSessions">;
+  categoryId: Id<"quizCategories">;
   overallScore: number;
   percentileRank?: number;
   subDimensionScores: SubDimensionScore[];
@@ -121,7 +121,7 @@ export interface RadarChartData {
   overallScore: number;
   percentileRank?: number;
   dominantTrait: string;
-  traitProfile: QuizResult['traitProfile'];
+  traitProfile: QuizResult["traitProfile"];
   completedAt: string;
   category: {
     name: string;
@@ -143,7 +143,7 @@ export function useQuizCategories() {
 
     return categories.map((category) => {
       const resultData = latestResults?.find(
-        (r) => r.category._id === category._id
+        (r) => r.category._id === category._id,
       );
 
       return {
@@ -166,7 +166,7 @@ export function useQuizCategories() {
 /**
  * Hook for managing a quiz session
  */
-export function useQuizSession(categorySlug: string) {
+function useQuizSession(categorySlug: string) {
   const { user } = useAuth();
 
   // Mutations
@@ -184,8 +184,8 @@ export function useQuizSession(categorySlug: string) {
   const startSession = useCallback(
     async (educationLevel: string, questionsCount: number = 15) => {
       // First get random questions
-      const questions = await fetch('/api/quiz/questions', {
-        method: 'POST',
+      const questions = await fetch("/api/quiz/questions", {
+        method: "POST",
         body: JSON.stringify({ categorySlug, educationLevel, questionsCount }),
       });
 
@@ -193,22 +193,22 @@ export function useQuizSession(categorySlug: string) {
       // In production, you'd want to handle this more elegantly
       return startSessionMutation({
         categorySlug,
-        sessionType: 'full',
+        sessionType: "full",
         educationLevel,
         questionsCount,
         questionIds: [], // Will be populated by the query
       });
     },
-    [categorySlug, startSessionMutation]
+    [categorySlug, startSessionMutation],
   );
 
   // Submit an answer
   const submitAnswer = useCallback(
     async (
-      sessionId: Id<'quizSessions'>,
-      questionId: Id<'quizQuestions'>,
+      sessionId: Id<"quizSessions">,
+      questionId: Id<"quizQuestions">,
       selectedValue: number,
-      responseTimeMs: number
+      responseTimeMs: number,
     ) => {
       return submitAnswerMutation({
         sessionId,
@@ -217,23 +217,23 @@ export function useQuizSession(categorySlug: string) {
         responseTimeMs,
       });
     },
-    [submitAnswerMutation]
+    [submitAnswerMutation],
   );
 
   // Complete the session
   const completeSession = useCallback(
-    async (sessionId: Id<'quizSessions'>) => {
+    async (sessionId: Id<"quizSessions">) => {
       return completeSessionMutation({ sessionId });
     },
-    [completeSessionMutation]
+    [completeSessionMutation],
   );
 
   // Abandon the session
   const abandonSession = useCallback(
-    async (sessionId: Id<'quizSessions'>) => {
+    async (sessionId: Id<"quizSessions">) => {
       return abandonSessionMutation({ sessionId });
     },
-    [abandonSessionMutation]
+    [abandonSessionMutation],
   );
 
   return {
@@ -249,10 +249,10 @@ export function useQuizSession(categorySlug: string) {
 /**
  * Hook for getting quiz results and visualization data
  */
-export function useQuizResults(resultId: Id<'quizResults'> | null) {
+function useQuizResults(resultId: Id<"quizResults"> | null) {
   const radarData = useQuery(
     api.quizVisualization.getRadarChartData,
-    resultId ? { resultId } : 'skip'
+    resultId ? { resultId } : "skip",
   );
 
   return {
@@ -264,7 +264,7 @@ export function useQuizResults(resultId: Id<'quizResults'> | null) {
 /**
  * Hook for getting improvement trajectory
  */
-export function useImprovementTrajectory(categorySlug: string) {
+function useImprovementTrajectory(categorySlug: string) {
   const trajectory = useQuery(api.quizVisualization.getImprovementTrajectory, {
     categorySlug,
   });
@@ -278,7 +278,7 @@ export function useImprovementTrajectory(categorySlug: string) {
 /**
  * Hook for getting overall profile across all quizzes
  */
-export function useOverallProfile() {
+function useOverallProfile() {
   const profile = useQuery(api.quizVisualization.getOverallProfile);
 
   return {
@@ -290,7 +290,7 @@ export function useOverallProfile() {
 /**
  * Hook for category comparison
  */
-export function useCategoryComparison() {
+function useCategoryComparison() {
   const comparison = useQuery(api.quizVisualization.getCategoryComparison);
 
   return {
@@ -317,14 +317,18 @@ export function useQuizHistory(categorySlug?: string, limit?: number) {
 /**
  * Utility to convert legacy quiz type to Convex category slug
  */
-export function legacyTypeToSlug(
-  legacyType: 'study_habits' | 'learning_style' | 'motivation_profile' | 'focus_type'
+function legacyTypeToSlug(
+  legacyType:
+    | "study_habits"
+    | "learning_style"
+    | "motivation_profile"
+    | "focus_type",
 ): string {
   const mapping: Record<string, string> = {
-    study_habits: 'study_habits',
-    learning_style: 'learning_style',
-    motivation_profile: 'motivation',
-    focus_type: 'focus_attention',
+    study_habits: "study_habits",
+    learning_style: "learning_style",
+    motivation_profile: "motivation",
+    focus_type: "focus_attention",
   };
   return mapping[legacyType] || legacyType;
 }
@@ -332,7 +336,7 @@ export function legacyTypeToSlug(
 /**
  * Check if Convex quiz system is available
  */
-export function useConvexQuizAvailable() {
+function useConvexQuizAvailable() {
   const categories = useQuery(api.quizQuestions.getCategories);
 
   return {

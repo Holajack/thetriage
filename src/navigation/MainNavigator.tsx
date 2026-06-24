@@ -9,15 +9,8 @@ import {
   CardStyleInterpolators,
   TransitionPresets,
   TransitionSpecs,
-  StackCardStyleInterpolator,
 } from "@react-navigation/stack";
-import {
-  Animated,
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-} from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -26,69 +19,9 @@ import {
   DrawerActions,
 } from "@react-navigation/native";
 
-// ── Direction-aware navigation for tab transitions ──
-// Tab screens in left-to-right order as they appear in the bottom bar
-export const TAB_ORDER: Record<string, number> = {
-  Profile: 0,
-  SessionHistory: 1,
-  Results: 2,
-  Bonuses: 3,
-  Community: 4,
-};
-
-// Module-level direction flag. Set synchronously by BottomTabBar before dispatching
-// navigation, then read by screenOptions at the next render. Using a module-level
-// variable instead of route params is more reliable: replace() doesn't always wire
-// fresh params into screenOptions before the first frame, which is why the
-// "right-to-left" animation occasionally inherited the wrong direction.
-let pendingSlideLeft = false;
-export function setPendingSlideLeft(value: boolean) {
-  pendingSlideLeft = value;
-}
-
-// Slide-from-left interpolator (mirror of forHorizontalIOS)
-const forSlideFromLeft: StackCardStyleInterpolator = ({
-  current,
-  next,
-  inverted,
-  layouts: { screen },
-}) => {
-  const translateFocused = Animated.multiply(
-    current.progress.interpolate({
-      inputRange: [0, 1],
-      outputRange: [-screen.width, 0],
-      extrapolate: "clamp",
-    }),
-    inverted,
-  );
-  const translateUnfocused = next
-    ? Animated.multiply(
-        next.progress.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0, screen.width * 0.3],
-          extrapolate: "clamp",
-        }),
-        inverted,
-      )
-    : 0;
-  const overlayOpacity = current.progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 0.07],
-    extrapolate: "clamp",
-  });
-
-  return {
-    cardStyle: {
-      transform: [
-        { translateX: translateFocused },
-        ...(translateUnfocused !== 0
-          ? [{ translateX: translateUnfocused }]
-          : []),
-      ],
-    },
-    overlayStyle: { opacity: overlayOpacity },
-  };
-};
+// Direction-aware navigation helpers live in ./navHelpers to avoid an import cycle
+// (tab screens / BottomTabBar import them without depending on this navigator).
+import { getPendingSlideLeft } from "./navHelpers";
 
 // Main screens
 import HomeScreen from "../screens/main/HomeScreen";
@@ -180,11 +113,8 @@ function ContentStack() {
     <ContentStackNav.Navigator
       initialRouteName="Home"
       screenOptions={({ route }) => {
-        // Tab-to-tab navigations: prefer the module-level flag (set synchronously
-        // before dispatch) over route params, since replace() can deliver params
-        // after the first transition frame.
         const slideLeft =
-          pendingSlideLeft || (route.params as any)?._slideLeft === true;
+          getPendingSlideLeft() || (route.params as any)?._slideLeft === true;
 
         return {
           headerShown: false,
@@ -192,10 +122,9 @@ function ContentStack() {
           headerTintColor: "#1B5E20",
           headerTitleStyle: { fontWeight: "bold" as const },
           gestureEnabled: true,
-          gestureDirection: slideLeft ? "horizontal-inverted" : "horizontal",
-          cardStyleInterpolator: slideLeft
-            ? forSlideFromLeft
-            : CardStyleInterpolators.forHorizontalIOS,
+          gestureDirection: "horizontal",
+          cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
+          animationTypeForReplace: slideLeft ? "pop" : "push",
           transitionSpec: {
             open: TransitionSpecs.TransitionIOSSpec,
             close: TransitionSpecs.TransitionIOSSpec,
@@ -251,6 +180,7 @@ function ContentStack() {
       <ContentStackNav.Screen
         name="StudySessionScreen"
         component={StudySessionScreen}
+        options={{ gestureEnabled: false }}
       />
       <ContentStackNav.Screen
         name="AIIntegration"

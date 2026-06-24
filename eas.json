@@ -20,6 +20,15 @@
       },
       "channel": "client-testing"
     },
+    "client-testing-simulator": {
+      "distribution": "internal",
+      "ios": {
+        "resourceClass": "m-medium",
+        "buildConfiguration": "Release",
+        "simulator": true
+      },
+      "channel": "client-testing"
+    },
     "production": {
       "ios": {
         "resourceClass": "m-medium",

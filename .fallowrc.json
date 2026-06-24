@@ -1,0 +1,85 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  "ignoreDependencies": [
+    "@react-native-masked-view/masked-view",
+    "@expo/metro-runtime",
+    "react-native-web",
+    "expo-dev-client",
+    "expo-updates",
+    "expo-tracking-transparency",
+    "events",
+    "util",
+    "os-browserify",
+    "assert",
+    "browserify-zlib",
+    "crypto-browserify",
+    "https-browserify",
+    "path-browserify",
+    "react-native-fs",
+    "stream-browserify",
+    "stream-http"
+  ],
+  "ignorePatterns": ["scripts/**", "plugins/**", "convex/_generated/**"],
+  "duplicates": {
+    "ignore": ["convex/_generated/**", "src/data/quizData.ts"]
+  },
+  "health": {
+    "ignore": ["convex/_generated/**"],
+    "maxCyclomatic": 40,
+    "maxCognitive": 50,
+    "maxCrap": 1700,
+    "thresholdOverrides": [
+      {
+        "files": [
+          "src/screens/main/StudySessionScreen.tsx",
+          "src/screens/main/ProfileScreen.tsx",
+          "src/screens/main/FocusPreparationScreen.tsx",
+          "src/screens/main/LeaderboardScreen.tsx",
+          "src/screens/main/StudyRoomScreen.tsx",
+          "src/screens/main/CommunityScreen.tsx",
+          "src/screens/main/NoraScreenNew.tsx",
+          "src/screens/main/settings/SoundSettingsScreen.tsx",
+          "src/screens/onboarding/ProfileCreationScreen.tsx"
+        ],
+        "maxCyclomatic": 90,
+        "maxCognitive": 140,
+        "maxCrap": 8000,
+        "reason": "Large legacy screen components — tracked tech debt. Scheduled for incremental component/hook extraction with manual QA; intentionally not refactored blind pre-launch to avoid runtime regressions. Kept visible here rather than hidden."
+      }
+    ]
+  },
+  "ignoreExports": [
+    {
+      "file": "src/data/quizData.ts",
+      "exports": ["*"]
+    },
+    {
+      "file": "src/hooks/useConvexQuiz.ts",
+      "exports": ["*"]
+    },
+    {
+      "file": "src/hooks/useSubscriptionTier.ts",
+      "exports": ["*"]
+    },
+    {
+      "file": "src/utils/tierGating.ts",
+      "exports": ["*"]
+    },
+    {
+      "file": "src/hooks/useConvex.ts",
+      "exports": ["*"]
+    },
+    {
+      "file": "src/navigation/types.ts",
+      "exports": ["*"]
+    },
+    {
+      "file": "src/utils/convexClient.ts",
+      "exports": ["*"]
+    },
+    {
+      "file": "src/utils/userAppData.js",
+      "exports": ["*"]
+    }
+  ]
+}

@@ -23,7 +23,6 @@ import Purchases, {
 import RevenueCatUI, { PAYWALL_RESULT } from "react-native-purchases-ui";
 import { api } from "../../convex/_generated/api";
 import { getConvexClient } from "../utils/convexClient";
-export { setConvexClient } from "../utils/convexClient";
 
 // ============================================
 // CONFIGURATION
@@ -35,7 +34,7 @@ const REVENUECAT_API_KEYS = {
 };
 
 // Product identifiers — match these in RevenueCat dashboard & App Store Connect
-export const PRODUCT_IDS = {
+const PRODUCT_IDS = {
   PREMIUM_MONTHLY: "hikewise_premium_monthly", // $14.99/mo
   ELITE_MONTHLY: "hikewise_elite_monthly", // $29.99/mo
   PREMIUM_YEARLY: "hikewise_premium_yearly", // $107.99/yr ($8.99/mo)
@@ -43,7 +42,7 @@ export const PRODUCT_IDS = {
 };
 
 // Entitlement identifiers — configure in RevenueCat dashboard
-export const ENTITLEMENTS = {
+const ENTITLEMENTS = {
   PREMIUM: "premium",
   ELITE: "elite",
 };
@@ -135,7 +134,7 @@ async function syncSubscriptionToConvex(
 }
 
 /** Get current customer info */
-export async function getCustomerInfo(): Promise<CustomerInfo | null> {
+async function getCustomerInfo(): Promise<CustomerInfo | null> {
   try {
     return await Purchases.getCustomerInfo();
   } catch (error) {
@@ -151,13 +150,13 @@ export async function getCurrentTier(): Promise<"free" | "premium" | "elite"> {
 }
 
 /** Check if user has any active subscription */
-export async function hasActiveSubscription(): Promise<boolean> {
+async function hasActiveSubscription(): Promise<boolean> {
   const tier = await getCurrentTier();
   return tier !== "free";
 }
 
 /** Check if user has a specific entitlement */
-export async function hasEntitlement(entitlementId: string): Promise<boolean> {
+async function hasEntitlement(entitlementId: string): Promise<boolean> {
   const customerInfo = await getCustomerInfo();
   if (!customerInfo) return false;
   return customerInfo.entitlements.active[entitlementId]?.isActive === true;
@@ -168,7 +167,7 @@ export async function hasEntitlement(entitlementId: string): Promise<boolean> {
 // ============================================
 
 /** Get the current offering configured in RevenueCat dashboard */
-export async function getOfferings(): Promise<PurchasesOffering | null> {
+async function getOfferings(): Promise<PurchasesOffering | null> {
   try {
     const offerings = await Purchases.getOfferings();
     if (offerings.current) {
@@ -274,7 +273,7 @@ export async function presentPaywall(
  * Present the Paywall only if the user does NOT have the given entitlement.
  * Useful for gating premium features inline.
  */
-export async function presentPaywallIfNeeded(
+async function presentPaywallIfNeeded(
   requiredEntitlement: string = ENTITLEMENTS.PREMIUM,
   offering?: PurchasesOffering,
 ): Promise<boolean> {
@@ -375,4 +374,3 @@ export async function getManagementURL(): Promise<string | null> {
 
 // Export types for use in components
 export type { PurchasesPackage, CustomerInfo, PurchasesOffering };
-export { PAYWALL_RESULT };

@@ -213,7 +213,7 @@ export const TimingConfig = {
 };
 
 // Easing curves
-export const EasingConfig = {
+const EasingConfig = {
   easeOut: Easing.bezier(0.33, 1, 0.68, 1),
   easeIn: Easing.bezier(0.32, 0, 0.67, 0),
   easeInOut: Easing.bezier(0.65, 0, 0.35, 1),

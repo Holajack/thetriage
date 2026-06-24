@@ -14,7 +14,6 @@ import {
   Pressable,
 } from "react-native";
 import * as Haptics from "expo-haptics";
-import { ThemedImageBackground } from "../../components/ThemedImage";
 import { ParallaxForestBackground } from "../../components/ParallaxForestBackground";
 import { useEquippedTrail } from "../../hooks/useEquippedTrail";
 import { AmbientMistBackground } from "../../components/AmbientMistBackground";

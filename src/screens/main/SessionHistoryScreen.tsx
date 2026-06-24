@@ -9,6 +9,7 @@ import {
   RefreshControl,
   Modal,
   Pressable,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
@@ -37,8 +38,10 @@ import {
   StaggeredItem,
 } from "../../components/premium/StaggeredList";
 import { Typography, Spacing, AnimationConfig } from "../../theme/premiumTheme";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
+import { Id } from "../../../convex/_generated/dataModel";
+import { navigateHomeWithSlide } from "../../navigation/navHelpers";
 
 interface SessionHistoryItem {
   id: string;
@@ -66,6 +69,45 @@ const SessionHistoryScreen = () => {
   const [timeFilter, setTimeFilter] = useState<"all" | "week" | "month">("all");
   const [selectedSession, setSelectedSession] =
     useState<SessionHistoryItem | null>(null);
+  const deleteSessionMutation = useMutation(api.focusSessions.deleteSession);
+
+  const handleDeleteSession = (session: SessionHistoryItem) => {
+    Alert.alert(
+      "Delete Session",
+      "Are you sure you want to delete this session? This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteSessionMutation({
+                sessionId: session.id as Id<"focusSessions">,
+              });
+              triggerHaptic("success");
+              setSelectedSession(null);
+            } catch {
+              Alert.alert("Error", "Failed to delete session.");
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const getIncompleteAge = (session: SessionHistoryItem): string | null => {
+    if (session.status === "completed") return null;
+    const created = new Date(session.created_at);
+    const now = new Date();
+    const hoursOld = (now.getTime() - created.getTime()) / (1000 * 60 * 60);
+    if (hoursOld < 1) return "Less than 1 hour ago";
+    if (hoursOld < 24) return `${Math.floor(hoursOld)} hours ago`;
+    const daysOld = Math.floor(hoursOld / 24);
+    const hoursLeft = Math.max(0, 72 - hoursOld);
+    if (hoursLeft <= 0) return "Will be auto-deleted soon";
+    return `${daysOld}d ago • Auto-deletes in ${Math.ceil(hoursLeft)}h`;
+  };
 
   // Force animations to replay on every screen focus
   const focusKey = useFocusAnimationKey();
@@ -446,7 +488,7 @@ const SessionHistoryScreen = () => {
       {/* Unified Header */}
       <UnifiedHeader
         title="History"
-        onClose={() => navigation.navigate("Main" as never, { screen: "Home" })}
+        onClose={() => navigateHomeWithSlide(navigation)}
       />
 
       {/* Time Filter */}
@@ -867,16 +909,33 @@ const SessionHistoryScreen = () => {
                   </Text>
                 </View>
 
-                {/* Close Button */}
-                <TouchableOpacity
-                  style={[
-                    styles.modalCloseButton,
-                    { backgroundColor: theme.primary },
-                  ]}
-                  onPress={() => setSelectedSession(null)}
-                >
-                  <Text style={styles.modalCloseButtonText}>Close</Text>
-                </TouchableOpacity>
+                {/* Delete & Close Buttons */}
+                <View style={{ flexDirection: "row", gap: 12, marginTop: 16 }}>
+                  <TouchableOpacity
+                    style={[
+                      styles.modalCloseButton,
+                      { backgroundColor: theme.error ?? "#EF4444", flex: 1 },
+                    ]}
+                    onPress={() => handleDeleteSession(selectedSession)}
+                  >
+                    <Ionicons
+                      name="trash-outline"
+                      size={16}
+                      color="#FFF"
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text style={styles.modalCloseButtonText}>Delete</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.modalCloseButton,
+                      { backgroundColor: theme.primary, flex: 1 },
+                    ]}
+                    onPress={() => setSelectedSession(null)}
+                  >
+                    <Text style={styles.modalCloseButtonText}>Close</Text>
+                  </TouchableOpacity>
+                </View>
               </>
             )}
           </Pressable>

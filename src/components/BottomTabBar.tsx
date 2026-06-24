@@ -8,7 +8,7 @@ import {
 } from "@react-navigation/native";
 import { useTheme } from "../context/ThemeContext";
 import { AnimatedTabIcon } from "./premium/AnimatedTabIcon";
-import { TAB_ORDER, setPendingSlideLeft } from "../navigation/MainNavigator";
+import { TAB_ORDER, setPendingSlideLeft } from "../navigation/navHelpers";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -38,11 +38,11 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({ currentRoute }) => {
 
   const tabs: TabConfig[] = [
     {
-      name: "Profile",
-      icon: "person",
-      outlineIcon: "person-outline",
-      label: "Profile",
-      route: "Profile",
+      name: "Leaderboard",
+      icon: "podium",
+      outlineIcon: "podium-outline",
+      label: "Leaderboard",
+      route: "Leaderboard",
     },
     {
       name: "History",
@@ -161,14 +161,18 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({ currentRoute }) => {
     setPendingSlideLeft(goingLeft);
 
     if (fromOrder >= 0) {
-      // Tab-to-tab: use replace() so a fresh screen is created with correct animation
       navigation.dispatch(
         StackActions.replace(route, { _slideLeft: goingLeft }),
       );
     } else {
-      // Non-tab to tab (e.g., from Home): push normally
       navigation.dispatch(StackActions.push(route, { _slideLeft: goingLeft }));
     }
+
+    // Reset the flag after the navigation dispatch has been processed.
+    // requestAnimationFrame ensures screenOptions has already read it.
+    requestAnimationFrame(() => {
+      setPendingSlideLeft(false);
+    });
   };
 
   return (

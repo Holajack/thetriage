@@ -424,11 +424,7 @@ export default function HomeScreen() {
               { backgroundColor: environmentColors.card },
             ]}
           >
-            <Ionicons
-              name="trophy-outline"
-              size={26}
-              color={environmentColors.primary}
-            />
+            <Ionicons name="add" size={28} color={environmentColors.primary} />
           </NavButton>
         </View>
       </View>

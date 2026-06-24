@@ -21,7 +21,7 @@ Notifications.setNotificationHandler({
     }) as Notifications.NotificationBehavior,
 });
 
-export interface UserStats {
+interface UserStats {
   totalStudyHours: number;
   currentStreak: number;
   totalSessions: number;
@@ -32,7 +32,7 @@ export interface UserStats {
 }
 
 // Achievement management functions
-export const initializeUserAchievements = async (
+const initializeUserAchievements = async (
   userId: string,
 ): Promise<UserAchievements> => {
   try {
@@ -67,7 +67,7 @@ export const initializeUserAchievements = async (
   }
 };
 
-export const getUserAchievements = async (
+const getUserAchievements = async (
   userId: string,
 ): Promise<UserAchievements> => {
   try {
@@ -106,7 +106,7 @@ export const getUserAchievements = async (
   }
 };
 
-export const saveUserAchievements = async (
+const saveUserAchievements = async (
   userId: string,
   userAchievements: UserAchievements,
 ): Promise<void> => {
@@ -123,7 +123,7 @@ export const saveUserAchievements = async (
   }
 };
 
-export const updateUserProgress = async (
+const updateUserProgress = async (
   userId: string,
   userStats: UserStats,
 ): Promise<Badge[]> => {
@@ -173,14 +173,14 @@ export const updateUserProgress = async (
   }
 };
 
-export const calculateTotalPoints = (badges: Badge[]): number => {
+const calculateTotalPoints = (badges: Badge[]): number => {
   return badges.reduce((total, badge) => {
     // Points based on tier: Tier 1 = 10 points, Tier 7 = 70 points
     return total + badge.tier * 10;
   }, 0);
 };
 
-export const calculateLevel = (totalPoints: number): number => {
+const calculateLevel = (totalPoints: number): number => {
   // Level calculation: Level 1-10 based on points
   // Level 1: 0-49 points
   // Level 2: 50-149 points
@@ -198,9 +198,7 @@ export const calculateLevel = (totalPoints: number): number => {
   return 10; // Maximum level
 };
 
-export const sendAchievementNotification = async (
-  badge: Badge,
-): Promise<void> => {
+const sendAchievementNotification = async (badge: Badge): Promise<void> => {
   try {
     const isFirstBadge = badge.tier === 1;
 
@@ -245,7 +243,7 @@ export const sendAchievementNotification = async (
   }
 };
 
-export const getAchievementsByCategory = (
+const getAchievementsByCategory = (
   achievements: Achievement[],
   category: string,
 ): Achievement[] => {
@@ -254,14 +252,11 @@ export const getAchievementsByCategory = (
   );
 };
 
-export const getBadgesByCategory = (
-  badges: Badge[],
-  category: string,
-): Badge[] => {
+const getBadgesByCategory = (badges: Badge[], category: string): Badge[] => {
   return badges.filter((badge) => badge.category === category);
 };
 
-export const getHighestBadgeInCategory = (
+const getHighestBadgeInCategory = (
   badges: Badge[],
   category: string,
 ): Badge | null => {
@@ -273,7 +268,7 @@ export const getHighestBadgeInCategory = (
   );
 };
 
-export const getUserLevel = async (userId: string): Promise<number> => {
+const getUserLevel = async (userId: string): Promise<number> => {
   try {
     const userAchievements = await getUserAchievements(userId);
     return userAchievements.level;
@@ -291,7 +286,7 @@ export const getUserBadges = async (userId: string): Promise<Badge[]> => {
   }
 };
 
-export const getTopBadgesForDisplay = async (
+const getTopBadgesForDisplay = async (
   userId: string,
   limit: number = 3,
 ): Promise<Badge[]> => {
@@ -312,7 +307,7 @@ export const getTopBadgesForDisplay = async (
 
 // Database sync functions (deprecated - achievement data stored in AsyncStorage)
 // DB-side achievement tracking is handled separately via Convex achievements.award mutation
-export const saveAchievementsToDatabase = async (
+const saveAchievementsToDatabase = async (
   userId: string,
   userAchievements: UserAchievements,
 ): Promise<void> => {
@@ -320,15 +315,13 @@ export const saveAchievementsToDatabase = async (
   // The Convex achievements.award mutation handles DB-side achievement tracking separately
 };
 
-export const syncAchievementsWithDatabase = async (
-  userId: string,
-): Promise<void> => {
+const syncAchievementsWithDatabase = async (userId: string): Promise<void> => {
   // No-op: Achievement data is primarily stored in AsyncStorage
   // The Convex achievements.award mutation handles DB-side achievement tracking separately
 };
 
 // Utility functions for specific achievements
-export const recordStudySession = async (
+const recordStudySession = async (
   userId: string,
   sessionDurationMinutes: number,
 ): Promise<Badge[]> => {

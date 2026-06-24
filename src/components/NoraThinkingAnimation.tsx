@@ -140,7 +140,7 @@ export const NoraThinkingAnimation: React.FC<NoraThinkingAnimationProps> = ({
 };
 
 // Simple dots for other uses
-export const NoraThinkingDots: React.FC<{
+const NoraThinkingDots: React.FC<{
   isDark?: boolean;
   color?: string;
 }> = ({ isDark = true, color }) => {
@@ -196,5 +196,3 @@ const styles = StyleSheet.create({
     borderRadius: 2.5,
   },
 });
-
-export default NoraThinkingAnimation;

@@ -43,5 +43,3 @@ export function ConvexClientProvider({ children }: ConvexClientProviderProps) {
     </ConvexProviderWithClerk>
   );
 }
-
-export default ConvexClientProvider;

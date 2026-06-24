@@ -4,7 +4,6 @@ import {
   respondToFriendRequest,
 } from "./convexFriendRequestService";
 import { getConvexClient } from "./convexClient";
-export { setConvexClient } from "./convexClient";
 
 export interface QRScanNotification {
   requestId: string;

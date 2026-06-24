@@ -8,7 +8,6 @@
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { getConvexClient } from "./convexClient";
-export { setConvexClient } from "./convexClient";
 
 // Re-export interfaces for backward compatibility
 export interface Message {
@@ -94,7 +93,7 @@ export async function markMessagesAsRead(
  * With Convex, this is a no-op — useQuery(api.messages.getConversation)
  * in the component handles real-time updates automatically.
  */
-export function subscribeToConversation(
+function subscribeToConversation(
   _otherUserId: string,
   _callback: (message: Message) => void,
 ): () => void {
@@ -121,7 +120,7 @@ export function subscribeToMessageNotifications(
 /**
  * Get messages for a specific conversation
  */
-export async function getConversation(
+async function getConversation(
   otherUserId: string,
 ): Promise<{ success: boolean; error?: string; data?: Message[] }> {
   try {

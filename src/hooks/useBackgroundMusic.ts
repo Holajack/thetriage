@@ -14,14 +14,14 @@ try {
   // expo-av not available, music playback disabled
 }
 
-export type MusicCategory =
+type MusicCategory =
   | "Ambient"
   | "Nature"
   | "Classical"
   | "Lo-Fi"
   | "Jazz Ambient";
 
-export type MusicTrack = {
+type MusicTrack = {
   id: string;
   name: string;
   displayName: string;

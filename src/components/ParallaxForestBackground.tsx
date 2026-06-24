@@ -1,6 +1,19 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { View, Image, StyleSheet, Dimensions, ImageSourcePropType } from 'react-native';
-import { getTrailAssets } from '../config/trailAssets';
+import React, { useEffect, useState, useMemo } from "react";
+import {
+  View,
+  Image,
+  StyleSheet,
+  Dimensions,
+  ImageSourcePropType,
+} from "react-native";
+import { getTrailAssets } from "../config/trailAssets";
+import { NineLayerParallax } from "./NineLayerParallax";
+import { hasNineLayerSet } from "../config/nineLayerAssets";
+import {
+  GROUND_BASELINE,
+  BUDDY_FOOT_FRAC,
+  DEFAULT_FOOT_FRAC,
+} from "../config/nineLayerGeometry";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -8,9 +21,9 @@ import Animated, {
   withTiming,
   Easing,
   cancelAnimation,
-} from 'react-native-reanimated';
+} from "react-native-reanimated";
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 // Spritesheet configuration - each sheet is 5600x200 (28 frames of 200x200)
 const FRAME_WIDTH = 200;
@@ -20,22 +33,22 @@ const SPRITESHEET_WIDTH = FRAME_WIDTH * TOTAL_FRAMES; // 5600px
 
 // Use spritesheets instead of individual frames (only 5 images vs 140)
 const BUDDY_SPRITESHEETS: Record<string, ImageSourcePropType> = {
-  fox: require('../../assets/trail-buddies/fox_walking_optimized.png'),
-  deer: require('../../assets/trail-buddies/deer_walking_optimized.png'),
-  wolf: require('../../assets/trail-buddies/wolf_walking_optimized.png'),
-  nora: require('../../assets/trail-buddies/nora_walking_optimized.png'),
-  bear: require('../../assets/trail-buddies/bear_walking_optimized.png'),
-  lion: require('../../assets/trail-buddies/lion_walking_optimized.png'),
+  fox: require("../../assets/trail-buddies/fox_walking_optimized.webp"),
+  deer: require("../../assets/trail-buddies/deer_walking_optimized.webp"),
+  wolf: require("../../assets/trail-buddies/wolf_walking_optimized.webp"),
+  nora: require("../../assets/trail-buddies/nora_walking_optimized.webp"),
+  bear: require("../../assets/trail-buddies/bear_walking_optimized.webp"),
+  lion: require("../../assets/trail-buddies/lion_walking_optimized.webp"),
 };
 
 // Resting spritesheets — same format (28 frames, 200x200 each, 5600x200 total)
 const BUDDY_RESTING_SPRITESHEETS: Record<string, ImageSourcePropType> = {
-  fox: require('../../assets/trail-buddies/fox_resting_optimized.png'),
-  deer: require('../../assets/trail-buddies/deer_resting_optimized.png'),
-  wolf: require('../../assets/trail-buddies/wolf_resting_optimized.png'),
-  nora: require('../../assets/trail-buddies/nora_resting_optimized.png'),
-  bear: require('../../assets/trail-buddies/bear_resting_optimized.png'),
-  lion: require('../../assets/trail-buddies/lion_walking_optimized.png'),
+  fox: require("../../assets/trail-buddies/fox_resting_optimized.webp"),
+  deer: require("../../assets/trail-buddies/deer_resting_optimized.webp"),
+  wolf: require("../../assets/trail-buddies/wolf_resting_optimized.webp"),
+  nora: require("../../assets/trail-buddies/nora_resting_optimized.webp"),
+  bear: require("../../assets/trail-buddies/bear_resting_optimized.webp"),
+  lion: require("../../assets/trail-buddies/lion_walking_optimized.webp"),
 };
 
 // Parallax layer speeds (duration for full screen scroll)
@@ -53,11 +66,13 @@ interface ParallaxForestBackgroundProps {
   showPath?: boolean;
   treeScrollDuration?: number;
   /** 'walking' = normal study session, 'resting' = break time (slower animation, resting sprite) */
-  animationMode?: 'walking' | 'resting';
+  animationMode?: "walking" | "resting";
   /** Trail environment ID - determines which parallax layers to render. Defaults to 'forest'. */
   trailType?: string;
   /** When true, stops scrolling layers and slows buddy animation for accessibility */
   reduceMotion?: boolean;
+  /** Which ground/path variant to show. Stable per session; rotates between sessions. */
+  groundVariantIndex?: number;
 }
 
 // Animated Trail Buddy Component using spritesheet
@@ -65,23 +80,37 @@ interface ParallaxForestBackgroundProps {
 const WALK_DISPLAY_SIZE = 120;
 const REST_DISPLAY_SIZE = 300;
 
-const TrailBuddySprite = ({ buddyType, mode = 'walking', reduceMotion = false }: { buddyType: string; mode?: 'walking' | 'resting'; reduceMotion?: boolean }) => {
+const TrailBuddySprite = ({
+  buddyType,
+  mode = "walking",
+  reduceMotion = false,
+}: {
+  buddyType: string;
+  mode?: "walking" | "resting";
+  reduceMotion?: boolean;
+}) => {
   const [currentFrame, setCurrentFrame] = useState(0);
 
   // Pick the right spritesheet based on animation mode
-  const spritesheets = mode === 'resting' ? BUDDY_RESTING_SPRITESHEETS : BUDDY_SPRITESHEETS;
+  const spritesheets =
+    mode === "resting" ? BUDDY_RESTING_SPRITESHEETS : BUDDY_SPRITESHEETS;
   const spritesheet = spritesheets[buddyType] || spritesheets.bear;
 
-  const displaySize = mode === 'resting' ? REST_DISPLAY_SIZE : WALK_DISPLAY_SIZE;
+  const displaySize =
+    mode === "resting" ? REST_DISPLAY_SIZE : WALK_DISPLAY_SIZE;
 
   useEffect(() => {
     // Normal: Walking 70ms (~2s), Resting 140ms (~4s)
     // Reduce motion: Walking 280ms (~8s gentle), Resting 300ms (~8.4s very slow)
     const FRAME_DURATION = reduceMotion
-      ? (mode === 'resting' ? 300 : 280)
-      : (mode === 'resting' ? 140 : 70);
+      ? mode === "resting"
+        ? 300
+        : 280
+      : mode === "resting"
+        ? 140
+        : 70;
     const interval = setInterval(() => {
-      setCurrentFrame(prev => (prev + 1) % TOTAL_FRAMES);
+      setCurrentFrame((prev) => (prev + 1) % TOTAL_FRAMES);
     }, FRAME_DURATION);
 
     return () => clearInterval(interval);
@@ -92,9 +121,18 @@ const TrailBuddySprite = ({ buddyType, mode = 'walking', reduceMotion = false }:
   const frameOffset = -currentFrame * FRAME_WIDTH * displayScale;
 
   return (
-    <View style={{ width: displaySize, height: displaySize, alignItems: 'center', justifyContent: 'center' }}>
+    <View
+      style={{
+        width: displaySize,
+        height: displaySize,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
       {/* Clip container to show only one frame */}
-      <View style={{ width: displaySize, height: displaySize, overflow: 'hidden' }}>
+      <View
+        style={{ width: displaySize, height: displaySize, overflow: "hidden" }}
+      >
         <Image
           source={spritesheet}
           style={[
@@ -102,7 +140,7 @@ const TrailBuddySprite = ({ buddyType, mode = 'walking', reduceMotion = false }:
               width: SPRITESHEET_WIDTH * (displaySize / FRAME_HEIGHT),
               height: displaySize,
             },
-            { transform: [{ translateX: frameOffset }] }
+            { transform: [{ translateX: frameOffset }] },
           ]}
           resizeMode="cover"
         />
@@ -140,7 +178,7 @@ const ScrollingLayer = ({
           easing: Easing.linear,
         }),
         -1, // Infinite repeat
-        false // Don't reverse
+        false, // Don't reverse
       );
     }
 
@@ -168,7 +206,9 @@ const ScrollingLayer = ({
   }
 
   return (
-    <Animated.View style={[styles.layerContainer, { zIndex }, style, animatedStyle]}>
+    <Animated.View
+      style={[styles.layerContainer, { zIndex }, style, animatedStyle]}
+    >
       {/* Two copies side by side for seamless loop */}
       <Image
         source={source}
@@ -185,7 +225,13 @@ const ScrollingLayer = ({
 };
 
 // Orbiting Sky Component (used in resting mode) - very subtle drift animation
-const OrbitingSky = ({ source, reduceMotion = false }: { source: ImageSourcePropType; reduceMotion?: boolean }) => {
+const OrbitingSky = ({
+  source,
+  reduceMotion = false,
+}: {
+  source: ImageSourcePropType;
+  reduceMotion?: boolean;
+}) => {
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
 
@@ -202,12 +248,12 @@ const OrbitingSky = ({ source, reduceMotion = false }: { source: ImageSourceProp
     translateX.value = withRepeat(
       withTiming(10, { duration: 30000, easing: Easing.inOut(Easing.sin) }),
       -1,
-      true // reverse
+      true, // reverse
     );
     translateY.value = withRepeat(
       withTiming(6, { duration: 25000, easing: Easing.inOut(Easing.sin) }),
       -1,
-      true
+      true,
     );
 
     return () => {
@@ -224,29 +270,30 @@ const OrbitingSky = ({ source, reduceMotion = false }: { source: ImageSourceProp
   }));
 
   return (
-    <Animated.View style={[styles.restSkyContainer, { zIndex: 0 }, animatedStyle]}>
-      <Image
-        source={source}
-        style={styles.restFullImage}
-        resizeMode="cover"
-      />
+    <Animated.View
+      style={[styles.restSkyContainer, { zIndex: 0 }, animatedStyle]}
+    >
+      <Image source={source} style={styles.restFullImage} resizeMode="cover" />
     </Animated.View>
   );
 };
 
-export const ParallaxForestBackground: React.FC<ParallaxForestBackgroundProps> = ({
-  trailBuddyType = 'bear',
+export const ParallaxForestBackground: React.FC<
+  ParallaxForestBackgroundProps
+> = ({
+  trailBuddyType = "bear",
   isActive = true,
   showTrailBuddy = false,
   showPath = true,
   treeScrollDuration = TREES_SCROLL_DURATION,
-  animationMode = 'walking',
-  trailType = 'forest',
+  animationMode = "walking",
+  trailType = "forest",
   reduceMotion = false,
+  groundVariantIndex = 0,
 }) => {
   const layers = useMemo(
     () => getTrailAssets(trailType, animationMode),
-    [trailType, animationMode]
+    [trailType, animationMode],
   );
 
   if (!isActive) {
@@ -256,7 +303,7 @@ export const ParallaxForestBackground: React.FC<ParallaxForestBackgroundProps> =
   // ─────────────────────────────────────────────
   // REST MODE: Static full-screen scene, no scrolling
   // ─────────────────────────────────────────────
-  if (animationMode === 'resting') {
+  if (animationMode === "resting") {
     return (
       <View style={styles.container}>
         {/* Layer 0: Sky - full screen with subtle orbit drift */}
@@ -292,7 +339,11 @@ export const ParallaxForestBackground: React.FC<ParallaxForestBackgroundProps> =
         {/* Layer 4: Trail Buddy resting - center-right on the ground */}
         {showTrailBuddy && (
           <View style={[styles.restBuddyLayer, { zIndex: 6 }]}>
-            <TrailBuddySprite buddyType={trailBuddyType} mode="resting" reduceMotion={reduceMotion} />
+            <TrailBuddySprite
+              buddyType={trailBuddyType}
+              mode="resting"
+              reduceMotion={reduceMotion}
+            />
           </View>
         )}
       </View>
@@ -300,17 +351,49 @@ export const ParallaxForestBackground: React.FC<ParallaxForestBackgroundProps> =
   }
 
   // ─────────────────────────────────────────────
-  // WALKING MODE: Parallax side-scrolling
+  // WALKING MODE: 9-layer parallax (when the trail has a full set)
+  // ─────────────────────────────────────────────
+  if (hasNineLayerSet(trailType)) {
+    // Plant the buddy's feet on the same ground baseline NineLayerParallax uses.
+    const baselineY = GROUND_BASELINE * SCREEN_HEIGHT;
+    const footFrac = BUDDY_FOOT_FRAC[trailBuddyType] ?? DEFAULT_FOOT_FRAC;
+    const buddyBottom =
+      SCREEN_HEIGHT - baselineY - WALK_DISPLAY_SIZE * (1 - footFrac);
+
+    return (
+      <View style={styles.container}>
+        <NineLayerParallax
+          biome={trailType}
+          reduceMotion={reduceMotion}
+          isActive={isActive}
+          groundVariantIndex={groundVariantIndex}
+        />
+        {showTrailBuddy && (
+          <View
+            style={[
+              styles.nineLayerBuddyLayer,
+              { bottom: buddyBottom, zIndex: 10 },
+            ]}
+          >
+            <TrailBuddySprite
+              buddyType={trailBuddyType}
+              mode="walking"
+              reduceMotion={reduceMotion}
+            />
+          </View>
+        )}
+      </View>
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  // WALKING MODE: legacy 4-layer side-scrolling (fallback, e.g. jungle)
   // ─────────────────────────────────────────────
   return (
     <View style={styles.container}>
       {/* Layer 0: Sky (static, furthest back) */}
       <View style={[styles.skyLayerContainer, { zIndex: 0 }]}>
-        <Image
-          source={layers.sky}
-          style={styles.skyLayer}
-          resizeMode="cover"
-        />
+        <Image source={layers.sky} style={styles.skyLayer} resizeMode="cover" />
       </View>
 
       {/* Layer 1: Background - Mountain/scenery (static, covers full screen) */}
@@ -343,7 +426,11 @@ export const ParallaxForestBackground: React.FC<ParallaxForestBackgroundProps> =
       {/* Layer 4: Trail Buddy (walking animation, slower when reduce motion) */}
       {showTrailBuddy && (
         <View style={[styles.buddyLayer, { zIndex: 4 }]}>
-          <TrailBuddySprite buddyType={trailBuddyType} mode={animationMode} reduceMotion={reduceMotion} />
+          <TrailBuddySprite
+            buddyType={trailBuddyType}
+            mode={animationMode}
+            reduceMotion={reduceMotion}
+          />
         </View>
       )}
     </View>
@@ -352,33 +439,33 @@ export const ParallaxForestBackground: React.FC<ParallaxForestBackgroundProps> =
 
 const styles = StyleSheet.create({
   container: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    overflow: 'hidden',
-    backgroundColor: '#000', // Prevent white gaps between layers
+    overflow: "hidden",
+    backgroundColor: "#000", // Prevent white gaps between layers
   },
 
   // ─── WALKING MODE STYLES ───────────────────────
   layerContainer: {
-    position: 'absolute',
+    position: "absolute",
     left: 0,
-    flexDirection: 'row',
+    flexDirection: "row",
     width: LAYER_WIDTH,
   },
   staticBackground: {
     width: SCREEN_WIDTH,
-    height: '100%',
+    height: "100%",
   },
   scrollingImage: {
     width: SCREEN_WIDTH + 2, // +2px overlap to eliminate sub-pixel seam between tiles
-    height: '100%',
+    height: "100%",
   },
   // Sky layer - covers full screen so no black gaps show behind transparent mountain/dune edges
   skyLayerContainer: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
@@ -386,11 +473,11 @@ const styles = StyleSheet.create({
   },
   skyLayer: {
     width: SCREEN_WIDTH,
-    height: '100%',
+    height: "100%",
   },
   // Mountain layer - covers full screen with lake in background
   mountainLayerContainer: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
@@ -398,7 +485,7 @@ const styles = StyleSheet.create({
   },
   mountainLayer: {
     width: SCREEN_WIDTH,
-    height: '100%',
+    height: "100%",
   },
   treesLayer: {
     // Trees/cacti - positioned so their bases sit at or just below the path ground
@@ -406,27 +493,33 @@ const styles = StyleSheet.create({
     height: SCREEN_HEIGHT * 0.55, // Taller to keep tree tops visible
     bottom: SCREEN_HEIGHT * 0.05, // Raise cacti so bases sit on the walking path
     top: undefined,
-    position: 'absolute',
+    position: "absolute",
   },
   pathLayer: {
     // Path/ground at the bottom - tall enough to cover gap under mountain/dunes
     height: SCREEN_HEIGHT * 0.45,
     bottom: 0,
     top: undefined,
-    position: 'absolute',
+    position: "absolute",
   },
   buddyLayer: {
-    position: 'absolute',
-    bottom: SCREEN_HEIGHT * 0.10, // Position buddy walking on top of the path
-    left: SCREEN_WIDTH * 0.38, // Centered on the path
+    position: "absolute",
+    bottom: SCREEN_HEIGHT * 0.1,
+    left: SCREEN_WIDTH * 0.38,
     width: 140,
     height: 140,
+  },
+  nineLayerBuddyLayer: {
+    position: "absolute",
+    left: SCREEN_WIDTH * 0.38,
+    width: WALK_DISPLAY_SIZE,
+    height: WALK_DISPLAY_SIZE,
   },
 
   // ─── REST MODE STYLES ──────────────────────────
   // Sky: slightly oversized for orbit drift without exposing edges
   restSkyContainer: {
-    position: 'absolute',
+    position: "absolute",
     top: -15,
     left: -15,
     right: -15,
@@ -434,32 +527,32 @@ const styles = StyleSheet.create({
   },
   // Full-screen layer used for mountain and tree frame
   restLayerFull: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
   },
   restFullImage: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
   },
   // Ground platform - large, top edge at info button level, lower half off-screen
   restGroundLayer: {
-    position: 'absolute',
-    bottom: -SCREEN_HEIGHT * 0.30,
+    position: "absolute",
+    bottom: -SCREEN_HEIGHT * 0.3,
     left: 0,
     right: 0,
     height: SCREEN_HEIGHT * 0.7,
   },
   restGroundImage: {
     width: SCREEN_WIDTH * 1.4,
-    height: '100%',
-    alignSelf: 'center',
+    height: "100%",
+    alignSelf: "center",
   },
   // Trail buddy resting position - center-right on the ground (300px sprite)
   restBuddyLayer: {
-    position: 'absolute',
+    position: "absolute",
     bottom: SCREEN_HEIGHT * 0.04,
     right: SCREEN_WIDTH * 0.08,
     width: 310,
@@ -470,18 +563,16 @@ const styles = StyleSheet.create({
   buddyContainer: {
     width: 120,
     height: 120,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   spriteClipContainer: {
     width: 120,
     height: 120,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   spritesheetImage: {
     width: SPRITESHEET_WIDTH * (120 / FRAME_HEIGHT), // Scale spritesheet to match display size
     height: 120,
   },
 });
-
-export default ParallaxForestBackground;

@@ -48,6 +48,7 @@ import Animated, {
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { AnimationConfig } from "../../theme/premiumTheme";
+import { navigateHomeWithSlide } from "../../navigation/navHelpers";
 
 const TABS = ["Friends", "Messages", "Study Rooms"];
 const MOCK_FRIENDS = [
@@ -1153,7 +1154,7 @@ const CommunityScreen = () => {
           {/* Unified Header */}
           <UnifiedHeader
             title="Community"
-            onClose={() => navigation.navigate("Home")}
+            onClose={() => navigateHomeWithSlide(navigation)}
           />
 
           {/* Search Bar with Friend Request Button */}

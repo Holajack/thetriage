@@ -9,7 +9,7 @@ import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { useCallback, useMemo } from "react";
 
-export interface NoraChatSession {
+interface NoraChatSession {
   _id: string;
   title: string;
   lastMessageAt: string;
@@ -17,7 +17,7 @@ export interface NoraChatSession {
   thinkingMode?: string;
 }
 
-export interface DateGroupedSessions {
+interface DateGroupedSessions {
   label: string;
   sessions: NoraChatSession[];
 }

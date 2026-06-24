@@ -68,7 +68,7 @@ const AMBIENT_ASSETS: Record<string, Record<string, any>> = {
   },
 };
 
-export type AmbientLayer = "environment" | "whitenoise" | "critters";
+type AmbientLayer = "environment" | "whitenoise" | "critters";
 
 const DEFAULT_AMBIENT_VOLUME = 0.3;
 const FADE_DURATION_MS = 400;

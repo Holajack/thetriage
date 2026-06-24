@@ -2,30 +2,24 @@
   "biome": "Galaxy",
   "model": "openai/gpt-image-1.5",
   "quality": "high",
-  "startedAt": 1780364907296,
-  "elapsedSeconds": 55,
+  "startedAt": 1780656401385,
+  "elapsedSeconds": 155,
   "results": [
-    {
-      "layerKey": "sky",
-      "fileName": "sky_gradient.png",
-      "status": "completed",
-      "attempts": 1
-    },
-    {
-      "layerKey": "sun",
-      "fileName": "sun.png",
-      "status": "completed",
-      "attempts": 1,
-      "transparencyBorderOpaqueRatio": 0,
-      "contentRatio": 0.0322882334391276
-    },
     {
       "layerKey": "clouds__fluffy_cloud",
       "fileName": "fluffy_cloud.png",
       "status": "completed",
-      "attempts": 1,
+      "attempts": 2,
       "transparencyBorderOpaqueRatio": 0,
-      "contentRatio": 0.2006359100341797
+      "contentRatio": 0.1277186075846354
+    },
+    {
+      "layerKey": "ground__regular_path",
+      "fileName": "regular_path.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0.04339327599687256,
+      "contentRatio": 0.10481007893880208
     }
   ]
 }

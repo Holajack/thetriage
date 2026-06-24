@@ -117,7 +117,7 @@ export async function resetWalkthrough(screenId: string) {
 }
 
 /** Reset all walkthroughs */
-export async function resetAllWalkthroughs() {
+async function resetAllWalkthroughs() {
   const keys = await AsyncStorage.getAllKeys();
   const walkthroughKeys = keys.filter((k) => k.startsWith(STORAGE_PREFIX));
   if (walkthroughKeys.length > 0) {

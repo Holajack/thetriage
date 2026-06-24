@@ -20,7 +20,6 @@ import type { MainTabParamList } from "../../navigation/types";
 import { useTheme } from "../../context/ThemeContext";
 const { useUserAppData } = require("../../utils/userAppData");
 import { useAuth } from "../../context/AuthContext";
-import { BottomTabBar } from "../../components/BottomTabBar";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { UnifiedHeader } from "../../components/UnifiedHeader";
 import { FlintIcon } from "../../components/FlintIcon";
@@ -42,7 +41,6 @@ import * as Haptics from "expo-haptics";
 import { Typography } from "../../theme/premiumTheme";
 import {
   useNavigationSlideAnimation,
-  useFocusAnimationKey,
   useCounterAnimation,
 } from "../../utils/animationUtils";
 import { ShimmerLoader } from "../../components/premium/ShimmerLoader";
@@ -51,25 +49,26 @@ import { AnimatedButton } from "../../components/premium/AnimatedButton";
 import InteractiveWalkthrough from "../../components/InteractiveWalkthrough";
 import { useScreenWalkthrough } from "../../hooks/useScreenWalkthrough";
 import { PROFILE_STEPS } from "../../config/walkthroughSteps";
+import { navigateHomeWithSlide } from "../../navigation/navHelpers";
 
 // Trail buddy portrait images (first frame of each animation)
 const TRAIL_BUDDY_IMAGES: Record<string, ImageSourcePropType> = {
-  fox: require("../../../assets/trail-buddies/fox-frames/fox_frame_00.png"),
-  bear: require("../../../assets/trail-buddies/bear-frames/bear_frame_00.png"),
-  deer: require("../../../assets/trail-buddies/deer-frames/deer_frame_00.png"),
-  nora: require("../../../assets/trail-buddies/nora-frames/nora_frame_00.png"),
-  wolf: require("../../../assets/trail-buddies/wolf-frames/wolf_frame_00.png"),
-  lion: require("../../../assets/trail-buddies/lion-frames/lion_frame_00.png"),
+  fox: require("../../../assets/trail-buddies/fox-frames/fox_frame_00.webp"),
+  bear: require("../../../assets/trail-buddies/bear-frames/bear_frame_00.webp"),
+  deer: require("../../../assets/trail-buddies/deer-frames/deer_frame_00.webp"),
+  nora: require("../../../assets/trail-buddies/nora-frames/nora_frame_00.webp"),
+  wolf: require("../../../assets/trail-buddies/wolf-frames/wolf_frame_00.webp"),
+  lion: require("../../../assets/trail-buddies/lion-frames/lion_frame_00.webp"),
 };
 
 // Spritesheet configuration for walking animation
 const BUDDY_SPRITESHEETS: Record<string, ImageSourcePropType> = {
-  fox: require("../../../assets/trail-buddies/fox_walking_optimized.png"),
-  deer: require("../../../assets/trail-buddies/deer_walking_optimized.png"),
-  wolf: require("../../../assets/trail-buddies/wolf_walking_optimized.png"),
-  nora: require("../../../assets/trail-buddies/nora_walking_optimized.png"),
-  bear: require("../../../assets/trail-buddies/bear_walking_optimized.png"),
-  lion: require("../../../assets/trail-buddies/lion_walking_optimized.png"),
+  fox: require("../../../assets/trail-buddies/fox_walking_optimized.webp"),
+  deer: require("../../../assets/trail-buddies/deer_walking_optimized.webp"),
+  wolf: require("../../../assets/trail-buddies/wolf_walking_optimized.webp"),
+  nora: require("../../../assets/trail-buddies/nora_walking_optimized.webp"),
+  bear: require("../../../assets/trail-buddies/bear_walking_optimized.webp"),
+  lion: require("../../../assets/trail-buddies/lion_walking_optimized.webp"),
 };
 const SPRITE_FRAME_WIDTH = 200;
 const SPRITE_FRAME_HEIGHT = 200;
@@ -160,8 +159,6 @@ const ProfileScreen = () => {
   const [editedLocation, setEditedLocation] = useState("");
   const [editedClasses, setEditedClasses] = useState("");
   const [userBadges, setUserBadges] = useState<Badge[]>([]);
-
-  const focusKey = useFocusAnimationKey();
 
   // Walkthrough refs and hook
   const scrollViewRef = useRef<ScrollView>(null);
@@ -385,12 +382,11 @@ const ProfileScreen = () => {
     >
       <UnifiedHeader
         title="Profile"
-        onClose={() => navigation.navigate("Home")}
+        onClose={() => navigateHomeWithSlide(navigation)}
       />
 
       <ScrollView
         ref={scrollViewRef}
-        key={focusKey}
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 100 }}
       >
@@ -655,7 +651,7 @@ const ProfileScreen = () => {
               ]}
             >
               <Image
-                source={require("../../../assets/trail-buddies/backpack for hikewise.png")}
+                source={require("../../../assets/trail-buddies/backpack for hikewise.webp")}
                 style={{ width: 32, height: 32 }}
                 resizeMode="contain"
               />
@@ -1157,8 +1153,6 @@ const ProfileScreen = () => {
         steps={PROFILE_STEPS}
         onStepChange={handleWalkthroughStepChange}
       />
-
-      <BottomTabBar currentRoute="Profile" />
     </SafeAreaView>
   );
 };

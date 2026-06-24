@@ -335,6 +335,7 @@ function getEmptyData() {
 // Explicit exports for CommonJS compatibility
 module.exports = {
   useUserAppData,
+  fetchUserAppData,
   getLeaderboardData,
   setConvexClient,
 };

@@ -10,13 +10,17 @@ import {
   Modal,
   Platform,
   Linking,
+  Share,
+  ActivityIndicator,
 } from "react-native";
+import Constants from "expo-constants";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import type { MainTabParamList } from "../../navigation/types";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useConvexProfile } from "../../hooks/useConvex";
+import { useSubscriptionTier } from "../../hooks/useSubscriptionTier";
 import { useTheme, themePalettes } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
 import { useAuth as useClerkAuth, useUser } from "@clerk/clerk-expo";
@@ -117,10 +121,12 @@ const SettingsScreen = () => {
   }, [clerkUserId]);
 
   // Subscription info for AI row
-  const subscriptionTier = profile?.subscription_tier || "free";
-  const isElite = subscriptionTier === "elite";
-  const isPremium = subscriptionTier === "premium";
-  const hasAIAccess = isElite || isPremium;
+  const {
+    currentTier: subscriptionTier,
+    isElite,
+    isPremium,
+    hasAIAccess,
+  } = useSubscriptionTier();
   const aiSummary = !hasAIAccess
     ? "Requires Premium or Elite"
     : isElite
@@ -308,10 +314,12 @@ const SettingsScreen = () => {
     ]);
   };
 
+  const [isExporting, setIsExporting] = useState(false);
+
   const handleExportData = () => {
     Alert.alert(
       "Export Your Data",
-      "This will export all your profile data, sessions, tasks, and settings.",
+      "This will export all your profile data, sessions, tasks, achievements, and settings as JSON.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -322,18 +330,37 @@ const SettingsScreen = () => {
                 Alert.alert("Error", "Please log in.");
                 return;
               }
+              setIsExporting(true);
+
+              // Re-fetch fresh data for export
+              const { fetchUserAppData } = require("../../utils/userAppData");
+              const freshData = await fetchUserAppData();
+
               const exportData = {
                 export_date: new Date().toISOString(),
+                app: "HikeWise",
+                version: Constants.expoConfig?.version ?? "unknown",
                 user_id: clerkUserId,
                 email: clerkUser.primaryEmailAddress?.emailAddress,
-                profile: userData?.profile || profile,
-                focus_sessions: userData?.sessions || [],
-                tasks: userData?.tasks || [],
-                settings: userData?.settings,
+                profile: freshData?.profile ?? profile,
+                focus_sessions: freshData?.sessions ?? [],
+                tasks: freshData?.tasks ?? [],
+                achievements: freshData?.achievements ?? [],
+                settings: freshData?.settings ?? {},
               };
-              Alert.alert("Export Complete", "Your data export is ready.");
-            } catch (error) {
-              Alert.alert("Error", "Failed to export data.");
+
+              const jsonString = JSON.stringify(exportData, null, 2);
+
+              await Share.share({
+                message: jsonString,
+                title: "HikeWise Data Export",
+              });
+            } catch (error: any) {
+              // User cancelled the share sheet — not an error
+              if (error?.message?.includes("User did not share")) return;
+              Alert.alert("Error", "Failed to export data. Please try again.");
+            } finally {
+              setIsExporting(false);
             }
           },
         },
@@ -362,7 +389,9 @@ const SettingsScreen = () => {
           }
           try {
             await legacySignOut();
-          } catch (_) {}
+          } catch {
+            // Legacy sign-out is best-effort; proceed to reset navigation regardless.
+          }
           navigation.dispatch(
             CommonActions.reset({
               index: 0,
@@ -432,10 +461,12 @@ const SettingsScreen = () => {
     ]);
   };
 
+  const appVersion = Constants.expoConfig?.version ?? "2.0.0";
+
   const handleAppInfo = () => {
     Alert.alert(
       "App Information",
-      "HikeWise Study Tracker\nVersion: 2.0.0\nBuild: 2025.001\n\nMade for students everywhere",
+      `HikeWise Study Tracker\nVersion: ${appVersion}\n\nMade for students everywhere`,
       [
         {
           text: "Check for Updates",
@@ -520,6 +551,35 @@ const SettingsScreen = () => {
         style={{ flex: 1 }}
         contentContainerStyle={styles.scrollContent}
       >
+        {/* DEV: 9-layer parallax trail preview */}
+        <TouchableOpacity
+          onPress={() => navigation.navigate("NineLayerPreview" as any)}
+          activeOpacity={0.9}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: `${theme.primary}22`,
+            borderColor: theme.primary,
+            borderWidth: 1,
+            borderRadius: 14,
+            paddingVertical: 14,
+            marginBottom: 16,
+          }}
+        >
+          <Ionicons
+            name="image-outline"
+            size={20}
+            color={theme.primary}
+            style={{ marginRight: 8 }}
+          />
+          <Text
+            style={{ color: theme.primary, fontWeight: "700", fontSize: 15 }}
+          >
+            Trail Preview (9-layer)
+          </Text>
+        </TouchableOpacity>
+
         {/* Tier Card — celebrates Elite users, upsells everyone else */}
         <StaggeredItem index={0}>
           <TouchableOpacity
@@ -720,9 +780,19 @@ const SettingsScreen = () => {
             <SettingsRow
               icon="download-outline"
               label="Export Data"
+              description={isExporting ? "Gathering your data..." : undefined}
               onPress={handleExportData}
+              disabled={isExporting}
               isLast
-            />
+            >
+              {isExporting && (
+                <ActivityIndicator
+                  size="small"
+                  color={theme.primary}
+                  style={{ marginTop: 8 }}
+                />
+              )}
+            </SettingsRow>
           </SettingsGroup>
         </StaggeredItem>
 
@@ -799,7 +869,7 @@ const SettingsScreen = () => {
             <SettingsRow
               icon="information-circle-outline"
               label="App Info"
-              value="v2.0.0"
+              value={`v${appVersion}`}
               onPress={handleAppInfo}
             />
             <SettingsRow
@@ -832,7 +902,7 @@ const SettingsScreen = () => {
 
         {/* Version */}
         <Text style={[styles.version, { color: `${theme.text}66` }]}>
-          v2.0.0 (517)
+          v{appVersion}
         </Text>
       </Animated.ScrollView>
 

@@ -27,6 +27,7 @@ import Animated, {
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { useConvexProfile } from "../../hooks/useConvex";
+import { useSubscriptionTier } from "../../hooks/useSubscriptionTier";
 import {
   isBuddyLocked,
   isProOrAbove,
@@ -46,13 +47,13 @@ const TOTAL_FRAMES = 28;
 // Use spritesheets instead of individual frames (only 5 images vs 140)
 const BUDDY_SPRITESHEETS: Record<string, ImageSourcePropType> = {
   // TODO: swap in dedicated Patrick spritesheet once art is delivered. Fox is a placeholder.
-  patrick: require("../../../assets/trail-buddies/fox_walking_optimized.png"),
-  fox: require("../../../assets/trail-buddies/fox_walking_optimized.png"),
-  deer: require("../../../assets/trail-buddies/deer_walking_optimized.png"),
-  wolf: require("../../../assets/trail-buddies/wolf_walking_optimized.png"),
-  nora: require("../../../assets/trail-buddies/nora_walking_optimized.png"),
-  bear: require("../../../assets/trail-buddies/bear_walking_optimized.png"),
-  lion: require("../../../assets/trail-buddies/lion_walking_optimized.png"),
+  patrick: require("../../../assets/trail-buddies/fox_walking_optimized.webp"),
+  fox: require("../../../assets/trail-buddies/fox_walking_optimized.webp"),
+  deer: require("../../../assets/trail-buddies/deer_walking_optimized.webp"),
+  wolf: require("../../../assets/trail-buddies/wolf_walking_optimized.webp"),
+  nora: require("../../../assets/trail-buddies/nora_walking_optimized.webp"),
+  bear: require("../../../assets/trail-buddies/bear_walking_optimized.webp"),
+  lion: require("../../../assets/trail-buddies/lion_walking_optimized.webp"),
 };
 
 interface TrailBuddy {
@@ -344,7 +345,8 @@ const TrailBuddySelectionScreen = () => {
     },
   });
 
-  const tier = profile?.subscription_tier;
+  const { currentTier } = useSubscriptionTier();
+  const tier = currentTier;
   const isElite = isEliteTier(tier);
   const isPro = isProOrAbove(tier);
 

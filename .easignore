@@ -65,6 +65,12 @@ assets/errors/**
 assets/Claude iOS Onboarding/**
 assets/trail-buddies/example-input-images/**
 
+# ─── 9-LAYER PARALLAX: app uses .webp; skip PNG masters + QA artifacts ──
+# The renderer references only the .webp sprites (~28 MB). The .png masters
+# (~393 MB) are kept in the repo for re-editing but never bundled/uploaded.
+assets/Background_animations/*/nine_layer/*.png
+assets/Background_animations/*/nine_layer/_run-summary.json
+
 # ─── BACKUP & UNUSED IMAGES ─────────────────
 assets/*-backup*.png
 assets/icon-ios-brand*.png
@@ -114,4 +120,3 @@ src/assets/models/Brain_Diagram_with_La_1027180205_texture.glb
 # assets/Nora-AI-Chatbot.png
 # src/assets/transparent-triage.png
 # src/assets/flint shop/** — FlintIcon.tsx
-

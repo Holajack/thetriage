@@ -23,6 +23,7 @@ import StudyRoomScreen from "../screens/main/StudyRoomScreen";
 import { PatrickSpeakScreen } from "../screens/main/PatrickScreen";
 import LandingPage from "../screens/LandingPage";
 import SessionHistoryScreen from "../screens/main/SessionHistoryScreen";
+import NineLayerPreviewScreen from "../screens/main/NineLayerPreviewScreen";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -198,12 +199,17 @@ export const RootNavigator = () => {
         <Stack.Screen
           name="StudySessionScreen"
           component={StudySessionScreen}
-          options={{ presentation: "fullScreenModal" }}
+          options={{ presentation: "fullScreenModal", gestureEnabled: false }}
         />
-        <Stack.Screen name="BreakTimerScreen" component={BreakTimerScreen} />
+        <Stack.Screen
+          name="BreakTimerScreen"
+          component={BreakTimerScreen}
+          options={{ gestureEnabled: false }}
+        />
         <Stack.Screen
           name="SessionReportScreen"
           component={SessionReportScreen}
+          options={{ gestureEnabled: false }}
         />
         <Stack.Screen name="SessionHistory" component={SessionHistoryScreen} />
         <Stack.Screen
@@ -212,6 +218,11 @@ export const RootNavigator = () => {
           options={{ presentation: "fullScreenModal" }}
         />
         <Stack.Screen name="MessageScreen" component={MessageScreen} />
+        <Stack.Screen
+          name="NineLayerPreview"
+          component={NineLayerPreviewScreen}
+          options={{ presentation: "fullScreenModal" }}
+        />
         <Stack.Screen
           name="StudyRoomScreen"
           component={StudyRoomScreen}

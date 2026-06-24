@@ -1,6 +1,5 @@
 import { api } from "../../convex/_generated/api";
 import { getConvexClient } from "./convexClient";
-export { setConvexClient } from "./convexClient";
 
 export interface UserSettings {
   auto_play_sound?: boolean;
@@ -22,6 +21,9 @@ export interface UserSettings {
   workStyle?: string;
   focus_duration?: number;
   break_duration?: number;
+  // Notifications & reminders
+  daily_reminder?: string;
+  session_end_reminder?: boolean;
   // Accessibility
   tts_enabled?: boolean;
   high_contrast?: boolean;
@@ -65,6 +67,8 @@ export async function getUserSettings(
       daily_goal_minutes: settings.dailyGoalMinutes,
       preferred_session_length: settings.preferredSessionLength,
       preferred_break_length: settings.breakLength,
+      daily_reminder: settings.dailyReminder,
+      session_end_reminder: settings.sessionEndReminder,
       tts_enabled: settings.ttsEnabled,
       high_contrast: settings.highContrast,
       reduce_motion: settings.reduceMotion,
@@ -126,6 +130,11 @@ export async function updateUserSettings(
       convexSettings.spotifyConnected = settings.spotifyConnected;
     if (settings.appleMusicConnected !== undefined)
       convexSettings.appleMusicConnected = settings.appleMusicConnected;
+    // Notifications & reminders
+    if (settings.daily_reminder !== undefined)
+      convexSettings.dailyReminder = settings.daily_reminder;
+    if (settings.session_end_reminder !== undefined)
+      convexSettings.sessionEndReminder = settings.session_end_reminder;
     // Accessibility
     if (settings.tts_enabled !== undefined)
       convexSettings.ttsEnabled = settings.tts_enabled;
@@ -147,9 +156,7 @@ export async function updateUserSettings(
 /**
  * Create initial user settings for new users
  */
-export async function createInitialUserSettings(
-  userId: string,
-): Promise<boolean> {
+async function createInitialUserSettings(userId: string): Promise<boolean> {
   try {
     const defaultSettings: UserSettings = {
       auto_play_sound: true,

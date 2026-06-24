@@ -1,5 +1,35 @@
 import { v } from "convex/values";
-import { query, mutation, QueryCtx } from "./_generated/server";
+import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
+
+/** Defaults applied to every newly created user record. */
+const NEW_USER_DEFAULTS = {
+  status: "active" as const,
+  subscriptionTier: "trial" as const,
+  flintCurrency: 0,
+  firstSessionBonusClaimed: false,
+};
+
+type NewUserArgs = {
+  clerkId: string;
+  email: string;
+  username?: string;
+  fullName?: string;
+  firstName?: string;
+  lastName?: string;
+  avatarUrl?: string;
+};
+
+/** Create a user from Clerk data if one doesn't already exist; returns the user id. */
+export async function createUserIfMissing(ctx: MutationCtx, args: NewUserArgs) {
+  const existing = await ctx.db
+    .query("users")
+    .withIndex("by_clerkId", (q) => q.eq("clerkId", args.clerkId))
+    .unique();
+
+  if (existing) return existing._id;
+
+  return await ctx.db.insert("users", { ...args, ...NEW_USER_DEFAULTS });
+}
 
 /** Helper: get the current user from Clerk identity */
 export async function getCurrentUserOrNull(ctx: QueryCtx) {
@@ -68,27 +98,7 @@ export const createUser = mutation({
     avatarUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    // Check if user already exists
-    const existing = await ctx.db
-      .query("users")
-      .withIndex("by_clerkId", (q) => q.eq("clerkId", args.clerkId))
-      .unique();
-
-    if (existing) return existing._id;
-
-    return await ctx.db.insert("users", {
-      clerkId: args.clerkId,
-      email: args.email,
-      username: args.username,
-      fullName: args.fullName,
-      firstName: args.firstName,
-      lastName: args.lastName,
-      avatarUrl: args.avatarUrl,
-      status: "active",
-      subscriptionTier: "trial",
-      flintCurrency: 0,
-      firstSessionBonusClaimed: false,
-    });
+    return await createUserIfMissing(ctx, args);
   },
 });
 
@@ -165,7 +175,13 @@ export const updateMySubscription = mutation({
 
     // Don't let RevenueCat downgrade manually overridden tiers (dev/test elite accounts)
     if (user.subscriptionOverride) {
-      const tierRank: Record<string, number> = { free: 0, trial: 1, premium: 2, pro: 3, elite: 4 };
+      const tierRank: Record<string, number> = {
+        free: 0,
+        trial: 1,
+        premium: 2,
+        pro: 3,
+        elite: 4,
+      };
       const currentRank = tierRank[user.subscriptionTier || "free"] ?? 0;
       const newRank = tierRank[args.subscriptionTier] ?? 0;
       if (newRank < currentRank) {
@@ -252,9 +268,7 @@ export const searchUsers = query({
       const username = (user.username ?? "").toLowerCase();
       const fullName = (user.fullName ?? "").toLowerCase();
 
-      return (
-        username.includes(searchTerm) || fullName.includes(searchTerm)
-      );
+      return username.includes(searchTerm) || fullName.includes(searchTerm);
     });
 
     // Limit to 20 results and return safe user data (no sensitive fields)

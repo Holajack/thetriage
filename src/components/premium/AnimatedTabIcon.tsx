@@ -9,19 +9,19 @@
  * - Optional badge indicator
  */
 
-import React, { useEffect, useCallback } from 'react';
-import { StyleSheet, View, Text, Pressable } from 'react-native';
+import React, { useEffect, useCallback } from "react";
+import { StyleSheet, View, Text, Pressable } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
   withSequence,
   interpolate,
-} from 'react-native-reanimated';
-import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
-import { useTheme } from '../../context/ThemeContext';
-import { AnimationConfig, Typography, Spacing } from '../../theme/premiumTheme';
+} from "react-native-reanimated";
+import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import { useTheme } from "../../context/ThemeContext";
+import { AnimationConfig, Typography, Spacing } from "../../theme/premiumTheme";
 
 interface AnimatedTabIconProps {
   name: keyof typeof Ionicons.glyphMap;
@@ -51,7 +51,8 @@ export const AnimatedTabIcon: React.FC<AnimatedTabIconProps> = ({
   const { theme } = useTheme();
 
   const finalActiveColor = activeColor || theme.primary;
-  const finalInactiveColor = inactiveColor || (theme.isDark ? '#9CA3AF' : '#6B7280');
+  const finalInactiveColor =
+    inactiveColor || (theme.isDark ? "#9CA3AF" : "#6B7280");
 
   // Animation values
   const scale = useSharedValue(1);
@@ -84,10 +85,7 @@ export const AnimatedTabIcon: React.FC<AnimatedTabIconProps> = ({
 
   // Animated styles
   const containerAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { scale: scale.value },
-      { translateY: translateY.value },
-    ],
+    transform: [{ scale: scale.value }, { translateY: translateY.value }],
   }));
 
   const iconAnimatedStyle = useAnimatedStyle(() => ({
@@ -125,9 +123,7 @@ export const AnimatedTabIcon: React.FC<AnimatedTabIconProps> = ({
         {/* Badge */}
         {badge !== undefined && badge > 0 && (
           <View style={[styles.badge, { backgroundColor: theme.primary }]}>
-            <Text style={styles.badgeText}>
-              {badge > 99 ? '99+' : badge}
-            </Text>
+            <Text style={styles.badgeText}>{badge > 99 ? "99+" : badge}</Text>
           </View>
         )}
 
@@ -138,7 +134,7 @@ export const AnimatedTabIcon: React.FC<AnimatedTabIconProps> = ({
               styles.label,
               {
                 color: isActive ? finalActiveColor : finalInactiveColor,
-                fontWeight: isActive ? '600' : '500',
+                fontWeight: isActive ? "600" : "500",
               },
             ]}
             numberOfLines={1}
@@ -152,66 +148,124 @@ export const AnimatedTabIcon: React.FC<AnimatedTabIconProps> = ({
 };
 
 // Preset tab icons for common use cases
-export const HomeTabIcon: React.FC<{ isActive: boolean; onPress?: () => void }> = (props) => (
-  <AnimatedTabIcon name="home" outlineName="home-outline" label="Home" {...props} />
+const HomeTabIcon: React.FC<{ isActive: boolean; onPress?: () => void }> = (
+  props,
+) => (
+  <AnimatedTabIcon
+    name="home"
+    outlineName="home-outline"
+    label="Home"
+    {...props}
+  />
 );
 
-export const ProfileTabIcon: React.FC<{ isActive: boolean; onPress?: () => void }> = (props) => (
-  <AnimatedTabIcon name="person" outlineName="person-outline" label="Profile" {...props} />
+const ProfileTabIcon: React.FC<{ isActive: boolean; onPress?: () => void }> = (
+  props,
+) => (
+  <AnimatedTabIcon
+    name="person"
+    outlineName="person-outline"
+    label="Profile"
+    {...props}
+  />
 );
 
-export const HistoryTabIcon: React.FC<{ isActive: boolean; onPress?: () => void }> = (props) => (
-  <AnimatedTabIcon name="document-text" outlineName="document-text-outline" label="History" {...props} />
+const HistoryTabIcon: React.FC<{ isActive: boolean; onPress?: () => void }> = (
+  props,
+) => (
+  <AnimatedTabIcon
+    name="document-text"
+    outlineName="document-text-outline"
+    label="History"
+    {...props}
+  />
 );
 
-export const StatsTabIcon: React.FC<{ isActive: boolean; onPress?: () => void }> = (props) => (
-  <AnimatedTabIcon name="stats-chart" outlineName="stats-chart-outline" label="Stats" {...props} />
+const StatsTabIcon: React.FC<{ isActive: boolean; onPress?: () => void }> = (
+  props,
+) => (
+  <AnimatedTabIcon
+    name="stats-chart"
+    outlineName="stats-chart-outline"
+    label="Stats"
+    {...props}
+  />
 );
 
-export const BonusesTabIcon: React.FC<{ isActive: boolean; onPress?: () => void }> = (props) => (
-  <AnimatedTabIcon name="trophy" outlineName="trophy-outline" label="Bonuses" {...props} />
+const BonusesTabIcon: React.FC<{ isActive: boolean; onPress?: () => void }> = (
+  props,
+) => (
+  <AnimatedTabIcon
+    name="trophy"
+    outlineName="trophy-outline"
+    label="Bonuses"
+    {...props}
+  />
 );
 
-export const CommunityTabIcon: React.FC<{ isActive: boolean; onPress?: () => void; badge?: number }> = (props) => (
-  <AnimatedTabIcon name="people" outlineName="people-outline" label="Community" {...props} />
+const CommunityTabIcon: React.FC<{
+  isActive: boolean;
+  onPress?: () => void;
+  badge?: number;
+}> = (props) => (
+  <AnimatedTabIcon
+    name="people"
+    outlineName="people-outline"
+    label="Community"
+    {...props}
+  />
 );
 
-export const SettingsTabIcon: React.FC<{ isActive: boolean; onPress?: () => void }> = (props) => (
-  <AnimatedTabIcon name="settings" outlineName="settings-outline" label="Settings" {...props} />
+const SettingsTabIcon: React.FC<{ isActive: boolean; onPress?: () => void }> = (
+  props,
+) => (
+  <AnimatedTabIcon
+    name="settings"
+    outlineName="settings-outline"
+    label="Settings"
+    {...props}
+  />
 );
 
-export const ChatTabIcon: React.FC<{ isActive: boolean; onPress?: () => void; badge?: number }> = (props) => (
-  <AnimatedTabIcon name="chatbubble" outlineName="chatbubble-outline" label="Chat" {...props} />
+const ChatTabIcon: React.FC<{
+  isActive: boolean;
+  onPress?: () => void;
+  badge?: number;
+}> = (props) => (
+  <AnimatedTabIcon
+    name="chatbubble"
+    outlineName="chatbubble-outline"
+    label="Chat"
+    {...props}
+  />
 );
 
 const styles = StyleSheet.create({
   container: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 2,
     paddingHorizontal: 4,
   },
   badge: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     right: 4,
     minWidth: 18,
     height: 18,
     borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 4,
   },
   badgeText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   label: {
     fontSize: 9,
     marginTop: 2,
-    textAlign: 'center',
+    textAlign: "center",
   },
 });
-
-export default AnimatedTabIcon;

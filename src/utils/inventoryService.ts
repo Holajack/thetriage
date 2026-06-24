@@ -1,6 +1,5 @@
 import { api } from "../../convex/_generated/api";
 import { getConvexClient } from "./convexClient";
-export { setConvexClient } from "./convexClient";
 
 export interface InventoryItem {
   id: string;
@@ -131,35 +130,9 @@ export async function getEquippedItems(): Promise<{
 }
 
 /**
- * Check if user owns an item
- */
-export async function ownsItem(itemId: string): Promise<boolean> {
-  try {
-    const client = getConvexClient();
-    const items = await client.query(api.inventory.listItems, {});
-    return (items || []).some((item: any) => item.itemId === itemId);
-  } catch (error) {
-    return false;
-  }
-}
-
-/**
- * Check if an item is equipped
- */
-export async function isItemEquipped(itemId: string): Promise<boolean> {
-  try {
-    const client = getConvexClient();
-    const items = await client.query(api.inventory.getEquipped, {});
-    return (items || []).some((item: any) => item.itemId === itemId);
-  } catch (error) {
-    return false;
-  }
-}
-
-/**
  * Unequip an item
  */
-export async function unequipItem(
+async function unequipItem(
   itemCategory: "gear" | "shelter" | "trail",
 ): Promise<{ success: boolean; error?: string }> {
   try {

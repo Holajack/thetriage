@@ -9,7 +9,7 @@ import { Appearance, ColorSchemeName, AccessibilityInfo } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export type ThemeName = "home" | "office" | "library" | "coffee" | "park";
-export type ThemeMode = "System Default" | "Light" | "Dark";
+type ThemeMode = "System Default" | "Light" | "Dark";
 
 // Standard status colors (red/green) — used by default and in dark mode.
 const STATUS_DEFAULT = {
@@ -96,7 +96,7 @@ export const lightThemePalettes: Record<ThemeName, ThemePalette> = {
 };
 
 // Dark theme palette (consistent across all environments)
-export const darkThemePalette: ThemePalette = {
+const darkThemePalette: ThemePalette = {
   name: "Dark",
   primary: "#4CAF50",
   background: "#121212",
@@ -112,7 +112,7 @@ export const darkThemePalette: ThemePalette = {
 };
 
 // Color blind friendly palettes (avoiding red-green, using blue-orange-yellow palette)
-export const colorBlindLightPalettes: Record<ThemeName, ThemePalette> = {
+const colorBlindLightPalettes: Record<ThemeName, ThemePalette> = {
   home: {
     name: "Home",
     primary: "#FF9800", // True orange (color blind safe)
@@ -182,7 +182,7 @@ export const colorBlindLightPalettes: Record<ThemeName, ThemePalette> = {
   },
 };
 
-export const colorBlindDarkPalette: ThemePalette = {
+const colorBlindDarkPalette: ThemePalette = {
   name: "Dark",
   primary: "#2196F3", // Blue instead of green (color blind safe)
   background: "#121212",
@@ -219,7 +219,7 @@ export type ThemePalette = {
   warning?: string;
 };
 
-export interface ThemeContextType {
+interface ThemeContextType {
   theme: ThemePalette & { isDark: boolean };
   isDark: boolean;
   themeName: ThemeName;

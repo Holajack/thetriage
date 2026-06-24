@@ -5,9 +5,15 @@
  * Shows sub-dimension scores in a visually appealing format.
  */
 
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
-import Svg, { Polygon, Circle, Line, Text as SvgText, G } from 'react-native-svg';
+import React, { useEffect } from "react";
+import { View, Text, StyleSheet, Dimensions } from "react-native";
+import Svg, {
+  Polygon,
+  Circle,
+  Line,
+  Text as SvgText,
+  G,
+} from "react-native-svg";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -15,8 +21,8 @@ import Animated, {
   withDelay,
   withTiming,
   Easing,
-} from 'react-native-reanimated';
-import { useTheme } from '../context/ThemeContext';
+} from "react-native-reanimated";
+import { useTheme } from "../context/ThemeContext";
 
 interface RadarDataPoint {
   axis: string;
@@ -81,7 +87,7 @@ const RadarChart: React.FC<RadarChartProps> = ({
       const point = getPoint(i, d.value);
       return `${point.x},${point.y}`;
     })
-    .join(' ');
+    .join(" ");
 
   const comparisonPolygonPoints = sortedComparisonData
     ? sortedComparisonData
@@ -89,7 +95,7 @@ const RadarChart: React.FC<RadarChartProps> = ({
           const point = getPoint(i, d.value);
           return `${point.x},${point.y}`;
         })
-        .join(' ')
+        .join(" ")
     : null;
 
   // Grid levels (0.2, 0.4, 0.6, 0.8, 1.0)
@@ -105,21 +111,23 @@ const RadarChart: React.FC<RadarChartProps> = ({
   };
 
   // Get text anchor based on position
-  const getTextAnchor = (index: number): 'start' | 'middle' | 'end' => {
+  const getTextAnchor = (index: number): "start" | "middle" | "end" => {
     const angle = angleStep * index - Math.PI / 2;
     const x = Math.cos(angle);
-    if (Math.abs(x) < 0.1) return 'middle';
-    return x > 0 ? 'start' : 'end';
+    if (Math.abs(x) < 0.1) return "middle";
+    return x > 0 ? "start" : "end";
   };
 
   // Initials only — full names shown in Dimension Scores legend below
   const abbreviateLabel = (text: string) => {
     const words = text.split(/[\s_]+/);
     if (words.length >= 2) {
-      return words.map(w => w.charAt(0).toUpperCase()).join('');
+      return words.map((w) => w.charAt(0).toUpperCase()).join("");
     }
     // Single word: first 4 chars
-    return text.length <= 4 ? text.toUpperCase() : text.substring(0, 4).toUpperCase();
+    return text.length <= 4
+      ? text.toUpperCase()
+      : text.substring(0, 4).toUpperCase();
   };
 
   // Entry animation — scale up from center with spring
@@ -129,7 +137,10 @@ const RadarChart: React.FC<RadarChartProps> = ({
 
   useEffect(() => {
     chartScale.value = withSpring(1, { damping: 12, stiffness: 100 });
-    chartOpacity.value = withTiming(1, { duration: 400, easing: Easing.out(Easing.cubic) });
+    chartOpacity.value = withTiming(1, {
+      duration: 400,
+      easing: Easing.out(Easing.cubic),
+    });
     labelOpacity.value = withDelay(300, withTiming(1, { duration: 400 }));
   }, []);
 
@@ -145,7 +156,9 @@ const RadarChart: React.FC<RadarChartProps> = ({
   return (
     <View style={[styles.container, { width: size, height: size }]}>
       {/* Animated chart — springs in from center */}
-      <Animated.View style={[{ width: size, height: size }, animatedChartStyle]}>
+      <Animated.View
+        style={[{ width: size, height: size }, animatedChartStyle]}
+      >
         <Svg width={size} height={size}>
           {/* Grid */}
           {showGrid && (
@@ -157,9 +170,9 @@ const RadarChart: React.FC<RadarChartProps> = ({
                   cy={centerY}
                   r={maxRadius * level}
                   fill="none"
-                  stroke={theme.text + '20'}
+                  stroke={theme.text + "20"}
                   strokeWidth={1}
-                  strokeDasharray={level === 1.0 ? undefined : '4,4'}
+                  strokeDasharray={level === 1.0 ? undefined : "4,4"}
                 />
               ))}
               {sortedData.map((_, i) => {
@@ -171,7 +184,7 @@ const RadarChart: React.FC<RadarChartProps> = ({
                     y1={centerY}
                     x2={endPoint.x}
                     y2={endPoint.y}
-                    stroke={theme.text + '30'}
+                    stroke={theme.text + "30"}
                     strokeWidth={1}
                   />
                 );
@@ -183,7 +196,7 @@ const RadarChart: React.FC<RadarChartProps> = ({
           {comparisonPolygonPoints && (
             <Polygon
               points={comparisonPolygonPoints}
-              fill={theme.textSecondary + '15'}
+              fill={theme.textSecondary + "15"}
               stroke={theme.textSecondary}
               strokeWidth={2}
               strokeDasharray="4,4"
@@ -193,7 +206,7 @@ const RadarChart: React.FC<RadarChartProps> = ({
           {/* Main data polygon */}
           <Polygon
             points={polygonPoints}
-            fill={chartColor + '30'}
+            fill={chartColor + "30"}
             stroke={chartColor}
             strokeWidth={2.5}
           />
@@ -221,7 +234,13 @@ const RadarChart: React.FC<RadarChartProps> = ({
 
       {/* Labels overlay — fades in after chart expands */}
       {showLabels && (
-        <Animated.View style={[styles.labelsOverlay, { width: size, height: size }, animatedLabelStyle]}>
+        <Animated.View
+          style={[
+            styles.labelsOverlay,
+            { width: size, height: size },
+            animatedLabelStyle,
+          ]}
+        >
           <Svg width={size} height={size}>
             {sortedData.map((d, i) => {
               const labelPos = getLabelPosition(i);
@@ -286,12 +305,7 @@ export const RadarLegend: React.FC<RadarLegendProps> = ({
     <View style={styles.legendContainer}>
       {sortedData.map((d, index) => (
         <View key={d.slug} style={styles.legendItem}>
-          <View
-            style={[
-              styles.legendDot,
-              { backgroundColor: chartColor },
-            ]}
-          />
+          <View style={[styles.legendDot, { backgroundColor: chartColor }]} />
           <View style={styles.legendTextContainer}>
             <Text style={[styles.legendLabel, { color: theme.text }]}>
               {d.axis}
@@ -311,7 +325,9 @@ export const RadarLegend: React.FC<RadarLegendProps> = ({
               { backgroundColor: theme.textSecondary },
             ]}
           />
-          <Text style={[styles.comparisonLabel, { color: theme.textSecondary }]}>
+          <Text
+            style={[styles.comparisonLabel, { color: theme.textSecondary }]}
+          >
             {comparisonLabel}
           </Text>
         </View>
@@ -327,7 +343,7 @@ interface MiniRadarChartProps {
   color?: string;
 }
 
-export const MiniRadarChart: React.FC<MiniRadarChartProps> = ({
+const MiniRadarChart: React.FC<MiniRadarChartProps> = ({
   data,
   size = 80,
   color,
@@ -356,7 +372,7 @@ export const MiniRadarChart: React.FC<MiniRadarChartProps> = ({
       const point = getPoint(i, d.value);
       return `${point.x},${point.y}`;
     })
-    .join(' ');
+    .join(" ");
 
   return (
     <View style={{ width: size, height: size }}>
@@ -367,14 +383,14 @@ export const MiniRadarChart: React.FC<MiniRadarChartProps> = ({
           cy={centerY}
           r={maxRadius}
           fill="none"
-          stroke={theme.text + '15'}
+          stroke={theme.text + "15"}
           strokeWidth={1}
         />
 
         {/* Data polygon */}
         <Polygon
           points={polygonPoints}
-          fill={chartColor + '30'}
+          fill={chartColor + "30"}
           stroke={chartColor}
           strokeWidth={1.5}
         />
@@ -385,22 +401,22 @@ export const MiniRadarChart: React.FC<MiniRadarChartProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'visible',
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "visible",
   },
   labelsOverlay: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
   },
   legendContainer: {
     marginTop: 16,
-    width: '100%',
+    width: "100%",
   },
   legendItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     marginBottom: 10,
   },
   legendDot: {
@@ -415,19 +431,19 @@ const styles = StyleSheet.create({
   },
   legendLabel: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   legendValue: {
     fontSize: 12,
     marginTop: 2,
   },
   comparisonLegend: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.1)',
+    borderTopColor: "rgba(0,0,0,0.1)",
   },
   legendLine: {
     width: 16,
@@ -436,7 +452,7 @@ const styles = StyleSheet.create({
   },
   comparisonLabel: {
     fontSize: 12,
-    fontStyle: 'italic',
+    fontStyle: "italic",
   },
 });
 

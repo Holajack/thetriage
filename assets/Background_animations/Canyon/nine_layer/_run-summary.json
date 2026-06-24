@@ -1,0 +1,57 @@
+{
+  "biome": "Canyon",
+  "model": "openai/gpt-image-1.5",
+  "quality": "high",
+  "startedAt": 1780657355565,
+  "elapsedSeconds": 91,
+  "results": [
+    {
+      "layerKey": "ground__regular_path",
+      "fileName": "regular_path.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0.017982799061767005,
+      "contentRatio": 0.15719922383626303
+    },
+    {
+      "layerKey": "ground__mossy_jungl_path",
+      "fileName": "mossy_jungl_path.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0,
+      "contentRatio": 0.15661493937174478
+    },
+    {
+      "layerKey": "ground__grassy_path",
+      "fileName": "grassy_path.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0.08522283033620015,
+      "contentRatio": 0.1582024892171224
+    },
+    {
+      "layerKey": "ground__damp_moss_path",
+      "fileName": "damp_moss_path.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0.10086004691164972,
+      "contentRatio": 0.18253771464029947
+    },
+    {
+      "layerKey": "ground__flower_jungl_path",
+      "fileName": "flower_jungl_path.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0.14327599687255668,
+      "contentRatio": 0.24088350931803384
+    },
+    {
+      "layerKey": "ground__stones_pebbles_path",
+      "fileName": "stones_pebbles_path.png",
+      "status": "completed",
+      "attempts": 1,
+      "transparencyBorderOpaqueRatio": 0.09089132134480063,
+      "contentRatio": 0.161773681640625
+    }
+  ]
+}

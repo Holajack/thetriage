@@ -7,7 +7,6 @@
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { getConvexClient } from "./convexClient";
-export { setConvexClient } from "./convexClient";
 
 // Re-export interfaces for backward compat
 export interface StudyRoom {
@@ -201,7 +200,7 @@ export async function sendStudyRoomMessage(
  * Subscribe to real-time study room messages.
  * No-op with Convex — useQuery(api.studyRooms.getMessages) is reactive.
  */
-export function subscribeToStudyRoomMessages(
+function subscribeToStudyRoomMessages(
   _roomId: string,
   _callback: (message: StudyRoomMessage) => void,
 ): () => void {
@@ -211,7 +210,7 @@ export function subscribeToStudyRoomMessages(
 /**
  * Get public study rooms
  */
-export async function getPublicStudyRooms(): Promise<{
+async function getPublicStudyRooms(): Promise<{
   success: boolean;
   error?: string;
   data?: StudyRoom[];
@@ -246,9 +245,7 @@ export async function getPublicStudyRooms(): Promise<{
 /**
  * Get study room members
  */
-export async function getStudyRoomMembers(
-  roomId: string,
-): Promise<{
+export async function getStudyRoomMembers(roomId: string): Promise<{
   success: boolean;
   error?: string;
   data?: StudyRoomParticipant[];

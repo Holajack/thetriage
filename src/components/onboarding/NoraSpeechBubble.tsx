@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image } from 'react-native';
-import Animated, { FadeIn, FadeInRight } from 'react-native-reanimated';
-import { useTheme } from '../../context/ThemeContext';
+import React, { useState, useEffect } from "react";
+import { View, Text, StyleSheet, Image } from "react-native";
+import Animated, { FadeIn, FadeInRight } from "react-native-reanimated";
+import { useTheme } from "../../context/ThemeContext";
 
 // Spritesheet config — matches TrailBuddySelectionScreen
 const FRAME_WIDTH = 200;
 const FRAME_HEIGHT = 200;
 const TOTAL_FRAMES = 28;
 
-const noraSpritesheet = require('../../../assets/trail-buddies/nora_walking_optimized.png');
+const noraSpritesheet = require("../../../assets/trail-buddies/nora_walking_optimized.webp");
 
 interface NoraSpeechBubbleProps {
   message: string;
@@ -45,9 +45,11 @@ export default function NoraSpeechBubble({
           style={{
             width: size,
             height: size,
-            overflow: 'hidden',
+            overflow: "hidden",
             borderRadius: size / 2,
-            backgroundColor: theme.isDark ? 'rgba(155,89,182,0.15)' : 'rgba(155,89,182,0.1)',
+            backgroundColor: theme.isDark
+              ? "rgba(155,89,182,0.15)"
+              : "rgba(155,89,182,0.1)",
           }}
         >
           <Image
@@ -68,8 +70,8 @@ export default function NoraSpeechBubble({
         style={[
           styles.bubble,
           {
-            backgroundColor: theme.isDark ? '#2a2a3a' : '#FFFFFF',
-            borderColor: theme.isDark ? '#3a3a4a' : '#E0E0E0',
+            backgroundColor: theme.isDark ? "#2a2a3a" : "#FFFFFF",
+            borderColor: theme.isDark ? "#3a3a4a" : "#E0E0E0",
           },
         ]}
       >
@@ -78,7 +80,7 @@ export default function NoraSpeechBubble({
             style={[
               styles.tailTriangle,
               {
-                borderRightColor: theme.isDark ? '#2a2a3a' : '#FFFFFF',
+                borderRightColor: theme.isDark ? "#2a2a3a" : "#FFFFFF",
               },
             ]}
           />
@@ -86,7 +88,7 @@ export default function NoraSpeechBubble({
         <Text
           style={[
             styles.messageText,
-            { color: theme.isDark ? '#E0E0E0' : '#333333' },
+            { color: theme.isDark ? "#E0E0E0" : "#333333" },
           ]}
         >
           {message}
@@ -98,8 +100,8 @@ export default function NoraSpeechBubble({
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
@@ -112,12 +114,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    position: 'relative',
+    position: "relative",
   },
   bubbleTail: {
-    position: 'absolute',
+    position: "absolute",
     left: -8,
-    top: '50%',
+    top: "50%",
     marginTop: -6,
   },
   tailTriangle: {
@@ -126,12 +128,12 @@ const styles = StyleSheet.create({
     borderTopWidth: 6,
     borderBottomWidth: 6,
     borderRightWidth: 8,
-    borderTopColor: 'transparent',
-    borderBottomColor: 'transparent',
+    borderTopColor: "transparent",
+    borderBottomColor: "transparent",
   },
   messageText: {
     fontSize: 14,
     lineHeight: 20,
-    fontWeight: '500',
+    fontWeight: "500",
   },
 });

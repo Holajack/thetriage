@@ -1,7 +1,6 @@
 import * as Notifications from "expo-notifications";
 import { api } from "../../convex/_generated/api";
 import { getConvexClient } from "./convexClient";
-export { setConvexClient } from "./convexClient";
 
 /**
  * Weekly Goal Notification System
@@ -41,7 +40,7 @@ const getWeekBounds = (): { startOfWeek: Date; endOfWeek: Date } => {
 /**
  * Calculate weekly progress for a user
  */
-export const getWeeklyProgress = async (
+const getWeeklyProgress = async (
   userId: string,
 ): Promise<WeeklyProgress | null> => {
   try {
@@ -92,7 +91,7 @@ export const getWeeklyProgress = async (
 /**
  * Check if user needs a reminder and send notification
  */
-export const checkAndSendWeeklyGoalReminder = async (
+const checkAndSendWeeklyGoalReminder = async (
   userId: string,
 ): Promise<void> => {
   try {
@@ -193,7 +192,7 @@ export const scheduleWeeklyGoalChecks = async (
 /**
  * Cancel all weekly goal notifications for a user
  */
-export const cancelWeeklyGoalNotifications = async (): Promise<void> => {
+const cancelWeeklyGoalNotifications = async (): Promise<void> => {
   try {
     const scheduled = await Notifications.getAllScheduledNotificationsAsync();
     const weeklyGoalNotifications = scheduled.filter(
@@ -211,7 +210,7 @@ export const cancelWeeklyGoalNotifications = async (): Promise<void> => {
 /**
  * Check if it's near the end of the week (Thursday onwards)
  */
-export const isNearEndOfWeek = (): boolean => {
+const isNearEndOfWeek = (): boolean => {
   const dayOfWeek = new Date().getDay();
   return dayOfWeek >= 4 && dayOfWeek <= 6; // Thursday (4), Friday (5), Saturday (6)
 };

@@ -51,7 +51,7 @@ function tierLevel(tier: string | undefined | null): number {
 // TIER CHECKS
 // ============================================
 
-export const isBasicOrAbove = (tier: string | undefined | null): boolean =>
+const isBasicOrAbove = (tier: string | undefined | null): boolean =>
   tierLevel(tier) >= 1;
 export const isProOrAbove = (tier: string | undefined | null): boolean =>
   tierLevel(tier) >= 2;
@@ -63,7 +63,7 @@ export const isElite = (tier: string | undefined | null): boolean =>
 // ============================================
 
 // Themes: Basic=office only, Pro+=all themes, Elite=all themes
-export function getAvailableThemes(tier: string | undefined | null): string[] {
+function getAvailableThemes(tier: string | undefined | null): string[] {
   if (isProOrAbove(tier))
     return [
       "office",
@@ -80,16 +80,14 @@ export function getAvailableThemes(tier: string | undefined | null): string[] {
 }
 
 // Sound albums: Basic=Ambient only, Pro=Ambient+Nature, Elite=all
-export function getAvailableSoundAlbums(
-  tier: string | undefined | null,
-): string[] {
+function getAvailableSoundAlbums(tier: string | undefined | null): string[] {
   if (isElite(tier))
     return ["Ambient", "Nature", "Classical", "Lo-Fi", "Jazz Ambient"];
   if (isProOrAbove(tier)) return ["Ambient", "Nature"];
   return ["Ambient"];
 }
 
-export function isSoundAlbumLocked(
+function isSoundAlbumLocked(
   tier: string | undefined | null,
   album: string,
 ): boolean {
@@ -99,7 +97,7 @@ export function isSoundAlbumLocked(
 // Trails: Basic=forest only, Pro=forest+beach+jungle, Elite=all trails
 const PRO_TRAILS = new Set(["forest", "beach", "jungle"]);
 
-export function isTrailLocked(
+function isTrailLocked(
   tier: string | undefined | null,
   trailId: string,
 ): boolean {
@@ -108,7 +106,7 @@ export function isTrailLocked(
   return trailId !== "forest";
 }
 
-export function getAvailableTrails(tier: string | undefined | null): string[] {
+function getAvailableTrails(tier: string | undefined | null): string[] {
   if (isElite(tier)) {
     return [
       "forest",
@@ -138,64 +136,60 @@ export function isBuddyLocked(
 }
 
 /** Default trail buddy assigned to a brand-new account. */
-export const DEFAULT_BUDDY = "patrick";
+const DEFAULT_BUDDY = "patrick";
 
 // AI: Basic/Pro=patrick only, Elite=nora
-export function hasNoraAccess(tier: string | undefined | null): boolean {
+function hasNoraAccess(tier: string | undefined | null): boolean {
   return isElite(tier);
 }
 
-export function hasPatrickAccess(tier: string | undefined | null): boolean {
+function hasPatrickAccess(tier: string | undefined | null): boolean {
   return isBasicOrAbove(tier);
 }
 
-export function hasAIInsights(tier: string | undefined | null): boolean {
+function hasAIInsights(tier: string | undefined | null): boolean {
   return isElite(tier);
 }
 
 // Voice + PDF analysis: Elite only
-export function hasVoiceAndPdfAnalysis(
-  tier: string | undefined | null,
-): boolean {
+function hasVoiceAndPdfAnalysis(tier: string | undefined | null): boolean {
   return isElite(tier);
 }
 
 // Personalized study plans: Elite only
-export function hasPersonalizedPlans(tier: string | undefined | null): boolean {
+function hasPersonalizedPlans(tier: string | undefined | null): boolean {
   return isElite(tier);
 }
 
 // Focus modes: Basic=basecamp only, Pro/Elite=basecamp+summit
-export function hasSummitAccess(tier: string | undefined | null): boolean {
+function hasSummitAccess(tier: string | undefined | null): boolean {
   return isProOrAbove(tier);
 }
 
 // Study rooms: Basic=no, Pro=2 max, Elite=unlimited
-export function getStudyRoomLimit(tier: string | undefined | null): number {
+function getStudyRoomLimit(tier: string | undefined | null): number {
   if (isElite(tier)) return Infinity;
   if (isProOrAbove(tier)) return 2;
   return 0;
 }
 
-export function canCreateStudyRoom(tier: string | undefined | null): boolean {
+function canCreateStudyRoom(tier: string | undefined | null): boolean {
   return isProOrAbove(tier);
 }
 
 // Brain mapping: Basic=no, Pro=limited, Elite=full
-export function hasBrainMappingAccess(
-  tier: string | undefined | null,
-): boolean {
+function hasBrainMappingAccess(tier: string | undefined | null): boolean {
   return isProOrAbove(tier);
 }
 
-export function hasFullBrainMapping(tier: string | undefined | null): boolean {
+function hasFullBrainMapping(tier: string | undefined | null): boolean {
   return isElite(tier);
 }
 
 // Quiz access — split by variant. Pro gets quick only; Elite gets quick + in-depth/extended.
 export type QuizVariant = "quick" | "extended" | "in_depth";
 
-export function hasQuizAccess(
+function hasQuizAccess(
   tier: string | undefined | null,
   variant: QuizVariant = "quick",
 ): boolean {
@@ -204,23 +198,23 @@ export function hasQuizAccess(
 }
 
 // Backwards-compatible helpers (used by existing callers)
-export function getBonusQuizLimit(tier: string | undefined | null): number {
+function getBonusQuizLimit(tier: string | undefined | null): number {
   if (isElite(tier)) return Infinity;
   if (isProOrAbove(tier)) return 2; // quick versions only
   return 0;
 }
 
 // Leaderboard: all see it, Elite gets badge + name color
-export function hasEliteBadge(tier: string | undefined | null): boolean {
+function hasEliteBadge(tier: string | undefined | null): boolean {
   return isElite(tier);
 }
 
 // Messaging: Basic=friends only, Pro/Elite=full community messaging
-export function hasFullMessaging(tier: string | undefined | null): boolean {
+function hasFullMessaging(tier: string | undefined | null): boolean {
   return isProOrAbove(tier);
 }
 
 // Early access to new features: Elite only
-export function hasEarlyAccess(tier: string | undefined | null): boolean {
+function hasEarlyAccess(tier: string | undefined | null): boolean {
   return isElite(tier);
 }

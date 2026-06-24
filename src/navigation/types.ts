@@ -124,6 +124,7 @@ export type RootStackParamList = {
   BrainMapping: undefined;
   Quizzes: undefined;
   Landing: undefined;
+  NineLayerPreview: undefined;
   Auth: NavigatorScreenParams<AuthStackParamList>;
   Onboarding: NavigatorScreenParams<OnboardingStackParamList>;
 };
