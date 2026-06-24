@@ -87,7 +87,6 @@ import { useSuccessAnimation, triggerHaptic } from "../../utils/animationUtils";
 import { ParallaxForestBackground } from "../../components/ParallaxForestBackground";
 import { useEquippedTrail } from "../../hooks/useEquippedTrail";
 import { useAmbientSounds } from "../../hooks/useAmbientSounds";
-import { spotifyService } from "../../services/spotify/SpotifyService";
 import { appleMusicService } from "../../services/appleMusic/AppleMusicService";
 import InteractiveWalkthrough from "../../components/InteractiveWalkthrough";
 import { useScreenWalkthrough } from "../../hooks/useScreenWalkthrough";
@@ -197,11 +196,8 @@ export const StudySessionScreen = () => {
   const [showBackConfirmModal, setShowBackConfirmModal] = useState(false);
   const [musicEnabled, setMusicEnabled] = useState(true);
   const [activeMusicSource, setActiveMusicSource] = useState<
-    "local" | "spotify" | "apple-music"
+    "local" | "apple-music"
   >("local");
-  const [spotifyConnected, setSpotifyConnected] = useState(
-    spotifyService.isConnected(),
-  );
   const [appleMusicConnected, setAppleMusicConnected] = useState(
     appleMusicService.isConnected(),
   );
@@ -2439,59 +2435,6 @@ export const StudySessionScreen = () => {
                             <Text
                               style={{
                                 color: "#007AFF",
-                                fontSize: 10,
-                                fontWeight: "600",
-                              }}
-                            >
-                              Connect
-                            </Text>
-                          )}
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={[
-                            modalStyles.musicServiceOption,
-                            { paddingVertical: 8 },
-                          ]}
-                          onPress={async () => {
-                            if (spotifyConnected) {
-                              setActiveMusicSource("spotify");
-                            } else {
-                              const connected = await spotifyService.connect();
-                              setSpotifyConnected(connected);
-                              if (connected) setActiveMusicSource("spotify");
-                            }
-                          }}
-                        >
-                          <Ionicons
-                            name="musical-notes-outline"
-                            size={18}
-                            color={
-                              spotifyConnected
-                                ? "#1DB954"
-                                : environmentColors.text
-                            }
-                          />
-                          <Text
-                            style={[
-                              modalStyles.serviceOptionText,
-                              { color: environmentColors.text, fontSize: 12 },
-                            ]}
-                          >
-                            Spotify
-                          </Text>
-                          {activeMusicSource === "spotify" ? (
-                            <Ionicons
-                              name="checkmark-circle"
-                              size={16}
-                              color="#4CAF50"
-                            />
-                          ) : spotifyConnected ? (
-                            <Ionicons name="ellipse" size={8} color="#1DB954" />
-                          ) : (
-                            <Text
-                              style={{
-                                color: "#1DB954",
                                 fontSize: 10,
                                 fontWeight: "600",
                               }}

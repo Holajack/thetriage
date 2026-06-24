@@ -35,7 +35,6 @@ export interface UserSettings {
   ambientVolume?: number;
   // Music service preferences
   preferredMusicService?: string;
-  spotifyConnected?: boolean;
   appleMusicConnected?: boolean;
 }
 
@@ -126,8 +125,6 @@ export async function updateUserSettings(
       convexSettings.ambientVolume = settings.ambientVolume;
     if (settings.preferredMusicService !== undefined)
       convexSettings.preferredMusicService = settings.preferredMusicService;
-    if (settings.spotifyConnected !== undefined)
-      convexSettings.spotifyConnected = settings.spotifyConnected;
     if (settings.appleMusicConnected !== undefined)
       convexSettings.appleMusicConnected = settings.appleMusicConnected;
     // Notifications & reminders

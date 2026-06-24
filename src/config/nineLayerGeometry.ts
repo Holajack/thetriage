@@ -33,9 +33,9 @@ export const NINE_LAYER_GEOMETRY: Record<NineLayerBiome, BiomeGeometry> = {
     bushGreenBottom: [0.984, 0.949, 0.989, 0.957],
   },
   beach: {
-    groundCrest: [0.6, 0.414, 0.732, 0.43, 0.372, 0.579],
-    groundBottom: [0.855, 0.751, 0.912, 0.658, 0.697, 0.814],
-    groundSolidWidth: [0.999, 0.973, 0.999, 0.999, 0.999, 0.999],
+    groundCrest: [0.576, 0.467, 0.524, 0.48, 0.479, 0.514],
+    groundBottom: [0.718, 0.663, 0.67, 0.693, 0.628, 0.684],
+    groundSolidWidth: [0.925, 0.999, 0.999, 0.999, 0.999, 0.999],
     treeBase: [0.991, 0.978, 0.982, 0.98, 0.982, 0.979, 0.99, 0.984, 0.982],
     bushGreenBottom: [0.92, 0.949, 0.94, 0.952],
   },

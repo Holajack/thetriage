@@ -25,7 +25,7 @@
         "NSPhotoLibraryUsageDescription": "Allow HikeWise to access your photos to set a profile picture",
         "NSFaceIDUsageDescription": "Use Face ID to quickly and securely access your HikeWise account",
         "NSUserTrackingUsageDescription": "This allows HikeWise to provide personalized study recommendations and improve the app experience",
-        "LSApplicationQueriesSchemes": ["spotify", "music"],
+        "LSApplicationQueriesSchemes": ["music"],
         "ITSAppUsesNonExemptEncryption": false
       },
       "associatedDomains": [],

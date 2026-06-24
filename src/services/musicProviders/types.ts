@@ -1,12 +1,18 @@
 /**
  * Music Provider Abstraction Types
  *
- * Common interface for all music sources (local, Spotify, Apple Music).
+ * Common interface for all music sources (local, Apple Music).
  * The useBackgroundMusic hook routes playback through the active provider.
  */
 
-export type AudioSource = 'local' | 'spotify' | 'apple-music';
-export type PlaybackState = 'idle' | 'loading' | 'playing' | 'paused' | 'stopped' | 'error';
+export type AudioSource = "local" | "apple-music";
+export type PlaybackState =
+  | "idle"
+  | "loading"
+  | "playing"
+  | "paused"
+  | "stopped"
+  | "error";
 
 export interface TrackInfo {
   id: string;
@@ -34,7 +40,11 @@ export interface MusicProvider {
   isConnected(): boolean;
 
   // Playback control
-  play(options: { category?: string; playlistId?: string; trackId?: string }): Promise<void>;
+  play(options: {
+    category?: string;
+    playlistId?: string;
+    trackId?: string;
+  }): Promise<void>;
   pause(): Promise<void>;
   resume(): Promise<void>;
   stop(): Promise<void>;

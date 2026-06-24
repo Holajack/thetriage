@@ -2,56 +2,16 @@
   "biome": "Beach",
   "model": "openai/gpt-image-1.5",
   "quality": "high",
-  "startedAt": 1780657013448,
-  "elapsedSeconds": 130,
+  "startedAt": 1782315223242,
+  "elapsedSeconds": 79,
   "results": [
-    {
-      "layerKey": "ground__regular_path",
-      "fileName": "regular_path.png",
-      "status": "completed",
-      "attempts": 1,
-      "transparencyBorderOpaqueRatio": 0.13682564503518374,
-      "contentRatio": 0.2537727355957031
-    },
-    {
-      "layerKey": "ground__mossy_jungl_path",
-      "fileName": "mossy_jungl_path.png",
-      "status": "completed",
-      "attempts": 1,
-      "transparencyBorderOpaqueRatio": 0.1983971853010164,
-      "contentRatio": 0.30539894104003906
-    },
-    {
-      "layerKey": "ground__grassy_path",
-      "fileName": "grassy_path.png",
-      "status": "completed",
-      "attempts": 1,
-      "transparencyBorderOpaqueRatio": 0.10281469898358092,
-      "contentRatio": 0.1652215321858724
-    },
-    {
-      "layerKey": "ground__damp_moss_path",
-      "fileName": "damp_moss_path.png",
-      "status": "completed",
-      "attempts": 2,
-      "transparencyBorderOpaqueRatio": 0.14190774042220486,
-      "contentRatio": 0.22519048055013022
-    },
-    {
-      "layerKey": "ground__flower_jungl_path",
-      "fileName": "flower_jungl_path.png",
-      "status": "completed",
-      "attempts": 1,
-      "transparencyBorderOpaqueRatio": 0.19761532447224395,
-      "contentRatio": 0.2970377604166667
-    },
     {
       "layerKey": "ground__stones_pebbles_path",
       "fileName": "stones_pebbles_path.png",
       "status": "completed",
       "attempts": 1,
-      "transparencyBorderOpaqueRatio": 0.1305707584050039,
-      "contentRatio": 0.2430413564046224
+      "transparencyBorderOpaqueRatio": 0.10086004691164972,
+      "contentRatio": 0.16956710815429688
     }
   ]
 }

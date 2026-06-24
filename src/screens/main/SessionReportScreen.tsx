@@ -662,7 +662,7 @@ const SessionReportScreen = () => {
           <TouchableOpacity
             style={[styles.primaryBtn, { backgroundColor: theme.primary }]}
             onPress={() =>
-              navigation.navigate("FocusPreparationScreen" as never)
+              navigation.navigate("Main", { screen: "FocusPreparation" })
             }
           >
             <MaterialIcons name="refresh" size={20} color="#fff" />

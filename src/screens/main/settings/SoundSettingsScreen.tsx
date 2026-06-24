@@ -20,7 +20,6 @@ import {
   getUserSettings,
   updateUserSettings,
 } from "../../../utils/userSettings";
-import { spotifyService } from "../../../services/spotify/SpotifyService";
 import { appleMusicService } from "../../../services/appleMusic/AppleMusicService";
 import { Typography, Spacing, BorderRadius } from "../../../theme/premiumTheme";
 import { StaggeredItem } from "../../../components/premium/StaggeredList";
@@ -36,10 +35,9 @@ const SOUND_OPTIONS = [
   "Ambient",
 ];
 
-// Beta gates for third-party music services. Flip to true when the integration ships.
+// Beta gate for Apple Music. Flip to true when the integration ships.
 const BETA_FEATURES = {
   appleMusic: false,
-  spotify: false,
 };
 
 const SoundSettingsScreen = () => {
@@ -53,7 +51,6 @@ const SoundSettingsScreen = () => {
   const [selectedSound, setSelectedSound] = useState("Lo-Fi");
   const [autoPlaySound, setAutoPlaySound] = useState(false);
   const [appleMusicConnected, setAppleMusicConnected] = useState(false);
-  const [spotifyConnected, setSpotifyConnected] = useState(false);
 
   useEffect(() => {
     if (profile) {
@@ -124,7 +121,6 @@ const SoundSettingsScreen = () => {
 
   // Load connection states on mount
   useEffect(() => {
-    setSpotifyConnected(spotifyService.isConnected());
     setAppleMusicConnected(appleMusicService.isConnected());
   }, []);
 
@@ -156,39 +152,6 @@ const SoundSettingsScreen = () => {
       if (connected && clerkUserId) {
         await updateUserSettings(clerkUserId, {
           appleMusicConnected: true,
-        } as any);
-      }
-    }
-  };
-
-  const handleSpotifyConnection = async () => {
-    if (spotifyConnected) {
-      Alert.alert(
-        "Disconnect Spotify",
-        "Are you sure you want to disconnect Spotify?",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Disconnect",
-            style: "destructive",
-            onPress: async () => {
-              await spotifyService.disconnect();
-              setSpotifyConnected(false);
-              if (clerkUserId) {
-                await updateUserSettings(clerkUserId, {
-                  spotifyConnected: false,
-                } as any);
-              }
-            },
-          },
-        ],
-      );
-    } else {
-      const connected = await spotifyService.connect();
-      setSpotifyConnected(connected);
-      if (connected && clerkUserId) {
-        await updateUserSettings(clerkUserId, {
-          spotifyConnected: true,
         } as any);
       }
     }
@@ -306,10 +269,6 @@ const SoundSettingsScreen = () => {
             <View
               style={[
                 styles.serviceRow,
-                {
-                  borderBottomWidth: StyleSheet.hairlineWidth,
-                  borderBottomColor: borderColor,
-                },
                 !BETA_FEATURES.appleMusic && styles.serviceRowDisabled,
               ]}
             >
@@ -372,94 +331,6 @@ const SoundSettingsScreen = () => {
                     ]}
                   >
                     {appleMusicConnected ? "Disconnect" : "Connect"}
-                  </Text>
-                </TouchableOpacity>
-              ) : (
-                <View
-                  style={[
-                    styles.comingSoonPill,
-                    {
-                      backgroundColor: isDark ? "#2f2f2f" : "#EEE",
-                      borderColor,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.comingSoonText,
-                      { color: theme.textSecondary ?? "#666" },
-                    ]}
-                  >
-                    Coming Soon
-                  </Text>
-                </View>
-              )}
-            </View>
-            <View
-              style={[
-                styles.serviceRow,
-                !BETA_FEATURES.spotify && styles.serviceRowDisabled,
-              ]}
-            >
-              <Ionicons
-                name="musical-notes-outline"
-                size={22}
-                color={
-                  BETA_FEATURES.spotify
-                    ? "#1DB954"
-                    : (theme.textTertiary ?? "#9E9E9E")
-                }
-                style={styles.serviceIcon}
-              />
-              <View style={{ flex: 1 }}>
-                <Text
-                  style={[
-                    styles.serviceLabel,
-                    {
-                      color: BETA_FEATURES.spotify
-                        ? theme.text
-                        : (theme.textSecondary ?? "#999"),
-                    },
-                  ]}
-                >
-                  Spotify
-                </Text>
-                <Text
-                  style={[
-                    styles.serviceDesc,
-                    { color: theme.textSecondary ?? "#666" },
-                  ]}
-                >
-                  {BETA_FEATURES.spotify
-                    ? spotifyConnected
-                      ? "Connected"
-                      : "Connect your account"
-                    : "Available in a future update"}
-                </Text>
-              </View>
-              {BETA_FEATURES.spotify ? (
-                <TouchableOpacity
-                  onPress={handleSpotifyConnection}
-                  style={[
-                    styles.connectBtn,
-                    {
-                      backgroundColor: spotifyConnected
-                        ? isDark
-                          ? "#2f2f2f"
-                          : "#F5F5F5"
-                        : "#1DB954",
-                      borderWidth: spotifyConnected ? 1 : 0,
-                      borderColor,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.connectBtnText,
-                      { color: spotifyConnected ? theme.text : "#FFF" },
-                    ]}
-                  >
-                    {spotifyConnected ? "Disconnect" : "Connect"}
                   </Text>
                 </TouchableOpacity>
               ) : (
