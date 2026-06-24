@@ -6,7 +6,6 @@ import {
   Dimensions,
   ImageSourcePropType,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -17,7 +16,9 @@ import Animated, {
 } from "react-native-reanimated";
 import { NINE_LAYER_ASSETS, NineLayerBiome } from "../config/nineLayerAssets";
 import {
-  GROUND_BASELINE,
+  SURFACE_FRAC,
+  GROUND_OVERSHOOT,
+  PLANT_DEPTH,
   NINE_LAYER_GEOMETRY,
 } from "../config/nineLayerGeometry";
 
@@ -26,10 +27,6 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const FRAME_ASPECT = 1024 / 1536;
 
 const BASE_SPEED = 93;
-
-// Fraction of screen height of path-crest texture shown above the solid fill.
-// The rest of the path "island" is covered by the over-path fill.
-const SURFACE_BAND = 0.05;
 
 type LayerConfig = {
   scale: number;
@@ -191,6 +188,7 @@ const ScrollRow = ({
   leftOffset,
   anchorFracs,
   baselineY,
+  solidFrac = 1,
 }: {
   frames: ImageSourcePropType[];
   pxPerSec: number;
@@ -207,11 +205,17 @@ const ScrollRow = ({
    */
   anchorFracs?: number[];
   baselineY?: number;
+  /**
+   * Fraction of the frame width that is solid. Used as the tile-stride basis so a
+   * tapered "island" path tiles by its solid centre — the tapered tips overlap the
+   * neighbour instead of leaving a transparent gap (which showed as blue sky).
+   */
+  solidFrac?: number;
 }) => {
   const translateX = useSharedValue(0);
   const scaledFrameW = Math.round(SCREEN_HEIGHT * FRAME_ASPECT * scale);
   const scaledH = Math.round(SCREEN_HEIGHT * scale);
-  const stride = scaledFrameW - TILE_OVERLAP;
+  const stride = Math.round(solidFrac * scaledFrameW) - TILE_OVERLAP;
   const period = frames.length * stride;
   const repeats = Math.max(2, Math.ceil((period + SCREEN_WIDTH) / period) + 1);
 
@@ -254,7 +258,9 @@ const ScrollRow = ({
           style={{
             width: scaledFrameW,
             height: scaledH,
-            marginRight: -TILE_OVERLAP,
+            // Spacing = stride, so a tapered path tiles by its solid centre
+            // (negative margin overlaps the tapered tips) — no gap / blue sky.
+            marginRight: stride - scaledFrameW,
             transform: [{ translateY: dy }],
           }}
           resizeMode="stretch"
@@ -276,38 +282,6 @@ const ScrollRow = ({
   );
 };
 
-/**
- * Solid ground fill — a gradient earth band from `baselineY + offset` to the
- * screen bottom. Rendered twice: once behind the path (offset 0) to back up the
- * transparent gaps in the "island" art, and once in front of it (offset =
- * SURFACE_BAND px) to cover the island's scenic body so only a thin crest band
- * of walkable-surface texture stays visible — not a second mini-scene.
- */
-const GroundFill = ({
-  baselineY,
-  fill,
-  zIndex,
-  offset = 0,
-}: {
-  baselineY: number;
-  fill: { top: string; bottom: string };
-  zIndex: number;
-  offset?: number;
-}) => (
-  <LinearGradient
-    colors={[fill.top, fill.bottom]}
-    style={{
-      position: "absolute",
-      left: 0,
-      right: 0,
-      top: baselineY + offset,
-      height: SCREEN_HEIGHT - baselineY - offset,
-      zIndex,
-    }}
-    pointerEvents="none"
-  />
-);
-
 export const NineLayerParallax: React.FC<NineLayerParallaxProps> = ({
   biome,
   speed = 1,
@@ -318,8 +292,7 @@ export const NineLayerParallax: React.FC<NineLayerParallaxProps> = ({
   const set = NINE_LAYER_ASSETS[biome];
   const layers = BIOME_LAYERS[biome];
   const geo = NINE_LAYER_GEOMETRY[biome];
-  const baselineY = Math.round(GROUND_BASELINE * SCREEN_HEIGHT);
-  const bandPx = Math.round(SCREEN_HEIGHT * SURFACE_BAND);
+  const baselineY = Math.round(SURFACE_FRAC * SCREEN_HEIGHT);
   const cloudFrames = useMemo(() => set.clouds, [set]);
   const treeFrames = useMemo(() => set.trees, [set]);
   const bushFrames = useMemo(() => set.bushes, [set]);
@@ -332,6 +305,19 @@ export const NineLayerParallax: React.FC<NineLayerParallaxProps> = ({
     [set, groundIndex],
   );
   const groundCrest = geo.groundCrest[groundIndex];
+  // Anchor the path crest on the surface line and its opaque bottom just BELOW
+  // the screen (GROUND_OVERSHOOT) so the path's gappy underside is hidden
+  // off-screen. The band must fill (1 - SURFACE_FRAC + GROUND_OVERSHOOT) of H.
+  const groundFill = 1 - SURFACE_FRAC + GROUND_OVERSHOOT;
+  const groundBand = Math.max(
+    0.05,
+    geo.groundBottom[groundIndex] - groundCrest,
+  );
+  const groundScale = groundFill / groundBand;
+  // Trees/bushes plant PLANT_DEPTH down into the band so their bases embed
+  // behind the path and they appear to grow out of the ground (not float on it).
+  const plantY =
+    baselineY + Math.round(PLANT_DEPTH * groundFill * SCREEN_HEIGHT);
 
   if (!isActive) return null;
 
@@ -383,62 +369,53 @@ export const NineLayerParallax: React.FC<NineLayerParallaxProps> = ({
         leftOffset={leftOff("midground")}
       />
 
-      {/* 4 — Solid ground fill below the baseline (backs up the path island art) */}
-      <GroundFill baselineY={baselineY} fill={geo.fill} zIndex={4} />
-
-      {/* 5 — Foreground trees (planted on the shared baseline) */}
+      {/* 4 — Foreground trees (planted on the surface line) */}
       <ScrollRow
         frames={treeFrames}
         pxPerSec={pxSec("trees")}
         speed={speed}
         reduceMotion={reduceMotion}
-        zIndex={5}
+        zIndex={4}
         scale={sc("trees")}
         topOffset={0}
         leftOffset={leftOff("trees")}
         anchorFracs={geo.treeBase}
-        baselineY={baselineY}
+        baselineY={plantY}
       />
 
-      {/* 6 — Bushes (planted on the shared baseline) */}
+      {/* 5 — Bushes (planted on the surface line) */}
       <ScrollRow
         frames={bushFrames}
         pxPerSec={pxSec("bushes")}
         speed={speed}
         reduceMotion={reduceMotion}
-        zIndex={6}
+        zIndex={5}
         scale={sc("bushes")}
         topOffset={0}
         leftOffset={leftOff("bushes")}
-        anchorFracs={geo.bushBase}
-        baselineY={baselineY}
+        anchorFracs={geo.bushGreenBottom}
+        baselineY={plantY}
       />
 
-      {/* 7 — Ground path: crest planted on the baseline; one variant per session */}
+      {/* 6 — Ground path: scaled so its crest sits on the surface and its opaque
+          bottom reaches the screen bottom; one variant per session */}
       <ScrollRow
         frames={groundFrame}
         pxPerSec={pxSec("ground")}
         speed={speed}
         reduceMotion={reduceMotion}
-        zIndex={7}
-        scale={sc("ground")}
+        zIndex={6}
+        scale={groundScale}
         topOffset={0}
         leftOffset={leftOff("ground")}
         anchorFracs={[groundCrest]}
         baselineY={baselineY}
+        solidFrac={geo.groundSolidWidth[groundIndex]}
       />
 
-      {/* 8 — Solid ground over the path's scenic body: only a thin crest band of texture stays visible */}
-      <GroundFill
-        baselineY={baselineY}
-        fill={geo.fill}
-        zIndex={8}
-        offset={bandPx}
-      />
-
-      {/* 9 — Sun: centered, static, always visible above scene layers */}
+      {/* 7 — Sun: centered, static, always visible above scene layers */}
       <View
-        style={[styles.sunContainer, { zIndex: 9, top: SCREEN_HEIGHT * 0.06 }]}
+        style={[styles.sunContainer, { zIndex: 7, top: SCREEN_HEIGHT * 0.06 }]}
         pointerEvents="none"
       >
         <Image
@@ -448,13 +425,13 @@ export const NineLayerParallax: React.FC<NineLayerParallaxProps> = ({
         />
       </View>
 
-      {/* 10 — Clouds: highest z-index so they're always visible */}
+      {/* 8 — Clouds: highest z-index so they're always visible */}
       <ScrollRow
         frames={cloudFrames}
         pxPerSec={pxSec("clouds")}
         speed={speed}
         reduceMotion={reduceMotion}
-        zIndex={10}
+        zIndex={8}
         scale={sc("clouds")}
         topOffset={topOff("clouds")}
         leftOffset={leftOff("clouds")}

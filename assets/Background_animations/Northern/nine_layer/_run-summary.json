@@ -2,16 +2,16 @@
   "biome": "Northern",
   "model": "openai/gpt-image-1.5",
   "quality": "high",
-  "startedAt": 1780656556453,
-  "elapsedSeconds": 45,
+  "startedAt": 1782279273934,
+  "elapsedSeconds": 44,
   "results": [
     {
-      "layerKey": "clouds__fluffy_cloud",
-      "fileName": "fluffy_cloud.png",
+      "layerKey": "ground__grassy_path",
+      "fileName": "grassy_path.png",
       "status": "completed",
       "attempts": 1,
-      "transparencyBorderOpaqueRatio": 0,
-      "contentRatio": 0.08222516377766927
+      "transparencyBorderOpaqueRatio": 0.11043784206411258,
+      "contentRatio": 0.2192535400390625
     }
   ]
 }

@@ -10,7 +10,7 @@ import { getTrailAssets } from "../config/trailAssets";
 import { NineLayerParallax } from "./NineLayerParallax";
 import { hasNineLayerSet } from "../config/nineLayerAssets";
 import {
-  GROUND_BASELINE,
+  PLANT_SURFACE_FRAC,
   BUDDY_FOOT_FRAC,
   DEFAULT_FOOT_FRAC,
 } from "../config/nineLayerGeometry";
@@ -355,7 +355,8 @@ export const ParallaxForestBackground: React.FC<
   // ─────────────────────────────────────────────
   if (hasNineLayerSet(trailType)) {
     // Plant the buddy's feet on the same ground baseline NineLayerParallax uses.
-    const baselineY = GROUND_BASELINE * SCREEN_HEIGHT;
+    // Buddy walks on the dirt line (where tree/bush bases sit), not the grass crest.
+    const baselineY = PLANT_SURFACE_FRAC * SCREEN_HEIGHT;
     const footFrac = BUDDY_FOOT_FRAC[trailBuddyType] ?? DEFAULT_FOOT_FRAC;
     const buddyBottom =
       SCREEN_HEIGHT - baselineY - WALK_DISPLAY_SIZE * (1 - footFrac);

@@ -2,24 +2,16 @@
   "biome": "Galaxy",
   "model": "openai/gpt-image-1.5",
   "quality": "high",
-  "startedAt": 1780656401385,
-  "elapsedSeconds": 155,
+  "startedAt": 1782279318043,
+  "elapsedSeconds": 42,
   "results": [
-    {
-      "layerKey": "clouds__fluffy_cloud",
-      "fileName": "fluffy_cloud.png",
-      "status": "completed",
-      "attempts": 2,
-      "transparencyBorderOpaqueRatio": 0,
-      "contentRatio": 0.1277186075846354
-    },
     {
       "layerKey": "ground__regular_path",
       "fileName": "regular_path.png",
       "status": "completed",
       "attempts": 1,
-      "transparencyBorderOpaqueRatio": 0.04339327599687256,
-      "contentRatio": 0.10481007893880208
+      "transparencyBorderOpaqueRatio": 0.10027365129007036,
+      "contentRatio": 0.1716130574544271
     }
   ]
 }
