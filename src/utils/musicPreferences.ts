@@ -100,19 +100,17 @@ export const getSoundPreference = (userData: any): string => {
 
 // Helper function to get auto-play setting
 export const getAutoPlaySetting = (userData: any): boolean => {
-  const hasExplicitAutoPlay = userData?.settings?.autoPlaySound !== undefined;
-  const hasSoundPreference =
+  // Respect an explicit choice from settings if the user set one.
+  if (userData?.settings?.autoPlaySound !== undefined) {
+    return userData.settings.autoPlaySound;
+  }
+  // Otherwise default ON so music auto-plays on entering a focus session,
+  // unless the user explicitly chose "Silence".
+  const preference =
     userData?.onboarding?.soundPreference ||
     userData?.onboarding?.focusMethod ||
     userData?.profile?.soundPreference;
-
-  return (
-    userData?.settings?.autoPlaySound ||
-    (!hasExplicitAutoPlay &&
-      hasSoundPreference &&
-      hasSoundPreference !== "Silence") ||
-    false
-  );
+  return preference !== "Silence";
 };
 
 // Helper function to get music volume

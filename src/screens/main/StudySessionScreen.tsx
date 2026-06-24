@@ -1173,8 +1173,9 @@ export const StudySessionScreen = () => {
       if (currentPlaylist && currentPlaylist.length > 0) {
         await pausePlayback();
       } else {
-        // Otherwise start a playlist based on user preference, fallback to ambient.
-        const category = (userSoundPreference as any) || "ambient";
+        // Otherwise start a playlist based on user preference (normalized to a
+        // real category inside the hook); fall back to a sensible default.
+        const category = (userSoundPreference as any) || "Lo-Fi";
         await startPlaylist(category);
       }
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

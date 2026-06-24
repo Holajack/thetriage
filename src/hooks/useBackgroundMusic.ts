@@ -65,6 +65,31 @@ const LOCAL_AUDIO_FILES: Record<MusicCategory, any[]> = {
   ],
 };
 
+// Stored preferences arrive in many shapes (focus-method strings, wrong case,
+// legacy aliases). Map them to a real audio category so playback never silently
+// no-ops on an unknown key.
+const CATEGORY_ALIASES: Record<string, MusicCategory> = {
+  ambient: "Ambient",
+  nature: "Nature",
+  classical: "Classical",
+  "lo-fi": "Lo-Fi",
+  lofi: "Lo-Fi",
+  "lo fi": "Lo-Fi",
+  jazz: "Jazz Ambient",
+  "jazz ambient": "Jazz Ambient",
+  "jazz-ambient": "Jazz Ambient",
+};
+
+const normalizeCategory = (preference: string): MusicCategory => {
+  if (preference in LOCAL_AUDIO_FILES) {
+    return preference as MusicCategory;
+  }
+  const key = String(preference || "")
+    .trim()
+    .toLowerCase();
+  return CATEGORY_ALIASES[key] || "Lo-Fi";
+};
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const isSoundNotLoadedError = (error: unknown) => {
@@ -186,7 +211,8 @@ export const useBackgroundMusic = () => {
   const getTracksFromCategory = useCallback(
     async (category: MusicCategory): Promise<MusicTrack[]> => {
       try {
-        const audioFiles = LOCAL_AUDIO_FILES[category];
+        const normalizedCategory = normalizeCategory(category);
+        const audioFiles = LOCAL_AUDIO_FILES[normalizedCategory];
 
         if (!audioFiles || audioFiles.length === 0) {
           return [];
@@ -252,11 +278,11 @@ export const useBackgroundMusic = () => {
               filename.replace(/\.(mp3|wav|m4a)$/i, "");
 
             const track: MusicTrack = {
-              id: `${category}-${i + 1}`,
+              id: `${normalizedCategory}-${i + 1}`,
               name: filename,
               displayName: displayName,
               url: asset.localUri || asset.uri,
-              category,
+              category: normalizedCategory,
             };
 
             tracks.push(track);
