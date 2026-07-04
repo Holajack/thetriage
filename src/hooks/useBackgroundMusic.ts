@@ -121,6 +121,9 @@ export const useBackgroundMusic = () => {
   const previewTimeout = useRef<NodeJS.Timeout | null>(null);
   const isStoppingRef = useRef<boolean>(false); // CRITICAL: Prevent auto-advance during stop
   const allowAutoAdvanceRef = useRef<boolean>(false); // CRITICAL: Only allow auto-advance on focus session screen
+  // Once the owning screen unmounts, an async play already in flight must not
+  // create a new sound — it would play with no owner left to stop it.
+  const isUnmountedRef = useRef<boolean>(false);
 
   // App state ref for background handling
   const appStateRef = useRef(AppState.currentState);
@@ -388,6 +391,9 @@ export const useBackgroundMusic = () => {
 
   const playTrackAtIndex = useCallback(
     async (index: number, playlist?: MusicTrack[]) => {
+      if (isUnmountedRef.current) {
+        return;
+      }
       // Reset stopping flag when starting new playback
       isStoppingRef.current = false;
 
@@ -455,6 +461,10 @@ export const useBackgroundMusic = () => {
         // Small delay to ensure cleanup is complete
         await new Promise((resolve) => setTimeout(resolve, 100));
 
+        if (isUnmountedRef.current) {
+          return;
+        }
+
         const initialAutoplay = !userPausedRef.current;
 
         const { sound } = await Audio.Sound.createAsync(
@@ -465,6 +475,15 @@ export const useBackgroundMusic = () => {
             volume: 0,
           },
         );
+
+        if (isUnmountedRef.current) {
+          try {
+            await sound.unloadAsync();
+          } catch {
+            // Already unloaded
+          }
+          return;
+        }
 
         const isPausedNow = userPausedRef.current;
         let shouldAutoplay = !isPausedNow;
@@ -821,6 +840,7 @@ export const useBackgroundMusic = () => {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      isUnmountedRef.current = true;
       stopPlayback().catch(() => {});
       stopPreview().catch(() => {});
     };

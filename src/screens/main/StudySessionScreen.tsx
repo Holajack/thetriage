@@ -210,6 +210,11 @@ export const StudySessionScreen = () => {
   const backgroundTimeRef = useRef<number | null>(null);
   const appStateRef = useRef(AppState.currentState);
   const musicStartAttemptedRef = useRef<boolean>(false);
+  // Auto-start is one-shot per screen visit. Without this, ending a session
+  // (setSessionStarted(false)) re-arms the autoStart effect — params.autoStart
+  // never changes — and a phantom session + music restarts underneath the
+  // completion modal / report screen.
+  const autoStartConsumedRef = useRef<boolean>(false);
 
   // Walkthrough refs
   const timerDisplayRef = useRef<View>(null);
@@ -536,7 +541,13 @@ export const StudySessionScreen = () => {
   // Enhanced useEffect for starting session and music - auto-start with selected task
   useEffect(() => {
     // If coming from automatic mode, start session immediately with the auto-selected task
-    if (params?.autoStart === true && !sessionStarted && currentTask) {
+    if (
+      params?.autoStart === true &&
+      !sessionStarted &&
+      !autoStartConsumedRef.current &&
+      currentTask
+    ) {
+      autoStartConsumedRef.current = true;
       // Get subject from current task - check multiple possible fields
       const autoSubject =
         currentTask.subject ||
@@ -565,7 +576,13 @@ export const StudySessionScreen = () => {
       }, 500);
     }
     // If auto-start is true but no task is found, start general study session
-    else if (params?.autoStart === true && !sessionStarted && !currentTask) {
+    else if (
+      params?.autoStart === true &&
+      !sessionStarted &&
+      !autoStartConsumedRef.current &&
+      !currentTask
+    ) {
+      autoStartConsumedRef.current = true;
       // Automatically set subject to "General Study" for auto mode with no tasks
       setSelectedSubject("General Study");
 
