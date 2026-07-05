@@ -1,6 +1,11 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
-import { getCurrentUser, getCurrentUserOrNull } from "./users";
+import {
+  getCurrentUser,
+  getCurrentUserOrNull,
+  areFriends,
+  isFieldVisible,
+} from "./users";
 
 export const getMyStats = query({
   args: {},
@@ -23,16 +28,25 @@ export const getGlobal = query({
 
     const limited = args.limit ? allStats.slice(0, args.limit) : allStats;
 
+    const viewer = await getCurrentUserOrNull(ctx);
     const enriched = [];
     for (const stat of limited) {
       const user = await ctx.db.get(stat.userId);
+      let showName = false;
+      if (user) {
+        const isSelf = viewer?._id === user._id;
+        const isFriend = viewer
+          ? await areFriends(ctx, viewer._id, user._id)
+          : false;
+        showName = isFieldVisible(user.fullNameVisibility, isSelf, isFriend);
+      }
       enriched.push({
         ...stat,
         user: user
           ? {
               _id: user._id,
               username: user.username,
-              fullName: user.fullName,
+              fullName: showName ? user.fullName : undefined,
               avatarUrl: user.avatarUrl,
             }
           : null,
@@ -70,13 +84,21 @@ export const getFriends = query({
     const enriched = [];
     for (const stat of friendStats) {
       const friendUser = await ctx.db.get(stat.userId);
+      // Everyone here is the viewer or a friend, so only "none" hides the name.
+      const showName = friendUser
+        ? isFieldVisible(
+            friendUser.fullNameVisibility,
+            friendUser._id === user._id,
+            true,
+          )
+        : false;
       enriched.push({
         ...stat,
         user: friendUser
           ? {
               _id: friendUser._id,
               username: friendUser.username,
-              fullName: friendUser.fullName,
+              fullName: showName ? friendUser.fullName : undefined,
               avatarUrl: friendUser.avatarUrl,
             }
           : null,

@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
+import { Id, Doc } from "./_generated/dataModel";
 
 /** Defaults applied to every newly created user record. */
 const NEW_USER_DEFAULTS = {
@@ -49,12 +50,90 @@ export async function getCurrentUser(ctx: QueryCtx) {
   return user;
 }
 
+// --- Profile visibility enforcement (server-side) ---
+// Per-field visibility ('everyone' | 'friends' | 'none'/'private'); unset = visible.
+export function isFieldVisible(
+  visibility: string | undefined,
+  isSelf: boolean,
+  isFriend: boolean,
+): boolean {
+  if (isSelf) return true;
+  const v = visibility ?? "everyone";
+  if (v === "everyone") return true;
+  if (v === "friends") return isFriend;
+  return false; // "none" / "private"
+}
+
+/** True if a and b are friends (bidirectional), or the same user. */
+export async function areFriends(
+  ctx: QueryCtx,
+  a: Id<"users">,
+  b: Id<"users">,
+): Promise<boolean> {
+  if (a === b) return true;
+  const forward = await ctx.db
+    .query("friends")
+    .withIndex("by_userId", (q) => q.eq("userId", a))
+    .collect();
+  if (forward.some((f) => f.friendId === b)) return true;
+  const reverse = await ctx.db
+    .query("friends")
+    .withIndex("by_friendId", (q) => q.eq("friendId", a))
+    .collect();
+  return reverse.some((f) => f.userId === b);
+}
+
+/** Null out visibility-restricted profile fields for a non-permitted viewer. */
+export function applyProfileVisibility<
+  T extends {
+    fullName?: string;
+    university?: string;
+    location?: string;
+    classes?: string;
+    fullNameVisibility?: string;
+    universityVisibility?: string;
+    locationVisibility?: string;
+    classesVisibility?: string;
+  },
+>(target: T, isSelf: boolean, isFriend: boolean): T {
+  if (isSelf) return target;
+  return {
+    ...target,
+    fullName: isFieldVisible(target.fullNameVisibility, isSelf, isFriend)
+      ? target.fullName
+      : undefined,
+    university: isFieldVisible(target.universityVisibility, isSelf, isFriend)
+      ? target.university
+      : undefined,
+    location: isFieldVisible(target.locationVisibility, isSelf, isFriend)
+      ? target.location
+      : undefined,
+    classes: isFieldVisible(target.classesVisibility, isSelf, isFriend)
+      ? target.classes
+      : undefined,
+  };
+}
+
+/** Resolve the viewer relationship to a target and apply profile visibility. */
+async function readUserWithVisibility(
+  ctx: QueryCtx,
+  target: Doc<"users"> | null,
+) {
+  if (!target) return null;
+  const viewer = await getCurrentUserOrNull(ctx);
+  const isSelf = viewer?._id === target._id;
+  const isFriend = viewer
+    ? await areFriends(ctx, viewer._id, target._id)
+    : false;
+  return applyProfileVisibility(target, isSelf, isFriend);
+}
+
 // --- Queries ---
 
 export const getUser = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.userId);
+    return await readUserWithVisibility(ctx, await ctx.db.get(args.userId));
   },
 });
 
@@ -68,20 +147,22 @@ export const me = query({
 export const getByClerkId = query({
   args: { clerkId: v.string() },
   handler: async (ctx, args) => {
-    return await ctx.db
+    const target = await ctx.db
       .query("users")
       .withIndex("by_clerkId", (q) => q.eq("clerkId", args.clerkId))
       .unique();
+    return await readUserWithVisibility(ctx, target);
   },
 });
 
 export const getByUsername = query({
   args: { username: v.string() },
   handler: async (ctx, args) => {
-    return await ctx.db
+    const target = await ctx.db
       .query("users")
       .withIndex("by_username", (q) => q.eq("username", args.username))
       .unique();
+    return await readUserWithVisibility(ctx, target);
   },
 });
 

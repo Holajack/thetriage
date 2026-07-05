@@ -1,6 +1,13 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
-import { getCurrentUser, getCurrentUserOrNull } from "./users";
+import { Id } from "./_generated/dataModel";
+import {
+  getCurrentUser,
+  getCurrentUserOrNull,
+  areFriends,
+  isFieldVisible,
+  applyProfileVisibility,
+} from "./users";
 
 export const listFriends = query({
   args: {},
@@ -23,11 +30,11 @@ export const listFriends = query({
     for (const f of friendships) friendIds.add(f.friendId);
     for (const f of reverseFriendships) friendIds.add(f.userId);
 
-    // Fetch friend profiles
+    // Fetch friend profiles (viewer is a friend, so only "none" fields hide).
     const friends = [];
     for (const fId of friendIds) {
-      const friend = await ctx.db.get(fId as any);
-      if (friend) friends.push(friend);
+      const friend = await ctx.db.get(fId as Id<"users">);
+      if (friend) friends.push(applyProfileVisibility(friend, false, true));
     }
     return friends;
   },
@@ -55,7 +62,19 @@ export const listRequests = query({
         .collect();
     }
 
-    // Enrich requests with sender/recipient profile data
+    // Enrich requests with sender/recipient profile data, respecting each
+    // person's fullName visibility relative to the current viewer.
+    const nameFor = async (other: {
+      _id: any;
+      fullName?: string;
+      fullNameVisibility?: string;
+    }) => {
+      const isSelf = other._id === user._id;
+      const isFriend = await areFriends(ctx, user._id, other._id);
+      return isFieldVisible(other.fullNameVisibility, isSelf, isFriend)
+        ? other.fullName
+        : undefined;
+    };
     const enrichedRequests = await Promise.all(
       requests.map(async (request) => {
         const sender = await ctx.db.get(request.senderId);
@@ -66,7 +85,7 @@ export const listRequests = query({
             ? {
                 id: sender._id,
                 username: sender.username,
-                fullName: sender.fullName,
+                fullName: await nameFor(sender),
                 avatarUrl: sender.avatarUrl,
                 status: sender.status,
               }
@@ -75,7 +94,7 @@ export const listRequests = query({
             ? {
                 id: recipient._id,
                 username: recipient.username,
-                fullName: recipient.fullName,
+                fullName: await nameFor(recipient),
                 avatarUrl: recipient.avatarUrl,
                 status: recipient.status,
               }
