@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "../../context/ThemeContext";
 import * as Haptics from "expo-haptics";
 import InteractiveQuiz from "../../components/InteractiveQuiz";
@@ -18,7 +19,10 @@ import QuizResults from "../../components/QuizResults";
 import { QuizResult } from "../../data/quizData";
 import { useAuth } from "../../context/AuthContext";
 import Animated, { FadeIn, FadeInUp } from "react-native-reanimated";
-import { useFocusAnimationKey } from "../../utils/animationUtils";
+import {
+  useFocusAnimationKey,
+  useCounterAnimation,
+} from "../../utils/animationUtils";
 import { ShimmerLoader } from "../../components/premium/ShimmerLoader";
 import { AnimatedButton } from "../../components/premium/AnimatedButton";
 import { StaggeredItem } from "../../components/premium/StaggeredList";
@@ -31,7 +35,7 @@ import {
 } from "../../hooks/useConvexQuiz";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
-import { Id } from "../../../convex/_generated/dataModel";
+import { Doc, Id } from "../../../convex/_generated/dataModel";
 
 interface Quiz {
   id: string;
@@ -53,6 +57,14 @@ interface Quiz {
   inProgressTotal?: number;
   inProgressMode?: "quick" | "in_depth";
 }
+
+type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
+
+// Shape returned by api.quizSessions.getQuizHistory: a quiz result document
+// with its category document attached.
+type QuizHistoryItem = Doc<"quizResults"> & {
+  category: Doc<"quizCategories"> | null;
+};
 
 // Fallback data if Convex is not available
 const FALLBACK_QUIZ_DATA: Quiz[] = [
@@ -264,6 +276,36 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
   }, [convexCategories, inProgressSessions]);
 
   const isLoading = isLoadingConvex;
+
+  // Summary counter: completed assessments out of total categories.
+  const totalCount = quizData.length;
+  const completedCount = useMemo(
+    () => quizData.filter((q) => q.hasResult).length,
+    [quizData],
+  );
+  const completedCounter = useCounterAnimation(completedCount, 800);
+
+  // Hero call-to-action: resume an in-progress quiz, else revisit the latest result.
+  const inProgressQuiz = useMemo(
+    () => quizData.find((q) => q.inProgressSessionId),
+    [quizData],
+  );
+  const latestResult: QuizHistoryItem | null =
+    quizHistory && quizHistory.length > 0 ? quizHistory[0] : null;
+  const heroIconName = (inProgressQuiz?.icon ??
+    latestResult?.category?.icon ??
+    "sparkles-outline") as IoniconName;
+
+  const handleHeroPress = () => {
+    if (inProgressQuiz) {
+      openQuizDetail(inProgressQuiz);
+      return;
+    }
+    if (latestResult) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      handleViewHistoryResult(latestResult);
+    }
+  };
 
   const openQuizDetail = (quiz: Quiz) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -545,8 +587,95 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <>
+            {/* ===== SUMMARY HEADER ===== */}
+            <Animated.View
+              entering={FadeIn.duration(400)}
+              style={styles.summarySection}
+            >
+              <Text style={[styles.summaryEyebrow, { color: theme.primary }]}>
+                SELF-DISCOVERY
+              </Text>
+              <Text style={[styles.summaryTitle, { color: theme.text }]}>
+                {Math.round(completedCounter.value)} of {totalCount} assessments
+                complete
+              </Text>
+              <Text
+                style={[styles.summarySubtitle, { color: theme.textSecondary }]}
+              >
+                {totalCount > 0 && completedCount >= totalCount
+                  ? "You've explored every assessment"
+                  : `${totalCount - completedCount} still to explore`}
+              </Text>
+            </Animated.View>
+
+            {/* ===== HERO CARD ===== */}
+            {(inProgressQuiz || latestResult) && (
+              <Animated.View
+                entering={FadeInUp.delay(100).duration(500)}
+                style={styles.heroWrapper}
+              >
+                <TouchableOpacity activeOpacity={0.9} onPress={handleHeroPress}>
+                  <LinearGradient
+                    colors={
+                      PremiumColors.gradients.primary as [
+                        string,
+                        string,
+                        ...string[],
+                      ]
+                    }
+                    start={{ x: 0.1, y: 0 }}
+                    end={{ x: 0.9, y: 1 }}
+                    style={styles.heroGradient}
+                  >
+                    <View style={styles.heroHighlight} />
+                    <View style={styles.heroContent}>
+                      <View style={styles.heroIconChip}>
+                        <Ionicons name={heroIconName} size={30} color="#fff" />
+                      </View>
+                      <View style={styles.heroInfo}>
+                        <Text style={styles.heroEyebrow}>
+                          {inProgressQuiz
+                            ? "PICK UP WHERE YOU LEFT OFF"
+                            : "YOUR LATEST RESULT"}
+                        </Text>
+                        <Text style={styles.heroTitle} numberOfLines={2}>
+                          {inProgressQuiz
+                            ? inProgressQuiz.name
+                            : (latestResult?.category?.name ?? "Quiz result")}
+                        </Text>
+                        <Text style={styles.heroSubtitle} numberOfLines={1}>
+                          {inProgressQuiz
+                            ? `${inProgressQuiz.inProgressAnswered} of ${inProgressQuiz.inProgressTotal} answered`
+                            : `${Math.round(latestResult?.overallScore ?? 0)}% score${
+                                latestResult?.dominantTrait
+                                  ? ` · ${latestResult.dominantTrait}`
+                                  : ""
+                              }`}
+                        </Text>
+                        <View style={styles.heroPill}>
+                          <Text
+                            style={[
+                              styles.heroPillText,
+                              { color: theme.primary },
+                            ]}
+                          >
+                            {inProgressQuiz ? "Resume" : "View result"}
+                          </Text>
+                          <Ionicons
+                            name={inProgressQuiz ? "play" : "arrow-forward"}
+                            size={12}
+                            color={theme.primary}
+                          />
+                        </View>
+                      </View>
+                    </View>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </Animated.View>
+            )}
+
             {/* ===== SECTION LABEL ===== */}
-            <Animated.View entering={FadeIn.delay(100).duration(400)}>
+            <Animated.View entering={FadeIn.delay(200).duration(400)}>
               <Text
                 style={[styles.sectionLabel, { color: theme.textSecondary }]}
               >
@@ -556,26 +685,27 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
           </>
         }
         ListFooterComponent={
-          quizHistory && quizHistory.length > 0 ? (
-            <Animated.View entering={FadeInUp.delay(300).duration(400)}>
-              <Text
-                style={[
-                  styles.sectionLabel,
-                  { color: theme.textSecondary, marginTop: 32 },
-                ]}
-              >
-                QUIZ HISTORY
-              </Text>
-              {quizHistory.map((item: any, index: number) => {
-                const categoryIcon =
-                  quizData.find((q) => q.slug === item.categorySlug)?.icon ||
-                  "document-outline";
+          <Animated.View entering={FadeInUp.delay(300).duration(400)}>
+            <Text
+              style={[
+                styles.sectionLabel,
+                { color: theme.textSecondary, marginTop: 32 },
+              ]}
+            >
+              QUIZ HISTORY
+            </Text>
+            {quizHistory && quizHistory.length > 0 ? (
+              quizHistory.map((item: QuizHistoryItem, index: number) => {
+                const historyQuiz = quizData.find(
+                  (q) => q.slug === item.category?.slug,
+                );
+                const categoryIcon = (historyQuiz?.icon ??
+                  item.category?.icon ??
+                  "document-outline") as IoniconName;
                 const categoryColor =
-                  quizData.find((q) => q.slug === item.categorySlug)?.color ||
-                  theme.primary;
+                  historyQuiz?.color ?? item.category?.color ?? theme.primary;
                 const categoryName =
-                  quizData.find((q) => q.slug === item.categorySlug)?.name ||
-                  item.categorySlug;
+                  historyQuiz?.name ?? item.category?.name ?? "Quiz";
                 const completedDate = item.completedAt
                   ? new Date(item.completedAt).toLocaleDateString("en-US", {
                       month: "short",
@@ -589,62 +719,118 @@ const SelfDiscoveryQuizScreen: React.FC = () => {
                     : null;
 
                 return (
-                  <TouchableOpacity
+                  <StaggeredItem
                     key={item._id || index}
-                    style={[
-                      styles.historyItem,
-                      { backgroundColor: theme.card },
-                    ]}
-                    onPress={() => handleViewHistoryResult(item)}
-                    activeOpacity={0.7}
+                    index={index}
+                    delay="fast"
+                    direction="up"
                   >
-                    <View
+                    <TouchableOpacity
                       style={[
-                        styles.historyIcon,
-                        { backgroundColor: categoryColor + "15" },
+                        styles.historyItem,
+                        glassStyles.subtleCard(isDark),
+                        { backgroundColor: theme.card },
                       ]}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        handleViewHistoryResult(item);
+                      }}
+                      activeOpacity={0.8}
                     >
+                      <View
+                        style={[
+                          styles.historyIcon,
+                          { backgroundColor: categoryColor + "15" },
+                        ]}
+                      >
+                        <Ionicons
+                          name={categoryIcon}
+                          size={22}
+                          color={categoryColor}
+                        />
+                      </View>
+                      <View style={styles.historyContent}>
+                        <Text
+                          style={[styles.historyTitle, { color: theme.text }]}
+                        >
+                          {categoryName}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.historyDate,
+                            { color: theme.textSecondary },
+                          ]}
+                        >
+                          {completedDate}
+                        </Text>
+                      </View>
+                      {scorePercent != null && (
+                        <Text
+                          style={[
+                            styles.historyScore,
+                            { color: getProgressColor(scorePercent / 100) },
+                          ]}
+                        >
+                          {scorePercent}%
+                        </Text>
+                      )}
                       <Ionicons
-                        name={categoryIcon as any}
-                        size={22}
-                        color={categoryColor}
+                        name="chevron-forward-outline"
+                        size={18}
+                        color={theme.textSecondary}
                       />
-                    </View>
-                    <View style={styles.historyContent}>
-                      <Text
-                        style={[styles.historyTitle, { color: theme.text }]}
-                      >
-                        {categoryName}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.historyDate,
-                          { color: theme.textSecondary },
-                        ]}
-                      >
-                        {completedDate}
-                      </Text>
-                    </View>
-                    {scorePercent != null && (
-                      <Text
-                        style={[
-                          styles.historyScore,
-                          { color: getProgressColor(scorePercent / 100) },
-                        ]}
-                      >
-                        {scorePercent}%
-                      </Text>
-                    )}
-                    <Ionicons
-                      name="chevron-forward-outline"
-                      size={18}
-                      color={theme.textSecondary}
-                    />
-                  </TouchableOpacity>
+                    </TouchableOpacity>
+                  </StaggeredItem>
                 );
-              })}
-            </Animated.View>
-          ) : null
+              })
+            ) : (
+              <View style={styles.emptyState}>
+                <View
+                  style={[
+                    styles.emptyIconContainer,
+                    { backgroundColor: theme.primary + "10" },
+                  ]}
+                >
+                  <Ionicons
+                    name="compass-outline"
+                    size={44}
+                    color={theme.primary + "80"}
+                  />
+                </View>
+                <Text style={[styles.emptyTitle, { color: theme.text }]}>
+                  No results yet
+                </Text>
+                <Text
+                  style={[styles.emptySubtext, { color: theme.textSecondary }]}
+                >
+                  Take an assessment above to discover your study style and see
+                  your results here.
+                </Text>
+              </View>
+            )}
+          </Animated.View>
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <View
+              style={[
+                styles.emptyIconContainer,
+                { backgroundColor: theme.primary + "10" },
+              ]}
+            >
+              <Ionicons
+                name="clipboard-outline"
+                size={44}
+                color={theme.primary + "80"}
+              />
+            </View>
+            <Text style={[styles.emptyTitle, { color: theme.text }]}>
+              No quizzes available
+            </Text>
+            <Text style={[styles.emptySubtext, { color: theme.textSecondary }]}>
+              Check back soon — new self-discovery assessments are on the way.
+            </Text>
+          </View>
         }
         renderItem={({ item, index }) => (
           <StaggeredItem
@@ -1094,6 +1280,131 @@ const styles = StyleSheet.create({
     ...Typography.label,
     marginTop: 24,
     marginBottom: 14,
+  },
+
+  // ===== SUMMARY HEADER =====
+  summarySection: {
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  summaryEyebrow: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+    marginBottom: 4,
+  },
+  summaryTitle: {
+    fontSize: 26,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+    lineHeight: 30,
+  },
+  summarySubtitle: {
+    fontSize: 13,
+    marginTop: 4,
+  },
+
+  // ===== HERO CARD =====
+  heroWrapper: {
+    marginTop: 18,
+  },
+  heroGradient: {
+    borderRadius: 24,
+    padding: 18,
+    overflow: "hidden",
+  },
+  heroHighlight: {
+    position: "absolute",
+    top: "-30%",
+    left: "-10%",
+    width: "70%",
+    height: "120%",
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderRadius: 200,
+  },
+  heroContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+  },
+  heroIconChip: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.2)",
+  },
+  heroInfo: {
+    flex: 1,
+  },
+  heroEyebrow: {
+    fontSize: 10,
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+    fontWeight: "800",
+    color: "#fff",
+    opacity: 0.9,
+  },
+  heroTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: -0.4,
+    lineHeight: 24,
+    marginTop: 4,
+    color: "#fff",
+    textShadowColor: "rgba(0,0,0,0.18)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
+  },
+  heroSubtitle: {
+    fontSize: 12,
+    marginTop: 4,
+    color: "#fff",
+    opacity: 0.92,
+    fontWeight: "500",
+  },
+  heroPill: {
+    marginTop: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.95)",
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 6,
+  },
+  heroPillText: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+
+  // ===== EMPTY STATE =====
+  emptyState: {
+    alignItems: "center",
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 24,
+  },
+  emptyIconContainer: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 18,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 20,
   },
 
   // ===== QUIZ CARDS =====

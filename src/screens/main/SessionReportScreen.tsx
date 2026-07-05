@@ -10,17 +10,46 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { LinearGradient } from "expo-linear-gradient";
+import Animated, { FadeIn, FadeInUp } from "react-native-reanimated";
+import * as Haptics from "expo-haptics";
 import type { RootStackParamList } from "../../navigation/types";
 const { useUserAppData } = require("../../utils/userAppData");
 import { useBackgroundMusic } from "../../hooks/useBackgroundMusic";
 import { useTheme } from "../../context/ThemeContext";
+import { StaggeredItem } from "../../components/premium/StaggeredList";
+import { ProductivityScoreRing } from "../../components/premium/ProductivityScoreRing";
+import { glassStyles } from "../../components/premium/LiquidGlass";
+import { useCounterAnimation } from "../../utils/animationUtils";
+
+type MaterialIconName = React.ComponentProps<typeof MaterialIcons>["name"];
+
+interface CompletedTaskData {
+  task: string;
+  subject: string;
+  duration: number;
+  focusRating: number;
+  productivityRating: number;
+  notes?: string;
+  completedFullSession?: boolean;
+  sessionType?: string;
+  plannedDuration?: number;
+}
+
+interface SessionAchievement {
+  id: string;
+  title: string;
+  description: string;
+  icon: MaterialIconName;
+  color: string;
+}
 
 const SessionReportScreen = () => {
   const { data: userData } = useUserAppData();
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute();
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
 
   const params = route.params as
     | {
@@ -34,12 +63,17 @@ const SessionReportScreen = () => {
         plannedDuration: number;
         productivity: number;
         focusMode?: "basecamp" | "summit";
-        completedTasksData?: any[];
+        completedTasksData?: CompletedTaskData[];
       }
     | undefined;
 
-  const [newAchievements, setNewAchievements] = useState<any[]>([]);
+  const [newAchievements, setNewAchievements] = useState<SessionAchievement[]>(
+    [],
+  );
   const [sessionScore, setSessionScore] = useState(0);
+
+  // Animated headline counter (must run before any early return -- hooks rule)
+  const minutesCounter = useCounterAnimation(params?.sessionDuration ?? 0, 900);
 
   // Music hook
   const {
@@ -85,7 +119,7 @@ const SessionReportScreen = () => {
     const checkAchievements = async () => {
       if (!params) return;
 
-      const achievements = [];
+      const achievements: SessionAchievement[] = [];
 
       // Focus Master achievement
       if (params.focusRating >= 5) {
@@ -168,7 +202,7 @@ const SessionReportScreen = () => {
         key={i}
         name={i < rating ? "star" : "star-outline"}
         size={20}
-        color={i < rating ? "#FFD700" : "#DDD"}
+        color={i < rating ? "#FFD700" : theme.border}
       />
     ));
   };
@@ -187,15 +221,111 @@ const SessionReportScreen = () => {
     return "Needs Improvement";
   };
 
+  const getScoreGradient = (score: number): [string, string, string] => {
+    if (score >= 90) return ["#4ADE80", "#22C55E", "#16A34A"];
+    if (score >= 70) return ["#FCD34D", "#F59E0B", "#D97706"];
+    if (score >= 50) return ["#38BDF8", "#3B82F6", "#2563EB"];
+    return ["#F87171", "#EF4444", "#DC2626"];
+  };
+
   if (!params) {
     return (
       <SafeAreaView
         style={[styles.safeArea, { backgroundColor: theme.background }]}
       >
-        <Text style={styles.errorText}>No session data available</Text>
+        <View style={styles.emptyState}>
+          <View
+            style={[
+              styles.emptyIconContainer,
+              { backgroundColor: theme.primary + "15" },
+            ]}
+          >
+            <Ionicons
+              name="document-text-outline"
+              size={44}
+              color={theme.primary + "80"}
+            />
+          </View>
+          <Text style={[styles.emptyTitle, { color: theme.text }]}>
+            No session data
+          </Text>
+          <Text style={[styles.emptySubtext, { color: theme.textSecondary }]}>
+            Complete a focus session to see your report here.
+          </Text>
+        </View>
       </SafeAreaView>
     );
   }
+
+  const tasksThisSession =
+    params.completedTasksData?.length ?? (params.taskCompleted ? 1 : 0);
+  const completionPoints = params.taskCompleted
+    ? 40
+    : Math.floor(40 * (params.sessionDuration / params.plannedDuration));
+
+  const scoreBreakdown: {
+    id: string;
+    label: string;
+    value: string;
+    icon: MaterialIconName;
+  }[] = [
+    {
+      id: "completion",
+      label: "Completion",
+      value: `${completionPoints}/40`,
+      icon: "check-circle",
+    },
+    {
+      id: "focus",
+      label: "Focus Rating",
+      value: `${Math.floor((params.focusRating / 5) * 25)}/25`,
+      icon: "psychology",
+    },
+    {
+      id: "productivity",
+      label: "Productivity",
+      value: `${Math.floor((params.productivity / 5) * 25)}/25`,
+      icon: "trending-up",
+    },
+    {
+      id: "notes",
+      label: "Notes Bonus",
+      value: `${params.notes && params.notes.trim().length > 0 ? "10" : "0"}/10`,
+      icon: "edit-note",
+    },
+  ];
+
+  const sessionDetails: {
+    id: string;
+    label: string;
+    value: string;
+    icon: MaterialIconName;
+  }[] = [
+    {
+      id: "duration",
+      label: "Duration",
+      value: `${params.sessionDuration} of ${params.plannedDuration} min`,
+      icon: "schedule",
+    },
+    {
+      id: "subject",
+      label: "Subject",
+      value: params.subject,
+      icon: "subject",
+    },
+    {
+      id: "type",
+      label: "Session Type",
+      value: params.sessionType === "manual" ? "Custom Setup" : "Quick Start",
+      icon: "settings",
+    },
+    {
+      id: "break",
+      label: "Break Duration",
+      value: `${params.breakDuration} min`,
+      icon: "free-breakfast",
+    },
+  ];
 
   return (
     <SafeAreaView
@@ -205,442 +335,438 @@ const SessionReportScreen = () => {
       {/* Top Navigation */}
       <View style={[styles.topNavBar, { backgroundColor: theme.background }]}>
         <TouchableOpacity
-          style={styles.iconBtn}
-          onPress={() => navigation.navigate("Main", { screen: "Home" })}
+          style={styles.backButton}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            navigation.navigate("Main", { screen: "Home" });
+          }}
         >
-          <Ionicons name="close" size={24} color={theme.text} />
+          <View
+            style={[
+              styles.backButtonCircle,
+              {
+                backgroundColor: isDark ? theme.text + "20" : "#fff",
+                borderColor: isDark ? "transparent" : theme.border,
+                borderWidth: isDark ? 0 : 1,
+              },
+            ]}
+          >
+            <Ionicons name="close" size={18} color={theme.text} />
+          </View>
         </TouchableOpacity>
-        <View style={styles.topNavTitleRow}>
-          <Text style={[styles.topNavTitle, { color: theme.text }]}>
-            Session Report
-          </Text>
-        </View>
-        <View style={styles.iconBtn} />
+        <Text style={[styles.topNavTitle, { color: theme.text }]}>
+          Session Report
+        </Text>
+        <View style={styles.headerSpacer} />
       </View>
 
       <ScrollView
         style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Session Score Card */}
-        <View
-          style={[
-            styles.scoreCard,
-            { backgroundColor: theme.card, borderColor: theme.border },
-          ]}
+        {/* ===== SUMMARY HEADER ===== */}
+        <Animated.View
+          entering={FadeIn.duration(400)}
+          style={styles.summarySection}
         >
-          <MaterialIcons name="assessment" size={32} color={theme.primary} />
-          <Text style={[styles.scoreTitle, { color: theme.text }]}>
-            Session Quality Score
+          <Text style={[styles.summaryEyebrow, { color: theme.primary }]}>
+            SESSION COMPLETE
           </Text>
-
-          <View
-            style={[styles.scoreCircle, { backgroundColor: theme.background }]}
-          >
-            <Text
-              style={[
-                styles.scoreNumber,
-                { color: getScoreColor(sessionScore) },
-              ]}
-            >
-              {sessionScore}
-            </Text>
-            <Text style={[styles.scoreOutOf, { color: theme.textSecondary }]}>
-              / 100
-            </Text>
-          </View>
-
+          <Animated.Text style={[styles.summaryTitle, { color: theme.text }]}>
+            {minutesCounter.value} min focused
+          </Animated.Text>
           <Text
-            style={[styles.scoreLabel, { color: getScoreColor(sessionScore) }]}
+            style={[styles.summarySubtitle, { color: theme.textSecondary }]}
           >
-            {getScoreLabel(sessionScore)}
+            {params.subject}
+            {"  ·  "}
+            <Text
+              style={{ color: getScoreColor(sessionScore), fontWeight: "700" }}
+            >
+              {getScoreLabel(sessionScore)}
+            </Text>
           </Text>
+        </Animated.View>
 
-          {/* Score Breakdown */}
+        {/* ===== HERO CARD ===== */}
+        <Animated.View
+          entering={FadeInUp.delay(100).duration(500)}
+          style={styles.heroWrapper}
+        >
+          <LinearGradient
+            colors={getScoreGradient(sessionScore)}
+            start={{ x: 0.1, y: 0 }}
+            end={{ x: 0.9, y: 1 }}
+            style={styles.heroGradient}
+          >
+            <View style={styles.heroHighlight} />
+            <View style={styles.heroContent}>
+              <View style={styles.heroBadge}>
+                <MaterialIcons name="emoji-events" size={34} color="#fff" />
+              </View>
+              <View style={styles.heroInfo}>
+                <Text style={styles.heroEyebrow}>QUALITY SCORE</Text>
+                <Text style={styles.heroTitle}>
+                  {sessionScore}
+                  <Text style={styles.heroTitleOutOf}> / 100</Text>
+                </Text>
+                <Text style={styles.heroSubtitle}>
+                  {params.taskCompleted
+                    ? "Full session complete"
+                    : "Partial session logged"}
+                </Text>
+              </View>
+            </View>
+          </LinearGradient>
+        </Animated.View>
+
+        {/* ===== PRODUCTIVITY RING ===== */}
+        <Animated.View entering={FadeInUp.delay(180).duration(500)}>
           <View
             style={[
-              styles.scoreBreakdown,
-              { backgroundColor: "rgba(255, 255, 255, 0.05)" },
+              styles.card,
+              styles.ringCard,
+              glassStyles.mediumCard(isDark),
+              { backgroundColor: theme.card },
             ]}
           >
-            <View style={styles.breakdownRow}>
-              <Text
-                style={[styles.breakdownLabel, { color: theme.textSecondary }]}
-              >
-                Completion:
-              </Text>
-              <Text style={[styles.breakdownValue, { color: theme.text }]}>
-                {params.taskCompleted
-                  ? "40/40"
-                  : `${Math.floor(40 * (params.sessionDuration / params.plannedDuration))}/40`}
-              </Text>
-            </View>
-            <View style={styles.breakdownRow}>
-              <Text
-                style={[styles.breakdownLabel, { color: theme.textSecondary }]}
-              >
-                Focus Rating:
-              </Text>
-              <Text style={[styles.breakdownValue, { color: theme.text }]}>
-                {Math.floor((params.focusRating / 5) * 25)}/25
-              </Text>
-            </View>
-            <View style={styles.breakdownRow}>
-              <Text
-                style={[styles.breakdownLabel, { color: theme.textSecondary }]}
-              >
-                Productivity:
-              </Text>
-              <Text style={[styles.breakdownValue, { color: theme.text }]}>
-                {Math.floor((params.productivity / 5) * 25)}/25
-              </Text>
-            </View>
-            <View style={styles.breakdownRow}>
-              <Text
-                style={[styles.breakdownLabel, { color: theme.textSecondary }]}
-              >
-                Notes Bonus:
-              </Text>
-              <Text style={[styles.breakdownValue, { color: theme.text }]}>
-                {params.notes && params.notes.trim().length > 0 ? "10" : "0"}/10
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Session Details Card */}
-        <View
-          style={[
-            styles.detailsCard,
-            { backgroundColor: theme.card, borderColor: theme.border },
-          ]}
-        >
-          <Text style={[styles.detailsTitle, { color: theme.text }]}>
-            Session Details
-          </Text>
-
-          <View style={styles.detailRow}>
-            <MaterialIcons name="schedule" size={20} color={theme.primary} />
-            <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>
-              Duration:
+            <Text style={[styles.cardEyebrow, { color: theme.textSecondary }]}>
+              PRODUCTIVITY
             </Text>
-            <Text style={[styles.detailValue, { color: theme.text }]}>
-              {params.sessionDuration} of {params.plannedDuration} minutes
-              {params.taskCompleted && (
-                <Text style={{ color: theme.primary }}> ✓</Text>
-              )}
-            </Text>
-          </View>
-
-          <View style={styles.detailRow}>
-            <MaterialIcons name="subject" size={20} color={theme.primary} />
-            <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>
-              Subject:
-            </Text>
-            <Text style={[styles.detailValue, { color: theme.text }]}>
-              {params.subject}
-            </Text>
-          </View>
-
-          <View style={styles.detailRow}>
-            <MaterialIcons name="settings" size={20} color={theme.primary} />
-            <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>
-              Session Type:
-            </Text>
-            <Text style={[styles.detailValue, { color: theme.text }]}>
-              {params.sessionType === "manual" ? "Custom Setup" : "Quick Start"}
-            </Text>
-          </View>
-
-          <View style={styles.detailRow}>
-            <MaterialIcons
-              name="free-breakfast"
-              size={20}
-              color={theme.primary}
+            <ProductivityScoreRing
+              streak={tasksThisSession}
+              focusProgress={sessionScore}
+              tasksCompleted={tasksThisSession}
             />
-            <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>
-              Break Duration:
-            </Text>
-            <Text style={[styles.detailValue, { color: theme.text }]}>
-              {params.breakDuration} minutes
-            </Text>
           </View>
-        </View>
+        </Animated.View>
 
-        {/* Summit Mode: Individual Tasks Breakdown */}
-        {params?.focusMode === "summit" &&
-          params?.completedTasksData &&
+        {/* ===== SCORE BREAKDOWN ===== */}
+        <Animated.View entering={FadeInUp.delay(240).duration(500)}>
+          <View
+            style={[
+              styles.card,
+              glassStyles.subtleCard(isDark),
+              { backgroundColor: theme.card },
+            ]}
+          >
+            <Text style={[styles.cardTitle, { color: theme.text }]}>
+              Score Breakdown
+            </Text>
+            {scoreBreakdown.map((row, index) => (
+              <StaggeredItem key={row.id} index={index} delay="fast">
+                <View style={styles.statRow}>
+                  <View
+                    style={[
+                      styles.statIcon,
+                      { backgroundColor: theme.primary + "15" },
+                    ]}
+                  >
+                    <MaterialIcons
+                      name={row.icon}
+                      size={18}
+                      color={theme.primary}
+                    />
+                  </View>
+                  <Text
+                    style={[styles.statLabel, { color: theme.textSecondary }]}
+                  >
+                    {row.label}
+                  </Text>
+                  <Text style={[styles.statValue, { color: theme.text }]}>
+                    {row.value}
+                  </Text>
+                </View>
+              </StaggeredItem>
+            ))}
+          </View>
+        </Animated.View>
+
+        {/* ===== SESSION DETAILS ===== */}
+        <Animated.View entering={FadeInUp.delay(300).duration(500)}>
+          <View
+            style={[
+              styles.card,
+              glassStyles.subtleCard(isDark),
+              { backgroundColor: theme.card },
+            ]}
+          >
+            <Text style={[styles.cardTitle, { color: theme.text }]}>
+              Session Details
+            </Text>
+            {sessionDetails.map((row, index) => (
+              <StaggeredItem key={row.id} index={index} delay="fast">
+                <View style={styles.statRow}>
+                  <View
+                    style={[
+                      styles.statIcon,
+                      { backgroundColor: theme.primary + "15" },
+                    ]}
+                  >
+                    <MaterialIcons
+                      name={row.icon}
+                      size={18}
+                      color={theme.primary}
+                    />
+                  </View>
+                  <Text
+                    style={[styles.statLabel, { color: theme.textSecondary }]}
+                  >
+                    {row.label}
+                  </Text>
+                  <Text
+                    style={[styles.statValue, { color: theme.text }]}
+                    numberOfLines={1}
+                  >
+                    {row.value}
+                    {row.id === "duration" && params.taskCompleted && (
+                      <Text style={{ color: theme.primary }}> ✓</Text>
+                    )}
+                  </Text>
+                </View>
+              </StaggeredItem>
+            ))}
+          </View>
+        </Animated.View>
+
+        {/* ===== SUMMIT MODE: TASKS BREAKDOWN ===== */}
+        {params.focusMode === "summit" &&
+          params.completedTasksData &&
           params.completedTasksData.length > 0 && (
-            <View
-              style={[
-                styles.detailsCard,
-                { backgroundColor: theme.card, borderColor: theme.border },
-              ]}
-            >
-              <Text style={[styles.detailsTitle, { color: theme.text }]}>
-                📋 Tasks Completed ({params.completedTasksData.length})
-              </Text>
+            <Animated.View entering={FadeInUp.delay(360).duration(500)}>
+              <View
+                style={[
+                  styles.card,
+                  glassStyles.subtleCard(isDark),
+                  { backgroundColor: theme.card },
+                ]}
+              >
+                <Text style={[styles.cardTitle, { color: theme.text }]}>
+                  Tasks Completed ({params.completedTasksData.length})
+                </Text>
 
-              {params.completedTasksData.map((taskData, index) => (
-                <View
-                  key={index}
-                  style={[
-                    styles.taskBreakdownItem,
-                    {
-                      backgroundColor: "rgba(255, 255, 255, 0.03)",
-                      borderColor: theme.border,
-                    },
-                  ]}
-                >
-                  <View style={styles.taskBreakdownHeader}>
-                    <Text
+                {params.completedTasksData.map((taskData, index) => (
+                  <StaggeredItem key={index} index={index} delay="fast">
+                    <View
                       style={[
-                        styles.taskBreakdownNumber,
-                        { color: theme.primary },
+                        styles.taskItem,
+                        {
+                          backgroundColor: theme.surface2,
+                          borderColor: theme.border,
+                        },
                       ]}
                     >
-                      Task {index + 1}
-                    </Text>
-                    <Text
-                      style={[styles.taskBreakdownTitle, { color: theme.text }]}
-                    >
-                      {taskData.task}
-                    </Text>
-                  </View>
+                      <Text
+                        style={[styles.taskNumber, { color: theme.primary }]}
+                      >
+                        TASK {index + 1}
+                      </Text>
+                      <Text style={[styles.taskTitle, { color: theme.text }]}>
+                        {taskData.task}
+                      </Text>
 
-                  <View style={styles.taskBreakdownDetails}>
-                    <View style={styles.taskBreakdownRow}>
-                      <MaterialIcons
-                        name="subject"
-                        size={16}
-                        color={theme.textSecondary}
-                      />
-                      <Text
-                        style={[
-                          styles.taskBreakdownLabel,
-                          { color: theme.textSecondary },
-                        ]}
-                      >
-                        Subject:
-                      </Text>
-                      <Text
-                        style={[
-                          styles.taskBreakdownValue,
-                          { color: theme.text },
-                        ]}
-                      >
-                        {taskData.subject}
-                      </Text>
-                    </View>
-
-                    <View style={styles.taskBreakdownRow}>
-                      <MaterialIcons
-                        name="schedule"
-                        size={16}
-                        color={theme.textSecondary}
-                      />
-                      <Text
-                        style={[
-                          styles.taskBreakdownLabel,
-                          { color: theme.textSecondary },
-                        ]}
-                      >
-                        Duration:
-                      </Text>
-                      <Text
-                        style={[
-                          styles.taskBreakdownValue,
-                          { color: theme.text },
-                        ]}
-                      >
-                        {taskData.duration} min
-                      </Text>
-                    </View>
-
-                    <View style={styles.taskBreakdownRow}>
-                      <MaterialIcons
-                        name="psychology"
-                        size={16}
-                        color={theme.textSecondary}
-                      />
-                      <Text
-                        style={[
-                          styles.taskBreakdownLabel,
-                          { color: theme.textSecondary },
-                        ]}
-                      >
-                        Focus:
-                      </Text>
-                      <View style={styles.starsContainer}>
-                        {renderStars(taskData.focusRating)}
-                      </View>
-                    </View>
-
-                    <View style={styles.taskBreakdownRow}>
-                      <MaterialIcons
-                        name="trending-up"
-                        size={16}
-                        color={theme.textSecondary}
-                      />
-                      <Text
-                        style={[
-                          styles.taskBreakdownLabel,
-                          { color: theme.textSecondary },
-                        ]}
-                      >
-                        Productivity:
-                      </Text>
-                      <View style={styles.starsContainer}>
-                        {renderStars(taskData.productivityRating)}
-                      </View>
-                    </View>
-
-                    {taskData.notes && (
-                      <View style={styles.taskBreakdownNotes}>
+                      <View style={styles.taskMetaRow}>
+                        <MaterialIcons
+                          name="subject"
+                          size={15}
+                          color={theme.textSecondary}
+                        />
                         <Text
                           style={[
-                            styles.taskBreakdownNotesText,
+                            styles.taskMetaLabel,
                             { color: theme.textSecondary },
+                          ]}
+                        >
+                          {taskData.subject}
+                        </Text>
+                        <MaterialIcons
+                          name="schedule"
+                          size={15}
+                          color={theme.textSecondary}
+                          style={{ marginLeft: 12 }}
+                        />
+                        <Text
+                          style={[
+                            styles.taskMetaLabel,
+                            { color: theme.textSecondary },
+                          ]}
+                        >
+                          {taskData.duration} min
+                        </Text>
+                      </View>
+
+                      <View style={styles.taskMetaRow}>
+                        <Text
+                          style={[
+                            styles.taskMetaLabel,
+                            { color: theme.textSecondary, width: 80 },
+                          ]}
+                        >
+                          Focus
+                        </Text>
+                        <View style={styles.starsContainer}>
+                          {renderStars(taskData.focusRating)}
+                        </View>
+                      </View>
+
+                      <View style={styles.taskMetaRow}>
+                        <Text
+                          style={[
+                            styles.taskMetaLabel,
+                            { color: theme.textSecondary, width: 80 },
+                          ]}
+                        >
+                          Productivity
+                        </Text>
+                        <View style={styles.starsContainer}>
+                          {renderStars(taskData.productivityRating)}
+                        </View>
+                      </View>
+
+                      {taskData.notes ? (
+                        <Text
+                          style={[
+                            styles.taskNotes,
+                            {
+                              color: theme.textSecondary,
+                              borderTopColor: theme.border,
+                            },
                           ]}
                         >
                           "{taskData.notes}"
                         </Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-              ))}
-            </View>
+                      ) : null}
+                    </View>
+                  </StaggeredItem>
+                ))}
+              </View>
+            </Animated.View>
           )}
 
-        {/* Ratings Card */}
-        <View
-          style={[
-            styles.ratingsCard,
-            { backgroundColor: theme.card, borderColor: theme.border },
-          ]}
-        >
-          <Text style={[styles.ratingsTitle, { color: theme.text }]}>
-            Your Ratings
-          </Text>
-
-          <View style={styles.ratingRow}>
-            <Text style={[styles.ratingLabel, { color: theme.textSecondary }]}>
-              Focus Quality:
-            </Text>
-            <View style={styles.starsContainer}>
-              {renderStars(params.focusRating)}
-            </View>
-            <Text style={[styles.ratingNumber, { color: theme.textSecondary }]}>
-              ({params.focusRating}/5)
-            </Text>
-          </View>
-
-          <View style={styles.ratingRow}>
-            <Text style={[styles.ratingLabel, { color: theme.textSecondary }]}>
-              Productivity:
-            </Text>
-            <View style={styles.starsContainer}>
-              {renderStars(params.productivity)}
-            </View>
-            <Text style={[styles.ratingNumber, { color: theme.textSecondary }]}>
-              ({params.productivity}/5)
-            </Text>
-          </View>
-
-          {params.notes && (
-            <View
-              style={[
-                styles.notesSection,
-                { backgroundColor: "rgba(255, 255, 255, 0.05)" },
-              ]}
-            >
-              <Text style={[styles.notesTitle, { color: theme.text }]}>
-                Your Notes:
-              </Text>
-              <Text style={[styles.notesText, { color: theme.textSecondary }]}>
-                "{params.notes}"
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* Achievements Card */}
-        {newAchievements.length > 0 && (
+        {/* ===== YOUR RATINGS ===== */}
+        <Animated.View entering={FadeInUp.delay(420).duration(500)}>
           <View
             style={[
-              styles.achievementsCard,
-              { backgroundColor: theme.card, borderColor: theme.border },
+              styles.card,
+              glassStyles.subtleCard(isDark),
+              { backgroundColor: theme.card },
             ]}
           >
-            <Text style={[styles.achievementsTitle, { color: theme.text }]}>
-              New Achievements! 🎉
+            <Text style={[styles.cardTitle, { color: theme.text }]}>
+              Your Ratings
             </Text>
 
-            {newAchievements.map((achievement, index) => (
+            <View style={styles.ratingRow}>
+              <Text
+                style={[styles.ratingLabel, { color: theme.textSecondary }]}
+              >
+                Focus Quality
+              </Text>
+              <View style={styles.starsContainer}>
+                {renderStars(params.focusRating)}
+              </View>
+              <Text
+                style={[styles.ratingNumber, { color: theme.textSecondary }]}
+              >
+                {params.focusRating}/5
+              </Text>
+            </View>
+
+            <View style={styles.ratingRow}>
+              <Text
+                style={[styles.ratingLabel, { color: theme.textSecondary }]}
+              >
+                Productivity
+              </Text>
+              <View style={styles.starsContainer}>
+                {renderStars(params.productivity)}
+              </View>
+              <Text
+                style={[styles.ratingNumber, { color: theme.textSecondary }]}
+              >
+                {params.productivity}/5
+              </Text>
+            </View>
+
+            {params.notes ? (
               <View
-                key={index}
                 style={[
-                  styles.achievementItem,
-                  {
-                    borderColor: achievement.color,
-                    backgroundColor: "rgba(255, 255, 255, 0.03)",
-                  },
+                  styles.notesSection,
+                  { backgroundColor: theme.surface2 },
                 ]}
               >
-                <View
-                  style={[
-                    styles.achievementIcon,
-                    { backgroundColor: achievement.color },
-                  ]}
+                <Text style={[styles.notesTitle, { color: theme.text }]}>
+                  Your Notes
+                </Text>
+                <Text
+                  style={[styles.notesText, { color: theme.textSecondary }]}
                 >
-                  <MaterialIcons
-                    name={achievement.icon}
-                    size={24}
-                    color="#fff"
-                  />
-                </View>
-                <View style={styles.achievementContent}>
-                  <Text
-                    style={[styles.achievementTitle, { color: theme.text }]}
-                  >
-                    {achievement.title}
-                  </Text>
-                  <Text
+                  "{params.notes}"
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        </Animated.View>
+
+        {/* ===== NEW ACHIEVEMENTS ===== */}
+        {newAchievements.length > 0 && (
+          <Animated.View entering={FadeInUp.delay(480).duration(500)}>
+            <View
+              style={[
+                styles.card,
+                glassStyles.subtleCard(isDark),
+                { backgroundColor: theme.card },
+              ]}
+            >
+              <Text style={[styles.cardTitle, { color: theme.text }]}>
+                New Achievements
+              </Text>
+              <View style={styles.chipWrap}>
+                {newAchievements.map((achievement) => (
+                  <View
+                    key={achievement.id}
                     style={[
-                      styles.achievementDesc,
-                      { color: theme.textSecondary },
+                      styles.achievementChip,
+                      { backgroundColor: achievement.color + "22" },
                     ]}
                   >
-                    {achievement.description}
-                  </Text>
-                </View>
+                    <MaterialIcons
+                      name={achievement.icon}
+                      size={16}
+                      color={achievement.color}
+                    />
+                    <Text
+                      style={[
+                        styles.achievementChipText,
+                        { color: achievement.color },
+                      ]}
+                    >
+                      {achievement.title}
+                    </Text>
+                  </View>
+                ))}
               </View>
-            ))}
-          </View>
+            </View>
+          </Animated.View>
         )}
 
-        {/* Music Status Section */}
+        {/* ===== MUSIC STATUS ===== */}
         {currentTrack && isPlaying && !isPreviewMode && (
           <View
             style={[
+              styles.card,
               styles.musicContinuing,
-              { backgroundColor: theme.card, borderColor: theme.border },
+              glassStyles.subtleCard(isDark),
+              { backgroundColor: theme.card },
             ]}
           >
             <MaterialIcons name="music-note" size={20} color={theme.primary} />
-            <View style={{ flex: 1, marginLeft: 8 }}>
-              <Text
-                style={[styles.musicContinuingTitle, { color: theme.text }]}
-              >
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={[styles.musicTitle, { color: theme.text }]}>
                 Music Continuing
               </Text>
-              <Text
-                style={[
-                  styles.musicContinuingText,
-                  { color: theme.textSecondary },
-                ]}
-              >
+              <Text style={[styles.musicText, { color: theme.textSecondary }]}>
                 ♪ {currentTrack.displayName}
               </Text>
             </View>
@@ -650,20 +776,22 @@ const SessionReportScreen = () => {
             >
               <Ionicons
                 name="stop-circle-outline"
-                size={20}
+                size={22}
                 color={theme.error ?? "#EF4444"}
               />
             </TouchableOpacity>
           </View>
         )}
 
-        {/* Action Buttons */}
+        {/* ===== ACTION BUTTONS ===== */}
         <View style={styles.actionsContainer}>
           <TouchableOpacity
             style={[styles.primaryBtn, { backgroundColor: theme.primary }]}
-            onPress={() =>
-              navigation.navigate("Main", { screen: "FocusPreparation" })
-            }
+            activeOpacity={0.85}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              navigation.navigate("Main", { screen: "FocusPreparation" });
+            }}
           >
             <MaterialIcons name="refresh" size={20} color="#fff" />
             <Text style={styles.primaryBtnText}>Start Another Session</Text>
@@ -671,7 +799,11 @@ const SessionReportScreen = () => {
 
           <TouchableOpacity
             style={[styles.secondaryBtn, { borderColor: theme.border }]}
-            onPress={() => navigation.navigate("Main", { screen: "Results" })}
+            activeOpacity={0.85}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              navigation.navigate("Main", { screen: "Results" });
+            }}
           >
             <MaterialIcons name="analytics" size={20} color={theme.primary} />
             <Text style={[styles.secondaryBtnText, { color: theme.text }]}>
@@ -681,7 +813,11 @@ const SessionReportScreen = () => {
 
           <TouchableOpacity
             style={styles.tertiaryBtn}
-            onPress={() => navigation.navigate("Main", { screen: "Home" })}
+            activeOpacity={0.7}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              navigation.navigate("Main", { screen: "Home" });
+            }}
           >
             <Text
               style={[styles.tertiaryBtnText, { color: theme.textSecondary }]}
@@ -697,6 +833,8 @@ const SessionReportScreen = () => {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
+
+  // Header
   topNavBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -705,134 +843,211 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     minHeight: 56,
   },
-  topNavTitleRow: {
-    flex: 1,
-    alignItems: "center",
-  },
   topNavTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#222",
+    fontSize: 17,
+    fontWeight: "700",
+    letterSpacing: -0.2,
   },
-  iconBtn: {
-    padding: 8,
-    minWidth: 40,
+  backButton: {
+    padding: 4,
   },
+  backButtonCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerSpacer: {
+    width: 44,
+  },
+
+  // Scroll
   scrollView: {
     flex: 1,
+  },
+  scrollContent: {
     paddingHorizontal: 16,
+    paddingBottom: 40,
   },
-  scoreCard: {
-    borderRadius: 16,
-    padding: 24,
+
+  // Summary header
+  summarySection: {
+    paddingHorizontal: 4,
+    paddingTop: 8,
+    paddingBottom: 18,
+  },
+  summaryEyebrow: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+    marginBottom: 4,
+  },
+  summaryTitle: {
+    fontSize: 26,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+    lineHeight: 30,
+    fontVariant: ["tabular-nums"],
+  },
+  summarySubtitle: {
+    fontSize: 13,
+    marginTop: 4,
+  },
+
+  // Hero
+  heroWrapper: {
+    marginBottom: 16,
+  },
+  heroGradient: {
+    borderRadius: 24,
+    padding: 18,
+    overflow: "hidden",
+  },
+  heroHighlight: {
+    position: "absolute",
+    top: "-30%",
+    left: "-10%",
+    width: "70%",
+    height: "120%",
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderRadius: 200,
+  },
+  heroContent: {
+    flexDirection: "row",
     alignItems: "center",
-    marginVertical: 16,
-    borderWidth: 1,
+    gap: 16,
   },
-  scoreTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginTop: 12,
-    marginBottom: 20,
-  },
-  scoreCircle: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: "#fff",
+  heroBadge: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    alignItems: "center",
     justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: "rgba(255,255,255,0.22)",
   },
-  scoreNumber: {
-    fontSize: 36,
-    fontWeight: "bold",
-  },
-  scoreOutOf: {
-    fontSize: 14,
-    color: "#666",
-  },
-  scoreLabel: {
-    fontSize: 16,
-    fontWeight: "bold",
-    marginBottom: 16,
-  },
-  scoreBreakdown: {
-    width: "100%",
-    backgroundColor: "rgba(255, 255, 255, 0.7)",
-    borderRadius: 8,
-    padding: 16,
-  },
-  breakdownRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  breakdownLabel: {
-    fontSize: 14,
-    color: "#666",
-  },
-  breakdownValue: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#333",
-  },
-  detailsCard: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 16,
-    borderWidth: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  detailsTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 16,
-  },
-  detailRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  detailLabel: {
-    fontSize: 14,
-    color: "#666",
-    marginLeft: 12,
+  heroInfo: {
     flex: 1,
   },
-  detailValue: {
+  heroEyebrow: {
+    fontSize: 10,
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+    fontWeight: "800",
+    color: "#fff",
+    opacity: 0.9,
+  },
+  heroTitle: {
+    fontSize: 32,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+    marginTop: 2,
+    color: "#fff",
+    fontVariant: ["tabular-nums"],
+    textShadowColor: "rgba(0,0,0,0.18)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
+  },
+  heroTitleOutOf: {
+    fontSize: 16,
+    fontWeight: "700",
+    opacity: 0.85,
+  },
+  heroSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+    color: "#fff",
+    opacity: 0.92,
+    fontWeight: "500",
+  },
+
+  // Cards
+  card: {
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 16,
+  },
+  ringCard: {
+    alignItems: "center",
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    letterSpacing: -0.2,
+    marginBottom: 12,
+  },
+  cardEyebrow: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+    alignSelf: "flex-start",
+  },
+
+  // Stat rows (breakdown + details)
+  statRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  statIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  statLabel: {
     fontSize: 14,
-    fontWeight: "bold",
-    color: "#333",
+    flex: 1,
+  },
+  statValue: {
+    fontSize: 14,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
     textAlign: "right",
+    marginLeft: 8,
   },
-  ratingsCard: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 16,
+
+  // Summit tasks
+  taskItem: {
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
     borderWidth: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
   },
-  ratingsTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 16,
+  taskNumber: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1,
+    marginBottom: 4,
   },
+  taskTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 10,
+  },
+  taskMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+    gap: 6,
+  },
+  taskMetaLabel: {
+    fontSize: 13,
+  },
+  taskNotes: {
+    fontSize: 13,
+    fontStyle: "italic",
+    lineHeight: 18,
+    marginTop: 6,
+    paddingTop: 10,
+    borderTopWidth: 1,
+  },
+
+  // Ratings
   ratingRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -840,8 +1055,7 @@ const styles = StyleSheet.create({
   },
   ratingLabel: {
     fontSize: 14,
-    color: "#666",
-    width: 80,
+    width: 90,
   },
   starsContainer: {
     flexDirection: "row",
@@ -851,113 +1065,79 @@ const styles = StyleSheet.create({
   },
   ratingNumber: {
     fontSize: 14,
-    color: "#666",
+    fontWeight: "600",
+    fontVariant: ["tabular-nums"],
     marginLeft: 8,
   },
   notesSection: {
-    marginTop: 16,
-    padding: 16,
-    backgroundColor: "#F8F9FA",
-    borderRadius: 8,
+    marginTop: 8,
+    padding: 14,
+    borderRadius: 12,
   },
   notesTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    marginBottom: 8,
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 6,
   },
   notesText: {
     fontSize: 14,
-    color: "#666",
     fontStyle: "italic",
     lineHeight: 20,
   },
-  achievementsCard: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 16,
-    borderWidth: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
+
+  // Achievement chips
+  chipWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
   },
-  achievementsTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 16,
-    textAlign: "center",
-  },
-  achievementItem: {
+  achievementChip: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    marginBottom: 12,
-    backgroundColor: "#FAFAFA",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
   },
-  achievementIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 16,
+  achievementChipText: {
+    fontSize: 13,
+    fontWeight: "700",
   },
-  achievementContent: {
-    flex: 1,
-  },
-  achievementTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 4,
-  },
-  achievementDesc: {
-    fontSize: 14,
-    color: "#666",
-  },
+
+  // Music
   musicContinuing: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 16,
-    borderWidth: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
+    padding: 14,
   },
-  musicContinuingTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
+  musicTitle: {
+    fontSize: 15,
+    fontWeight: "700",
   },
-  musicContinuingText: {
-    fontSize: 14,
-    marginTop: 4,
+  musicText: {
+    fontSize: 13,
+    marginTop: 2,
   },
   musicStopBtn: {
-    marginLeft: 16,
+    marginLeft: 12,
   },
+
+  // Actions
   actionsContainer: {
-    marginBottom: 32,
+    marginTop: 4,
   },
   primaryBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 16,
-    borderRadius: 8,
+    borderRadius: 14,
     marginBottom: 12,
     gap: 8,
   },
   primaryBtnText: {
     color: "#fff",
-    fontWeight: "bold",
+    fontWeight: "700",
     fontSize: 16,
   },
   secondaryBtn: {
@@ -965,15 +1145,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 16,
-    borderRadius: 8,
+    borderRadius: 14,
     backgroundColor: "transparent",
     borderWidth: 1,
-    borderColor: "#4CAF50",
     marginBottom: 12,
     gap: 8,
   },
   secondaryBtnText: {
-    fontWeight: "bold",
+    fontWeight: "700",
     fontSize: 16,
   },
   tertiaryBtn: {
@@ -981,60 +1160,34 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   tertiaryBtnText: {
-    color: "#666",
-    fontSize: 14,
-  },
-  errorText: {
-    textAlign: "center",
-    fontSize: 16,
-    color: "#666",
-    marginTop: 50,
-  },
-  taskBreakdownItem: {
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-  },
-  taskBreakdownHeader: {
-    marginBottom: 12,
-  },
-  taskBreakdownNumber: {
-    fontSize: 12,
-    fontWeight: "bold",
-    marginBottom: 4,
-  },
-  taskBreakdownTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-  taskBreakdownDetails: {
-    gap: 8,
-  },
-  taskBreakdownRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  taskBreakdownLabel: {
-    fontSize: 14,
-    marginLeft: 8,
-    width: 100,
-  },
-  taskBreakdownValue: {
     fontSize: 14,
     fontWeight: "600",
   },
-  taskBreakdownNotes: {
-    marginTop: 8,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255, 255, 255, 0.1)",
+
+  // Empty state
+  emptyState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 40,
   },
-  taskBreakdownNotesText: {
-    fontSize: 13,
-    fontStyle: "italic",
-    lineHeight: 18,
+  emptyIconContainer: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 18,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 20,
   },
 });
 
