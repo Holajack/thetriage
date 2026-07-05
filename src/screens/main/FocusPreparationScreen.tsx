@@ -420,7 +420,9 @@ export default function FocusPreparationScreen() {
         // Set default time based on user's work style
         let defaultTime = 25; // Default fallback
 
-        if (settings?.workStyle) {
+        if (settings?.preferred_session_length) {
+          defaultTime = settings.preferred_session_length;
+        } else if (settings?.workStyle) {
           switch (settings.workStyle) {
             case "Sprint":
               defaultTime = 25;
@@ -494,9 +496,21 @@ export default function FocusPreparationScreen() {
     { label: "30 min", value: 30, isWorkStyle: false },
   ];
 
-  const handleTimeSelection = (time: number, isWorkStyle: boolean) => {
+  const handleTimeSelection = async (time: number, isWorkStyle: boolean) => {
     setSelectedTime(time);
     setShowTimeSelector(false);
+
+    // Save session length preference to database
+    if (user?.id) {
+      try {
+        await updateUserSettings(user.id, {
+          preferred_session_length: time,
+        });
+        // Session length preference saved
+      } catch (error) {
+        // Failed to save session length preference
+      }
+    }
 
     // Auto-select break time based on work style
     if (isWorkStyle) {

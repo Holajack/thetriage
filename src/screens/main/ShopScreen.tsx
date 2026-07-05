@@ -37,6 +37,7 @@ import Animated, {
 import * as Haptics from "expo-haptics";
 import { AnimatedButton } from "../../components/premium/AnimatedButton";
 import { StaggeredItem } from "../../components/premium/StaggeredList";
+import { ShimmerLoader } from "../../components/premium/ShimmerLoader";
 import {
   useCounterAnimation,
   usePulseAnimation,
@@ -310,6 +311,35 @@ const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
 type ShopTab = "shop" | "gear";
 
+// Skeleton placeholders shown while inventory/equipped queries resolve, so
+// ownership badges never flip from "un-owned" to "Equipped" in front of the user.
+const ShopGridSkeleton = ({ count = 6 }: { count?: number }) => {
+  const { theme } = useTheme();
+  return (
+    <>
+      {Array.from({ length: count }).map((_, index) => (
+        <View
+          key={index}
+          style={[
+            styles.itemCard,
+            { backgroundColor: theme.card, borderColor: theme.border },
+          ]}
+        >
+          <ShimmerLoader variant="circle" height={60} />
+          <ShimmerLoader variant="text" width="70%" height={13} />
+          <ShimmerLoader variant="text" width="90%" height={10} />
+          <ShimmerLoader
+            variant="custom"
+            width="100%"
+            height={22}
+            borderRadius={6}
+          />
+        </View>
+      ))}
+    </>
+  );
+};
+
 const ShopScreen = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<MainTabParamList>>();
@@ -335,7 +365,7 @@ const ShopScreen = () => {
   // Load inventory and equipped items
   useEffect(() => {
     loadInventoryData();
-  }, [user]);
+  }, [user?.id]);
 
   const loadInventoryData = async () => {
     setLoading(true);
@@ -638,7 +668,9 @@ const ShopScreen = () => {
         {activeTab === "gear" ? (
           /* ===== YOUR GEAR TAB ===== */
           <View style={styles.itemsGrid}>
-            {inventory.length === 0 ? (
+            {loading ? (
+              <ShopGridSkeleton count={4} />
+            ) : inventory.length === 0 ? (
               <View style={styles.emptyGear}>
                 <Ionicons
                   name="cube-outline"
@@ -826,224 +858,243 @@ const ShopScreen = () => {
 
             {/* Shop Items Grid */}
             <View style={styles.itemsGrid}>
-              {filteredItems.map((item, index) => {
-                const canAfford = flintCurrency >= item.cost;
-                const owned = isOwned(item.id);
-                const equipped = isEquipped(item.id);
-                const isFree = item.cost === 0;
-                const isComingSoon = item.comingSoon === true;
-                // Trail-specific accent color (falls back to green for non-trails)
-                const accentColor = TRAIL_ACCENT_COLORS[item.id] || "#4CAF50";
+              {loading ? (
+                <ShopGridSkeleton count={filteredItems.length || 6} />
+              ) : (
+                filteredItems.map((item, index) => {
+                  const canAfford = flintCurrency >= item.cost;
+                  const owned = isOwned(item.id);
+                  const equipped = isEquipped(item.id);
+                  const isFree = item.cost === 0;
+                  const isComingSoon = item.comingSoon === true;
+                  // Trail-specific accent color (falls back to green for non-trails)
+                  const accentColor = TRAIL_ACCENT_COLORS[item.id] || "#4CAF50";
 
-                return (
-                  <StaggeredItem
-                    key={item.id}
-                    index={index}
-                    delay="fast"
-                    direction="fade"
-                    subtle={true}
-                  >
-                    <AnimatedTouchable
-                      style={[
-                        styles.itemCard,
-                        {
-                          backgroundColor: theme.card,
-                          borderColor: isComingSoon
-                            ? theme.border
-                            : equipped
-                              ? accentColor
-                              : owned
-                                ? accentColor
-                                : isFree
-                                  ? accentColor
-                                  : canAfford
-                                    ? "#FF5700"
-                                    : theme.border,
-                        },
-                        (isComingSoon || (!canAfford && !owned && !isFree)) &&
-                          styles.itemCardLocked,
-                      ]}
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        handleItemPress(item);
-                      }}
-                      activeOpacity={0.7}
+                  return (
+                    <StaggeredItem
+                      key={item.id}
+                      index={index}
+                      delay="fast"
+                      direction="fade"
+                      subtle={true}
                     >
-                      {/* Icon — prefer image when present, fall back to emoji */}
-                      <View
+                      <AnimatedTouchable
                         style={[
-                          styles.itemIconContainer,
-                          { backgroundColor: theme.surface },
+                          styles.itemCard,
+                          {
+                            backgroundColor: theme.card,
+                            borderColor: isComingSoon
+                              ? theme.border
+                              : equipped
+                                ? accentColor
+                                : owned
+                                  ? accentColor
+                                  : isFree
+                                    ? accentColor
+                                    : canAfford
+                                      ? "#FF5700"
+                                      : theme.border,
+                          },
+                          (isComingSoon || (!canAfford && !owned && !isFree)) &&
+                            styles.itemCardLocked,
                         ]}
+                        onPress={() => {
+                          Haptics.impactAsync(
+                            Haptics.ImpactFeedbackStyle.Light,
+                          );
+                          handleItemPress(item);
+                        }}
+                        activeOpacity={0.7}
                       >
-                        {item.image ? (
-                          <Image
-                            source={item.image}
-                            style={styles.itemImage}
-                            resizeMode="cover"
-                          />
+                        {/* Icon — prefer image when present, fall back to emoji */}
+                        <View
+                          style={[
+                            styles.itemIconContainer,
+                            { backgroundColor: theme.surface },
+                          ]}
+                        >
+                          {item.image ? (
+                            <Image
+                              source={item.image}
+                              style={styles.itemImage}
+                              resizeMode="cover"
+                            />
+                          ) : (
+                            <Text style={styles.itemIcon}>{item.icon}</Text>
+                          )}
+                          {isComingSoon && (
+                            <View
+                              style={[
+                                styles.statusBadge,
+                                { backgroundColor: "#888" },
+                              ]}
+                            >
+                              <Ionicons
+                                name="time-outline"
+                                size={10}
+                                color="#FFF"
+                              />
+                            </View>
+                          )}
+                          {!isComingSoon && equipped && (
+                            <View
+                              style={[
+                                styles.statusBadge,
+                                { backgroundColor: accentColor },
+                              ]}
+                            >
+                              <Ionicons
+                                name="checkmark-outline"
+                                size={10}
+                                color="#FFF"
+                              />
+                            </View>
+                          )}
+                          {!isComingSoon && owned && !equipped && (
+                            <View
+                              style={[
+                                styles.statusBadge,
+                                { backgroundColor: accentColor },
+                              ]}
+                            >
+                              <Ionicons
+                                name="swap-horizontal-outline"
+                                size={10}
+                                color="#FFF"
+                              />
+                            </View>
+                          )}
+                          {!isComingSoon && !canAfford && !owned && !isFree && (
+                            <View
+                              style={[
+                                styles.statusBadge,
+                                { backgroundColor: "#666" },
+                              ]}
+                            >
+                              <Ionicons
+                                name="lock-closed-outline"
+                                size={10}
+                                color="#FFF"
+                              />
+                            </View>
+                          )}
+                        </View>
+
+                        {/* Info */}
+                        <Text
+                          style={[styles.itemName, { color: theme.text }]}
+                          numberOfLines={1}
+                        >
+                          {item.name}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.itemDescription,
+                            { color: theme.textSecondary },
+                          ]}
+                          numberOfLines={2}
+                        >
+                          {item.description}
+                        </Text>
+
+                        {/* Status/Price */}
+                        {isComingSoon ? (
+                          <View
+                            style={[
+                              styles.statusTag,
+                              { backgroundColor: "#88888820" },
+                            ]}
+                          >
+                            <Text
+                              style={[styles.statusText, { color: "#888" }]}
+                            >
+                              Coming Soon
+                            </Text>
+                          </View>
+                        ) : equipped ? (
+                          <View
+                            style={[
+                              styles.statusTag,
+                              { backgroundColor: accentColor + "20" },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.statusText,
+                                { color: accentColor },
+                              ]}
+                            >
+                              Equipped
+                            </Text>
+                          </View>
+                        ) : owned ? (
+                          <View
+                            style={[
+                              styles.statusTag,
+                              { backgroundColor: accentColor + "20" },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.statusText,
+                                { color: accentColor },
+                              ]}
+                            >
+                              Tap to Equip
+                            </Text>
+                          </View>
+                        ) : isFree ? (
+                          <View
+                            style={[
+                              styles.statusTag,
+                              { backgroundColor: accentColor + "20" },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.statusText,
+                                { color: accentColor },
+                              ]}
+                            >
+                              Free
+                            </Text>
+                          </View>
                         ) : (
-                          <Text style={styles.itemIcon}>{item.icon}</Text>
-                        )}
-                        {isComingSoon && (
                           <View
                             style={[
-                              styles.statusBadge,
-                              { backgroundColor: "#888" },
-                            ]}
-                          >
-                            <Ionicons
-                              name="time-outline"
-                              size={10}
-                              color="#FFF"
-                            />
-                          </View>
-                        )}
-                        {!isComingSoon && equipped && (
-                          <View
-                            style={[
-                              styles.statusBadge,
-                              { backgroundColor: accentColor },
-                            ]}
-                          >
-                            <Ionicons
-                              name="checkmark-outline"
-                              size={10}
-                              color="#FFF"
-                            />
-                          </View>
-                        )}
-                        {!isComingSoon && owned && !equipped && (
-                          <View
-                            style={[
-                              styles.statusBadge,
-                              { backgroundColor: accentColor },
-                            ]}
-                          >
-                            <Ionicons
-                              name="swap-horizontal-outline"
-                              size={10}
-                              color="#FFF"
-                            />
-                          </View>
-                        )}
-                        {!isComingSoon && !canAfford && !owned && !isFree && (
-                          <View
-                            style={[
-                              styles.statusBadge,
-                              { backgroundColor: "#666" },
-                            ]}
-                          >
-                            <Ionicons
-                              name="lock-closed-outline"
-                              size={10}
-                              color="#FFF"
-                            />
-                          </View>
-                        )}
-                      </View>
-
-                      {/* Info */}
-                      <Text
-                        style={[styles.itemName, { color: theme.text }]}
-                        numberOfLines={1}
-                      >
-                        {item.name}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.itemDescription,
-                          { color: theme.textSecondary },
-                        ]}
-                        numberOfLines={2}
-                      >
-                        {item.description}
-                      </Text>
-
-                      {/* Status/Price */}
-                      {isComingSoon ? (
-                        <View
-                          style={[
-                            styles.statusTag,
-                            { backgroundColor: "#88888820" },
-                          ]}
-                        >
-                          <Text style={[styles.statusText, { color: "#888" }]}>
-                            Coming Soon
-                          </Text>
-                        </View>
-                      ) : equipped ? (
-                        <View
-                          style={[
-                            styles.statusTag,
-                            { backgroundColor: accentColor + "20" },
-                          ]}
-                        >
-                          <Text
-                            style={[styles.statusText, { color: accentColor }]}
-                          >
-                            Equipped
-                          </Text>
-                        </View>
-                      ) : owned ? (
-                        <View
-                          style={[
-                            styles.statusTag,
-                            { backgroundColor: accentColor + "20" },
-                          ]}
-                        >
-                          <Text
-                            style={[styles.statusText, { color: accentColor }]}
-                          >
-                            Tap to Equip
-                          </Text>
-                        </View>
-                      ) : isFree ? (
-                        <View
-                          style={[
-                            styles.statusTag,
-                            { backgroundColor: accentColor + "20" },
-                          ]}
-                        >
-                          <Text
-                            style={[styles.statusText, { color: accentColor }]}
-                          >
-                            Free
-                          </Text>
-                        </View>
-                      ) : (
-                        <View
-                          style={[
-                            styles.priceTag,
-                            {
-                              backgroundColor: canAfford
-                                ? "#FF570015"
-                                : theme.surface,
-                            },
-                          ]}
-                        >
-                          <FlintIcon
-                            size={12}
-                            color={canAfford ? "#FF5700" : theme.textSecondary}
-                          />
-                          <Text
-                            style={[
-                              styles.itemCost,
+                              styles.priceTag,
                               {
-                                color: canAfford
-                                  ? "#FF5700"
-                                  : theme.textSecondary,
+                                backgroundColor: canAfford
+                                  ? "#FF570015"
+                                  : theme.surface,
                               },
                             ]}
                           >
-                            {item.cost}
-                          </Text>
-                        </View>
-                      )}
-                    </AnimatedTouchable>
-                  </StaggeredItem>
-                );
-              })}
+                            <FlintIcon
+                              size={12}
+                              color={
+                                canAfford ? "#FF5700" : theme.textSecondary
+                              }
+                            />
+                            <Text
+                              style={[
+                                styles.itemCost,
+                                {
+                                  color: canAfford
+                                    ? "#FF5700"
+                                    : theme.textSecondary,
+                                },
+                              ]}
+                            >
+                              {item.cost}
+                            </Text>
+                          </View>
+                        )}
+                      </AnimatedTouchable>
+                    </StaggeredItem>
+                  );
+                })
+              )}
             </View>
           </>
         )}

@@ -82,7 +82,6 @@ const SettingsScreen = () => {
   const [showWorkStyleModal, setShowWorkStyleModal] = useState(false);
 
   // Accessibility state (kept inline)
-  const [tts, setTts] = useState(false);
   const [highContrast, setHighContrast] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
 
@@ -92,10 +91,22 @@ const SettingsScreen = () => {
   // Load profile data
   useEffect(() => {
     if (profile) {
-      setWeeklyGoal(profile.weeklyFocusGoal || 10);
       setFocusDuration(profile.focusDuration || 25);
     }
   }, [profile]);
+
+  // Hydrate Focus & Study selections from the onboarding doc — the same table
+  // the handlers write to via updateOnboarding, so it's the source of truth for
+  // Main Goal, Work Style, and Weekly Focus Goal.
+  useEffect(() => {
+    const onboarding = userData?.onboarding;
+    if (onboarding) {
+      if (onboarding.userGoal) setMainGoal(onboarding.userGoal);
+      if (onboarding.workStyle) setWorkStyle(onboarding.workStyle);
+      if (onboarding.weeklyFocusGoal !== undefined)
+        setWeeklyGoal(onboarding.weeklyFocusGoal);
+    }
+  }, [userData]);
 
   // Load accessibility settings
   useEffect(() => {
@@ -104,9 +115,10 @@ const SettingsScreen = () => {
         if (clerkUserId) {
           const settings = await getUserSettings(clerkUserId);
           if (settings) {
-            setTts(settings.tts_enabled || false);
             setHighContrast(settings.high_contrast || false);
             setReduceMotion(settings.reduce_motion || false);
+            if (settings.auto_dnd_focus !== undefined)
+              setAutoDND(settings.auto_dnd_focus);
             // Mirror persisted accessibility state into ThemeContext so the rest of
             // the app (animation hooks, palette swap) sees it on next render.
             setColorBlindMode(!!settings.high_contrast);
@@ -229,27 +241,17 @@ const SettingsScreen = () => {
 
   // --- Accessibility Handlers ---
   const handleAccessibilityToggle = async (
-    type: "tts" | "highContrast" | "reduceMotion",
+    type: "highContrast" | "reduceMotion",
     value: boolean,
   ) => {
-    const setter =
-      type === "tts"
-        ? setTts
-        : type === "highContrast"
-          ? setHighContrast
-          : setReduceMotion;
+    const setter = type === "highContrast" ? setHighContrast : setReduceMotion;
     setter(value);
     // Push the setting through ThemeContext too so animation hooks pick it up immediately.
     if (type === "highContrast") setColorBlindMode(value);
     if (type === "reduceMotion") setReduceMotionContext(value);
     try {
       if (clerkUserId) {
-        const key =
-          type === "tts"
-            ? "tts_enabled"
-            : type === "highContrast"
-              ? "high_contrast"
-              : "reduce_motion";
+        const key = type === "highContrast" ? "high_contrast" : "reduce_motion";
         await updateUserSettings(clerkUserId, { [key]: value });
       }
     } catch (error) {
@@ -814,14 +816,6 @@ const SettingsScreen = () => {
         <StaggeredItem index={6}>
           <SettingsSectionHeader title="ACCESSIBILITY" />
           <SettingsGroup>
-            <SettingsRow
-              icon="mic-outline"
-              label="Text-to-Speech"
-              description="Read notifications aloud"
-              toggle
-              toggleValue={tts}
-              onToggleChange={(v) => handleAccessibilityToggle("tts", v)}
-            />
             <SettingsRow
               icon="color-palette-outline"
               label="Color Blind Mode"

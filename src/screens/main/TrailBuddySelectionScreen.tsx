@@ -7,7 +7,6 @@ import {
   TextInput,
   Dimensions,
   Alert,
-  Image,
   ImageSourcePropType,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -24,6 +23,10 @@ import Animated, {
   FadeInDown,
   runOnJS,
   useDerivedValue,
+  withRepeat,
+  withTiming,
+  cancelAnimation,
+  Easing,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { useConvexProfile } from "../../hooks/useConvex";
@@ -136,28 +139,46 @@ const AnimatedSprite = ({
   isSelected: boolean;
   displaySize?: number;
 }) => {
-  const [currentFrame, setCurrentFrame] = useState(0);
   const spritesheet = BUDDY_SPRITESHEETS[buddyId] || BUDDY_SPRITESHEETS.bear;
+
+  // Frame index driven on the UI thread to avoid JS-thread re-renders (~20fps)
+  const frame = useSharedValue(0);
+
+  // Geometry scaled to the display size
+  const displayScale = displaySize / FRAME_HEIGHT;
+  const frameStride = FRAME_WIDTH * displayScale;
+  const spritesheetWidth = frameStride * TOTAL_FRAMES;
 
   useEffect(() => {
     if (!isSelected) {
-      setCurrentFrame(0);
+      cancelAnimation(frame);
+      frame.value = 0;
       return;
     }
 
-    // Smooth walking animation - 50ms per frame (~20 fps for smooth 28-frame loop)
+    // Smooth walking animation - ~50ms per frame (~20 fps for a smooth 28-frame loop)
     // Full cycle takes ~1.4 seconds (28 frames * 50ms)
-    const interval = setInterval(() => {
-      setCurrentFrame((prev) => (prev + 1) % TOTAL_FRAMES);
-    }, 50);
+    frame.value = withRepeat(
+      withTiming(TOTAL_FRAMES, {
+        duration: TOTAL_FRAMES * 50,
+        easing: Easing.linear,
+      }),
+      -1,
+      false,
+    );
 
-    return () => clearInterval(interval);
+    return () => {
+      cancelAnimation(frame);
+    };
   }, [isSelected]);
 
-  // Calculate the offset to show the current frame (scaled to display size)
-  const displayScale = displaySize / FRAME_HEIGHT;
-  const frameOffset = -currentFrame * FRAME_WIDTH * displayScale;
-  const spritesheetWidth = FRAME_WIDTH * TOTAL_FRAMES * displayScale;
+  // Offset the spritesheet to show the current frame
+  const frameStyle = useAnimatedStyle(() => {
+    const currentFrame = Math.floor(frame.value) % TOTAL_FRAMES;
+    return {
+      transform: [{ translateX: -currentFrame * frameStride }],
+    };
+  });
 
   return (
     <View
@@ -175,13 +196,15 @@ const AnimatedSprite = ({
       <View
         style={{ width: displaySize, height: displaySize, overflow: "hidden" }}
       >
-        <Image
+        <Animated.Image
           source={spritesheet}
-          style={{
-            width: spritesheetWidth,
-            height: displaySize,
-            transform: [{ translateX: frameOffset }],
-          }}
+          style={[
+            {
+              width: spritesheetWidth,
+              height: displaySize,
+            },
+            frameStyle,
+          ]}
           resizeMode="cover"
         />
       </View>
@@ -237,7 +260,9 @@ const BuddyItem = ({
     };
   });
 
-  const [selected, setSelected] = useState(index === 1);
+  const [selected, setSelected] = useState(
+    Math.abs(scrollX.value / ITEM_WIDTH - index) < 0.5,
+  );
 
   useDerivedValue(() => {
     const centerOffset = scrollX.value / ITEM_WIDTH;
@@ -245,6 +270,22 @@ const BuddyItem = ({
     if (isNowSelected !== selected) {
       runOnJS(setSelected)(isNowSelected);
     }
+  });
+
+  const shadowStyle = useAnimatedStyle(() => {
+    const width = interpolate(
+      scrollX.value,
+      inputRange,
+      [60, 100, 60],
+      Extrapolation.CLAMP,
+    );
+    const height = interpolate(
+      scrollX.value,
+      inputRange,
+      [16, 24, 16],
+      Extrapolation.CLAMP,
+    );
+    return { width, height };
   });
 
   const characterSize = BUDDY_SIZE - 80;
@@ -269,16 +310,15 @@ const BuddyItem = ({
         </View>
 
         {/* Shadow ellipse */}
-        <View
+        <Animated.View
           style={[
             styles.shadowEllipse,
             {
               backgroundColor: isDark
                 ? "rgba(255,255,255,0.1)"
                 : "rgba(0,0,0,0.08)",
-              width: selected ? 100 : 60,
-              height: selected ? 24 : 16,
             },
+            shadowStyle,
           ]}
         />
       </Animated.View>
@@ -319,13 +359,11 @@ const TrailBuddySelectionScreen = () => {
       if (savedIndex >= 0) {
         setSelectedIndex(savedIndex);
         scrollX.value = savedIndex * ITEM_WIDTH;
-        // Scroll to saved buddy after a short delay to ensure FlatList is ready
-        setTimeout(() => {
-          flatListRef.current?.scrollToOffset({
-            offset: savedIndex * ITEM_WIDTH,
-            animated: false,
-          });
-        }, 100);
+        // Correct the position immediately if the profile arrived after mount
+        flatListRef.current?.scrollToOffset({
+          offset: savedIndex * ITEM_WIDTH,
+          animated: false,
+        });
       }
       if (profile.trail_buddy_name) {
         setBuddyName(profile.trail_buddy_name);
@@ -478,7 +516,7 @@ const TrailBuddySelectionScreen = () => {
           onScroll={scrollHandler}
           scrollEventThrottle={16}
           getItemLayout={getItemLayout}
-          initialScrollIndex={1}
+          initialScrollIndex={getInitialIndex()}
         />
       </View>
 

@@ -152,7 +152,10 @@ async function fetchUserAppData(userId = null) {
 
     return {
       profile: safeProfile,
-      onboarding: safeOnboarding,
+      onboarding: {
+        ...safeOnboarding,
+        focus_method: safeOnboarding.focusMethod,
+      },
       leaderboard: safeLeaderboard,
       sessions: safeSessions,
       tasks: safeTasks,
@@ -307,6 +310,7 @@ function getEmptyData() {
     profile: { fullName: "Study User", email: "" },
     onboarding: {
       focusMethod: "Balanced",
+      focus_method: "Balanced",
       soundPreference: "Lo-Fi",
       weeklyFocusGoal: 10,
       isOnboardingComplete: true,
