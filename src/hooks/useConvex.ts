@@ -605,6 +605,10 @@ export const useConvexProfile = () => {
   const user = useQuery(api.users.me);
   const updateProfileMutation = useMutation(api.users.updateProfile);
   const updateUserMutation = useMutation(api.users.updateUser);
+  const generateAvatarUploadUrlMutation = useMutation(
+    api.users.generateAvatarUploadUrl,
+  );
+  const saveAvatarMutation = useMutation(api.users.saveAvatar);
   const loading = user === undefined;
 
   const updateProfile = async (updates: Record<string, any>) => {
@@ -647,8 +651,22 @@ export const useConvexProfile = () => {
   };
 
   const uploadProfileImage = async (imageUri: string) => {
-    // Placeholder — image upload will need Convex file storage in a later phase
-    return { publicUrl: imageUri };
+    // Upload the picked image bytes to Convex file storage and persist the
+    // resulting public serving URL on the user (works across devices/launches).
+    const uploadUrl = await generateAvatarUploadUrlMutation({});
+    const response = await fetch(imageUri);
+    const blob = await response.blob();
+    const uploadResult = await fetch(uploadUrl, {
+      method: "POST",
+      headers: { "Content-Type": blob.type || "image/jpeg" },
+      body: blob,
+    });
+    if (!uploadResult.ok) {
+      throw new Error("Failed to upload profile image");
+    }
+    const { storageId } = await uploadResult.json();
+    const publicUrl = await saveAvatarMutation({ storageId });
+    return { publicUrl };
   };
 
   const updateStatus = async (status: string) => {

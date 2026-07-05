@@ -71,9 +71,45 @@ const NotificationSettingsScreen = () => {
         if (settings.session_end_reminder !== undefined) {
           setSessionEndReminder(settings.session_end_reminder);
         }
+        if (settings.notif_friend_requests !== undefined)
+          setNotifFriendRequests(settings.notif_friend_requests);
+        if (settings.notif_friend_messages !== undefined)
+          setNotifFriendMessages(settings.notif_friend_messages);
+        if (settings.notif_study_room_invites !== undefined)
+          setNotifStudyRoomInvites(settings.notif_study_room_invites);
+        if (settings.notif_qr_scans !== undefined)
+          setNotifQRScans(settings.notif_qr_scans);
+        if (settings.study_reminders_enabled !== undefined)
+          setNotifStudyReminders(settings.study_reminders_enabled);
+        if (settings.weekly_goal_reminders_enabled !== undefined)
+          setNotifWeeklyGoalReminders(settings.weekly_goal_reminders_enabled);
+        if (settings.weekly_goal_reminder_days !== undefined)
+          setWeeklyGoalReminderDays(settings.weekly_goal_reminder_days);
+        if (settings.focus_session_warnings_enabled !== undefined)
+          setNotifFocusSessionWarnings(settings.focus_session_warnings_enabled);
+        if (settings.app_updates_enabled !== undefined)
+          setNotifAppUpdates(settings.app_updates_enabled);
       }
     });
   }, []);
+
+  // Set local state immediately, then persist the change to Convex so the toggle
+  // actually holds across launches (these were previously UI-only useState).
+  const persistToggle = async (
+    setter: (v: boolean) => void,
+    key: keyof import("../../../utils/userSettings").UserSettings,
+    value: boolean,
+  ) => {
+    setter(value);
+    try {
+      if (clerkUserId) {
+        await updateUserSettings(clerkUserId, { [key]: value });
+      }
+    } catch (error) {
+      // Revert on failure so the UI reflects the persisted state
+      setter(!value);
+    }
+  };
 
   const checkNotificationPermission = async () => {
     try {
@@ -242,13 +278,19 @@ const NotificationSettingsScreen = () => {
     return `${hours}:${minutes} ${period}`;
   };
 
-  const toggleDay = (day: string) => {
-    if (weeklyGoalReminderDays.includes(day)) {
-      setWeeklyGoalReminderDays(
-        weeklyGoalReminderDays.filter((d) => d !== day),
-      );
-    } else {
-      setWeeklyGoalReminderDays([...weeklyGoalReminderDays, day]);
+  const toggleDay = async (day: string) => {
+    const next = weeklyGoalReminderDays.includes(day)
+      ? weeklyGoalReminderDays.filter((d) => d !== day)
+      : [...weeklyGoalReminderDays, day];
+    setWeeklyGoalReminderDays(next);
+    try {
+      if (clerkUserId) {
+        await updateUserSettings(clerkUserId, {
+          weekly_goal_reminder_days: next,
+        });
+      }
+    } catch (error) {
+      setWeeklyGoalReminderDays(weeklyGoalReminderDays);
     }
   };
 
@@ -326,7 +368,13 @@ const NotificationSettingsScreen = () => {
               description="When someone sends you a friend request"
               toggle
               toggleValue={notifFriendRequests}
-              onToggleChange={setNotifFriendRequests}
+              onToggleChange={(v) =>
+                persistToggle(
+                  setNotifFriendRequests,
+                  "notif_friend_requests",
+                  v,
+                )
+              }
             />
             <SettingsRow
               icon="chatbubble-outline"
@@ -334,7 +382,13 @@ const NotificationSettingsScreen = () => {
               description="When a friend sends you a message"
               toggle
               toggleValue={notifFriendMessages}
-              onToggleChange={setNotifFriendMessages}
+              onToggleChange={(v) =>
+                persistToggle(
+                  setNotifFriendMessages,
+                  "notif_friend_messages",
+                  v,
+                )
+              }
             />
             <SettingsRow
               icon="people-outline"
@@ -342,7 +396,13 @@ const NotificationSettingsScreen = () => {
               description="When someone invites you to a study room"
               toggle
               toggleValue={notifStudyRoomInvites}
-              onToggleChange={setNotifStudyRoomInvites}
+              onToggleChange={(v) =>
+                persistToggle(
+                  setNotifStudyRoomInvites,
+                  "notif_study_room_invites",
+                  v,
+                )
+              }
             />
             <SettingsRow
               icon="qr-code-outline"
@@ -350,7 +410,9 @@ const NotificationSettingsScreen = () => {
               description="When someone scans your QR code"
               toggle
               toggleValue={notifQRScans}
-              onToggleChange={setNotifQRScans}
+              onToggleChange={(v) =>
+                persistToggle(setNotifQRScans, "notif_qr_scans", v)
+              }
               isLast
             />
           </SettingsGroup>
@@ -366,7 +428,13 @@ const NotificationSettingsScreen = () => {
               description="Scheduled reminders for study sessions"
               toggle
               toggleValue={notifStudyReminders}
-              onToggleChange={setNotifStudyReminders}
+              onToggleChange={(v) =>
+                persistToggle(
+                  setNotifStudyReminders,
+                  "study_reminders_enabled",
+                  v,
+                )
+              }
             />
             <SettingsRow
               icon="flag-outline"
@@ -374,7 +442,13 @@ const NotificationSettingsScreen = () => {
               description="Reminders when you're behind on your weekly goal"
               toggle
               toggleValue={notifWeeklyGoalReminders}
-              onToggleChange={setNotifWeeklyGoalReminders}
+              onToggleChange={(v) =>
+                persistToggle(
+                  setNotifWeeklyGoalReminders,
+                  "weekly_goal_reminders_enabled",
+                  v,
+                )
+              }
             >
               {notifWeeklyGoalReminders && (
                 <View style={{ marginTop: Spacing.sm }}>
@@ -433,7 +507,13 @@ const NotificationSettingsScreen = () => {
               description="When you leave the app during a focus session"
               toggle
               toggleValue={notifFocusSessionWarnings}
-              onToggleChange={setNotifFocusSessionWarnings}
+              onToggleChange={(v) =>
+                persistToggle(
+                  setNotifFocusSessionWarnings,
+                  "focus_session_warnings_enabled",
+                  v,
+                )
+              }
               isLast
             />
           </SettingsGroup>
@@ -449,7 +529,9 @@ const NotificationSettingsScreen = () => {
               description="News about new features and improvements"
               toggle
               toggleValue={notifAppUpdates}
-              onToggleChange={setNotifAppUpdates}
+              onToggleChange={(v) =>
+                persistToggle(setNotifAppUpdates, "app_updates_enabled", v)
+              }
               isLast
             />
           </SettingsGroup>

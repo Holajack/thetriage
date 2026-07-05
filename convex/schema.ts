@@ -29,6 +29,7 @@ export default defineSchema({
     weeklyFocusGoal: v.optional(v.number()),
     focusDuration: v.optional(v.number()),
     breakDuration: v.optional(v.number()),
+    workStyle: v.optional(v.string()), // 'balanced' | 'sprint' | 'deepwork'
     // Privacy visibility
     fullNameVisibility: v.optional(v.string()),
     universityVisibility: v.optional(v.string()),
@@ -81,6 +82,11 @@ export default defineSchema({
     major: v.optional(v.string()),
     location: v.optional(v.string()),
     timezone: v.optional(v.string()),
+    // Preferences screen fields
+    userGoal: v.optional(v.string()),
+    workStyle: v.optional(v.string()),
+    learningEnvironment: v.optional(v.string()),
+    soundPreference: v.optional(v.string()),
     // Privacy preferences
     dataCollectionConsent: v.optional(v.boolean()),
     personalizedRecommendations: v.optional(v.boolean()),
@@ -117,6 +123,21 @@ export default defineSchema({
     reduceMotion: v.optional(v.boolean()),
     dailyReminder: v.optional(v.string()), // HH:MM
     sessionEndReminder: v.optional(v.boolean()),
+    // Per-category notification toggles
+    notifFriendRequests: v.optional(v.boolean()),
+    notifFriendMessages: v.optional(v.boolean()),
+    notifStudyRoomInvites: v.optional(v.boolean()),
+    notifQrScans: v.optional(v.boolean()),
+    studyRemindersEnabled: v.optional(v.boolean()),
+    weeklyGoalRemindersEnabled: v.optional(v.boolean()),
+    weeklyGoalReminderDays: v.optional(v.array(v.string())),
+    focusSessionWarningsEnabled: v.optional(v.boolean()),
+    appUpdatesEnabled: v.optional(v.boolean()),
+    // AI feature toggles
+    noraEnabled: v.optional(v.boolean()),
+    patrickEnabled: v.optional(v.boolean()),
+    insightsEnabled: v.optional(v.boolean()),
+    personalizedResponses: v.optional(v.boolean()),
     dailyGoalMinutes: v.optional(v.number()),
     preferredSessionLength: v.optional(v.number()),
     breakLength: v.optional(v.number()),

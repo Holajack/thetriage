@@ -24,6 +24,20 @@ export interface UserSettings {
   // Notifications & reminders
   daily_reminder?: string;
   session_end_reminder?: boolean;
+  notif_friend_requests?: boolean;
+  notif_friend_messages?: boolean;
+  notif_study_room_invites?: boolean;
+  notif_qr_scans?: boolean;
+  study_reminders_enabled?: boolean;
+  weekly_goal_reminders_enabled?: boolean;
+  weekly_goal_reminder_days?: string[];
+  focus_session_warnings_enabled?: boolean;
+  app_updates_enabled?: boolean;
+  // AI feature toggles
+  nora_enabled?: boolean;
+  patrick_enabled?: boolean;
+  insights_enabled?: boolean;
+  personalized_responses?: boolean;
   // Accessibility
   tts_enabled?: boolean;
   high_contrast?: boolean;
@@ -68,9 +82,27 @@ export async function getUserSettings(
       preferred_break_length: settings.breakLength,
       daily_reminder: settings.dailyReminder,
       session_end_reminder: settings.sessionEndReminder,
+      notif_friend_requests: settings.notifFriendRequests,
+      notif_friend_messages: settings.notifFriendMessages,
+      notif_study_room_invites: settings.notifStudyRoomInvites,
+      notif_qr_scans: settings.notifQrScans,
+      study_reminders_enabled: settings.studyRemindersEnabled,
+      weekly_goal_reminders_enabled: settings.weeklyGoalRemindersEnabled,
+      weekly_goal_reminder_days: settings.weeklyGoalReminderDays,
+      focus_session_warnings_enabled: settings.focusSessionWarningsEnabled,
+      app_updates_enabled: settings.appUpdatesEnabled,
+      nora_enabled: settings.noraEnabled,
+      patrick_enabled: settings.patrickEnabled,
+      insights_enabled: settings.insightsEnabled,
+      personalized_responses: settings.personalizedResponses,
       tts_enabled: settings.ttsEnabled,
       high_contrast: settings.highContrast,
       reduce_motion: settings.reduceMotion,
+      ambientEnvironmentEnabled: settings.ambientEnvironmentEnabled,
+      ambientWhiteNoiseEnabled: settings.ambientWhiteNoiseEnabled,
+      ambientCrittersEnabled: settings.ambientCrittersEnabled,
+      ambientVolume: settings.ambientVolume,
+      appleMusicConnected: settings.appleMusicConnected,
     };
   } catch (error) {
     // Error in getUserSettings
@@ -132,6 +164,36 @@ export async function updateUserSettings(
       convexSettings.dailyReminder = settings.daily_reminder;
     if (settings.session_end_reminder !== undefined)
       convexSettings.sessionEndReminder = settings.session_end_reminder;
+    if (settings.notif_friend_requests !== undefined)
+      convexSettings.notifFriendRequests = settings.notif_friend_requests;
+    if (settings.notif_friend_messages !== undefined)
+      convexSettings.notifFriendMessages = settings.notif_friend_messages;
+    if (settings.notif_study_room_invites !== undefined)
+      convexSettings.notifStudyRoomInvites = settings.notif_study_room_invites;
+    if (settings.notif_qr_scans !== undefined)
+      convexSettings.notifQrScans = settings.notif_qr_scans;
+    if (settings.study_reminders_enabled !== undefined)
+      convexSettings.studyRemindersEnabled = settings.study_reminders_enabled;
+    if (settings.weekly_goal_reminders_enabled !== undefined)
+      convexSettings.weeklyGoalRemindersEnabled =
+        settings.weekly_goal_reminders_enabled;
+    if (settings.weekly_goal_reminder_days !== undefined)
+      convexSettings.weeklyGoalReminderDays =
+        settings.weekly_goal_reminder_days;
+    if (settings.focus_session_warnings_enabled !== undefined)
+      convexSettings.focusSessionWarningsEnabled =
+        settings.focus_session_warnings_enabled;
+    if (settings.app_updates_enabled !== undefined)
+      convexSettings.appUpdatesEnabled = settings.app_updates_enabled;
+    // AI feature toggles
+    if (settings.nora_enabled !== undefined)
+      convexSettings.noraEnabled = settings.nora_enabled;
+    if (settings.patrick_enabled !== undefined)
+      convexSettings.patrickEnabled = settings.patrick_enabled;
+    if (settings.insights_enabled !== undefined)
+      convexSettings.insightsEnabled = settings.insights_enabled;
+    if (settings.personalized_responses !== undefined)
+      convexSettings.personalizedResponses = settings.personalized_responses;
     // Accessibility
     if (settings.tts_enabled !== undefined)
       convexSettings.ttsEnabled = settings.tts_enabled;

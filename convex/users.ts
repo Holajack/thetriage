@@ -119,6 +119,7 @@ export const updateUser = mutation({
     weeklyFocusGoal: v.optional(v.number()),
     focusDuration: v.optional(v.number()),
     breakDuration: v.optional(v.number()),
+    workStyle: v.optional(v.string()),
     fullNameVisibility: v.optional(v.string()),
     universityVisibility: v.optional(v.string()),
     locationVisibility: v.optional(v.string()),
@@ -140,6 +141,31 @@ export const updateUser = mutation({
     if (Object.keys(cleanUpdates).length > 0) {
       await ctx.db.patch(userId, cleanUpdates);
     }
+  },
+});
+
+// Avatar upload via Convex file storage (mirrors the ebooks pattern).
+// The client PUTs the image bytes to the URL from generateAvatarUploadUrl,
+// then calls saveAvatar with the returned storageId; avatarUrl becomes a
+// public serving URL that works across devices.
+export const generateAvatarUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await getCurrentUser(ctx);
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+export const saveAvatar = mutation({
+  args: { storageId: v.id("_storage") },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    const url = await ctx.storage.getUrl(args.storageId);
+    if (!url) {
+      throw new Error("Uploaded avatar not found in storage");
+    }
+    await ctx.db.patch(user._id, { avatarUrl: url });
+    return url;
   },
 });
 

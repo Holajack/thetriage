@@ -397,6 +397,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       if (data.timezone !== undefined) {
         convexData.timezone = data.timezone;
       }
+      if (data.user_goal !== undefined) {
+        convexData.userGoal = data.user_goal;
+      }
+      if (data.work_style !== undefined) {
+        convexData.workStyle = data.work_style;
+      }
+      if (data.learning_environment !== undefined) {
+        convexData.learningEnvironment = data.learning_environment;
+      }
+      if (data.sound_preference !== undefined) {
+        convexData.soundPreference = data.sound_preference;
+      }
       if (data.completed_at !== undefined) {
         convexData.completedAt = data.completed_at;
       }
