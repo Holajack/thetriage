@@ -136,10 +136,20 @@ Before saying "done," Claude must:
 When Claude does something wrong, add a rule here so it doesn't happen again.
 Start fresh with each project. Examples of what goes here:
 
-- ~~Claude tried to install `moment` — we use `date-fns` in this repo.~~
-- ~~Claude created a new `formatCurrency` util when one already exists in `lib/formatters.ts`.~~
-
-(Empty to start. Grow this file over time.)
+- **Never add `paths` to `tsconfig.json` to fix a types-only problem.** Expo's Metro honours
+  tsconfig `paths` by default (`isTsconfigPathsEnabled ?? true`), so a `paths` alias rewrites the
+  **runtime** import too. Aliasing `three` → `@types/three` (which contains zero `.js` files) breaks
+  the bundle. When a package ships no types, add a typed `declare module` in `global.d.ts` instead.
+- **Never "fix" a missing type with a bare `declare module "x";`.** That types the whole module as
+  `any` and silently defeats every downstream type check (this is what hid the three.js API for
+  months). Install the real `@types` package, or write a `declare module` with actual signatures.
+- **Substring keyword matching is a bug, not a shortcut.** `text.includes("art")` also matches
+  "start"/"chart"/"quarterly"; `includes("cs ")` matches "economi**cs** ". Match on word boundaries
+  (tokenise, then compare whole words or prefixes) and weight subject nouns above study verbs.
+- **A tier gate must wait for the tier to load.** `useSubscriptionTier()` reports `free` until the
+  Convex profile resolves; gate on `isLoading` or paying members see the upgrade wall flash.
+- Verify a 3D/visual change by rendering it offline (replicate the shader math over the real mesh
+  and write a PNG) rather than assuming a device build will look right.
 
 ## graphify
 
