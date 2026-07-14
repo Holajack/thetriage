@@ -1,159 +1,38 @@
 /**
  * Convex action for Patrick AI chat — GPT-4o-mini powered study coach.
  *
- * Patrick is the Premium-tier AI assistant. He provides personalized study
- * coaching, time management advice, motivation, and general academic support
- * using GPT-4o-mini (cost-effective).
+ * Patrick is the everyday AI coach included with every membership
+ * (Basic, Pro, and Elite — see tiers.ts). He is deliberately simpler
+ * and cheaper than Nora.
  *
  * What Patrick CAN do:
  *   - Conversational study coaching with real AI responses
- *   - Personalized advice based on user's study data
+ *   - Personalized advice based on the user's study data
  *   - Time management, focus techniques, motivation
  *   - General academic Q&A and study planning
  *
- * What Patrick CANNOT do (upsell to Nora/Pro):
+ * What Patrick CANNOT do (upsell to Nora / Elite):
  *   - Web search / real-time research
  *   - PDF / document analysis
  *   - Code execution / STEM problem solving
- *   - Deep research mode
+ *   - Long-term memory or learning with the user
+ *
+ * Shared auth/rate-limit/context/usage helpers live in aiShared.ts.
  */
 import { v } from "convex/values";
-import { action, internalMutation, internalQuery } from "./_generated/server";
+import {
+  action,
+  internalMutation,
+  internalQuery,
+  query,
+} from "./_generated/server";
 import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
+import { sanitizeChatInput, estimateCostUsd } from "./aiShared";
 
 // ────────────────────────────────────────────────────
 // Internal helpers
 // ────────────────────────────────────────────────────
-
-export const _getCurrentUser = internalQuery({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return null;
-    return ctx.db
-      .query("users")
-      .withIndex("by_clerkId", (q) => q.eq("clerkId", identity.subject))
-      .unique();
-  },
-});
-
-/** Get user context for personalized responses */
-export const _getUserContext = internalQuery({
-  args: { userId: v.id("users") },
-  handler: async (ctx, { userId }) => {
-    const user = await ctx.db.get(userId);
-    const onboarding = await ctx.db
-      .query("onboardingPreferences")
-      .withIndex("by_userId", (q) => q.eq("userId", userId))
-      .unique();
-    const leaderboard = await ctx.db
-      .query("leaderboardStats")
-      .withIndex("by_userId", (q) => q.eq("userId", userId))
-      .unique();
-    const sessions = await ctx.db
-      .query("focusSessions")
-      .withIndex("by_userId", (q) => q.eq("userId", userId))
-      .order("desc")
-      .take(5);
-    return { user, onboarding, leaderboard, sessions };
-  },
-});
-
-export const _checkRateLimit = internalQuery({
-  args: { userId: v.id("users"), aiType: v.string() },
-  handler: async (ctx, { userId, aiType }) => {
-    const user = await ctx.db.get(userId);
-    const tier = user?.subscriptionTier || "free";
-
-    // Patrick is available for premium+ tiers
-    const limits: Record<
-      string,
-      { enabled: boolean; perDay: number; maxLen: number }
-    > = {
-      free: { enabled: false, perDay: 0, maxLen: 500 },
-      trial: { enabled: true, perDay: 15, maxLen: 1500 },
-      premium: { enabled: true, perDay: 40, maxLen: 2000 },
-      pro: { enabled: true, perDay: 100, maxLen: 3000 },
-    };
-    const tierLimits = limits[tier] || limits.free;
-
-    if (!tierLimits.enabled) {
-      return {
-        allowed: false,
-        tier,
-        reason:
-          "Patrick AI is available for Premium and Pro members. Upgrade to unlock your personal study coach!",
-        remaining: 0,
-        maxLen: tierLimits.maxLen,
-      };
-    }
-
-    const today = new Date().toISOString().slice(0, 10);
-    const usage = await ctx.db
-      .query("aiUsageTracking")
-      .withIndex("by_userId_aiType_date", (q) =>
-        q.eq("userId", userId).eq("aiType", aiType).eq("date", today),
-      )
-      .unique();
-
-    const sent = usage?.messagesSent ?? 0;
-    if (sent >= tierLimits.perDay) {
-      return {
-        allowed: false,
-        tier,
-        reason: `You've reached your daily Patrick message limit (${tierLimits.perDay}). ${tier === "premium" ? "Upgrade to Pro for more messages and access to Nora AI!" : "Come back tomorrow!"}`,
-        remaining: 0,
-        maxLen: tierLimits.maxLen,
-      };
-    }
-
-    return {
-      allowed: true,
-      tier,
-      reason: "",
-      remaining: tierLimits.perDay - sent,
-      maxLen: tierLimits.maxLen,
-    };
-  },
-});
-
-export const _logUsage = internalMutation({
-  args: {
-    userId: v.id("users"),
-    aiType: v.string(),
-    tokensUsed: v.number(),
-    costEstimate: v.number(),
-  },
-  handler: async (ctx, { userId, aiType, tokensUsed, costEstimate }) => {
-    const today = new Date().toISOString().slice(0, 10);
-    const existing = await ctx.db
-      .query("aiUsageTracking")
-      .withIndex("by_userId_aiType_date", (q) =>
-        q.eq("userId", userId).eq("aiType", aiType).eq("date", today),
-      )
-      .unique();
-
-    if (existing) {
-      await ctx.db.patch(existing._id, {
-        messagesSent: (existing.messagesSent ?? 0) + 1,
-        tokensUsed: (existing.tokensUsed ?? 0) + tokensUsed,
-        costEstimate: (existing.costEstimate ?? 0) + costEstimate,
-        lastMessageAt: new Date().toISOString(),
-      });
-    } else {
-      await ctx.db.insert("aiUsageTracking", {
-        userId,
-        aiType,
-        date: today,
-        messagesSent: 1,
-        tokensUsed,
-        costEstimate,
-        lastMessageAt: new Date().toISOString(),
-      });
-    }
-  },
-});
 
 export const _saveMessage = internalMutation({
   args: {
@@ -184,20 +63,39 @@ export const _getRecentHistory = internalQuery({
 });
 
 // ────────────────────────────────────────────────────
-// Pure helpers
+// Public queries
 // ────────────────────────────────────────────────────
 
-function sanitizeInput(input: string): string {
-  return input
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
-    .replace(/[<>]/g, "")
-    .trim();
-}
+/** Chat history for the signed-in user (rendered by the Patrick screen). */
+export const getMyHistory = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return [];
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerkId", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) return [];
 
-function estimateCost(inputTokens: number, outputTokens: number): number {
-  // GPT-4o-mini pricing
-  return (inputTokens / 1000) * 0.00015 + (outputTokens / 1000) * 0.0006;
-}
+    const messages = await ctx.db
+      .query("patrickChat")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .order("desc")
+      .take(50);
+
+    return messages.reverse().map((m) => ({
+      _id: m._id,
+      role: m.role,
+      content: m.content,
+      _creationTime: m._creationTime,
+    }));
+  },
+});
+
+// ────────────────────────────────────────────────────
+// Pure helpers
+// ────────────────────────────────────────────────────
 
 function buildSystemPrompt(userCtx: any): string {
   const userName = userCtx?.user?.fullName?.split(" ")[0] || "there";
@@ -251,11 +149,13 @@ function buildSystemPrompt(userCtx: any): string {
 - Use their name naturally (not every message, but occasionally)
 - When they're struggling, be empathetic first, then offer practical next steps
 - Celebrate wins, no matter how small
+- Write in PLAIN TEXT only: no markdown symbols like **, ##, or backticks. Use
+  simple line breaks and plainly written lists ("1.", "2.", "-") instead.
 
 **Boundaries (handle gracefully):**
-- If asked to search the web, research something, or find current information: "I can't search the web, but I can share what I know! For real-time research, Nora AI on the Pro plan can search the internet and cite sources for you."
-- If asked to analyze a PDF, document, or uploaded file: "I'm not able to read documents, but Nora AI on the Pro plan can analyze your PDFs, create study guides, and generate practice questions from them!"
-- If asked to solve complex math, run code, or do STEM calculations: "That's a bit beyond my wheelhouse! Nora AI on the Pro plan has a code interpreter that can work through math and science problems step by step."
+- If asked to search the web, research something, or find current information: "I can't search the web, but I can share what I know! For real-time research, Nora AI on the Elite plan can search the internet and cite sources for you."
+- If asked to analyze a PDF, document, or uploaded file: "I'm not able to read documents, but Nora AI on the Elite plan can analyze your PDFs, create study guides, and generate practice questions from them!"
+- If asked to solve complex math, run code, or do STEM calculations: "That's a bit beyond my wheelhouse! Nora AI on the Elite plan has a code interpreter that can work through math and science problems step by step."
 - If asked to write entire essays or complete assignments: "I'd love to help you plan and outline your work! I can help with thesis development, structure, and study strategies — but the actual writing is your superpower. Want to start with an outline?"
 - Keep upsell mentions natural and helpful, not pushy — mention Nora only when genuinely relevant
 
@@ -294,12 +194,11 @@ export const sendMessage = action({
   args: {
     message: v.string(),
     pdfContext: v.optional(v.any()),
-    userSettings: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
     // 1. Authenticate
     const currentUser: any = await ctx.runQuery(
-      internal.patrickChat._getCurrentUser,
+      internal.aiShared._getCurrentUser,
     );
     if (!currentUser) {
       return {
@@ -310,9 +209,9 @@ export const sendMessage = action({
     }
     const userId = currentUser._id as Id<"users">;
 
-    // 2. Rate limit check
+    // 2. Rate limit / tier check (Patrick: Basic and above — see tiers.ts)
     const rateLimit: any = await ctx.runQuery(
-      internal.patrickChat._checkRateLimit,
+      internal.aiShared._checkRateLimit,
       {
         userId,
         aiType: "patrick",
@@ -329,16 +228,16 @@ export const sendMessage = action({
     }
 
     // 3. Sanitize & validate
-    const sanitized = sanitizeInput(args.message);
+    const sanitized = sanitizeChatInput(args.message);
     if (sanitized.length > rateLimit.maxLen) {
       return {
         error: "MESSAGE_TOO_LONG",
         response: `Message too long. Max ${rateLimit.maxLen} characters for your plan. Current: ${sanitized.length}.`,
-        upgrade_required: rateLimit.tier === "premium",
+        upgrade_required: rateLimit.tier === "basic",
       };
     }
 
-    // 4. Handle PDF context gracefully (upsell to Nora)
+    // 4. Handle PDF context gracefully (Patrick can't read documents)
     if (args.pdfContext) {
       return {
         response:
@@ -351,19 +250,27 @@ export const sendMessage = action({
     }
 
     // 5. Get user context for personalized responses
-    const userCtx: any = await ctx.runQuery(
-      internal.patrickChat._getUserContext,
-      { userId },
+    const userCtx: any = await ctx.runQuery(internal.aiShared._getAppContext, {
+      userId,
+      scope: "basic",
+    });
+
+    // 6. Fetch history BEFORE saving the new message, so the context
+    // never needs to filter the current message back out (the old
+    // content-equality filter also dropped older identical messages).
+    const recentHistory: any[] = await ctx.runQuery(
+      internal.patrickChat._getRecentHistory,
+      { userId, limit: 10 },
     );
 
-    // 6. Save user message
+    // 7. Save user message
     await ctx.runMutation(internal.patrickChat._saveMessage, {
       userId,
       role: "user",
       content: sanitized,
     });
 
-    // 7. Call GPT-4o-mini
+    // 8. Call GPT-4o-mini
     const apiKey = process.env.OPENAI_API_KEY || "";
     let responseText: string;
 
@@ -371,28 +278,13 @@ export const sendMessage = action({
       responseText = fallbackResponse(sanitized, userCtx);
     } else {
       try {
-        // Get recent conversation history for context
-        const recentHistory: any[] = await ctx.runQuery(
-          internal.patrickChat._getRecentHistory,
-          { userId, limit: 10 },
-        );
-
         const systemPrompt = buildSystemPrompt(userCtx);
 
-        // Build messages array with conversation history
         const messages: { role: string; content: string }[] = [
           { role: "system", content: systemPrompt },
+          ...recentHistory,
+          { role: "user", content: sanitized },
         ];
-
-        // Add recent history (excluding the message we just saved)
-        for (const msg of recentHistory) {
-          // Skip the current message we just inserted
-          if (msg.role === "user" && msg.content === sanitized) continue;
-          messages.push({ role: msg.role, content: msg.content });
-        }
-
-        // Add current message
-        messages.push({ role: "user", content: sanitized });
 
         const res = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
@@ -409,8 +301,10 @@ export const sendMessage = action({
         });
 
         if (!res.ok) {
-          const errorText = await res.text();
-          throw new Error(`OpenAI error: ${res.status}`);
+          const errorBody = await res.text();
+          throw new Error(
+            `OpenAI error ${res.status}: ${errorBody.slice(0, 300)}`,
+          );
         }
 
         const data = await res.json();
@@ -420,22 +314,24 @@ export const sendMessage = action({
 
         // Log actual token usage
         if (data.usage) {
-          await ctx.runMutation(internal.patrickChat._logUsage, {
+          await ctx.runMutation(internal.aiShared._logUsage, {
             userId,
             aiType: "patrick",
             tokensUsed: data.usage.total_tokens || 0,
-            costEstimate: estimateCost(
+            costEstimate: estimateCostUsd(
+              "gpt-4o-mini",
               data.usage.prompt_tokens || 0,
               data.usage.completion_tokens || 0,
             ),
           });
         }
-      } catch {
+      } catch (e: any) {
+        console.error("[patrickChat] OpenAI call failed:", e?.message || e);
         responseText = fallbackResponse(sanitized, userCtx);
       }
     }
 
-    // 8. Save Patrick's response
+    // 9. Save Patrick's response
     await ctx.runMutation(internal.patrickChat._saveMessage, {
       userId,
       role: "assistant",

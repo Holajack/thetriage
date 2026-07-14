@@ -15,10 +15,7 @@ export interface NoraChatArgs {
   message: string;
   thinkingMode?: "auto" | "quick" | "deep" | "research";
   sessionId?: string;
-  conversationHistory?: { role: string; content: string }[];
-  userSettings?: any;
   pdfContext?: { title: string; file_path?: string } | null;
-  screenContext?: any;
   /** OpenAI vector store ID for the attached ebook so file_search can find it. */
   vectorStoreId?: string;
 }
@@ -44,10 +41,7 @@ export async function sendNoraChatMessage(
       message: args.message,
       thinkingMode: args.thinkingMode || "quick",
       sessionId: args.sessionId as any,
-      conversationHistory: args.conversationHistory,
-      userSettings: args.userSettings,
       pdfContext: args.pdfContext || null,
-      screenContext: args.screenContext,
       vectorStoreId: args.vectorStoreId,
     });
     return result as AIChatResponse;
@@ -68,7 +62,6 @@ export async function sendNoraChatMessage(
 export interface PatrickChatArgs {
   message: string;
   pdfContext?: any;
-  userSettings?: any;
 }
 
 export async function sendPatrickChatMessage(
@@ -79,7 +72,6 @@ export async function sendPatrickChatMessage(
     const result = await client.action(api.patrickChat.sendMessage, {
       message: args.message,
       pdfContext: args.pdfContext,
-      userSettings: args.userSettings,
     });
     return result as AIChatResponse;
   } catch (error: any) {
@@ -92,19 +84,21 @@ export async function sendPatrickChatMessage(
 }
 
 // ────────────────────────────────────────────────────
-// Whisper Transcription
+// Whisper Transcription (Elite — voice input for Nora)
 // ────────────────────────────────────────────────────
 
 export interface TranscribeArgs {
   audioBase64: string;
   mimeType?: string;
   fileName?: string;
-  model?: string;
+  /** Recording length, used server-side for cost tracking. */
+  durationSeconds?: number;
 }
 
 export interface TranscribeResponse {
   text: string | null;
   error: string | null;
+  upgrade_required?: boolean;
 }
 
 export async function transcribeAudio(
@@ -116,7 +110,7 @@ export async function transcribeAudio(
       audioBase64: args.audioBase64,
       mimeType: args.mimeType,
       fileName: args.fileName,
-      model: args.model,
+      durationSeconds: args.durationSeconds,
     });
     return result as TranscribeResponse;
   } catch (error: any) {

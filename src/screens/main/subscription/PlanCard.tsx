@@ -22,7 +22,7 @@ export interface PlanFeature {
 
 export interface PlanTier {
   name: string;
-  tier: "basic" | "premium" | "elite";
+  tier: "basic" | "pro" | "elite";
   monthlyPrice: number;
   annualPrice: number;
   annualMonthlyEquivalent: number;

@@ -37,11 +37,14 @@ export const update = mutation({
     weeklyGoalReminderDays: v.optional(v.array(v.string())),
     focusSessionWarningsEnabled: v.optional(v.boolean()),
     appUpdatesEnabled: v.optional(v.boolean()),
-    // AI feature toggles
+    // AI feature toggles (legacy — superseded by the two Nora toggles below)
     noraEnabled: v.optional(v.boolean()),
     patrickEnabled: v.optional(v.boolean()),
     insightsEnabled: v.optional(v.boolean()),
     personalizedResponses: v.optional(v.boolean()),
+    // Nora privacy toggles (Elite)
+    noraAppAccess: v.optional(v.boolean()),
+    noraTrainingConsent: v.optional(v.boolean()),
     dailyGoalMinutes: v.optional(v.number()),
     preferredSessionLength: v.optional(v.number()),
     breakLength: v.optional(v.number()),

@@ -32,6 +32,7 @@ const COMPARISON_DATA: ComparisonRow[] = [
   { feature: "Full Brain Mapping", premium: false, elite: true },
   { feature: "Quick Self-Discovery Quizzes", premium: true, elite: true },
   { feature: "In-Depth Quizzes", premium: false, elite: true },
+  { feature: "Patrick AI Study Coach", premium: true, elite: true },
   { feature: "Nora Advanced AI", premium: false, elite: true, highlight: true },
   {
     feature: "Voice + PDF Analysis",

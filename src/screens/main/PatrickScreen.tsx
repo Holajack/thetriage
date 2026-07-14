@@ -1,610 +1,175 @@
-import React, { useState, useEffect } from "react";
+/**
+ * Patrick AI Chat — the everyday study coach for Basic, Pro, and Elite members.
+ *
+ * Deliberately simpler than the Nora screen: no thinking modes, no PDF
+ * attachments, no voice input. Patrick answers in plain text from gpt-4o-mini
+ * (enforced server-side in convex/patrickChat.ts) and keeps a single rolling
+ * conversation per user, hydrated from the patrickChat table.
+ */
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   TextInput,
-  Image,
   ScrollView,
-  Modal,
   Platform,
   KeyboardAvoidingView,
   Alert,
-  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, RouteProp } from "@react-navigation/native";
-import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import SessionReportScreen from "./SessionReportScreen";
-import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import { useQuery } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 import { sendPatrickChatMessage } from "../../utils/convexAIChatService";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import * as Haptics from "expo-haptics";
 import { AnimatedButton } from "../../components/premium/AnimatedButton";
 import { ShimmerLoader } from "../../components/premium/ShimmerLoader";
-import { StaggeredItem } from "../../components/premium/StaggeredList";
-import {
-  useFloatingAnimation,
-  usePulseAnimation,
-  useEntranceAnimation,
-} from "../../utils/animationUtils";
-import {
-  MascotState,
-  MascotAnimationDurations,
-} from "../../theme/premiumTheme";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withRepeat,
-  withSequence,
-  withTiming,
-  Easing,
-} from "react-native-reanimated";
-
-const AnimatedView = Animated.View;
-
-interface PDFContext {
-  title: string;
-  url: string;
-  fileSize?: number;
-}
+import { usePulseAnimation } from "../../utils/animationUtils";
+import Animated from "react-native-reanimated";
 
 type RootStackParamList = {
   PatrickSpeak: {
     initialMessage?: string;
-    isResponse?: boolean;
-    responseMessage?: string;
-    pdfContext?: PDFContext; // Add PDF context type
   };
-  Quizzes: undefined;
-  SessionReportScreen: undefined;
 };
 
-type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type PatrickSpeakRouteProp = RouteProp<RootStackParamList, "PatrickSpeak">;
-
-const DEEP_GREEN = "#1B5E20";
 
 interface ChatMessage {
   id: string;
   content: string;
   sender: "user" | "patrick";
   timestamp: string;
-  user_id: string;
 }
 
-const FOCUS_TOPICS = [
-  {
-    title: "Start a Balanced Session",
-    subtitle: "Last session 2 hours ago",
-    action: "pomodoro",
-  },
-  {
-    title: "Review My Tasks",
-    subtitle: "Last review 3 hours ago",
-    action: "tasks",
-  },
-  {
-    title: "Ask for Study Tips",
-    subtitle: "Last tip 3 hours ago",
-    action: "tips",
-  },
-  {
-    title: "Check Progress",
-    subtitle: "Last check 3 hours ago",
-    action: "progress",
-  },
-  {
-    title: "Join a Study Room",
-    subtitle: "Last joined 4 hours ago",
-    action: "study_room",
-  },
-  {
-    title: "Daily Focus Inspiration",
-    subtitle: "Last inspiration 5 hours ago",
-    action: "inspiration",
-  },
+const QUICK_PROMPTS = [
+  "Help me plan today's study session",
+  "How do I stop procrastinating?",
+  "Give me a focus technique to try",
 ];
 
-const PatrickScreen = () => {
-  const { user } = useAuth();
-  const [userProfile, setUserProfile] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const { theme } = useTheme();
-
-  useEffect(() => {
-    fetchUserProfile();
-  }, [user]);
-
-  const fetchUserProfile = async () => {
-    if (!user) return;
-
-    // Profile data is available through Convex hooks
-    // Using basic user info from auth context
-    setUserProfile({
-      username: user.username || "Student",
-      full_name: user.fullName || "Student",
-    });
-    setLoading(false);
-  };
-
-  if (loading) {
-    return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" color="#1B5E20" />
-      </View>
-    );
-  }
-
-  return (
-    <PatrickHomeScreen
-      nickname={userProfile?.full_name || userProfile?.username || "Friend"}
-    />
-  );
-};
-
-const PatrickHomeScreen = ({ nickname }: { nickname: string }) => {
-  const { theme } = useTheme();
-  const [chatModalVisible, setChatModalVisible] = useState(false);
-  const [chatInput, setChatInput] = useState("");
-  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
-  const [mascotState, setMascotState] = useState<MascotState>("pumped");
-  const { user } = useAuth();
-  const navigation =
-    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-
-  // Patrick animations - more energetic
-  const floatingAnim = useFloatingAnimation();
-  const entranceAnim = useEntranceAnimation(100);
-
-  useEffect(() => {
-    fetchChatHistory();
-
-    // Patrick stays pumped for motivation
-    setTimeout(() => {
-      setMascotState("cheering");
-    }, MascotAnimationDurations.celebrating);
-
-    // Then goes back to coaching
-    setTimeout(() => {
-      setMascotState("coaching");
-    }, MascotAnimationDurations.celebrating + 2000);
-  }, []);
-
-  const fetchChatHistory = async () => {
-    if (!user) return;
-
-    // TODO: Load chat history from Convex
-    // Will be implemented when chat history tables are added to Convex schema
-    setChatHistory([]);
-  };
-
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return "Good morning";
-    if (hour < 18) return "Good afternoon";
-    return "Good evening";
-  };
-
-  const handleCardPress = (title: string, action: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setMascotState("excited");
-    navigation.navigate("PatrickSpeak", { initialMessage: title });
-  };
-
-  const handleInputBarPress = () => {
-    setChatModalVisible(true);
-  };
-
-  const handleSendChat = async () => {
-    if (!chatInput.trim()) return;
-
-    try {
-      navigation.navigate("PatrickSpeak", { initialMessage: chatInput });
-      setChatInput("");
-      setChatModalVisible(false);
-    } catch (error) {
-      // Navigation error
-      Alert.alert("Error", "Failed to open chat. Please try again.");
-    }
-  };
-
-  return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          marginTop: 32,
-          marginBottom: 12,
-          paddingHorizontal: 24,
-        }}
-      >
-        <Text
-          style={{
-            fontSize: 32,
-            fontWeight: "bold",
-            color: theme.text,
-            flex: 1,
-          }}
-        >
-          {getGreeting()}, {nickname}
-        </Text>
-        <View
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 22,
-            backgroundColor: theme.card,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Text style={{ color: theme.text, fontWeight: "bold", fontSize: 20 }}>
-            {nickname ? nickname[0].toUpperCase() : "?"}
-          </Text>
-        </View>
-      </View>
-
-      <KeyboardAwareScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 120 }}
-        enableOnAndroid={true}
-        extraScrollHeight={80}
-      >
-        {FOCUS_TOPICS.map((topic, idx) => (
-          <StaggeredItem
-            key={topic.title}
-            index={idx}
-            delay="fast"
-            direction="up"
-          >
-            <TouchableOpacity
-              style={{
-                backgroundColor: theme.card,
-                borderRadius: 20,
-                marginHorizontal: 16,
-                marginBottom: 18,
-                padding: 20,
-                shadowColor: "#000",
-                shadowOpacity: 0.03,
-                shadowRadius: 4,
-                elevation: 1,
-              }}
-              activeOpacity={0.85}
-              onPress={() => handleCardPress(topic.title, topic.action)}
-            >
-              <Text
-                style={{
-                  fontSize: 20,
-                  fontWeight: "bold",
-                  color: theme.text,
-                  marginBottom: 4,
-                }}
-              >
-                {topic.title}
-              </Text>
-              <Text style={{ color: theme.text, fontSize: 15 }}>
-                {topic.subtitle}
-              </Text>
-            </TouchableOpacity>
-          </StaggeredItem>
-        ))}
-
-        {/* Recent chat history */}
-        {chatHistory.length > 0 && (
-          <View style={{ marginHorizontal: 16, marginTop: 20 }}>
-            <Text
-              style={{
-                fontSize: 18,
-                fontWeight: "bold",
-                color: theme.text,
-                marginBottom: 12,
-              }}
-            >
-              Recent Conversations
-            </Text>
-            {chatHistory.slice(0, 3).map((msg) => (
-              <View key={msg.id} style={{ marginBottom: 8 }}>
-                <Text
-                  style={{
-                    color:
-                      msg.sender === "user" ? theme.primary : theme.primary,
-                    fontWeight: "600",
-                  }}
-                >
-                  {msg.sender === "user" ? "You" : "Patrick"}:
-                </Text>
-                <Text
-                  style={{ color: theme.text, fontSize: 14 }}
-                  numberOfLines={2}
-                >
-                  {msg.content}
-                </Text>
-              </View>
-            ))}
-          </View>
-        )}
-      </KeyboardAwareScrollView>
-
-      <TouchableOpacity
-        style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: theme.card,
-          borderTopLeftRadius: 24,
-          borderTopRightRadius: 24,
-          padding: 18,
-          flexDirection: "row",
-          alignItems: "center",
-          shadowColor: "#000",
-          shadowOpacity: 0.06,
-          shadowRadius: 8,
-          elevation: 8,
-        }}
-        activeOpacity={0.85}
-        onPress={handleInputBarPress}
-      >
-        <Ionicons
-          name="create-outline"
-          size={28}
-          color={theme.primary}
-          style={{ marginRight: 10 }}
-        />
-        <Text style={{ color: theme.text, fontSize: 18, flex: 1 }}>
-          Chat with Patrick or start a focus session...
-        </Text>
-      </TouchableOpacity>
-
-      <Modal
-        visible={chatModalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setChatModalVisible(false)}
-      >
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.2)",
-            justifyContent: "flex-end",
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: theme.card,
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-              padding: 24,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 18,
-                fontWeight: "bold",
-                color: theme.text,
-                marginBottom: 12,
-              }}
-            >
-              Start a new chat or focus session
-            </Text>
-            <TextInput
-              style={{
-                fontSize: 17,
-                color: theme.text,
-                backgroundColor: "#F6F6E9",
-                borderRadius: 12,
-                padding: 14,
-                marginBottom: 16,
-              }}
-              placeholder="Type your message or focus goal..."
-              placeholderTextColor="#BDBDBD"
-              value={chatInput}
-              onChangeText={setChatInput}
-              autoFocus
-              returnKeyType="send"
-              onSubmitEditing={handleSendChat}
-            />
-            <AnimatedButton
-              title="Send"
-              onPress={handleSendChat}
-              disabled={!chatInput.trim()}
-              variant="primary"
-              size="large"
-              fullWidth={true}
-              hapticFeedback={true}
-              style={{ marginBottom: 8 }}
-            />
-            <TouchableOpacity
-              style={{ alignItems: "center", marginTop: 2 }}
-              onPress={() => setChatModalVisible(false)}
-            >
-              <Text style={{ color: theme.text, fontSize: 16 }}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-    </View>
-  );
-};
+const LOW_MESSAGE_WARNING_THRESHOLD = 15;
 
 export const PatrickSpeakScreen = ({
   route,
 }: {
   route: PatrickSpeakRouteProp;
 }) => {
-  const { initialMessage, pdfContext } = route.params || {};
+  const { initialMessage } = route.params || {};
   const { user } = useAuth();
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
+  const { theme } = useTheme();
+
   const [input, setInput] = useState("");
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
-  const [streamedText, setStreamedText] = useState("");
-  const [error, setError] = useState("");
-  const [activePDF, setActivePDF] = useState<PDFContext | null>(
-    pdfContext || null,
+  const [remainingMessages, setRemainingMessages] = useState<number | null>(
+    null,
   );
-  const [mascotState, setMascotState] = useState<MascotState>("coaching");
-  const scrollViewRef = React.useRef<ScrollView>(null);
-  const { theme } = useTheme();
-  const userData = null as Record<string, any> | null;
-
-  // Patrick animations
+  const scrollViewRef = useRef<ScrollView>(null);
   const pulseAnim = usePulseAnimation(streaming);
-  const entranceAnim = useEntranceAnimation(0);
 
+  // Hydrate from Convex once; after that, local state stays authoritative
+  // for the session (new messages are persisted server-side as they're sent).
+  const history = useQuery(api.patrickChat.getMyHistory);
+  const hasHydrated = useRef(false);
   useEffect(() => {
-    fetchChatHistory();
-    // Send initial message with PDF context if provided
+    if (hasHydrated.current || history === undefined) return;
+    hasHydrated.current = true;
+    setChat(
+      history.map((m: any) => ({
+        id: m._id,
+        content: m.content,
+        sender: m.role === "user" ? "user" : "patrick",
+        timestamp: new Date(m._creationTime).toISOString(),
+      })),
+    );
     if (initialMessage) {
       handleSend(initialMessage);
     }
-  }, []);
+  }, [history]);
 
   useEffect(() => {
-    // Auto-scroll to bottom on new message
     scrollViewRef.current?.scrollToEnd({ animated: true });
-  }, [chat, streamedText]);
+  }, [chat]);
 
-  const fetchChatHistory = async () => {
-    if (!user) return;
-
-    // TODO: Load chat history from Convex
-    // Will be implemented when chat history tables are added to Convex schema
-    setChat([]);
-  };
-
-  const saveMessage = async (content: string, sender: "user" | "patrick") => {
-    if (!user) return;
-
-    // TODO: Save messages to Convex
-    // Chat history will be implemented when chat tables are added to Convex schema
-    // Patrick message received
+  const goToPlans = () => {
+    navigation.navigate("Main", {
+      screen: "Content",
+      params: { screen: "Subscription" },
+    });
   };
 
   const handleSend = async (messageText?: string) => {
-    const textToSend = messageText || input.trim();
-    if (!textToSend || !user) return;
+    const textToSend = (messageText || input).trim();
+    if (!textToSend || !user || streaming) return;
 
-    setError("");
-
-    // Enhanced message with PDF context
-    let enhancedMessage = textToSend;
-    if (activePDF) {
-      enhancedMessage = `[PDF Context: "${activePDF.title}"] ${textToSend}`;
-    }
-
-    // Add user message to chat immediately
     const userMsg: ChatMessage = {
-      id: Math.random().toString(36).slice(2),
-      content: textToSend, // Display original message to user
+      id: `local-${Date.now()}`,
+      content: textToSend,
       sender: "user",
       timestamp: new Date().toISOString(),
-      user_id: user.id,
     };
     setChat((prev) => [...prev, userMsg]);
+    if (!messageText) setInput("");
 
-    // Clear input only if it came from the input field
-    if (!messageText) {
-      setInput("");
-    }
-
-    await saveMessage(textToSend, "user");
     setStreaming(true);
-    setStreamedText("");
-    setMascotState("thinking");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    try {
-      // Send enhanced message with PDF context to Patrick via Convex
-      const data = await sendPatrickChatMessage({
-        message: enhancedMessage,
-        pdfContext: activePDF,
-        userSettings: {
-          focus_method:
-            userData?.onboarding?.focus_method ||
-            userData?.settings?.focus_method,
-          weekly_focus_goal:
-            userData?.onboarding?.weekly_focus_goal ||
-            userData?.settings?.weekly_goal,
-          environment_theme: userData?.settings?.environment_theme,
-          notifications: userData?.settings?.notifications,
-          onboarding: userData?.onboarding,
-        },
-      });
-      setStreaming(false);
+    const data = await sendPatrickChatMessage({ message: textToSend });
+    setStreaming(false);
 
-      if (data.response) {
-        // Clean response by removing markdown formatting
-        const cleanResponse = data.response
-          .replace(/\*\*(.*?)\*\*/g, "$1") // Remove **bold** formatting
-          .replace(/\*(.*?)\*/g, "$1") // Remove *italic* formatting
-          .replace(/__(.*?)__/g, "$1") // Remove __underline__ formatting
-          .trim();
+    if (typeof data.remaining_messages === "number") {
+      setRemainingMessages(data.remaining_messages);
+    }
 
-        const patrickMsg: ChatMessage = {
-          id: Math.random().toString(36).slice(2),
-          content: cleanResponse,
-          sender: "patrick",
-          timestamp: new Date().toISOString(),
-          user_id: user.id,
-        };
-        setChat((prev) => [...prev, patrickMsg]);
-        await saveMessage(cleanResponse, "patrick");
-        setMascotState("coaching");
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } else {
-        throw new Error("No response from Patrick");
-      }
-    } catch (error) {
-      // Patrick request error
-      setError("Sorry, I had trouble connecting. Please try again.");
-      setStreaming(false);
-      setMascotState("coaching");
+    if (data.error === "ACCESS_DENIED" && data.upgrade_required) {
+      Alert.alert(
+        "Membership Required",
+        data.response ||
+          "Patrick is included with every HikeWise membership (Basic and above).",
+        [
+          { text: "Not Now", style: "cancel" },
+          { text: "View Plans", onPress: goToPlans },
+        ],
+      );
+    }
 
-      // Add fallback response
-      const fallbackMsg: ChatMessage = {
-        id: Math.random().toString(36).slice(2),
-        content:
-          "I'm having some technical difficulties right now. Please try again in a moment!",
-        sender: "patrick",
-        timestamp: new Date().toISOString(),
-        user_id: user.id,
-      };
-      setChat((prev) => [...prev, fallbackMsg]);
+    const patrickMsg: ChatMessage = {
+      id: `local-${Date.now()}-p`,
+      content:
+        data.response ||
+        "I'm having some technical difficulties right now. Please try again in a moment!",
+      sender: "patrick",
+      timestamp: new Date().toISOString(),
+    };
+    setChat((prev) => [...prev, patrickMsg]);
+    if (data.success) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
   };
 
-  const renderBubble = (msg: ChatMessage, idx: number) => {
+  const renderBubble = (msg: ChatMessage) => {
     const isUser = msg.sender === "user";
     return (
       <View
-        key={msg.id + idx}
-        style={{
-          alignSelf: isUser ? "flex-end" : "flex-start",
-          backgroundColor: isUser ? "#E8F5E9" : "#fff",
-          borderRadius: 18,
-          marginVertical: 4,
-          marginHorizontal: 8,
-          padding: 14,
-          maxWidth: "80%",
-          shadowColor: "#000",
-          shadowOpacity: 0.03,
-          shadowRadius: 2,
-        }}
+        key={msg.id}
+        style={[
+          styles.bubble,
+          isUser
+            ? { alignSelf: "flex-end", backgroundColor: "#E8F5E9" }
+            : { alignSelf: "flex-start", backgroundColor: theme.card },
+        ]}
       >
-        <Text style={{ color: theme.text, fontSize: 16 }}>{msg.content}</Text>
+        <Text style={{ color: theme.text, fontSize: 16, lineHeight: 23 }}>
+          {msg.content}
+        </Text>
         <Text
-          style={{
-            color: "#BDBDBD",
-            fontSize: 11,
-            marginTop: 4,
-            textAlign: isUser ? "right" : "left",
-          }}
+          style={[styles.bubbleMeta, { textAlign: isUser ? "right" : "left" }]}
         >
           {isUser ? "You" : "Patrick"}
         </Text>
@@ -612,81 +177,71 @@ export const PatrickSpeakScreen = ({
     );
   };
 
+  const showWelcome = chat.length === 0 && history !== undefined && !streaming;
+
   return (
-    <View style={speakStyles.container}>
-      <View style={speakStyles.headerRow}>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <View style={styles.headerRow}>
         <TouchableOpacity
-          style={speakStyles.backBtn}
+          style={[styles.backBtn, { backgroundColor: theme.card }]}
           onPress={() => navigation.goBack()}
         >
           <Ionicons name="arrow-back-outline" size={24} color={theme.primary} />
         </TouchableOpacity>
-        <Text style={speakStyles.speakTitle}>Patrick AI Chat</Text>
-        <View style={speakStyles.gridBtn} />
+        <Text style={[styles.title, { color: theme.text }]}>Patrick</Text>
+        <View style={{ width: 40 }} />
       </View>
-
-      {/* PDF Context Banner */}
-      {activePDF && (
-        <View
-          style={[
-            speakStyles.pdfBanner,
-            { backgroundColor: theme.primary + "15" },
-          ]}
-        >
-          <Ionicons
-            name="document-text-outline"
-            size={20}
-            color={theme.primary}
-          />
-          <View style={{ flex: 1, marginLeft: 8 }}>
-            <Text
-              style={[speakStyles.pdfTitle, { color: theme.primary }]}
-              numberOfLines={1}
-            >
-              📖 {activePDF.title}
-            </Text>
-            <Text
-              style={[speakStyles.pdfSubtitle, { color: theme.primary + "99" }]}
-            >
-              Patrick can help you study from this document
-            </Text>
-          </View>
-          <TouchableOpacity
-            onPress={() => setActivePDF(null)}
-            style={speakStyles.removePdfButton}
-          >
-            <Ionicons name="close-outline" size={16} color={theme.primary} />
-          </TouchableOpacity>
-        </View>
-      )}
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 100 : 0}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 0}
       >
         <ScrollView
           ref={scrollViewRef}
           style={{ flex: 1 }}
-          contentContainerStyle={{ padding: 18, paddingBottom: 120 }}
+          contentContainerStyle={{ padding: 18, paddingBottom: 130 }}
           keyboardShouldPersistTaps="handled"
           onContentSizeChange={() =>
             scrollViewRef.current?.scrollToEnd({ animated: true })
           }
         >
-          {chat.map(renderBubble)}
+          {showWelcome ? (
+            <View style={styles.welcome}>
+              <Text style={[styles.welcomeTitle, { color: theme.text }]}>
+                Hey! I'm Patrick, your study coach.
+              </Text>
+              <Text style={[styles.welcomeSub, { color: theme.textSecondary }]}>
+                Study plans, focus techniques, motivation — ask me anything.
+              </Text>
+              {QUICK_PROMPTS.map((prompt) => (
+                <TouchableOpacity
+                  key={prompt}
+                  style={[
+                    styles.quickPrompt,
+                    { backgroundColor: theme.card, borderColor: theme.border },
+                  ]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    handleSend(prompt);
+                  }}
+                >
+                  <Text style={{ color: theme.text, fontSize: 14, flex: 1 }}>
+                    {prompt}
+                  </Text>
+                  <Ionicons
+                    name="arrow-forward"
+                    size={16}
+                    color={theme.primary}
+                  />
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : (
+            chat.map(renderBubble)
+          )}
           {streaming && (
-            <AnimatedView
-              style={[
-                {
-                  alignSelf: "flex-start",
-                  marginVertical: 4,
-                  marginHorizontal: 8,
-                  maxWidth: "80%",
-                },
-                pulseAnim,
-              ]}
-            >
+            <Animated.View style={[styles.thinkingWrap, pulseAnim]}>
               <ShimmerLoader variant="custom" width={200} height={60} />
               <Text
                 style={{
@@ -695,257 +250,132 @@ export const PatrickSpeakScreen = ({
                   marginTop: 4,
                 }}
               >
-                {mascotState === "thinking"
-                  ? "Patrick is thinking..."
-                  : "Patrick is typing..."}
+                Patrick is thinking...
               </Text>
-            </AnimatedView>
+            </Animated.View>
           )}
         </ScrollView>
 
-        {/* Fixed Input Area */}
-        <View
-          style={{
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            backgroundColor: "#fff",
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-            padding: 16,
-            flexDirection: "row",
-            alignItems: "flex-end",
-            shadowColor: "#000",
-            shadowOpacity: 0.06,
-            shadowRadius: 8,
-            elevation: 8,
-            borderTopWidth: 1,
-            borderTopColor: "#F0F0F0",
-          }}
-        >
-          <TextInput
-            style={{
-              flex: 1,
-              fontSize: 17,
-              color: theme.text,
-              backgroundColor: "#F6F6E9",
-              borderRadius: 12,
-              padding: 14,
-              marginRight: 10,
-              maxHeight: 100,
-            }}
-            placeholder="Type your message..."
-            placeholderTextColor="#BDBDBD"
-            value={input}
-            onChangeText={setInput}
-            editable={!streaming}
-            onSubmitEditing={() => handleSend()}
-            returnKeyType="send"
-            multiline
-            textAlignVertical="top"
-          />
-          <AnimatedButton
-            title=""
-            onPress={() => handleSend()}
-            disabled={!input.trim() || streaming}
-            loading={streaming}
-            variant="primary"
-            size="medium"
-            icon={<Ionicons name="send-outline" size={22} color="#fff" />}
-            hapticFeedback={true}
-            style={{ padding: 12 }}
-          />
+        <View style={[styles.inputArea, { backgroundColor: theme.card }]}>
+          {remainingMessages !== null &&
+            remainingMessages <= LOW_MESSAGE_WARNING_THRESHOLD && (
+              <Text
+                style={[styles.remainingText, { color: theme.textSecondary }]}
+              >
+                {remainingMessages > 0
+                  ? `${remainingMessages} Patrick messages left today`
+                  : "Daily Patrick limit reached — resets tomorrow"}
+              </Text>
+            )}
+          <View style={{ flexDirection: "row", alignItems: "flex-end" }}>
+            <TextInput
+              style={[
+                styles.textInput,
+                { color: theme.text, backgroundColor: theme.background },
+              ]}
+              placeholder="Ask Patrick..."
+              placeholderTextColor={theme.textSecondary}
+              value={input}
+              onChangeText={setInput}
+              editable={!streaming}
+              onSubmitEditing={() => handleSend()}
+              returnKeyType="send"
+              multiline
+              maxLength={3000}
+            />
+            <AnimatedButton
+              title=""
+              onPress={() => handleSend()}
+              disabled={!input.trim() || streaming}
+              loading={streaming}
+              variant="primary"
+              size="medium"
+              icon={<Ionicons name="send-outline" size={22} color="#fff" />}
+              hapticFeedback={true}
+              style={{ padding: 12 }}
+            />
+          </View>
         </View>
       </KeyboardAvoidingView>
-
-      {error ? (
-        <View style={{ position: "absolute", top: 100, left: 16, right: 16 }}>
-          <Text
-            style={{
-              color: "red",
-              textAlign: "center",
-              backgroundColor: "#fff",
-              padding: 8,
-              borderRadius: 8,
-            }}
-          >
-            {error}
-          </Text>
-        </View>
-      ) : null}
     </View>
   );
 };
 
-// Placeholder for QuizzesScreen
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#FAFAF6", paddingHorizontal: 0 },
+  container: { flex: 1 },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     padding: 20,
-    paddingBottom: 0,
+    paddingBottom: 8,
   },
-  avatar: { width: 48, height: 48, borderRadius: 24, marginRight: 12 },
-  headerIconBtn: {
-    marginLeft: 12,
-    backgroundColor: "#F6F6E9",
-    borderRadius: 20,
-    padding: 8,
-  },
-  greeting: {
-    fontSize: 26,
-    fontWeight: "bold",
-    color: "#1B5E20",
-    marginLeft: 20,
-    marginTop: 8,
-  },
-  subtitle: {
+  backBtn: { borderRadius: 20, padding: 8 },
+  title: { fontSize: 18, fontWeight: "bold", textAlign: "center" },
+  welcome: { paddingTop: 40, alignItems: "stretch" },
+  welcomeTitle: {
     fontSize: 22,
     fontWeight: "bold",
-    color: "#1B5E20",
-    marginLeft: 20,
-    marginTop: 2,
-  },
-  desc: {
-    fontSize: 15,
-    color: "#388E3C",
-    marginLeft: 20,
-    marginTop: 2,
-    marginBottom: 16,
-  },
-  searchRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginHorizontal: 20,
-    marginBottom: 18,
-  },
-  searchInput: {
-    flex: 1,
-    backgroundColor: "#F6F6E9",
-    borderRadius: 24,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: "#222",
-    marginRight: 10,
-  },
-  speakBtn: {
-    backgroundColor: "#1B5E20",
-    borderRadius: 24,
-    padding: 12,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  sectionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginHorizontal: 20,
+    textAlign: "center",
     marginBottom: 8,
   },
-  sectionTitle: { fontSize: 18, fontWeight: "bold", color: "#1B5E20" },
-  seeAll: { color: "#388E3C", fontWeight: "bold", fontSize: 15 },
-  tasksGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    marginHorizontal: 20,
-    marginTop: 8,
-  },
-  taskCard: {
-    width: "47%",
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 16,
-    elevation: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 2,
-  },
-  taskIconRow: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
-  taskType: {
-    marginLeft: 8,
-    color: "#1B5E20",
-    fontWeight: "bold",
-    fontSize: 15,
-  },
-  taskLabel: { fontSize: 16, color: "#222", fontWeight: "500", marginTop: 2 },
-});
-
-const speakStyles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#FAFAF6", paddingHorizontal: 0 },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 20,
-    paddingBottom: 0,
-  },
-  backBtn: { backgroundColor: "#F6F6E9", borderRadius: 20, padding: 8 },
-  gridBtn: { backgroundColor: "#F6F6E9", borderRadius: 20, padding: 8 },
-  speakTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#1B5E20",
-    flex: 1,
-    textAlign: "center",
-  },
-  centerContent: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 24,
-  },
-  speakImage: { width: 160, height: 160, borderRadius: 80, marginBottom: 24 },
-  speakPrompt: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: "#1B5E20",
-    textAlign: "center",
-    marginBottom: 12,
-  },
-  speakDesc: {
-    fontSize: 15,
-    color: "#222",
+  welcomeSub: {
+    fontSize: 14,
     textAlign: "center",
     marginBottom: 24,
   },
-  speakMicRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 12,
-  },
-  speakMicBtn: {
-    backgroundColor: "#E8F5E9",
-    borderRadius: 40,
-    padding: 18,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  pdfBanner: {
+  quickPrompt: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 12,
-    marginHorizontal: 16,
-    marginBottom: 8,
-    borderRadius: 8,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(76, 175, 80, 0.3)",
+    padding: 14,
+    marginBottom: 10,
   },
-  pdfTitle: {
-    fontSize: 14,
-    fontWeight: "bold",
+  bubble: {
+    borderRadius: 18,
+    marginVertical: 4,
+    padding: 14,
+    maxWidth: "82%",
+    shadowColor: "#000",
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
   },
-  pdfSubtitle: {
+  bubbleMeta: {
+    color: "#BDBDBD",
+    fontSize: 11,
+    marginTop: 4,
+  },
+  thinkingWrap: {
+    alignSelf: "flex-start",
+    marginVertical: 4,
+    maxWidth: "80%",
+  },
+  inputArea: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 16,
+    paddingBottom: 24,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  remainingText: {
     fontSize: 12,
-    marginTop: 2,
+    textAlign: "center",
+    marginBottom: 6,
   },
-  removePdfButton: {
-    padding: 4,
+  textInput: {
+    flex: 1,
+    fontSize: 17,
+    borderRadius: 12,
+    padding: 14,
+    marginRight: 10,
+    maxHeight: 100,
   },
 });

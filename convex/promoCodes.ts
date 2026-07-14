@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query, mutation, internalMutation } from "./_generated/server";
 import { getCurrentUser } from "./users";
+import { tierRank } from "./tiers";
 
 /**
  * Redeem a promo code. Grants tier upgrade, Flint, and trails based on code config.
@@ -92,18 +93,10 @@ export const redeem = mutation({
       return { success: false, error: "You've already redeemed this code" };
     }
 
-    // Apply rewards
+    // Apply rewards (tier ranks come from the canonical table in tiers.ts)
     const rewards: string[] = [];
-    const tierRank: Record<string, number> = {
-      free: 0,
-      trial: 1,
-      basic: 2,
-      premium: 3,
-      pro: 4,
-      elite: 5,
-    };
-    const currentRank = tierRank[user.subscriptionTier ?? "free"] ?? 0;
-    const newRank = tierRank[codeConfig.tier] ?? 0;
+    const currentRank = tierRank(user.subscriptionTier);
+    const newRank = tierRank(codeConfig.tier);
 
     const patch: Record<string, any> = {};
 

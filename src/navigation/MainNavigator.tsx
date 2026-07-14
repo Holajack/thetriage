@@ -33,6 +33,7 @@ import LeaderboardScreen from "../screens/main/LeaderboardScreen";
 import ProfileScreen from "../screens/main/ProfileScreen";
 import ShopScreen from "../screens/main/ShopScreen";
 import SettingsScreen from "../screens/main/SettingsScreen";
+import { useSubscriptionTier } from "../hooks/useSubscriptionTier";
 import SubscriptionScreen from "../screens/main/SubscriptionScreen";
 import ProTrekkerScreen from "../screens/main/ProTrekkerScreen";
 import SessionHistoryScreen from "../screens/main/SessionHistoryScreen";
@@ -56,7 +57,6 @@ import {
 
 // Additional screens
 import PDFViewerScreen from "../screens/main/PDFViewerScreen";
-import AIIntegrationScreen from "../screens/main/AIIntegrationScreen";
 import QRScannerScreen from "../screens/main/QRScannerScreen";
 import EBooksScreen from "../screens/main/EBooksScreen";
 
@@ -182,10 +182,6 @@ function ContentStack() {
         component={StudySessionScreen}
         options={{ gestureEnabled: false }}
       />
-      <ContentStackNav.Screen
-        name="AIIntegration"
-        component={AIIntegrationScreen}
-      />
       <ContentStackNav.Screen name="Privacy" component={PrivacyScreen} />
       <ContentStackNav.Screen name="PDFViewer" component={PDFViewerScreen} />
 
@@ -222,6 +218,8 @@ function ContentStack() {
 function CustomDrawerContent(props: any) {
   const { signOut, user } = useAuth();
   const navigation = props.navigation;
+  // Elite gets Nora; Basic/Pro get Patrick; no membership goes to plans.
+  const { hasNoraAccess, hasPatrickAccess } = useSubscriptionTier();
 
   // Navigate to a screen inside the ContentStack from the Drawer menu
   const navigateTo = (screen: string, params?: any) => {
@@ -296,7 +294,13 @@ function CustomDrawerContent(props: any) {
         labelStyle={{ color: "#1B5E20", fontWeight: "bold" }}
       />
       <DrawerItem
-        label="Nora Assistant"
+        label={
+          hasNoraAccess
+            ? "Nora Assistant"
+            : hasPatrickAccess
+              ? "Patrick Assistant"
+              : "AI Assistant"
+        }
         icon={({ color, size }) => (
           <Ionicons
             name="chatbubble-ellipses-outline"
@@ -304,7 +308,17 @@ function CustomDrawerContent(props: any) {
             color="#1B5E20"
           />
         )}
-        onPress={() => navigateTo("NoraScreen")}
+        onPress={() => {
+          if (hasNoraAccess) {
+            navigateTo("NoraScreen");
+          } else if (hasPatrickAccess) {
+            // PatrickSpeak is registered on the root stack
+            navigation.closeDrawer();
+            navigation.navigate("PatrickSpeak", {});
+          } else {
+            navigateTo("Subscription");
+          }
+        }}
         labelStyle={{ color: "#1B5E20", fontWeight: "bold" }}
       />
       <DrawerItem

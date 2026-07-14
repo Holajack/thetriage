@@ -33,19 +33,28 @@ const REVENUECAT_API_KEYS = {
   android: process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY || "",
 };
 
-// Product identifiers — match these in RevenueCat dashboard & App Store Connect
+// Product identifiers — match these in RevenueCat dashboard & App Store Connect.
+// Tiers: basic (app functionality) < pro (+ Patrick AI) < elite (+ Nora AI).
+// All products should carry a 7-day free intro offer.
 const PRODUCT_IDS = {
-  PREMIUM_MONTHLY: "hikewise_premium_monthly", // $14.99/mo
-  ELITE_MONTHLY: "hikewise_elite_monthly", // $29.99/mo
-  PREMIUM_YEARLY: "hikewise_premium_yearly", // $107.99/yr ($8.99/mo)
-  ELITE_YEARLY: "hikewise_elite_yearly", // $215.99/yr ($17.99/mo)
+  BASIC_MONTHLY: "hikewise_basic_monthly",
+  BASIC_YEARLY: "hikewise_basic_yearly",
+  PRO_MONTHLY: "hikewise_pro_monthly",
+  PRO_YEARLY: "hikewise_pro_yearly",
+  ELITE_MONTHLY: "hikewise_elite_monthly",
+  ELITE_YEARLY: "hikewise_elite_yearly",
 };
 
-// Entitlement identifiers — configure in RevenueCat dashboard
+// Entitlement identifiers — configure in RevenueCat dashboard.
+// "premium" is the legacy entitlement name and maps to pro.
 const ENTITLEMENTS = {
-  PREMIUM: "premium",
+  BASIC: "basic",
+  PRO: "pro",
   ELITE: "elite",
+  LEGACY_PREMIUM: "premium",
 };
+
+export type RcTier = "free" | "basic" | "pro" | "elite";
 
 let isInitialized = false;
 
@@ -107,22 +116,26 @@ async function handleCustomerInfoUpdate(
 
 function getSubscriptionTierFromCustomerInfo(
   customerInfo: CustomerInfo,
-): "free" | "premium" | "elite" {
+): RcTier {
   const activeEntitlements = customerInfo.entitlements.active;
 
   // Check highest tier first
   if (activeEntitlements[ENTITLEMENTS.ELITE]?.isActive) {
     return "elite";
   }
-  if (activeEntitlements[ENTITLEMENTS.PREMIUM]?.isActive) {
-    return "premium";
+  if (
+    activeEntitlements[ENTITLEMENTS.PRO]?.isActive ||
+    activeEntitlements[ENTITLEMENTS.LEGACY_PREMIUM]?.isActive
+  ) {
+    return "pro";
+  }
+  if (activeEntitlements[ENTITLEMENTS.BASIC]?.isActive) {
+    return "basic";
   }
   return "free";
 }
 
-async function syncSubscriptionToConvex(
-  tier: "free" | "premium" | "elite",
-): Promise<void> {
+async function syncSubscriptionToConvex(tier: RcTier): Promise<void> {
   try {
     const client = getConvexClient();
     await client.mutation(api.users.updateMySubscription, {
@@ -143,7 +156,7 @@ async function getCustomerInfo(): Promise<CustomerInfo | null> {
 }
 
 /** Get current subscription tier */
-export async function getCurrentTier(): Promise<"free" | "premium" | "elite"> {
+export async function getCurrentTier(): Promise<RcTier> {
   const customerInfo = await getCustomerInfo();
   if (!customerInfo) return "free";
   return getSubscriptionTierFromCustomerInfo(customerInfo);
@@ -216,7 +229,7 @@ export async function purchasePackage(
 /** Restore previous purchases (reinstall / device switch) */
 export async function restorePurchases(): Promise<{
   success: boolean;
-  tier: "free" | "premium" | "elite";
+  tier: RcTier;
   error?: string;
 }> {
   try {
@@ -274,7 +287,7 @@ export async function presentPaywall(
  * Useful for gating premium features inline.
  */
 async function presentPaywallIfNeeded(
-  requiredEntitlement: string = ENTITLEMENTS.PREMIUM,
+  requiredEntitlement: string = ENTITLEMENTS.PRO,
   offering?: PurchasesOffering,
 ): Promise<boolean> {
   try {

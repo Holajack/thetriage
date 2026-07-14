@@ -1,11 +1,21 @@
 import { v } from "convex/values";
-import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
+import {
+  query,
+  mutation,
+  internalMutation,
+  QueryCtx,
+  MutationCtx,
+} from "./_generated/server";
 import { Id, Doc } from "./_generated/dataModel";
+import { normalizeTier, tierRank } from "./tiers";
 
-/** Defaults applied to every newly created user record. */
+/** Defaults applied to every newly created user record.
+ * New accounts are "free" until a subscription is active — the 7-day free
+ * trial is a store intro offer, so trialing users already hold a paid-tier
+ * entitlement (basic/pro/elite) via RevenueCat. */
 const NEW_USER_DEFAULTS = {
   status: "active" as const,
-  subscriptionTier: "trial" as const,
+  subscriptionTier: "free" as const,
   flintCurrency: 0,
   firstSessionBonusClaimed: false,
 };
@@ -279,24 +289,53 @@ export const updateMySubscription = mutation({
   },
   handler: async (ctx, args) => {
     const user = await getCurrentUser(ctx);
+    const newTier = normalizeTier(args.subscriptionTier);
+    const currentTier = normalizeTier(user.subscriptionTier);
 
-    // Don't let RevenueCat downgrade manually overridden tiers (dev/test elite accounts)
-    if (user.subscriptionOverride) {
-      const tierRank: Record<string, number> = {
-        free: 0,
-        trial: 1,
-        premium: 2,
-        pro: 3,
-        elite: 4,
-      };
-      const currentRank = tierRank[user.subscriptionTier || "free"] ?? 0;
-      const newRank = tierRank[args.subscriptionTier] ?? 0;
-      if (newRank < currentRank) {
-        return;
-      }
+    // Don't let RevenueCat downgrade manually overridden tiers (dev/test/promo accounts)
+    if (
+      user.subscriptionOverride &&
+      tierRank(newTier) < tierRank(currentTier)
+    ) {
+      return;
     }
 
-    await ctx.db.patch(user._id, { subscriptionTier: args.subscriptionTier });
+    // Once the RevenueCat server webhook is configured (REVENUECAT_WEBHOOK_TOKEN
+    // set in the Convex dashboard), it is the only trusted source for UPGRADES —
+    // a client-side call can no longer grant itself a paid tier. Client sync is
+    // still allowed to downgrade (subscription lapsed) or re-assert the same tier.
+    if (
+      process.env.REVENUECAT_WEBHOOK_TOKEN &&
+      tierRank(newTier) > tierRank(currentTier)
+    ) {
+      return;
+    }
+
+    await ctx.db.patch(user._id, { subscriptionTier: newTier });
+  },
+});
+
+/** Webhook-driven tier update (see http.ts /revenuecat-webhook). */
+export const _setSubscriptionTierFromWebhook = internalMutation({
+  args: {
+    userIdString: v.string(),
+    subscriptionTier: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = ctx.db.normalizeId("users", args.userIdString);
+    if (!userId) return; // anonymous RevenueCat id or stale alias — ignore
+    const user = await ctx.db.get(userId);
+    if (!user) return;
+
+    const newTier = normalizeTier(args.subscriptionTier);
+    // Manual overrides (dev/promo accounts) still win over webhook downgrades.
+    if (
+      user.subscriptionOverride &&
+      tierRank(newTier) < tierRank(normalizeTier(user.subscriptionTier))
+    ) {
+      return;
+    }
+    await ctx.db.patch(userId, { subscriptionTier: newTier });
   },
 });
 

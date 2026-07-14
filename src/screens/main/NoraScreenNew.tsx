@@ -36,7 +36,7 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import {
   sendNoraChatMessage,
   transcribeAudio as convexTranscribeAudio,
@@ -886,6 +886,11 @@ const NoraScreenNew: React.FC = () => {
   const { user } = useAuth();
   const { theme } = useTheme();
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
+  const routeParams = (route.params ?? {}) as {
+    initialMessage?: string;
+    initialPdfTitle?: string;
+  };
   const scrollViewRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
 
@@ -896,6 +901,9 @@ const NoraScreenNew: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [remainingMessages, setRemainingMessages] = useState<number | null>(
+    null,
+  );
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [showWelcome, setShowWelcome] = useState(true);
@@ -903,7 +911,6 @@ const NoraScreenNew: React.FC = () => {
     "auto" | "quick" | "deep" | "research"
   >("quick");
   const [showPdfPicker, setShowPdfPicker] = useState(false);
-  const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   // Live ebook list — replaces the local `uploadedPdfs` state with a Convex query.
   const ebooks = useQuery(api.ebooks.listForCurrentUser, {});
   const uploadedPdfs = (ebooks ?? []).map((e: any) => ({
@@ -1005,10 +1012,6 @@ const NoraScreenNew: React.FC = () => {
   useEffect(() => {
     navigation.setOptions({ headerShown: false });
     logoScale.value = withSpring(1, { damping: 15 });
-    loadChatHistory();
-    loadPdfs();
-    // Check onboarding status
-    // Will be handled reactively via onboardingStatus query
 
     // Reset audio system on mount to clear any orphaned recordings
     const resetAudio = async () => {
@@ -1041,11 +1044,34 @@ const NoraScreenNew: React.FC = () => {
         timestamp: m._creationTime
           ? new Date(m._creationTime).toISOString()
           : new Date().toISOString(),
+        sources: m.metadata?.sources,
+        mode: m.metadata?.mode,
       }));
       setMessages(loaded);
       isRestoringSession.current = false;
     }
   }, [sessionMessages]);
+
+  // Entry from the PDF viewer: preselect the matching ebook, then fire the
+  // initial message once (waits for onboarding + the ebook list to load).
+  const sentInitialMessage = useRef(false);
+  useEffect(() => {
+    if (sentInitialMessage.current) return;
+    if (!routeParams.initialMessage) return;
+    if (!onboardingStatus?.hasAcceptedPolicies) return;
+
+    let pdfToAttach: any = null;
+    if (routeParams.initialPdfTitle) {
+      if (ebooks === undefined) return; // ebook list still loading
+      pdfToAttach =
+        uploadedPdfs.find((p) => p.title === routeParams.initialPdfTitle) ??
+        null;
+      if (pdfToAttach) setSelectedPdf(pdfToAttach);
+    }
+
+    sentInitialMessage.current = true;
+    handleSend(routeParams.initialMessage, undefined, undefined, pdfToAttach);
+  }, [onboardingStatus, ebooks]);
 
   // Enforce onboarding
   useEffect(() => {
@@ -1180,35 +1206,6 @@ const NoraScreenNew: React.FC = () => {
     opacity: interpolate(sendButtonGlow.value, [0, 1], [0, 0.5]),
     transform: [{ scale: interpolate(sendButtonGlow.value, [0, 1], [1, 1.4]) }],
   }));
-
-  const loadChatHistory = async () => {
-    // Chat history is now managed by Convex via useNoraSessions hook
-  };
-
-  const groupByDay = (data: any[]): ChatSession[] => {
-    const groups: { [key: string]: any[] } = {};
-    data.forEach((msg) => {
-      const date = new Date(msg.timestamp).toLocaleDateString();
-      if (!groups[date]) groups[date] = [];
-      groups[date].push(msg);
-    });
-
-    return Object.entries(groups).map(([date, msgs]) => ({
-      id: date,
-      date,
-      preview: msgs[0]?.content || "",
-      messages: msgs.map((m) => ({
-        id: m.id,
-        content: m.content,
-        sender: m.sender,
-        timestamp: m.timestamp,
-      })),
-    }));
-  };
-
-  const loadPdfs = async () => {
-    // PDFs are now loaded reactively via the ebooks Convex query
-  };
 
   // Voice recording with Whisper
   const isStartingRecording = useRef(false);
@@ -1381,6 +1378,7 @@ const NoraScreenNew: React.FC = () => {
 
     setIsRecording(false);
     setVoiceAmplitude(0);
+    const durationSec = recordingDuration;
 
     try {
       await recordingRef.current.stopAndUnloadAsync();
@@ -1390,7 +1388,7 @@ const NoraScreenNew: React.FC = () => {
       setRecordingDuration(0);
 
       if (uri) {
-        await transcribeAudio(uri, true); // true = auto-send
+        await transcribeAudio(uri, true, durationSec); // true = auto-send
       }
     } catch {
       recordingRef.current = null;
@@ -1406,6 +1404,7 @@ const NoraScreenNew: React.FC = () => {
 
     setIsRecording(false);
     setVoiceAmplitude(0);
+    const durationSec = recordingDuration;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
@@ -1416,7 +1415,7 @@ const NoraScreenNew: React.FC = () => {
       setRecordingDuration(0);
 
       if (uri) {
-        await transcribeAudio(uri, false); // false = just put in input box
+        await transcribeAudio(uri, false, durationSec); // false = just put in input box
       }
     } catch {
       recordingRef.current = null;
@@ -1428,6 +1427,7 @@ const NoraScreenNew: React.FC = () => {
   const transcribeAudio = async (
     audioUri: string,
     autoSend: boolean = true,
+    durationSeconds: number = 0,
   ) => {
     try {
       // Only show loading if we're going to auto-send
@@ -1446,7 +1446,7 @@ const NoraScreenNew: React.FC = () => {
         audioBase64,
         mimeType,
         fileName: `recording.${fileExtension}`,
-        model: "whisper-1",
+        durationSeconds,
       });
 
       if (result.text) {
@@ -1455,6 +1455,19 @@ const NoraScreenNew: React.FC = () => {
         if (autoSend) {
           handleSend(result.text);
         }
+      } else if (result.upgrade_required) {
+        Alert.alert(
+          "Elite Feature",
+          "Voice input is part of Nora on the Elite plan.",
+          [
+            { text: "Not Now", style: "cancel" },
+            {
+              text: "View Plans",
+              onPress: () => navigation.navigate("Subscription"),
+            },
+          ],
+        );
+        setIsLoading(false);
       } else {
         Alert.alert(
           "Voice Error",
@@ -1484,11 +1497,15 @@ const NoraScreenNew: React.FC = () => {
     text?: string,
     displayText?: string,
     modeOverride?: "auto" | "quick" | "deep" | "research",
+    pdfOverride?: any,
   ) => {
     const messageText = text || input.trim();
     if (!messageText || !user || isLoading) {
       return;
     }
+    // pdfOverride lets callers attach a PDF before React state has committed
+    // (used by the PDF-viewer entry effect).
+    const activePdf = pdfOverride ?? selectedPdf;
     // Quick Action chips always use Quick mode for the fastest response, even if the
     // user has previously toggled into Deep/Research.
     const effectiveThinkingMode = modeOverride ?? thinkingMode;
@@ -1552,11 +1569,28 @@ const NoraScreenNew: React.FC = () => {
         message: messageText,
         thinkingMode: effectiveThinkingMode,
         sessionId: currentSessionId || undefined,
-        pdfContext: selectedPdf
-          ? { title: selectedPdf.title, file_path: selectedPdf.file_path }
+        pdfContext: activePdf
+          ? { title: activePdf.title, file_path: activePdf.file_path }
           : null,
-        vectorStoreId: selectedPdf?.vectorStoreId,
+        vectorStoreId: activePdf?.vectorStoreId,
       });
+
+      if (typeof data.remaining_messages === "number") {
+        setRemainingMessages(data.remaining_messages);
+      }
+      if (data.error === "ACCESS_DENIED" && data.upgrade_required) {
+        Alert.alert(
+          "Elite Feature",
+          data.response || "Nora is available on the Elite plan.",
+          [
+            { text: "Not Now", style: "cancel" },
+            {
+              text: "View Plans",
+              onPress: () => navigation.navigate("Subscription"),
+            },
+          ],
+        );
+      }
 
       // Store the session ID returned from the backend
       if (data.sessionId && !currentSessionId) {
@@ -1576,8 +1610,8 @@ const NoraScreenNew: React.FC = () => {
             url: s.url,
             type: "web" as const,
           }));
-        } else if (selectedPdf) {
-          messageSources = [{ title: selectedPdf.title, type: "document" }];
+        } else if (activePdf) {
+          messageSources = [{ title: activePdf.title, type: "document" }];
         }
 
         const responseText =
@@ -1793,6 +1827,20 @@ const NoraScreenNew: React.FC = () => {
             },
           ]}
         >
+          {remainingMessages !== null && remainingMessages <= 15 && (
+            <Text
+              style={{
+                color: theme.textSecondary,
+                fontSize: 12,
+                textAlign: "center",
+                marginBottom: 4,
+              }}
+            >
+              {remainingMessages > 0
+                ? `${remainingMessages} Nora messages left today`
+                : "Daily Nora limit reached — resets tomorrow"}
+            </Text>
+          )}
           <Animated.View
             style={[
               styles.inputContainer,
@@ -1822,7 +1870,7 @@ const NoraScreenNew: React.FC = () => {
                 value={input}
                 onChangeText={setInput}
                 multiline
-                maxLength={1000}
+                maxLength={5000}
               />
             )}
 

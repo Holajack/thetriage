@@ -14,6 +14,7 @@ import {
 } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
+import { normalizeTier } from "./tiers";
 
 // ────────────────────────────────────────────────────
 // Queries
@@ -68,10 +69,22 @@ export const getUnreadCount = query({
 // Mutations
 // ────────────────────────────────────────────────────
 
-/** Mark a notification as read */
+/** Mark a notification as read (owner only) */
 export const markRead = mutation({
   args: { notificationId: v.id("noraNotifications") },
   handler: async (ctx, { notificationId }) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return;
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerkId", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) return;
+
+    const notification = await ctx.db.get(notificationId);
+    if (!notification || notification.userId !== user._id) return;
+
     await ctx.db.patch(notificationId, {
       readAt: new Date().toISOString(),
     });
@@ -160,10 +173,24 @@ export const generateNotifications = internalAction({
           { userId: user._id },
         );
 
-        const tier = user.subscriptionTier || "free";
+        const tier = normalizeTier(user.subscriptionTier);
+        const streak = leaderboard?.currentStreak || 0;
+        const inactive = recentSessions.length === 0;
 
-        // Trigger 1: Study reminder (no session in 2+ days)
-        if (!sentTypes.has("study_reminder") && recentSessions.length === 0) {
+        // Triggers 1+2 are mutually exclusive: a user with a streak at risk
+        // gets the streak message, everyone else inactive gets the reminder.
+        if (inactive && streak > 2 && !sentTypes.has("streak_encouragement")) {
+          await ctx.runMutation(
+            internal.noraNotifications._scheduleNotification,
+            {
+              userId: user._id,
+              type: "streak_encouragement",
+              title: `${streak}-day streak at risk!`,
+              body: `You've been studying for ${streak} days straight. Don't break your streak -- even a short session counts!`,
+              scheduledFor: now.toISOString(),
+            },
+          );
+        } else if (inactive && !sentTypes.has("study_reminder")) {
           await ctx.runMutation(
             internal.noraNotifications._scheduleNotification,
             {
@@ -176,29 +203,10 @@ export const generateNotifications = internalAction({
           );
         }
 
-        // Trigger 2: Streak encouragement (streak > 0 and about to break)
-        const streak = leaderboard?.currentStreak || 0;
-        if (
-          !sentTypes.has("streak_encouragement") &&
-          streak > 2 &&
-          recentSessions.length === 0
-        ) {
-          await ctx.runMutation(
-            internal.noraNotifications._scheduleNotification,
-            {
-              userId: user._id,
-              type: "streak_encouragement",
-              title: `${streak}-day streak at risk!`,
-              body: `You've been studying for ${streak} days straight. Don't break your streak -- even a short session counts!`,
-              scheduledFor: now.toISOString(),
-            },
-          );
-        }
-
         // Trigger 3: Weekly summary (Sunday)
         if (!sentTypes.has("weekly_summary") && dayOfWeek === 0) {
           const weeklyHours = leaderboard
-            ? Math.round((leaderboard.totalFocusTime || 0) / 3600)
+            ? Math.round((leaderboard.weeklyFocusTime || 0) / 3600)
             : 0;
           await ctx.runMutation(
             internal.noraNotifications._scheduleNotification,
@@ -243,9 +251,20 @@ export const generateNotifications = internalAction({
 export const _getActiveUsers = internalQuery({
   args: {},
   handler: async (ctx) => {
-    // Get users who have been active in the last 30 days
+    // Users seen in the last 30 days (lastSeen is a Unix ms timestamp set by
+    // presence tracking; users without it are treated as inactive).
+    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
     const allUsers = await ctx.db.query("users").collect();
-    return allUsers.filter((u) => u.status !== "inactive").slice(0, 500);
+    const active = allUsers.filter(
+      (u) => u.status !== "inactive" && (u.lastSeen ?? 0) > thirtyDaysAgo,
+    );
+    if (active.length > 500) {
+      // Batch cap — log so we notice when the user base outgrows one cron run.
+      console.error(
+        `[noraNotifications] ${active.length} active users; capping run at 500`,
+      );
+    }
+    return active.slice(0, 500);
   },
 });
 

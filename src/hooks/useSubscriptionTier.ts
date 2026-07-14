@@ -3,48 +3,48 @@ import { useConvexProfile } from "./useConvex";
 import {
   getCurrentTier,
   isRevenueCatInitialized,
+  RcTier,
 } from "../services/revenuecat";
+import {
+  normalizeTier,
+  tierLevel,
+  hasNoraAccess,
+  hasPatrickAccess,
+  CanonicalTier,
+} from "../utils/tierGating";
 
-export type SubscriptionTier = "free" | "basic" | "premium" | "elite";
-
-const TIER_RANK: Record<string, number> = {
-  free: 0,
-  basic: 1,
-  premium: 2,
-  pro: 2,
-  elite: 3,
-};
-
+/**
+ * Resolve the user's subscription tier from both sources:
+ * Convex (server-synced, webhook-authoritative) and the RevenueCat SDK
+ * (instant after a purchase). The higher of the two wins so a fresh
+ * purchase unlocks immediately while the webhook catches Convex up.
+ */
 export function useSubscriptionTier() {
-  const { profile } = useConvexProfile();
-  const [rcTier, setRcTier] = useState<SubscriptionTier>("free");
+  const { profile, loading } = useConvexProfile();
+  const [rcTier, setRcTier] = useState<RcTier>("free");
 
   useEffect(() => {
     if (!isRevenueCatInitialized()) return;
     getCurrentTier().then((tier) => setRcTier(tier));
   }, []);
 
-  const convexTier = (profile?.subscription_tier ||
-    profile?.subscriptionTier ||
-    "free") as string;
-  const normalizedConvex = convexTier === "pro" ? "premium" : convexTier;
+  const convexTier = normalizeTier(
+    (profile as any)?.subscription_tier || (profile as any)?.subscriptionTier,
+  );
 
-  const resolved =
-    (TIER_RANK[normalizedConvex] ?? 0) >= (TIER_RANK[rcTier] ?? 0)
-      ? normalizedConvex
-      : rcTier;
-
-  const currentTier = resolved as SubscriptionTier;
+  const currentTier: CanonicalTier =
+    tierLevel(convexTier) >= tierLevel(rcTier) ? convexTier : rcTier;
 
   return {
     currentTier,
-    isElite: currentTier === "elite",
-    isPremium: currentTier === "premium" || currentTier === "elite",
-    isBasic:
-      currentTier === "basic" ||
-      currentTier === "premium" ||
-      currentTier === "elite",
+    // Until the profile resolves, currentTier reads "free" — gated screens must
+    // wait on this rather than flashing an upgrade wall at a paying member.
+    isLoading: loading,
+    isElite: tierLevel(currentTier) >= 3,
+    isPro: tierLevel(currentTier) >= 2,
+    isBasic: tierLevel(currentTier) >= 1,
     isFree: currentTier === "free",
-    hasAIAccess: currentTier === "premium" || currentTier === "elite",
+    hasNoraAccess: hasNoraAccess(currentTier),
+    hasPatrickAccess: hasPatrickAccess(currentTier),
   };
 }

@@ -133,17 +133,12 @@ const SettingsScreen = () => {
   }, [clerkUserId]);
 
   // Subscription info for AI row
-  const {
-    currentTier: subscriptionTier,
-    isElite,
-    isPremium,
-    hasAIAccess,
-  } = useSubscriptionTier();
-  const aiSummary = !hasAIAccess
-    ? "Requires Premium or Elite"
+  const { isElite, isPro, hasPatrickAccess } = useSubscriptionTier();
+  const aiSummary = !hasPatrickAccess
+    ? "Requires a membership"
     : isElite
-      ? "Elite Plan"
-      : "Premium Plan";
+      ? "Nora + Patrick"
+      : "Patrick included";
 
   // --- Focus & Study Handlers ---
   const handleMainGoalUpdate = async (goal: string) => {
@@ -630,11 +625,7 @@ const SettingsScreen = () => {
                     { color: isElite ? "#3B2A00" : "#FFFFFF" },
                   ]}
                 >
-                  {isElite
-                    ? "ELITE MEMBER"
-                    : isPremium
-                      ? "PREMIUM PLAN"
-                      : "UPGRADE"}
+                  {isElite ? "ELITE MEMBER" : isPro ? "PRO PLAN" : "UPGRADE"}
                 </Text>
               </View>
             </View>
@@ -642,14 +633,14 @@ const SettingsScreen = () => {
               <Text style={styles.tierCardTitle}>
                 {isElite
                   ? "Welcome back, Trailblazer"
-                  : isPremium
+                  : isPro
                     ? "Step up to Elite"
                     : "Become an Elite HikeWise Member"}
               </Text>
               <Text style={styles.tierCardSubtitle}>
                 {isElite
                   ? "You have full access to Nora AI, brain mapping, and every premium feature."
-                  : isPremium
+                  : isPro
                     ? "Unlock Nora AI, voice + PDF analysis, and unlimited study rooms."
                     : "Unlock Nora AI, voice analysis, brain mapping & more."}
               </Text>

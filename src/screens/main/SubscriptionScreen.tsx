@@ -23,6 +23,7 @@ import {
   Shadows,
 } from "../../theme/premiumTheme";
 import { StaggeredItem } from "../../components/premium/StaggeredList";
+import { normalizeTier, tierLevel } from "../../utils/tierGating";
 
 // Sub-components
 import BillingToggle, { BillingPeriod } from "./subscription/BillingToggle";
@@ -62,6 +63,7 @@ const BASIC_PLAN: PlanTier = {
     { text: "Default theme", included: true },
     { text: "Bear trail buddy", included: true },
     { text: "Lo-Fi sound album", included: true },
+    { text: "Patrick AI Study Coach", included: true, highlight: true },
     { text: "Basecamp Focus Mode", included: true },
     { text: "Basic session history", included: true },
     { text: "Leaderboard access", included: true },
@@ -69,15 +71,20 @@ const BASIC_PLAN: PlanTier = {
   gradient: ["#22C55E", "#16A34A"],
 };
 
-const PREMIUM_PLAN: PlanTier = {
+const PRO_PLAN: PlanTier = {
   name: "Pro",
-  tier: "premium",
+  tier: "pro",
   monthlyPrice: 14.99,
   annualPrice: 143.99,
   annualMonthlyEquivalent: 11.99,
   badge: "Most Popular",
   tagline: "Level up your study sessions",
   features: [
+    {
+      text: "Patrick AI (higher daily limit)",
+      included: true,
+      highlight: true,
+    },
     { text: "Forest, Beach & Jungle trails", included: true },
     { text: "All themes", included: true },
     { text: "Pro-level trail buddies", included: true },
@@ -125,18 +132,20 @@ const ELITE_PLAN: PlanTier = {
 };
 
 // RevenueCat product identifiers — match these in App Store Connect
-const PLAN_PRODUCTS: Record<string, Record<BillingPeriod, string>> = {
+const PLAN_PRODUCTS: Record<string, Record<BillingPeriod, string[]>> = {
   basic: {
-    monthly: "hikewise_basic_monthly",
-    annual: "hikewise_basic_yearly",
+    monthly: ["hikewise_basic_monthly"],
+    annual: ["hikewise_basic_yearly"],
   },
-  premium: {
-    monthly: "hikewise_premium_monthly",
-    annual: "hikewise_premium_yearly",
+  // Legacy "premium" product ids kept as fallback until the dashboard
+  // catalog is fully migrated to the pro naming.
+  pro: {
+    monthly: ["hikewise_pro_monthly", "hikewise_premium_monthly"],
+    annual: ["hikewise_pro_yearly", "hikewise_premium_yearly"],
   },
   elite: {
-    monthly: "hikewise_elite_monthly",
-    annual: "hikewise_elite_yearly",
+    monthly: ["hikewise_elite_monthly"],
+    annual: ["hikewise_elite_yearly"],
   },
 };
 
@@ -146,9 +155,13 @@ function findPackageForPlan(
   tier: string,
   period: BillingPeriod,
 ): PurchasesPackage | undefined {
-  const productId =
-    PLAN_PRODUCTS[tier]?.[period === "monthly" ? "monthly" : "annual"];
-  return packages.find((pkg) => pkg.product.identifier === productId);
+  const productIds =
+    PLAN_PRODUCTS[tier]?.[period === "monthly" ? "monthly" : "annual"] ?? [];
+  for (const productId of productIds) {
+    const match = packages.find((pkg) => pkg.product.identifier === productId);
+    if (match) return match;
+  }
+  return undefined;
 }
 
 // ============================================
@@ -161,7 +174,7 @@ const SubscriptionScreen = () => {
   const { profile } = useConvexProfile();
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>("monthly");
   const [currentTier, setCurrentTier] = useState<
-    "free" | "basic" | "premium" | "elite"
+    "free" | "basic" | "pro" | "elite"
   >("free");
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingTier, setProcessingTier] = useState<string | null>(null);
@@ -175,7 +188,7 @@ const SubscriptionScreen = () => {
       try {
         setLoadingPackages(true);
 
-        let resolvedTier: "free" | "basic" | "premium" | "elite" = "free";
+        let resolvedTier: "free" | "basic" | "pro" | "elite" = "free";
 
         if (isRevenueCatInitialized()) {
           const [rcTier, availablePackages] = await Promise.all([
@@ -186,20 +199,11 @@ const SubscriptionScreen = () => {
           setPackages(availablePackages);
         }
 
-        const convexTier = profile?.subscriptionTier as string | undefined;
-        if (convexTier && convexTier !== "free") {
-          const tierRank: Record<string, number> = {
-            free: 0,
-            basic: 1,
-            premium: 2,
-            pro: 2,
-            elite: 3,
-          };
-          if ((tierRank[convexTier] ?? 0) > (tierRank[resolvedTier] ?? 0)) {
-            resolvedTier = (
-              convexTier === "pro" ? "premium" : convexTier
-            ) as typeof resolvedTier;
-          }
+        const convexTier = normalizeTier(
+          profile?.subscriptionTier as string | undefined,
+        );
+        if (tierLevel(convexTier) > tierLevel(resolvedTier)) {
+          resolvedTier = convexTier;
         }
 
         setCurrentTier(resolvedTier);
@@ -324,7 +328,7 @@ const SubscriptionScreen = () => {
   }, []);
 
   const isEliteUser = currentTier === "elite";
-  const isPremiumUser = currentTier === "premium";
+  const isProUser = currentTier === "pro";
   const isFreeUser = currentTier === "free";
 
   return (
@@ -381,7 +385,7 @@ const SubscriptionScreen = () => {
               <Text style={styles.heroSubtitle}>
                 {isEliteUser
                   ? "You have access to everything"
-                  : isPremiumUser
+                  : isProUser
                     ? "Upgrade to Elite for Nora AI and more"
                     : "Choose the plan that fits your study goals"}
               </Text>
@@ -405,7 +409,7 @@ const SubscriptionScreen = () => {
                   name={
                     isEliteUser
                       ? "diamond"
-                      : isPremiumUser
+                      : isProUser
                         ? "star"
                         : "leaf-outline"
                   }
@@ -413,7 +417,7 @@ const SubscriptionScreen = () => {
                   color={
                     isEliteUser
                       ? "#FFD24A"
-                      : isPremiumUser
+                      : isProUser
                         ? "#7B61FF"
                         : theme.primary
                   }
@@ -431,7 +435,7 @@ const SubscriptionScreen = () => {
                 <Text style={[styles.currentPlanTier, { color: theme.text }]}>
                   {isEliteUser
                     ? "Elite"
-                    : isPremiumUser
+                    : isProUser
                       ? "Premium"
                       : currentTier === "basic"
                         ? "Basic"
@@ -478,7 +482,7 @@ const SubscriptionScreen = () => {
               onManageSubscription={handleManageSubscription}
             />
           </StaggeredItem>
-        ) : isPremiumUser ? (
+        ) : isProUser ? (
           /* --- Premium User: Current Plan + Elite Upgrade --- */
           <View>
             {/* Current Plan Acknowledgment */}
@@ -541,11 +545,11 @@ const SubscriptionScreen = () => {
               style={styles.cardContainer}
             >
               <PlanCard
-                plan={PREMIUM_PLAN}
+                plan={PRO_PLAN}
                 isCurrent={false}
                 billingPeriod={billingPeriod}
-                onUpgrade={() => handleUpgrade(PREMIUM_PLAN)}
-                isProcessing={isProcessing && processingTier === "premium"}
+                onUpgrade={() => handleUpgrade(PRO_PLAN)}
+                isProcessing={isProcessing && processingTier === "pro"}
                 disabled={isProcessing || loadingPackages}
               />
             </StaggeredItem>

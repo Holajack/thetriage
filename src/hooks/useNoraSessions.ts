@@ -14,7 +14,6 @@ interface NoraChatSession {
   title: string;
   lastMessageAt: string;
   messageCount: number;
-  thinkingMode?: string;
 }
 
 interface DateGroupedSessions {
@@ -55,7 +54,6 @@ export const useNoraSessions = () => {
         title: s.title,
         lastMessageAt: s.lastMessageAt,
         messageCount: s.messageCount ?? 0,
-        thinkingMode: s.thinkingMode,
       })),
     [rawSessions],
   );

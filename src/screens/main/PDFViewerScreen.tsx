@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { WebView } from "react-native-webview";
 import { useTheme } from "../../context/ThemeContext";
+import { useSubscriptionTier } from "../../hooks/useSubscriptionTier";
 import { ShimmerLoader } from "../../components/premium/ShimmerLoader";
 
 interface PDFViewerParams {
@@ -27,6 +28,7 @@ const PDFViewerScreen = () => {
   const route = useRoute();
   const { theme } = useTheme();
   const { url, title, bookData } = route.params as PDFViewerParams;
+  const { hasNoraAccess } = useSubscriptionTier();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -43,15 +45,26 @@ const PDFViewerScreen = () => {
     }
   };
 
-  const sendToPatrick = () => {
-    navigation.navigate("PatrickSpeak" as any, {
-      initialMessage: `I'm looking at "${title}". Can you help me study from this textbook?`,
-      pdfContext: {
-        title: title,
-        url: url,
-        fileSize: bookData?.file_size,
-      },
-    });
+  // PDF analysis is a Nora (Elite) capability — Patrick can't read documents.
+  const askNora = () => {
+    if (hasNoraAccess) {
+      navigation.navigate("NoraScreen", {
+        initialPdfTitle: title,
+        initialMessage: `Help me study from "${title}".`,
+      });
+    } else {
+      Alert.alert(
+        "Nora can read this PDF",
+        "Nora AI on the Elite plan can analyze your PDFs — study guides, practice questions, and summaries.",
+        [
+          { text: "Not Now", style: "cancel" },
+          {
+            text: "View Plans",
+            onPress: () => navigation.navigate("Subscription"),
+          },
+        ],
+      );
+    }
   };
 
   const openInExternalApp = async () => {
@@ -100,7 +113,7 @@ const PDFViewerScreen = () => {
             <Ionicons name="open-outline" size={24} color={theme.text} />
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={sendToPatrick} style={styles.headerButton}>
+          <TouchableOpacity onPress={askNora} style={styles.headerButton}>
             <Ionicons name="chatbox-outline" size={24} color="#FF5722" />
           </TouchableOpacity>
         </View>
@@ -180,10 +193,10 @@ const PDFViewerScreen = () => {
       <View style={[styles.bottomActions, { backgroundColor: theme.card }]}>
         <TouchableOpacity
           style={[styles.actionButton, { backgroundColor: theme.primary }]}
-          onPress={sendToPatrick}
+          onPress={askNora}
         >
           <Ionicons name="chatbox-outline" size={20} color="#fff" />
-          <Text style={styles.actionButtonText}>Ask Patrick</Text>
+          <Text style={styles.actionButtonText}>Ask Nora</Text>
         </TouchableOpacity>
 
         <TouchableOpacity

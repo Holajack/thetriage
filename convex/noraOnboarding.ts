@@ -96,13 +96,22 @@ export const complete = mutation({
   },
 });
 
-/** DEV ONLY: Reset onboarding so the flow can be re-tested */
+/** DEV ONLY: Reset the CURRENT user's onboarding so the flow can be re-tested */
 export const resetOnboarding = mutation({
-  args: { userId: v.id("users") },
-  handler: async (ctx, { userId }) => {
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerkId", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) return;
+
     const existing = await ctx.db
       .query("noraOnboardingStatus")
-      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
       .unique();
 
     if (existing) {

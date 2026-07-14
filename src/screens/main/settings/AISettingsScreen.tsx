@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import {
   View,
   Text,
@@ -10,153 +10,88 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
 import { useTheme } from "../../../context/ThemeContext";
-import { useConvexProfile } from "../../../hooks/useConvex";
 import { useSubscriptionTier } from "../../../hooks/useSubscriptionTier";
-import { useAuth as useClerkAuth } from "@clerk/clerk-expo";
-import { updateUserSettings } from "../../../utils/userSettings";
 import { Typography, Spacing, BorderRadius } from "../../../theme/premiumTheme";
 import { StaggeredItem } from "../../../components/premium/StaggeredList";
 import SettingsGroup from "./components/SettingsGroup";
 import SettingsRow from "./components/SettingsRow";
 import SettingsSectionHeader from "./components/SettingsSectionHeader";
 
+/**
+ * AI Integration settings.
+ *
+ * Assistant access is decided by subscription tier alone (Patrick: Basic+,
+ * Nora: Elite — enforced server-side in convex/tiers.ts). The only user
+ * choices here are Nora's two privacy toggles, persisted in Convex
+ * userSettings and enforced in convex/noraChat.ts.
+ */
 const AISettingsScreen = () => {
   const navigation = useNavigation<any>();
   const { theme } = useTheme();
-  const isDark = theme.isDark;
-  const { profile } = useConvexProfile();
-  const { userId: clerkUserId } = useClerkAuth();
-  const { isElite, isPremium, hasAIAccess } = useSubscriptionTier();
+  const { currentTier, isElite, hasNoraAccess, hasPatrickAccess } =
+    useSubscriptionTier();
 
-  const [noraEnabled, setNoraEnabled] = useState(true);
-  const [patrickEnabled, setPatrickEnabled] = useState(false);
-  const [insightsEnabled, setInsightsEnabled] = useState(true);
-  const [personalizedResponses, setPersonalizedResponses] = useState(true);
+  const settings = useQuery(api.settings.get);
+  const updateSettings = useMutation(api.settings.update);
 
-  const handleAIToggle = async (
-    aiType: "nora" | "patrick" | "insights",
+  // Hydrated from Convex; defaults match the backend (noraChat.ts)
+  const noraAppAccess = settings?.noraAppAccess ?? true;
+  const noraTrainingConsent = settings?.noraTrainingConsent ?? false;
+
+  const goToPlans = () => navigation.navigate("Subscription");
+
+  const requireElite = (featureName: string) => {
+    Alert.alert(
+      "Elite Feature",
+      `${featureName} is part of Nora, which is available on the Elite plan.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "View Plans", onPress: goToPlans },
+      ],
+    );
+  };
+
+  const handleToggle = async (
+    key: "noraAppAccess" | "noraTrainingConsent",
     value: boolean,
   ) => {
-    if (!hasAIAccess) {
-      Alert.alert(
-        "Subscription Required",
-        "AI features require a Premium or Elite subscription.",
-        [
-          { text: "Maybe Later", style: "cancel" },
-          {
-            text: "View Plans",
-            onPress: () => navigation.navigate("Subscription"),
-          },
-        ],
-      );
-      return;
-    }
-
-    if (isPremium && aiType === "nora") {
-      Alert.alert(
-        "Elite Feature",
-        "Nora AI with full contextual access is an Elite-only feature.",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Upgrade to Elite",
-            onPress: () => navigation.navigate("Subscription"),
-          },
-        ],
-      );
-      return;
-    }
-
-    try {
-      if (!clerkUserId) return;
-      const updateData: any = { [`${aiType}_enabled`]: value };
-
-      if (isElite && value) {
-        if (aiType === "nora") updateData.patrick_enabled = false;
-        else if (aiType === "patrick") updateData.nora_enabled = false;
-      }
-
-      await updateUserSettings(clerkUserId, updateData);
-
-      if (aiType === "nora") {
-        setNoraEnabled(value);
-        if (value && isElite) setPatrickEnabled(false);
-      }
-      if (aiType === "patrick") {
-        setPatrickEnabled(value);
-        if (value && isElite) setNoraEnabled(false);
-      }
-      if (aiType === "insights") setInsightsEnabled(value);
-
-      const names = {
-        nora: "Nora AI",
-        patrick: "Patrick AI",
-        insights: "AI Insights",
-      };
-      Alert.alert(
-        "Updated",
-        `${names[aiType]} ${value ? "enabled" : "disabled"}`,
-      );
-    } catch (error) {
-      // Error updating AI setting
-      Alert.alert("Error", "Failed to update AI setting.");
-      if (aiType === "nora") setNoraEnabled(!value);
-      if (aiType === "patrick") setPatrickEnabled(!value);
-      if (aiType === "insights") setInsightsEnabled(!value);
-    }
-  };
-
-  const handlePersonalizationToggle = async (value: boolean) => {
     if (!isElite) {
-      Alert.alert(
-        "Elite Feature",
-        "Personalized AI responses require an Elite subscription.",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Upgrade to Elite",
-            onPress: () => navigation.navigate("Subscription"),
-          },
-        ],
-      );
+      requireElite("This setting");
       return;
     }
     try {
-      if (!clerkUserId) return;
-      await updateUserSettings(clerkUserId, {
-        personalized_responses: value,
-      } as any);
-      setPersonalizedResponses(value);
+      await updateSettings({ [key]: value });
     } catch (error) {
-      // Error updating personalization
-      Alert.alert("Error", "Failed to update setting.");
-      setPersonalizedResponses(!value);
+      console.error("[AISettings] failed to update", key, error);
+      Alert.alert("Error", "Failed to update setting. Please try again.");
     }
   };
 
-  const tierConfig = !hasAIAccess
+  const tierConfig = isElite
     ? {
-        label: "Free Plan",
-        color: "#EF5350",
-        bg: "#FFEBEE",
-        icon: "lock-closed" as const,
-        desc: "Upgrade to Premium or Elite to access AI features.",
+        label: "Elite Plan",
+        color: "#2E7D32",
+        bg: "#E8F5E9",
+        icon: "star" as const,
+        desc: "Full access to Nora — with memory, PDF analysis, and app-aware study support — plus Patrick.",
       }
-    : isElite
+    : hasPatrickAccess
       ? {
-          label: "Elite Plan",
-          color: "#2E7D32",
-          bg: "#E8F5E9",
-          icon: "star" as const,
-          desc: "Full access to Nora, Patrick, and AI insights.",
-        }
-      : {
-          label: "Premium Plan",
+          label: currentTier === "pro" ? "Pro Plan" : "Basic Plan",
           color: "#F57C00",
           bg: "#FFF3E0",
           icon: "sparkles" as const,
-          desc: "Access to Patrick and basic AI insights. Upgrade to Elite for Nora.",
+          desc: "Patrick, your AI study coach, is included. Upgrade to Elite to unlock Nora.",
+        }
+      : {
+          label: "No Membership",
+          color: "#EF5350",
+          bg: "#FFEBEE",
+          icon: "lock-closed" as const,
+          desc: "Subscribe to unlock Patrick (Basic and above) or Nora (Elite).",
         };
 
   return (
@@ -198,9 +133,9 @@ const AISettingsScreen = () => {
               <Text style={[styles.tierDesc, { color: tierConfig.color }]}>
                 {tierConfig.desc}
               </Text>
-              {!hasAIAccess && (
+              {!isElite && (
                 <TouchableOpacity
-                  onPress={() => navigation.navigate("Subscription")}
+                  onPress={goToPlans}
                   style={[
                     styles.upgradeBtn,
                     { backgroundColor: tierConfig.color },
@@ -213,68 +148,65 @@ const AISettingsScreen = () => {
           </View>
         </StaggeredItem>
 
-        {/* AI Assistants */}
+        {/* Assistants — access is tier-based, shown here for clarity */}
         <StaggeredItem index={1}>
-          <SettingsSectionHeader title="AI ASSISTANTS" />
+          <SettingsSectionHeader title="YOUR ASSISTANTS" />
           <SettingsGroup>
             <SettingsRow
-              icon="hardware-chip-outline"
-              label="Nora AI"
+              icon="sparkles-outline"
+              label="Nora"
               description={
-                isElite && patrickEnabled
-                  ? "Full contextual AI (disabled - Patrick is active)"
-                  : "Full contextual AI with PDF analysis and insights"
+                hasNoraAccess
+                  ? "Your full AI companion: web research, PDF analysis, voice, and memory that learns with you."
+                  : "Elite only — web research, PDF analysis, voice, and memory that learns with you."
               }
-              toggle
-              toggleValue={isElite && noraEnabled}
-              onToggleChange={(v) => handleAIToggle("nora", v)}
-              disabled={!isElite || patrickEnabled}
+              value={hasNoraAccess ? "Included" : "Elite"}
+              onPress={hasNoraAccess ? undefined : goToPlans}
             />
             <SettingsRow
               icon="chatbubble-ellipses-outline"
-              label="Patrick AI"
+              label="Patrick"
               description={
-                isElite && noraEnabled
-                  ? "General Q&A assistant (disabled - Nora is active)"
-                  : "General Q&A assistant for study questions"
+                hasPatrickAccess
+                  ? "Your everyday study coach for planning, focus, and motivation."
+                  : "Included with every membership (Basic and above)."
               }
-              toggle
-              toggleValue={hasAIAccess && patrickEnabled}
-              onToggleChange={(v) => handleAIToggle("patrick", v)}
-              disabled={!hasAIAccess || (isElite && noraEnabled)}
+              value={hasPatrickAccess ? "Included" : "Basic+"}
+              onPress={hasPatrickAccess ? undefined : goToPlans}
               isLast
             />
           </SettingsGroup>
         </StaggeredItem>
 
-        {/* Features */}
+        {/* Nora privacy toggles */}
         <StaggeredItem index={2}>
-          <SettingsSectionHeader title="FEATURES" />
+          <SettingsSectionHeader title="NORA PRIVACY" />
           <SettingsGroup>
             <SettingsRow
-              icon="bulb-outline"
-              label="AI Insights"
-              description={
-                isElite
-                  ? "Full AI-powered study insights and suggestions"
-                  : "Basic AI insights for study sessions"
-              }
+              icon="key-outline"
+              label="App Access & Memory"
+              description="Gives Nora complete access to this app — and only this app. She learns alongside you as you study. None of this data is used to train Nora."
               toggle
-              toggleValue={hasAIAccess && insightsEnabled}
-              onToggleChange={(v) => handleAIToggle("insights", v)}
-              disabled={!hasAIAccess}
+              toggleValue={isElite && noraAppAccess}
+              onToggleChange={(v) => handleToggle("noraAppAccess", v)}
+              disabled={!isElite}
             />
             <SettingsRow
-              icon="star-outline"
-              label="Personalized Responses"
-              description="AI learns from your study habits for tailored recommendations"
+              icon="school-outline"
+              label="Help Improve Nora"
+              description="We use your conversations to train Nora only — so she gets better at learning you and the AI system improves. Off by default."
               toggle
-              toggleValue={isElite && personalizedResponses}
-              onToggleChange={handlePersonalizationToggle}
+              toggleValue={isElite && noraTrainingConsent}
+              onToggleChange={(v) => handleToggle("noraTrainingConsent", v)}
               disabled={!isElite}
               isLast
             />
           </SettingsGroup>
+          <Text style={[styles.footnote, { color: theme.textSecondary }]}>
+            Turning off App Access & Memory means Nora stops reading your app
+            data and stops learning new things about you. What she has already
+            learned stays until you clear it from her memory.
+          </Text>
         </StaggeredItem>
       </ScrollView>
     </SafeAreaView>
@@ -330,6 +262,12 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "bold",
     fontSize: 13,
+  },
+  footnote: {
+    fontSize: 12,
+    lineHeight: 17,
+    paddingHorizontal: Spacing.sm,
+    marginTop: Spacing.xs,
   },
 });
 

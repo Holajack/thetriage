@@ -1,7 +1,14 @@
 import { v } from "convex/values";
-import { action, internalQuery, mutation, query } from "./_generated/server";
-import { api, internal } from "./_generated/api";
+import {
+  internalAction,
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+} from "./_generated/server";
+import { internal } from "./_generated/api";
 import { getCurrentUser } from "./users";
+import { normalizeTier } from "./tiers";
 
 /**
  * Upload flow:
@@ -40,7 +47,7 @@ export const registerUpload = mutation({
     });
 
     // Fire-and-forget OpenAI ingestion; ingestion will patch the row when done.
-    await ctx.scheduler.runAfter(0, api.ebooks.ingestEbook, { ebookId });
+    await ctx.scheduler.runAfter(0, internal.ebooks.ingestEbook, { ebookId });
 
     return { ebookId };
   },
@@ -76,7 +83,7 @@ export const deleteEbook = mutation({
 });
 
 // Internal mutation used by the ingestion action to patch ebook rows.
-export const setEbookOpenAIIds = mutation({
+export const _setEbookOpenAIIds = internalMutation({
   args: {
     ebookId: v.id("ebooks"),
     openaiFileId: v.optional(v.string()),
@@ -100,7 +107,7 @@ export const setEbookOpenAIIds = mutation({
  * If the OPENAI_API_KEY isn't configured (e.g., dev environment), the upload
  * still succeeds but the row is left in `processing` and Nora can't reference it.
  */
-export const ingestEbook = action({
+export const ingestEbook = internalAction({
   args: { ebookId: v.id("ebooks") },
   handler: async (ctx, args): Promise<{ success: boolean; error?: string }> => {
     const apiKey = process.env.OPENAI_API_KEY;
@@ -108,10 +115,22 @@ export const ingestEbook = action({
       return { success: false, error: "OPENAI_API_KEY missing" };
     }
 
-    const ebook: any = await ctx.runQuery(internal.ebooks._getEbookInternal, {
+    const result: any = await ctx.runQuery(internal.ebooks._getEbookInternal, {
       ebookId: args.ebookId,
     });
+    const ebook = result?.ebook;
     if (!ebook) return { success: false, error: "Ebook not found" };
+
+    // OpenAI file_search only exists for Nora (Elite). For everyone else the
+    // PDF stays viewable in-app, but we skip the OpenAI upload + vector store
+    // so non-Elite accounts never generate OpenAI cost.
+    if (normalizeTier(result.ownerTier) !== "elite") {
+      await ctx.runMutation(internal.ebooks._setEbookOpenAIIds, {
+        ebookId: args.ebookId,
+        status: "ready",
+      });
+      return { success: true };
+    }
 
     try {
       // 1. Download PDF bytes from Convex storage
@@ -156,7 +175,7 @@ export const ingestEbook = action({
       const vectorStoreId: string = vsJson.id;
 
       // 4. Persist on the ebook row
-      await ctx.runMutation(api.ebooks.setEbookOpenAIIds, {
+      await ctx.runMutation(internal.ebooks._setEbookOpenAIIds, {
         ebookId: args.ebookId,
         openaiFileId,
         vectorStoreId,
@@ -165,7 +184,7 @@ export const ingestEbook = action({
 
       return { success: true };
     } catch (err: any) {
-      await ctx.runMutation(api.ebooks.setEbookOpenAIIds, {
+      await ctx.runMutation(internal.ebooks._setEbookOpenAIIds, {
         ebookId: args.ebookId,
         status: "failed",
         errorMessage: err?.message || String(err),
@@ -187,5 +206,10 @@ export const getEbook = query({
 
 export const _getEbookInternal = internalQuery({
   args: { ebookId: v.id("ebooks") },
-  handler: async (ctx, args) => ctx.db.get(args.ebookId),
+  handler: async (ctx, args) => {
+    const ebook = await ctx.db.get(args.ebookId);
+    if (!ebook) return null;
+    const owner = await ctx.db.get(ebook.userId);
+    return { ebook, ownerTier: owner?.subscriptionTier };
+  },
 });

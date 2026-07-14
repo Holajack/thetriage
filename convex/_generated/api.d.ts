@@ -10,6 +10,7 @@
 
 import type * as achievements from "../achievements.js";
 import type * as aiInsights from "../aiInsights.js";
+import type * as aiShared from "../aiShared.js";
 import type * as appConfig from "../appConfig.js";
 import type * as crons from "../crons.js";
 import type * as ebooks from "../ebooks.js";
@@ -42,6 +43,7 @@ import type * as studyRooms from "../studyRooms.js";
 import type * as subjects from "../subjects.js";
 import type * as subtasks from "../subtasks.js";
 import type * as tasks from "../tasks.js";
+import type * as tiers from "../tiers.js";
 import type * as transcribe from "../transcribe.js";
 import type * as users from "../users.js";
 import type * as webhookHelpers from "../webhookHelpers.js";
@@ -55,6 +57,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   achievements: typeof achievements;
   aiInsights: typeof aiInsights;
+  aiShared: typeof aiShared;
   appConfig: typeof appConfig;
   crons: typeof crons;
   ebooks: typeof ebooks;
@@ -87,6 +90,7 @@ declare const fullApi: ApiFromModules<{
   subjects: typeof subjects;
   subtasks: typeof subtasks;
   tasks: typeof tasks;
+  tiers: typeof tiers;
   transcribe: typeof transcribe;
   users: typeof users;
   webhookHelpers: typeof webhookHelpers;

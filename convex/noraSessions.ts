@@ -14,6 +14,30 @@ import {
 } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
+import { QueryCtx } from "./_generated/server";
+
+/**
+ * Resolve the current user and the session, returning the session only if
+ * the caller owns it. Every public session endpoint must go through this.
+ */
+async function getOwnedSession(
+  ctx: QueryCtx,
+  sessionId: Id<"noraChatSessions">,
+) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) return { user: null, session: null };
+
+  const user = await ctx.db
+    .query("users")
+    .withIndex("by_clerkId", (q) => q.eq("clerkId", identity.subject))
+    .unique();
+  if (!user) return { user: null, session: null };
+
+  const session = await ctx.db.get(sessionId);
+  if (!session || session.userId !== user._id) return { user, session: null };
+
+  return { user, session };
+}
 
 // ────────────────────────────────────────────────────
 // Queries
@@ -42,12 +66,12 @@ export const listSessions = query({
   },
 });
 
-/** Get messages for a specific session */
+/** Get messages for a specific session (owner only) */
 export const getSessionMessages = query({
   args: { sessionId: v.id("noraChatSessions") },
   handler: async (ctx, { sessionId }) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
+    const { session } = await getOwnedSession(ctx, sessionId);
+    if (!session) return [];
 
     const messages = await ctx.db
       .query("noraChat")
@@ -117,10 +141,7 @@ export const updateSessionTitle = mutation({
     title: v.string(),
   },
   handler: async (ctx, { sessionId, title }) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
-
-    const session = await ctx.db.get(sessionId);
+    const { session } = await getOwnedSession(ctx, sessionId);
     if (!session) throw new Error("Session not found");
 
     await ctx.db.patch(sessionId, { title });
@@ -154,15 +175,12 @@ export const _updateSessionAfterMessage = internalMutation({
   },
 });
 
-/** Delete a session and all its messages */
+/** Delete a session and all its messages (owner only) */
 export const deleteSession = mutation({
   args: { sessionId: v.id("noraChatSessions") },
   handler: async (ctx, { sessionId }) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
-
-    const session = await ctx.db.get(sessionId);
-    if (!session) return;
+    const { user, session } = await getOwnedSession(ctx, sessionId);
+    if (!user || !session) return;
 
     // Delete all messages in this session
     const messages = await ctx.db
@@ -175,20 +193,14 @@ export const deleteSession = mutation({
     }
 
     // Delete the response ID for this session
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerkId", (q) => q.eq("clerkId", identity.subject))
+    const responseIdRecord = await ctx.db
+      .query("noraResponseIds")
+      .withIndex("by_userId_sessionId", (q) =>
+        q.eq("userId", user._id).eq("sessionId", sessionId),
+      )
       .unique();
-    if (user) {
-      const responseIdRecord = await ctx.db
-        .query("noraResponseIds")
-        .withIndex("by_userId_sessionId", (q) =>
-          q.eq("userId", user._id).eq("sessionId", sessionId),
-        )
-        .unique();
-      if (responseIdRecord) {
-        await ctx.db.delete(responseIdRecord._id);
-      }
+    if (responseIdRecord) {
+      await ctx.db.delete(responseIdRecord._id);
     }
 
     // Delete the session itself
@@ -200,10 +212,20 @@ export const deleteSession = mutation({
 // Actions
 // ────────────────────────────────────────────────────
 
-/** Generate a short title from the first exchange in a session */
+/** Generate a short title from the first exchange in a session (owner only) */
 export const generateSessionTitle = action({
   args: { sessionId: v.id("noraChatSessions") },
   handler: async (ctx, { sessionId }) => {
+    // Only the session owner may trigger title generation (it costs API money)
+    const currentUser: any = await ctx.runQuery(
+      internal.aiShared._getCurrentUser,
+    );
+    const ownerId: string | null = await ctx.runQuery(
+      internal.noraSessions._getSessionOwner,
+      { sessionId },
+    );
+    if (!currentUser || !ownerId || ownerId !== currentUser._id) return;
+
     // Get first 2 messages from the session
     const messages = await ctx.runQuery(
       internal.noraSessions._getFirstMessages,
@@ -271,6 +293,15 @@ export const generateSessionTitle = action({
 // ────────────────────────────────────────────────────
 // Internal helpers
 // ────────────────────────────────────────────────────
+
+/** Owner userId of a session (for action-side ownership checks) */
+export const _getSessionOwner = internalQuery({
+  args: { sessionId: v.id("noraChatSessions") },
+  handler: async (ctx, { sessionId }) => {
+    const session = await ctx.db.get(sessionId);
+    return session?.userId ?? null;
+  },
+});
 
 /** Get first N messages from a session (for title generation) */
 export const _getFirstMessages = internalQuery({

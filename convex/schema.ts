@@ -36,7 +36,7 @@ export default defineSchema({
     locationVisibility: v.optional(v.string()),
     classesVisibility: v.optional(v.string()),
     // Subscription
-    subscriptionTier: v.optional(v.string()), // 'free' | 'premium' | 'elite'
+    subscriptionTier: v.optional(v.string()), // 'free' | 'basic' | 'pro' | 'elite' (legacy rows: 'trial'→free, 'premium'→pro — see tiers.ts)
     subscriptionOverride: v.optional(v.boolean()), // true = manual override, skip RevenueCat sync
     subscriptionStatus: v.optional(v.string()),
     trialStartedAt: v.optional(v.string()),
@@ -133,11 +133,16 @@ export default defineSchema({
     weeklyGoalReminderDays: v.optional(v.array(v.string())),
     focusSessionWarningsEnabled: v.optional(v.boolean()),
     appUpdatesEnabled: v.optional(v.boolean()),
-    // AI feature toggles
+    // AI feature toggles (noraEnabled/patrickEnabled/insightsEnabled/
+    // personalizedResponses are legacy — superseded by the two Nora toggles below)
     noraEnabled: v.optional(v.boolean()),
     patrickEnabled: v.optional(v.boolean()),
     insightsEnabled: v.optional(v.boolean()),
     personalizedResponses: v.optional(v.boolean()),
+    // Nora privacy toggles (Elite): app access & memory (default ON),
+    // training consent (default OFF, opt-in)
+    noraAppAccess: v.optional(v.boolean()),
+    noraTrainingConsent: v.optional(v.boolean()),
     dailyGoalMinutes: v.optional(v.number()),
     preferredSessionLength: v.optional(v.number()),
     breakLength: v.optional(v.number()),

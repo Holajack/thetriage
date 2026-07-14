@@ -103,15 +103,21 @@ export const _upsertMemory = internalMutation({
   },
 });
 
-/** Delete a specific memory */
+/** Delete a specific memory (owner only) */
 export const deleteMemory = mutation({
   args: { memoryId: v.id("noraMemory") },
   handler: async (ctx, { memoryId }) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
 
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerkId", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) return;
+
     const memory = await ctx.db.get(memoryId);
-    if (!memory) return;
+    if (!memory || memory.userId !== user._id) return;
 
     await ctx.db.delete(memoryId);
   },
@@ -170,10 +176,11 @@ export const extractMemories = internalAction({
         },
         body: JSON.stringify({
           model: "gpt-4o-mini",
+          response_format: { type: "json_object" },
           messages: [
             {
               role: "system",
-              content: `You extract learnable facts about a student from their conversation with an AI study assistant. Return a JSON array of objects with these fields:
+              content: `You extract learnable facts about a student from their conversation with an AI study assistant. Return a JSON object: {"facts": [...]} where each fact has these fields:
 - category: one of "academic", "preference", "struggle", "goal", "personal"
 - key: a snake_case identifier for this fact (e.g. "weak_subject", "preferred_study_time")
 - value: the fact itself, as a concise string
@@ -183,8 +190,7 @@ Only extract clear, meaningful facts. Do NOT extract:
 - Vague statements
 - Things the AI said (only extract from the user's messages)
 
-If no facts can be extracted, return an empty array [].
-Return ONLY valid JSON, no markdown or explanation.`,
+If no facts can be extracted, return {"facts": []}.`,
             },
             {
               role: "user",
@@ -196,7 +202,10 @@ Return ONLY valid JSON, no markdown or explanation.`,
         }),
       });
 
-      if (!res.ok) return;
+      if (!res.ok) {
+        console.error(`[noraMemory] extraction call failed: ${res.status}`);
+        return;
+      }
 
       const data = await res.json();
       const content = data.choices?.[0]?.message?.content?.trim();
@@ -209,9 +218,11 @@ Return ONLY valid JSON, no markdown or explanation.`,
       }>;
 
       try {
-        facts = JSON.parse(content);
-      } catch {
-        return; // Invalid JSON, skip
+        const parsed = JSON.parse(content);
+        facts = Array.isArray(parsed) ? parsed : parsed?.facts;
+      } catch (e) {
+        console.error("[noraMemory] extraction returned invalid JSON");
+        return;
       }
 
       if (!Array.isArray(facts)) return;
@@ -244,8 +255,8 @@ Return ONLY valid JSON, no markdown or explanation.`,
           source: "inferred",
         });
       }
-    } catch {
-      // Memory extraction failed
+    } catch (e: any) {
+      console.error("[noraMemory] extraction failed:", e?.message || e);
     }
   },
 });
