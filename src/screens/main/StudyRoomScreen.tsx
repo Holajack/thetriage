@@ -47,8 +47,13 @@ const StudyRoomScreen = () => {
   const { user } = useAuth();
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
-  const { room } =
-    (route.params as { room?: StudyRoomService.StudyRoom }) ?? {};
+  // `roomCode` arrives from a deep link / QR invite (hikewise://join/ABC123).
+  // `room` is set when navigating from inside the app.
+  const { room, roomCode } =
+    (route.params as {
+      room?: StudyRoomService.StudyRoom;
+      roomCode?: string;
+    }) ?? {};
   const [messages, setMessages] = useState<StudyRoomService.StudyRoomMessage[]>(
     [],
   );
@@ -68,6 +73,35 @@ const StudyRoomScreen = () => {
   const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
   const [inviteMessage, setInviteMessage] = useState("");
   const flatListRef = useRef<FlatList>(null);
+
+  // Arrived from an invite link or QR: redeem the code, join, and load the room.
+  // Without this the deep link landed on an empty screen.
+  useEffect(() => {
+    if (!roomCode || roomData || !user?.id) return;
+
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const joined = await StudyRoomService.joinStudyRoomByCode(roomCode);
+      if (cancelled) return;
+
+      if (!joined.success || !joined.data) {
+        setLoading(false);
+        Alert.alert(
+          "Couldn't open that room",
+          joined.error ?? "This invite may have expired.",
+          [{ text: "OK", onPress: () => navigation.goBack() }],
+        );
+        return;
+      }
+      setRoomData(joined.data);
+      setLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [roomCode, roomData, user?.id, navigation]);
 
   // Load messages and set up polling for real-time updates
   useEffect(() => {

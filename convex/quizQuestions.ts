@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query, mutation, QueryCtx } from "./_generated/server";
+import { query, QueryCtx, internalMutation } from "./_generated/server";
 import { getCurrentUser, getCurrentUserOrNull } from "./users";
 import { Doc, Id } from "./_generated/dataModel";
 
@@ -92,13 +92,13 @@ export const getRandomQuestionsForSession = query({
     const allQuestions = await ctx.db
       .query("quizQuestions")
       .withIndex("by_categoryId_isActive", (q) =>
-        q.eq("categoryId", category._id).eq("isActive", true)
+        q.eq("categoryId", category._id).eq("isActive", true),
       )
       .collect();
 
     // Filter by education level
     const eligibleQuestions = allQuestions.filter((q) =>
-      q.educationLevels.includes(args.educationLevel)
+      q.educationLevels.includes(args.educationLevel),
     );
 
     // 4. Get recently answered questions to exclude (if user is logged in)
@@ -113,7 +113,7 @@ export const getRandomQuestionsForSession = query({
         .collect();
 
       const recentFiltered = recentResponses.filter(
-        (r) => new Date(r.answeredAt) >= cutoffDate
+        (r) => new Date(r.answeredAt) >= cutoffDate,
       );
 
       for (const response of recentFiltered) {
@@ -124,7 +124,7 @@ export const getRandomQuestionsForSession = query({
 
     // Filter out excluded questions
     const availableQuestions = eligibleQuestions.filter(
-      (q) => !excludedQuestionIds.has(q.questionId)
+      (q) => !excludedQuestionIds.has(q.questionId),
     );
 
     // 5. Balanced selection across sub-dimensions
@@ -132,7 +132,7 @@ export const getRandomQuestionsForSession = query({
       availableQuestions,
       subDimensions,
       args.questionsCount,
-      args.sessionType
+      args.sessionType,
     );
 
     // 6. Shuffle final selection
@@ -141,7 +141,7 @@ export const getRandomQuestionsForSession = query({
     // 7. Apply education-level adaptations if available
     return shuffled.map((q) => {
       const adapted = q.adaptedVersions?.find(
-        (v) => v.educationLevel === args.educationLevel
+        (v) => v.educationLevel === args.educationLevel,
       );
 
       return {
@@ -164,7 +164,7 @@ function selectBalancedQuestions(
   questions: Doc<"quizQuestions">[],
   subDimensions: Doc<"quizSubDimensions">[],
   targetCount: number,
-  sessionType: string
+  sessionType: string,
 ): Doc<"quizQuestions">[] {
   const selected: Doc<"quizQuestions">[] = [];
   const subDimMap = new Map<string, Doc<"quizQuestions">[]>();
@@ -192,14 +192,14 @@ function selectBalancedQuestions(
     if (totalTargets > targetCount) {
       // Reduce from highest target
       const highest = subDimTargets.reduce((max, t) =>
-        t.target > max.target ? t : max
+        t.target > max.target ? t : max,
       );
       highest.target--;
       totalTargets--;
     } else {
       // Increase lowest target
       const lowest = subDimTargets.reduce((min, t) =>
-        t.target < min.target ? t : min
+        t.target < min.target ? t : min,
       );
       lowest.target++;
       totalTargets++;
@@ -228,7 +228,7 @@ function selectBalancedQuestions(
 // ============================================================
 
 /** Add a new question to the database */
-export const addQuestion = mutation({
+export const addQuestion = internalMutation({
   args: {
     questionId: v.string(),
     categoryId: v.id("quizCategories"),
@@ -240,7 +240,7 @@ export const addQuestion = mutation({
         value: v.number(),
         label: v.string(),
         scoringWeight: v.optional(v.number()),
-      })
+      }),
     ),
     weight: v.number(),
     difficulty: v.number(),
@@ -255,10 +255,10 @@ export const addQuestion = mutation({
             v.object({
               value: v.number(),
               label: v.string(),
-            })
+            }),
           ),
-        })
-      )
+        }),
+      ),
     ),
     researchCitations: v.optional(
       v.array(
@@ -268,8 +268,8 @@ export const addQuestion = mutation({
           title: v.string(),
           journal: v.optional(v.string()),
           doi: v.optional(v.string()),
-        })
-      )
+        }),
+      ),
     ),
   },
   handler: async (ctx, args) => {
@@ -286,7 +286,7 @@ export const addQuestion = mutation({
 });
 
 /** Bulk add questions */
-export const bulkAddQuestions = mutation({
+export const bulkAddQuestions = internalMutation({
   args: {
     questions: v.array(
       v.object({
@@ -300,13 +300,13 @@ export const bulkAddQuestions = mutation({
             value: v.number(),
             label: v.string(),
             scoringWeight: v.optional(v.number()),
-          })
+          }),
         ),
         weight: v.number(),
         difficulty: v.number(),
         isReversed: v.boolean(),
         educationLevels: v.array(v.string()),
-      })
+      }),
     ),
   },
   handler: async (ctx, args) => {
@@ -329,7 +329,7 @@ export const bulkAddQuestions = mutation({
 });
 
 /** Update a question */
-export const updateQuestion = mutation({
+export const updateQuestion = internalMutation({
   args: {
     questionId: v.id("quizQuestions"),
     questionText: v.optional(v.string()),
@@ -339,8 +339,8 @@ export const updateQuestion = mutation({
           value: v.number(),
           label: v.string(),
           scoringWeight: v.optional(v.number()),
-        })
-      )
+        }),
+      ),
     ),
     weight: v.optional(v.number()),
     difficulty: v.optional(v.number()),
@@ -366,7 +366,7 @@ export const updateQuestion = mutation({
 });
 
 /** Deprecate a question (soft delete) */
-export const deprecateQuestion = mutation({
+export const deprecateQuestion = internalMutation({
   args: {
     questionId: v.id("quizQuestions"),
     reason: v.string(),
@@ -395,7 +395,7 @@ export const getQuestionCounts = query({
       const questions = await ctx.db
         .query("quizQuestions")
         .withIndex("by_categoryId_isActive", (q) =>
-          q.eq("categoryId", category._id).eq("isActive", true)
+          q.eq("categoryId", category._id).eq("isActive", true),
         )
         .collect();
       counts[category.slug] = questions.length;

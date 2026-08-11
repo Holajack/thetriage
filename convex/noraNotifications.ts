@@ -206,7 +206,7 @@ export const generateNotifications = internalAction({
         // Trigger 3: Weekly summary (Sunday)
         if (!sentTypes.has("weekly_summary") && dayOfWeek === 0) {
           const weeklyHours = leaderboard
-            ? Math.round((leaderboard.weeklyFocusTime || 0) / 3600)
+            ? Math.round((leaderboard.weeklyFocusTime || 0) / 60)
             : 0;
           await ctx.runMutation(
             internal.noraNotifications._scheduleNotification,

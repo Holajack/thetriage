@@ -7,6 +7,7 @@
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { getConvexClient } from "./convexClient";
+import { humanizeConvexError } from "./convexError";
 
 // Re-export interfaces for backward compat
 export interface StudyRoom {
@@ -125,7 +126,13 @@ export async function createStudyRoom(roomData: {
       },
     };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return {
+      success: false,
+      error: humanizeConvexError(
+        error,
+        "Something went wrong. Please try again.",
+      ),
+    };
   }
 }
 
@@ -145,7 +152,13 @@ export async function joinStudyRoom(
     await client.mutation(api.studyRooms.join, { roomId: targetId });
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return {
+      success: false,
+      error: humanizeConvexError(
+        error,
+        "Something went wrong. Please try again.",
+      ),
+    };
   }
 }
 
@@ -162,7 +175,13 @@ export async function leaveStudyRoom(
     });
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return {
+      success: false,
+      error: humanizeConvexError(
+        error,
+        "Something went wrong. Please try again.",
+      ),
+    };
   }
 }
 
@@ -192,7 +211,13 @@ export async function sendStudyRoomMessage(
       },
     };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return {
+      success: false,
+      error: humanizeConvexError(
+        error,
+        "Something went wrong. Please try again.",
+      ),
+    };
   }
 }
 
@@ -226,7 +251,9 @@ async function getPublicStudyRooms(): Promise<{
       is_public: r.isPublic ?? true,
       max_participants: r.maxParticipants ?? 10,
       current_participants: r.currentParticipants ?? 0,
-      room_code: r.roomCode ?? "",
+      // Browse results carry no join code — it is a credential, and members get
+      // it from studyRooms.getById.
+      room_code: "",
       subject: r.subject,
       session_duration: r.sessionDuration ?? 25,
       break_duration: r.breakDuration ?? 5,
@@ -238,7 +265,13 @@ async function getPublicStudyRooms(): Promise<{
     }));
     return { success: true, data: adapted as StudyRoom[] };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return {
+      success: false,
+      error: humanizeConvexError(
+        error,
+        "Something went wrong. Please try again.",
+      ),
+    };
   }
 }
 
@@ -274,7 +307,13 @@ export async function getStudyRoomMembers(roomId: string): Promise<{
     }));
     return { success: true, data: adapted };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return {
+      success: false,
+      error: humanizeConvexError(
+        error,
+        "Something went wrong. Please try again.",
+      ),
+    };
   }
 }
 
@@ -314,23 +353,36 @@ export async function getStudyRoomMessages(
     }));
     return { success: true, data: adapted };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return {
+      success: false,
+      error: humanizeConvexError(
+        error,
+        "Something went wrong. Please try again.",
+      ),
+    };
   }
 }
 
 export async function getPendingStudyRoomInvitations(): Promise<{
   success: boolean;
   data?: any[];
+  error?: string;
 }> {
   try {
     const client = getConvexClient();
     const invitations = await client.query(
-      (api as any).studyRooms.getPendingInvitations,
+      api.studyRooms.getPendingInvitations,
       {},
     );
     return { success: true, data: invitations ?? [] };
-  } catch {
-    return { success: true, data: [] };
+  } catch (error: any) {
+    // Report the failure. Swallowing it and returning success with an empty
+    // list told the user they had no invitations when the call had actually
+    // blown up (the query did not even exist).
+    return {
+      success: false,
+      error: error?.message ?? "Couldn't load invitations",
+    };
   }
 }
 
@@ -340,13 +392,19 @@ export async function respondToStudyRoomInvitation(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const client = getConvexClient();
-    await client.mutation((api as any).studyRooms.respondToInvitation, {
+    await client.mutation(api.studyRooms.respondToInvitation, {
       invitationId: invitationId as Id<"studyRoomInvitations">,
       response,
     });
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return {
+      success: false,
+      error: humanizeConvexError(
+        error,
+        "Something went wrong. Please try again.",
+      ),
+    };
   }
 }
 
@@ -356,13 +414,19 @@ export async function sendStudyRoomInvitation(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const client = getConvexClient();
-    await client.mutation((api as any).studyRooms.sendInvitation, {
+    await client.mutation(api.studyRooms.sendInvitation, {
       roomId: roomId as Id<"studyRooms">,
       recipientId: recipientId as Id<"users">,
     });
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return {
+      success: false,
+      error: humanizeConvexError(
+        error,
+        "Something went wrong. Please try again.",
+      ),
+    };
   }
 }
 
@@ -372,13 +436,19 @@ export async function removeMemberFromStudyRoom(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const client = getConvexClient();
-    await client.mutation((api as any).studyRooms.removeMember, {
+    await client.mutation(api.studyRooms.removeMember, {
       roomId: roomId as Id<"studyRooms">,
       userId: userId as Id<"users">,
     });
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return {
+      success: false,
+      error: humanizeConvexError(
+        error,
+        "Something went wrong. Please try again.",
+      ),
+    };
   }
 }
 
@@ -387,11 +457,64 @@ export async function deleteStudyRoom(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const client = getConvexClient();
-    await client.mutation((api as any).studyRooms.deleteRoom, {
+    await client.mutation(api.studyRooms.deleteRoom, {
       roomId: roomId as Id<"studyRooms">,
     });
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return {
+      success: false,
+      error: humanizeConvexError(
+        error,
+        "Something went wrong. Please try again.",
+      ),
+    };
+  }
+}
+
+/**
+ * Redeem an invite code (from a deep link or QR), join the room, and return it.
+ * This is the other half of the invite loop — the link now actually lands you
+ * inside the room instead of on an empty screen.
+ */
+export async function joinStudyRoomByCode(
+  roomCode: string,
+): Promise<{ success: boolean; error?: string; data?: StudyRoom }> {
+  try {
+    const client = getConvexClient();
+    const roomId = await client.mutation(api.studyRooms.joinByCode, {
+      roomCode,
+    });
+    const room = await client.query(api.studyRooms.getById, { roomId });
+    if (!room) {
+      return { success: false, error: "That room no longer exists" };
+    }
+
+    return {
+      success: true,
+      data: {
+        id: room._id,
+        name: room.name,
+        description: room.description,
+        owner_id: room.ownerId,
+        is_public: room.isPublic ?? true,
+        max_participants: room.maxParticipants ?? 10,
+        current_participants: room.currentParticipants ?? 0,
+        room_code: room.roomCode ?? "",
+        subject: room.subject,
+        session_duration: room.sessionDuration ?? 25,
+        break_duration: room.breakDuration ?? 5,
+        is_active: room.isActive ?? true,
+        created_at: room._creationTime
+          ? new Date(room._creationTime).toISOString()
+          : "",
+        updated_at: "",
+      },
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: humanizeConvexError(error, "Couldn't join that room"),
+    };
   }
 }

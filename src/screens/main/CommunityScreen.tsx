@@ -27,6 +27,8 @@ import * as MessageService from "../../utils/convexMessagingService";
 import * as StudyRoomService from "../../utils/convexStudyRoomService";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
+import { track } from "../../analytics/analytics";
+import { AnalyticsEvent } from "../../analytics/events";
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
 import FriendRequestNotification from "../../components/FriendRequestNotification";
@@ -648,6 +650,9 @@ const CommunityScreen = () => {
       });
 
       if (result.success && result.data) {
+        track(AnalyticsEvent.ROOM_CREATED, {
+          maxParticipants: Number(participantLimit) || 5,
+        });
         // Reset form and close modal
         setNewRoomName("");
         setNewTopic("");
@@ -678,6 +683,7 @@ const CommunityScreen = () => {
       const result = await StudyRoomService.joinStudyRoom(room.id);
 
       if (result.success) {
+        track(AnalyticsEvent.ROOM_JOINED, { roomId: String(room.id) });
         navigation.navigate("StudyRoomScreen", { room: result.data || room });
         // Refresh study rooms list
         loadUserStudyRooms();

@@ -32,7 +32,7 @@ export const extractQuizMemories = internalMutation({
     const previousResults = await ctx.db
       .query("quizResults")
       .withIndex("by_userId_categoryId", (q) =>
-        q.eq("userId", args.userId).eq("categoryId", result.categoryId)
+        q.eq("userId", args.userId).eq("categoryId", result.categoryId),
       )
       .collect();
 
@@ -41,7 +41,7 @@ export const extractQuizMemories = internalMutation({
       .filter((r) => r._id !== args.resultId)
       .sort(
         (a, b) =>
-          new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
+          new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime(),
       );
 
     const previousResult = olderResults.length > 0 ? olderResults[0] : null;
@@ -49,7 +49,7 @@ export const extractQuizMemories = internalMutation({
     // Calculate trend
     const getTrend = (
       currentScore: number,
-      previousScore: number | undefined
+      previousScore: number | undefined,
     ): string | undefined => {
       if (previousScore === undefined) return undefined;
       const diff = currentScore - previousScore;
@@ -86,7 +86,9 @@ export const extractQuizMemories = internalMutation({
           ? getTrend(result.overallScore, previousResult.overallScore)
           : undefined,
         comparedToLast: previousResult
-          ? Math.round((result.overallScore - previousResult.overallScore) * 100) / 100
+          ? Math.round(
+              (result.overallScore - previousResult.overallScore) * 100,
+            ) / 100
           : undefined,
       },
       actionableInsights: [
@@ -97,7 +99,7 @@ export const extractQuizMemories = internalMutation({
     // 2. Extract strength memories
     for (const strength of result.strengths) {
       const prevSubDim = previousResult?.subDimensionScores.find(
-        (s) => s.slug === strength.subDimensionSlug
+        (s) => s.slug === strength.subDimensionSlug,
       );
 
       memories.push({
@@ -111,7 +113,8 @@ export const extractQuizMemories = internalMutation({
             ? getTrend(strength.score, prevSubDim.normalizedScore)
             : undefined,
           comparedToLast: prevSubDim
-            ? Math.round((strength.score - prevSubDim.normalizedScore) * 100) / 100
+            ? Math.round((strength.score - prevSubDim.normalizedScore) * 100) /
+              100
             : undefined,
         },
         actionableInsights: [
@@ -123,7 +126,7 @@ export const extractQuizMemories = internalMutation({
     // 3. Extract growth area memories with recommendations
     for (const growth of result.areasForGrowth) {
       const prevSubDim = previousResult?.subDimensionScores.find(
-        (s) => s.slug === growth.subDimensionSlug
+        (s) => s.slug === growth.subDimensionSlug,
       );
 
       memories.push({
@@ -137,7 +140,8 @@ export const extractQuizMemories = internalMutation({
             ? getTrend(growth.score, prevSubDim.normalizedScore)
             : undefined,
           comparedToLast: prevSubDim
-            ? Math.round((growth.score - prevSubDim.normalizedScore) * 100) / 100
+            ? Math.round((growth.score - prevSubDim.normalizedScore) * 100) /
+              100
             : undefined,
         },
         actionableInsights: growth.recommendations,
@@ -158,7 +162,9 @@ export const extractQuizMemories = internalMutation({
             ? getTrend(result.overallScore, previousResult.overallScore)
             : undefined,
           comparedToLast: previousResult
-            ? Math.round((result.overallScore - previousResult.overallScore) * 100) / 100
+            ? Math.round(
+                (result.overallScore - previousResult.overallScore) * 100,
+              ) / 100
             : undefined,
         },
         actionableInsights: [
@@ -210,7 +216,7 @@ async function syncToNoraMemory(
     primaryTrait: string;
     strengths: string[];
     growthAreas: string[];
-  }
+  },
 ) {
   const memories = [
     {
@@ -244,7 +250,7 @@ async function syncToNoraMemory(
       .collect();
 
     const match = existing.find(
-      (m: any) => m.key === memory.key && m.category === memory.category
+      (m: any) => m.key === memory.key && m.category === memory.category,
     );
 
     if (match) {
@@ -272,14 +278,14 @@ async function createTriggers(
   ctx: MutationCtx,
   userId: Id<"users">,
   categoryId: Id<"quizCategories">,
-  result: Doc<"quizResults">
+  result: Doc<"quizResults">,
 ) {
   // Check if low score trigger should be created
   if (result.overallScore < 50) {
     const existingTrigger = await ctx.db
       .query("quizRecommendationTriggers")
       .withIndex("by_userId_triggerType", (q) =>
-        q.eq("userId", userId).eq("triggerType", "low_score")
+        q.eq("userId", userId).eq("triggerType", "low_score"),
       )
       .first();
 
@@ -300,7 +306,7 @@ async function createTriggers(
   const existingPeriodicTrigger = await ctx.db
     .query("quizRecommendationTriggers")
     .withIndex("by_userId_triggerType", (q) =>
-      q.eq("userId", userId).eq("triggerType", "periodic")
+      q.eq("userId", userId).eq("triggerType", "periodic"),
     )
     .first();
 
@@ -350,17 +356,23 @@ export const getQuizInsightsForNora = internalQuery({
       // Sort by extractedAt and get latest
       const sorted = memories.sort(
         (a, b) =>
-          new Date(b.extractedAt).getTime() - new Date(a.extractedAt).getTime()
+          new Date(b.extractedAt).getTime() - new Date(a.extractedAt).getTime(),
       );
 
       // Get category name - cast to proper type
-      const category = await ctx.db.get(memories[0].categoryId) as Doc<"quizCategories"> | null;
+      const category = (await ctx.db.get(
+        memories[0].categoryId,
+      )) as Doc<"quizCategories"> | null;
       const categoryName = category?.name || "Unknown";
 
       // Extract relevant insights
       const traitMemory = sorted.find((m) => m.memoryType === "trait");
-      const strengthMemories = sorted.filter((m) => m.memoryType === "strength");
-      const growthMemories = sorted.filter((m) => m.memoryType === "growth_area");
+      const strengthMemories = sorted.filter(
+        (m) => m.memoryType === "strength",
+      );
+      const growthMemories = sorted.filter(
+        (m) => m.memoryType === "growth_area",
+      );
 
       if (traitMemory) {
         insights.push({
@@ -432,7 +444,7 @@ export const shouldSuggestRetake = query({
     const results = await ctx.db
       .query("quizResults")
       .withIndex("by_userId_categoryId", (q) =>
-        q.eq("userId", user._id).eq("categoryId", category._id)
+        q.eq("userId", user._id).eq("categoryId", category._id),
       )
       .collect();
 
@@ -440,7 +452,7 @@ export const shouldSuggestRetake = query({
 
     const latest = results.sort(
       (a, b) =>
-        new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
+        new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime(),
     )[0];
 
     // Suggest retake if more than 30 days old
@@ -457,7 +469,12 @@ export const shouldSuggestRetake = query({
 // ============================================================
 
 /** Format quiz insights for injection into Nora's system prompt */
-export const formatQuizContextForPrompt = query({
+/**
+ * Internal only. As a public query taking an arbitrary userId, this handed any
+ * caller another user's full psychometric profile. It has no client callers —
+ * it exists to build Nora's prompt context server-side.
+ */
+export const formatQuizContextForPrompt = internalQuery({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
     const insights = await ctx.db
@@ -488,7 +505,7 @@ export const formatQuizContextForPrompt = query({
         .sort(
           (a, b) =>
             new Date(b.extractedAt).getTime() -
-            new Date(a.extractedAt).getTime()
+            new Date(a.extractedAt).getTime(),
         )[0];
 
       if (traitInsight) {

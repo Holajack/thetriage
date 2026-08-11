@@ -5,6 +5,7 @@ import {
   NavigationContainer,
   NavigationContainerRef,
   CommonActions,
+  type LinkingOptions,
 } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useAuth as useClerkAuth } from "@clerk/clerk-expo";
@@ -15,6 +16,9 @@ import { MainNavigator } from "./MainNavigator";
 import { AuthNavigator } from "./AuthNavigator";
 import { OnboardingNavigator } from "./OnboardingNavigator";
 import { RootStackParamList } from "./types";
+import { usePresence } from "../hooks/usePresence";
+import { track, flushAnalytics } from "../analytics/analytics";
+import { AnalyticsEvent } from "../analytics/events";
 import { StudySessionScreen } from "../screens/main/StudySessionScreen";
 import BreakTimerScreen from "../screens/main/BreakTimerScreen";
 import SessionReportScreen from "../screens/main/SessionReportScreen";
@@ -42,6 +46,18 @@ export const RootNavigator = () => {
   const hasEverLoaded = useRef(false);
   const navigationRef =
     useRef<NavigationContainerRef<RootStackParamList>>(null);
+
+  // Keep users.lastSeen fresh. Nothing wrote it before, which silently made the
+  // daily notification cron deliver to zero users.
+  usePresence();
+
+  // The one event that makes retention measurable at all.
+  useEffect(() => {
+    track(AnalyticsEvent.APP_OPENED);
+    return () => {
+      void flushAnalytics();
+    };
+  }, []);
 
   // Track when Clerk has loaded at least once
   useEffect(() => {
@@ -122,10 +138,15 @@ export const RootNavigator = () => {
   // Note: Clerk handles password reset via email code verification
   // The ResetPassword screen is navigated to from ForgotPassword screen after initiating reset
 
-  // Deep linking configuration
-  // Note: Clerk handles auth deep links internally
-  const linking = {
-    prefixes: ["hikewise://"],
+  // Deep linking configuration.
+  // This object used to be built and then never handed to NavigationContainer,
+  // so every hikewise:// link — including every invite — was inert.
+  const linking: LinkingOptions<RootStackParamList> = {
+    prefixes: [
+      "hikewise://",
+      "https://hikewise.app",
+      "https://www.hikewise.app",
+    ],
     config: {
       screens: {
         Auth: {
@@ -136,8 +157,14 @@ export const RootNavigator = () => {
           },
         },
         Landing: "",
-        Main: "main",
         Onboarding: "onboarding",
+
+        // The invite target. StudyRoomScreen is a ROOT stack screen — an earlier
+        // attempt nested it under Main, where it does not exist, so the link
+        // resolved to nothing and invites stayed dead even once linking was wired.
+        StudyRoomScreen: "join/:roomCode",
+
+        Main: "main",
       },
     },
     async getInitialURL() {
@@ -168,10 +195,10 @@ export const RootNavigator = () => {
     return null; // Minimal flash - Clerk loads very fast
   }
 
-  // Note: linking config defined but not used - can re-enable after verifying deep links work
   return (
     <NavigationContainer
       ref={navigationRef}
+      linking={linking}
       onReady={() => {
         // Set navigation ref for QR acceptance context when navigation is ready
         if (navigationRef.current) {

@@ -10,8 +10,12 @@ import { getCurrentUser, getCurrentUserOrNull } from "./users";
 export const getRadarChartData = query({
   args: { resultId: v.id("quizResults") },
   handler: async (ctx, args) => {
+    const user = await getCurrentUserOrNull(ctx);
     const result = await ctx.db.get(args.resultId);
-    if (!result) throw new Error("Result not found");
+    // Psychometric results are private to the person who took the quiz.
+    if (!result || !user || result.userId !== user._id) {
+      throw new Error("Result not found");
+    }
 
     // Get sub-dimension metadata for labels and order
     const subDimensions = await ctx.db
@@ -22,7 +26,7 @@ export const getRadarChartData = query({
     // Build radar chart data
     const radarData = result.subDimensionScores.map((score) => {
       const subDim = subDimensions.find(
-        (sd) => sd._id.toString() === score.subDimensionId.toString()
+        (sd) => sd._id.toString() === score.subDimensionId.toString(),
       );
 
       return {
@@ -83,14 +87,14 @@ export const getHistoricalRadarData = query({
     const history = await ctx.db
       .query("quizProgressHistory")
       .withIndex("by_userId_categoryId", (q) =>
-        q.eq("userId", user._id).eq("categoryId", category._id)
+        q.eq("userId", user._id).eq("categoryId", category._id),
       )
       .collect();
 
     // Sort by recorded date (newest first)
     history.sort(
       (a, b) =>
-        new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+        new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime(),
     );
 
     // Apply limit
@@ -128,7 +132,7 @@ export const getImprovementTrajectory = query({
     const results = await ctx.db
       .query("quizResults")
       .withIndex("by_userId_categoryId", (q) =>
-        q.eq("userId", user._id).eq("categoryId", category._id)
+        q.eq("userId", user._id).eq("categoryId", category._id),
       )
       .collect();
 
@@ -143,7 +147,7 @@ export const getImprovementTrajectory = query({
     // Sort by completion date (oldest first)
     results.sort(
       (a, b) =>
-        new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime()
+        new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime(),
     );
 
     const first = results[0];
@@ -156,7 +160,7 @@ export const getImprovementTrajectory = query({
     const subDimensionImprovements = latest.subDimensionScores.map(
       (latestScore) => {
         const firstScore = first.subDimensionScores.find(
-          (s) => s.slug === latestScore.slug
+          (s) => s.slug === latestScore.slug,
         );
 
         return {
@@ -164,9 +168,10 @@ export const getImprovementTrajectory = query({
           name: latestScore.name,
           firstScore: firstScore?.normalizedScore || 0,
           latestScore: latestScore.normalizedScore,
-          improvement: latestScore.normalizedScore - (firstScore?.normalizedScore || 0),
+          improvement:
+            latestScore.normalizedScore - (firstScore?.normalizedScore || 0),
         };
-      }
+      },
     );
 
     // Sort by improvement (biggest gains first)
@@ -226,7 +231,7 @@ export const getCategoryComparison = query({
         const results = await ctx.db
           .query("quizResults")
           .withIndex("by_userId_categoryId", (q) =>
-            q.eq("userId", user._id).eq("categoryId", category._id)
+            q.eq("userId", user._id).eq("categoryId", category._id),
           )
           .collect();
 
@@ -249,7 +254,7 @@ export const getCategoryComparison = query({
         results.sort(
           (a, b) =>
             new Date(b.completedAt).getTime() -
-            new Date(a.completedAt).getTime()
+            new Date(a.completedAt).getTime(),
         );
 
         const latest = results[0];
@@ -269,7 +274,7 @@ export const getCategoryComparison = query({
           completedAt: latest.completedAt,
           attemptCount: results.length,
         };
-      })
+      }),
     );
 
     // Sort by category order
@@ -315,7 +320,7 @@ export const getOverallProfile = query({
       const results = await ctx.db
         .query("quizResults")
         .withIndex("by_userId_categoryId", (q) =>
-          q.eq("userId", user._id).eq("categoryId", category._id)
+          q.eq("userId", user._id).eq("categoryId", category._id),
         )
         .collect();
 
@@ -324,7 +329,7 @@ export const getOverallProfile = query({
       // Get latest
       results.sort(
         (a, b) =>
-          new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
+          new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime(),
       );
 
       const latest = results[0];
@@ -380,8 +385,9 @@ export const getPercentileComparison = query({
     resultId: v.id("quizResults"),
   },
   handler: async (ctx, args) => {
+    const user = await getCurrentUserOrNull(ctx);
     const result = await ctx.db.get(args.resultId);
-    if (!result) return null;
+    if (!result || !user || result.userId !== user._id) return null;
 
     // Get benchmark stats
     const benchmark = await ctx.db
@@ -389,7 +395,7 @@ export const getPercentileComparison = query({
       .withIndex("by_categoryId_educationLevel", (q) =>
         q
           .eq("categoryId", result.categoryId)
-          .eq("educationLevel", result.educationLevel)
+          .eq("educationLevel", result.educationLevel),
       )
       .unique();
 
@@ -403,13 +409,13 @@ export const getPercentileComparison = query({
     // Calculate percentile
     const percentile = calculatePercentile(
       result.overallScore,
-      benchmark.percentiles
+      benchmark.percentiles,
     );
 
     // Get sub-dimension percentiles
     const subDimensionPercentiles = result.subDimensionScores.map((score) => {
       const subDimBenchmark = benchmark.subDimensionBenchmarks.find(
-        (b) => b.subDimensionSlug === score.slug
+        (b) => b.subDimensionSlug === score.slug,
       );
 
       return {
@@ -417,7 +423,10 @@ export const getPercentileComparison = query({
         name: score.name,
         score: score.normalizedScore,
         percentile: subDimBenchmark
-          ? calculatePercentile(score.normalizedScore, subDimBenchmark.percentiles)
+          ? calculatePercentile(
+              score.normalizedScore,
+              subDimBenchmark.percentiles,
+            )
           : null,
       };
     });
@@ -435,10 +444,10 @@ export const getPercentileComparison = query({
 
 function calculatePercentile(
   score: number,
-  percentiles: Array<{ percentile: number; scoreThreshold: number }>
+  percentiles: Array<{ percentile: number; scoreThreshold: number }>,
 ): number {
   const sorted = [...percentiles].sort(
-    (a, b) => a.scoreThreshold - b.scoreThreshold
+    (a, b) => a.scoreThreshold - b.scoreThreshold,
   );
 
   if (score <= sorted[0].scoreThreshold) {
@@ -458,7 +467,7 @@ function calculatePercentile(
         (score - lower.scoreThreshold) /
         (upper.scoreThreshold - lower.scoreThreshold);
       return Math.round(
-        lower.percentile + ratio * (upper.percentile - lower.percentile)
+        lower.percentile + ratio * (upper.percentile - lower.percentile),
       );
     }
   }

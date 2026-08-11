@@ -1,7 +1,9 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
+import { track } from "../analytics/analytics";
+import { AnalyticsEvent } from "../analytics/events";
 import { Id } from "../../convex/_generated/dataModel";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 // Re-export types for backward compatibility
 export interface Task {
@@ -82,6 +84,10 @@ export const useConvexTasks = () => {
     priority: string = "Medium",
     subject: string = "General",
   ) => {
+    track(AnalyticsEvent.TASK_CREATED, {
+      priority,
+      hasSubject: subject !== "General",
+    });
     const id = await createTask({
       title,
       description,
@@ -401,7 +407,9 @@ export const useConvexStudyRooms = () => {
         ...r,
         id: r._id,
         creator_id: r.ownerId,
-        room_code: r.roomCode,
+        // The browse list deliberately carries no join code — it is a credential.
+        // Members read it from studyRooms.getById.
+        room_code: "",
         is_public: r.isPublic,
         max_participants: r.maxParticipants,
         current_participants: r.currentParticipants,
@@ -430,6 +438,10 @@ export const useConvexFocusSession = () => {
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [currentSession, setCurrentSession] = useState<any>(null);
   const [sessionDuration, setSessionDuration] = useState(0);
+
+  // Locally-measured pause total — a safety net for a failed pause() mutation.
+  const pausedAtRef = useRef<number | null>(null);
+  const pausedTotalRef = useRef(0);
 
   const startMutation = useMutation(api.focusSessions.start);
   const endMutation = useMutation(api.focusSessions.end);
@@ -466,6 +478,15 @@ export const useConvexFocusSession = () => {
       taskId,
     };
 
+    pausedAtRef.current = null;
+    pausedTotalRef.current = 0;
+
+    track(AnalyticsEvent.SESSION_STARTED, {
+      sessionType,
+      hasSubject: Boolean(subject),
+      inRoom: Boolean(roomId),
+    });
+
     setCurrentSession(session);
     setIsSessionActive(true);
     setSessionDuration(0);
@@ -473,88 +494,110 @@ export const useConvexFocusSession = () => {
     return session;
   };
 
-  const endSession = async () => {
-    if (!currentSession) return null;
+  /**
+   * Finish the session. Always tells the backend — dropping short sessions
+   * client-side left an "active" row alive forever while the UI cheerfully
+   * announced "Session Complete!". The server is the source of truth for
+   * duration (paused time excluded), Flint, and achievements.
+   */
+  const endSession = async (reflection?: {
+    rating?: number;
+    productivityRating?: number;
+    notes?: string;
+  }) => {
+    // Throw rather than return null. Returning null let StudySessionScreen render
+    // the success modal against an empty result — "Session Complete! 0m focused"
+    // — which is the same fabricated success this rewrite exists to remove.
+    if (!currentSession) {
+      throw new Error("No active session to end");
+    }
 
-    const endTime = new Date().toISOString();
-    const duration = Math.floor(
-      (new Date(endTime).getTime() -
-        new Date(
-          currentSession.start_time || currentSession.startTime,
-        ).getTime()) /
-        1000,
-    );
+    const sessionId = (currentSession.id ||
+      currentSession._id) as Id<"focusSessions">;
 
-    // Don't save sessions under 5 minutes
-    if (duration < 300) {
+    try {
+      // Close out an open pause before reporting the total.
+      let clientPaused = pausedTotalRef.current;
+      if (pausedAtRef.current) {
+        clientPaused += Math.max(
+          0,
+          Math.floor((Date.now() - pausedAtRef.current) / 1000),
+        );
+      }
+
+      const result = await endMutation({
+        sessionId,
+        rating: reflection?.rating,
+        productivityRating: reflection?.productivityRating,
+        notes: reflection?.notes,
+        clientPausedSeconds: clientPaused,
+      });
+
+      pausedAtRef.current = null;
+      pausedTotalRef.current = 0;
+
       setCurrentSession(null);
       setSessionDuration(0);
       setIsSessionActive(false);
+
       return {
-        id: currentSession.id || currentSession._id,
-        duration,
-        end_time: endTime,
-        status: "too_short",
-        message: "Session was less than 5 minutes and was not saved",
+        id: sessionId,
+        duration: result.durationSeconds,
+        duration_seconds: result.durationSeconds,
+        duration_minutes: result.durationMinutes,
+        flint_earned: result.flintEarned,
+        new_achievements: result.newAchievements ?? [],
+        // `credited: false` means it was too short to earn anything — the UI
+        // must say so rather than claim a completed session.
+        credited: result.credited,
+        end_time: new Date().toISOString(),
+        status: result.credited ? "completed" : "too_short",
       };
-    }
-
-    try {
-      await endMutation({
-        sessionId: (currentSession.id ||
-          currentSession._id) as Id<"focusSessions">,
-      });
-
-      // Award Flint currency (1 per minute)
-      const minutesCompleted = duration / 60;
-      const flintEarned = Math.floor(minutesCompleted);
-      if (flintEarned > 0) {
-        try {
-          // We need the user's current data to update flint
-          // This is handled via a separate call since we can't query inside a callback
-          // Flint to award tracked internally
-        } catch (flintError) {
-          // Error awarding Flint
-        }
-      }
     } catch (error) {
-      // Error ending session
+      // Surface the failure. Fabricating a success payload here is what made
+      // the app award phantom Flint for sessions the backend never recorded.
+      setIsSessionActive(false);
+      throw error;
     }
-
-    const result = {
-      id: currentSession.id || currentSession._id,
-      duration,
-      duration_seconds: duration,
-      end_time: endTime,
-      status: "completed",
-    };
-
-    setCurrentSession(null);
-    setSessionDuration(0);
-    setIsSessionActive(false);
-
-    return result;
   };
 
   const pauseSession = async () => {
     if (!currentSession) return;
+
+    // Measure the pause locally as well as on the server. If the pause mutation
+    // fails (flaky network), the server would otherwise believe the user was
+    // focusing the whole time and pay them for it. endSession sends this total
+    // as a floor; over-reporting can only cost the user, never earn them more.
+    pausedAtRef.current = Date.now();
+
+    setIsSessionActive(false);
+    setCurrentSession({ ...currentSession, status: "paused" });
+
     await pauseMutation({
       sessionId: (currentSession.id ||
         currentSession._id) as Id<"focusSessions">,
     });
-    setIsSessionActive(false);
-    setCurrentSession({ ...currentSession, status: "paused" });
     return currentSession;
   };
 
   const resumeSession = async () => {
     if (!currentSession) return;
+
+    if (pausedAtRef.current) {
+      pausedTotalRef.current += Math.max(
+        0,
+        Math.floor((Date.now() - pausedAtRef.current) / 1000),
+      );
+      pausedAtRef.current = null;
+    }
+
+    setIsSessionActive(true);
+    setCurrentSession({ ...currentSession, status: "active" });
+
     await resumeMutation({
       sessionId: (currentSession.id ||
         currentSession._id) as Id<"focusSessions">,
     });
-    setIsSessionActive(true);
-    setCurrentSession({ ...currentSession, status: "active" });
     return currentSession;
   };
 
@@ -626,8 +669,6 @@ export const useConvexProfile = () => {
       trail_buddy_name: "trailBuddyName",
       sound_preference: "soundPreference",
       daily_reminder: "dailyReminder",
-      flint_currency: "flintCurrency",
-      first_session_bonus_claimed: "firstSessionBonusClaimed",
       time_zone: "timeZone",
       full_name_visibility: "fullNameVisibility",
       university_visibility: "universityVisibility",
@@ -636,11 +677,24 @@ export const useConvexProfile = () => {
       environment_theme: "environmentTheme",
     };
 
+    // Currency is server-authoritative (earned by focusSessions.end, spent by
+    // inventory.purchaseItem). The server no longer accepts it here, so drop it
+    // rather than send a field that would fail validation.
+    const SERVER_OWNED = new Set([
+      "flint_currency",
+      "flintCurrency",
+      "first_session_bonus_claimed",
+      "firstSessionBonusClaimed",
+    ]);
+
     for (const [key, value] of Object.entries(updates)) {
       if (value === undefined) continue;
+      if (SERVER_OWNED.has(key)) continue;
       const mappedKey = fieldMap[key] || key;
       convexUpdates[mappedKey] = value;
     }
+
+    if (Object.keys(convexUpdates).length === 0) return user;
 
     await updateUserMutation({
       userId: user._id,

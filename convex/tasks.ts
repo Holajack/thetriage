@@ -17,7 +17,11 @@ export const list = query({
 export const getById = query({
   args: { taskId: v.id("tasks") },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.taskId);
+    const user = await getCurrentUserOrNull(ctx);
+    if (!user) return null;
+    const task = await ctx.db.get(args.taskId);
+    if (!task || task.userId !== user._id) return null;
+    return task;
   },
 });
 
@@ -29,7 +33,7 @@ export const listByStatus = query({
     return await ctx.db
       .query("tasks")
       .withIndex("by_userId_status", (q) =>
-        q.eq("userId", user._id).eq("status", args.status)
+        q.eq("userId", user._id).eq("status", args.status),
       )
       .collect();
   },
@@ -40,19 +44,29 @@ export const create = mutation({
     title: v.string(),
     description: v.optional(v.string()),
     priority: v.optional(v.string()),
+    subject: v.optional(v.string()),
     category: v.optional(v.string()),
     estimatedMinutes: v.optional(v.number()),
     dueDate: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const user = await getCurrentUser(ctx);
+    const title = args.title.trim();
+    if (!title) throw new Error("Give the task a name");
+
+    // `subject` is what the app has always called it (it drives the brain map
+    // and the pre-session picker); `category` is the legacy column. Keep both
+    // in step so neither read path comes back empty.
+    const subject = args.subject ?? args.category;
+
     return await ctx.db.insert("tasks", {
       userId: user._id,
-      title: args.title,
+      title,
       description: args.description,
       priority: args.priority ?? "medium",
       status: "pending",
-      category: args.category,
+      subject,
+      category: subject,
       estimatedMinutes: args.estimatedMinutes,
       dueDate: args.dueDate,
     });
@@ -66,6 +80,7 @@ export const update = mutation({
     description: v.optional(v.string()),
     priority: v.optional(v.string()),
     status: v.optional(v.string()),
+    subject: v.optional(v.string()),
     category: v.optional(v.string()),
     estimatedMinutes: v.optional(v.number()),
     actualMinutes: v.optional(v.number()),
@@ -73,11 +88,23 @@ export const update = mutation({
     completedAt: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    const task = await ctx.db.get(args.taskId);
+    if (!task || task.userId !== user._id) {
+      throw new Error("Task not found");
+    }
+
     const { taskId, ...updates } = args;
     const cleanUpdates: Record<string, any> = {};
     for (const [key, value] of Object.entries(updates)) {
       if (value !== undefined) cleanUpdates[key] = value;
     }
+    // Keep subject/category mirrored whichever one the caller sent.
+    if (updates.subject !== undefined) cleanUpdates.category = updates.subject;
+    else if (updates.category !== undefined) {
+      cleanUpdates.subject = updates.category;
+    }
+
     if (Object.keys(cleanUpdates).length > 0) {
       await ctx.db.patch(taskId, cleanUpdates);
     }

@@ -32,12 +32,12 @@ export const startSession = mutation({
     const existingSessions = await ctx.db
       .query("quizSessions")
       .withIndex("by_userId_categoryId", (q) =>
-        q.eq("userId", user._id).eq("categoryId", category._id)
+        q.eq("userId", user._id).eq("categoryId", category._id),
       )
       .collect();
 
     const inProgressSession = existingSessions.find(
-      (s) => s.status === "in_progress"
+      (s) => s.status === "in_progress",
     );
 
     if (inProgressSession) {
@@ -79,7 +79,7 @@ export const getCurrentSession = query({
     const sessions = await ctx.db
       .query("quizSessions")
       .withIndex("by_userId_categoryId", (q) =>
-        q.eq("userId", user._id).eq("categoryId", category._id)
+        q.eq("userId", user._id).eq("categoryId", category._id),
       )
       .collect();
 
@@ -97,7 +97,7 @@ export const getAllInProgressSessions = query({
     const sessions = await ctx.db
       .query("quizSessions")
       .withIndex("by_userId_status", (q) =>
-        q.eq("userId", user._id).eq("status", "in_progress")
+        q.eq("userId", user._id).eq("status", "in_progress"),
       )
       .collect();
 
@@ -113,7 +113,7 @@ export const getAllInProgressSessions = query({
           category,
           answeredCount: responses.length,
         };
-      })
+      }),
     );
   },
 });
@@ -131,7 +131,7 @@ export const getSessionWithQuestions = query({
 
     // Get questions in session order
     const questions = await Promise.all(
-      session.questionIds.map((qId) => ctx.db.get(qId))
+      session.questionIds.map((qId) => ctx.db.get(qId)),
     );
 
     // Get responses for this session
@@ -151,7 +151,7 @@ export const getSessionWithQuestions = query({
       questions: questions.filter(Boolean).map((q) => {
         // Apply education level adaptation if available
         const adapted = q!.adaptedVersions?.find(
-          (v) => v.educationLevel === session.educationLevel
+          (v) => v.educationLevel === session.educationLevel,
         );
 
         return {
@@ -170,7 +170,9 @@ export const getSessionWithQuestions = query({
       progress: {
         answered: responses.length,
         total: session.questionsCount,
-        percentage: Math.round((responses.length / session.questionsCount) * 100),
+        percentage: Math.round(
+          (responses.length / session.questionsCount) * 100,
+        ),
       },
     };
   },
@@ -210,9 +212,7 @@ export const submitAnswer = mutation({
     }
 
     // Check for custom scoring weight
-    const option = question.options.find(
-      (o) => o.value === args.selectedValue
-    );
+    const option = question.options.find((o) => o.value === args.selectedValue);
     if (option?.scoringWeight !== undefined) {
       rawScore = option.scoringWeight;
     }
@@ -227,7 +227,7 @@ export const submitAnswer = mutation({
       .collect();
 
     const existingResponse = existingResponses.find(
-      (r) => r.questionId === args.questionId
+      (r) => r.questionId === args.questionId,
     );
 
     if (existingResponse) {
@@ -255,7 +255,7 @@ export const submitAnswer = mutation({
       // Update session progress
       const newIndex = Math.min(
         session.currentQuestionIndex + 1,
-        session.questionsCount - 1
+        session.questionsCount - 1,
       );
       await ctx.db.patch(args.sessionId, {
         currentQuestionIndex: newIndex,
@@ -290,7 +290,9 @@ export const completeSession = mutation({
 
     if (session.status === "completed") {
       // Already completed, return existing result
-      const existingResult = session.resultId ? await ctx.db.get(session.resultId) : null;
+      const existingResult = session.resultId
+        ? await ctx.db.get(session.resultId)
+        : null;
       return { result: existingResult, sessionId: args.sessionId };
     }
 
@@ -314,23 +316,26 @@ export const completeSession = mutation({
     const subDimensionScores = await calculateSubDimensionScores(
       ctx,
       responses,
-      subDimensions
+      subDimensions,
     );
 
     // Calculate overall score
-    const overallScore = calculateOverallScore(subDimensionScores, subDimensions);
+    const overallScore = calculateOverallScore(
+      subDimensionScores,
+      subDimensions,
+    );
 
     // Determine trait profile
     const traitProfile = determineTraitProfile(subDimensionScores);
 
     // Identify strengths and areas for growth
-    const { strengths, areasForGrowth } = identifyStrengthsAndGrowth(
-      subDimensionScores
-    );
+    const { strengths, areasForGrowth } =
+      identifyStrengthsAndGrowth(subDimensionScores);
 
     // Calculate average response time
     const averageResponseTimeMs =
-      responses.reduce((sum, r) => sum + r.responseTimeMs, 0) / responses.length;
+      responses.reduce((sum, r) => sum + r.responseTimeMs, 0) /
+      responses.length;
 
     // Calculate time spent
     const startTime = new Date(session.startedAt).getTime();
@@ -424,7 +429,7 @@ export const getQuizHistory = query({
       results = await ctx.db
         .query("quizResults")
         .withIndex("by_userId_categoryId", (q) =>
-          q.eq("userId", user._id).eq("categoryId", category._id)
+          q.eq("userId", user._id).eq("categoryId", category._id),
         )
         .collect();
     } else {
@@ -437,7 +442,7 @@ export const getQuizHistory = query({
     // Sort by completion date (newest first)
     results.sort(
       (a, b) =>
-        new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
+        new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime(),
     );
 
     // Apply limit
@@ -450,7 +455,7 @@ export const getQuizHistory = query({
       results.map(async (r) => {
         const category = await ctx.db.get(r.categoryId);
         return { ...r, category };
-      })
+      }),
     );
 
     return resultsWithCategory;
@@ -474,19 +479,24 @@ export const getLatestResultPerCategory = query({
         const results = await ctx.db
           .query("quizResults")
           .withIndex("by_userId_categoryId", (q) =>
-            q.eq("userId", user._id).eq("categoryId", category._id)
+            q.eq("userId", user._id).eq("categoryId", category._id),
           )
           .collect();
 
         if (results.length === 0) {
-          return { category, result: null, completionCount: 0, hasResult: false };
+          return {
+            category,
+            result: null,
+            completionCount: 0,
+            hasResult: false,
+          };
         }
 
         // Sort and get latest
         results.sort(
           (a, b) =>
             new Date(b.completedAt).getTime() -
-            new Date(a.completedAt).getTime()
+            new Date(a.completedAt).getTime(),
         );
 
         return {
@@ -495,7 +505,7 @@ export const getLatestResultPerCategory = query({
           completionCount: results.length,
           hasResult: true,
         };
-      })
+      }),
     );
 
     return latestResults.sort((a, b) => a.category.order - b.category.order);
@@ -509,7 +519,7 @@ export const getLatestResultPerCategory = query({
 async function calculateSubDimensionScores(
   ctx: any,
   responses: any[],
-  subDimensions: any[]
+  subDimensions: any[],
 ): Promise<any[]> {
   const subDimScores = [];
 
@@ -518,7 +528,10 @@ async function calculateSubDimensionScores(
     const subDimResponses = [];
     for (const response of responses) {
       const question = await ctx.db.get(response.questionId);
-      if (question && question.subDimensionId.toString() === subDim._id.toString()) {
+      if (
+        question &&
+        question.subDimensionId.toString() === subDim._id.toString()
+      ) {
         subDimResponses.push({ response, question });
       }
     }
@@ -567,14 +580,14 @@ async function calculateSubDimensionScores(
 
 function calculateOverallScore(
   subDimensionScores: any[],
-  subDimensions: any[]
+  subDimensions: any[],
 ): number {
   let weightedSum = 0;
   let totalWeight = 0;
 
   for (const score of subDimensionScores) {
     const subDim = subDimensions.find(
-      (sd) => sd._id.toString() === score.subDimensionId.toString()
+      (sd) => sd._id.toString() === score.subDimensionId.toString(),
     );
     if (subDim) {
       weightedSum += score.normalizedScore * subDim.weight;
@@ -588,7 +601,7 @@ function calculateOverallScore(
 function determineTraitProfile(subDimensionScores: any[]): any {
   // Sort by normalized score descending
   const sorted = [...subDimensionScores].sort(
-    (a, b) => b.normalizedScore - a.normalizedScore
+    (a, b) => b.normalizedScore - a.normalizedScore,
   );
 
   const primary = sorted[0];
@@ -631,7 +644,7 @@ function identifyStrengthsAndGrowth(subDimensionScores: any[]): {
   areasForGrowth: any[];
 } {
   const sorted = [...subDimensionScores].sort(
-    (a, b) => b.normalizedScore - a.normalizedScore
+    (a, b) => b.normalizedScore - a.normalizedScore,
   );
 
   // Top 2-3 as strengths (scores above 60)

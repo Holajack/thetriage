@@ -722,8 +722,14 @@ export default function FocusPreparationScreen() {
   };
 
   const handleStartFocus = async () => {
-    if (!selectedTask) {
-      Alert.alert("Select a Task", "Please select a task to focus on");
+    // A brand-new user has no tasks, and this used to hard-block them with
+    // "Please select a task" — a dead end on the single most important action in
+    // the app. Focusing without a task is legitimate; it just runs as general study.
+    if (!selectedTask && activeTasks.length > 0 && focusMode === "summit") {
+      Alert.alert(
+        "Pick a task",
+        "Summit mode works through your tasks one at a time. Choose at least one.",
+      );
       return;
     }
 
@@ -1519,6 +1525,32 @@ export default function FocusPreparationScreen() {
                   )}
                 </ReAnimated.View>
 
+                {/* A new user has no tasks. Say so, and make clear they can
+                    still start — the list used to just render as nothing. */}
+                {activeTasks.length === 0 && (
+                  <View style={styles.emptyTasks}>
+                    <Ionicons
+                      name="leaf-outline"
+                      size={26}
+                      color={theme.primary}
+                    />
+                    <Text
+                      style={[styles.emptyTasksTitle, { color: theme.text }]}
+                    >
+                      No tasks yet
+                    </Text>
+                    <Text
+                      style={[
+                        styles.emptyTasksBody,
+                        { color: theme.textSecondary },
+                      ]}
+                    >
+                      Add one above to focus on something specific — or just hit
+                      Start and we&apos;ll log it as general study.
+                    </Text>
+                  </View>
+                )}
+
                 {/* Existing Tasks */}
                 {activeTasks.map((task, index) => {
                   const isSelected = selectedTasks.some(
@@ -2199,5 +2231,20 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: "center",
     alignItems: "center",
+  },
+  emptyTasks: {
+    alignItems: "center",
+    paddingVertical: 22,
+    paddingHorizontal: 18,
+    gap: 6,
+  },
+  emptyTasksTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  emptyTasksBody: {
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: "center",
   },
 });

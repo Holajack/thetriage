@@ -124,6 +124,16 @@ export function applyProfileVisibility<
   };
 }
 
+/**
+ * Strip account-identifying fields from a user document before it leaves the
+ * server for anyone other than the owner. clerkId is an auth handle and email
+ * is PII — neither has any business on another user's profile card.
+ */
+function stripSensitiveFields(user: Doc<"users">) {
+  const { clerkId: _clerkId, email: _email, ...safe } = user;
+  return safe;
+}
+
 /** Resolve the viewer relationship to a target and apply profile visibility. */
 async function readUserWithVisibility(
   ctx: QueryCtx,
@@ -135,7 +145,8 @@ async function readUserWithVisibility(
   const isFriend = viewer
     ? await areFriends(ctx, viewer._id, target._id)
     : false;
-  return applyProfileVisibility(target, isSelf, isFriend);
+  const visible = applyProfileVisibility(target, isSelf, isFriend);
+  return isSelf ? visible : stripSensitiveFields(visible);
 }
 
 // --- Queries ---
@@ -178,20 +189,10 @@ export const getByUsername = query({
 
 // --- Mutations ---
 
-export const createUser = mutation({
-  args: {
-    clerkId: v.string(),
-    email: v.string(),
-    username: v.optional(v.string()),
-    fullName: v.optional(v.string()),
-    firstName: v.optional(v.string()),
-    lastName: v.optional(v.string()),
-    avatarUrl: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    return await createUserIfMissing(ctx, args);
-  },
-});
+// NOTE: there is deliberately no public `createUser` / `deleteUser` mutation.
+// Account lifecycle is owned by the Clerk webhook (http.ts ->
+// internal.webhookHelpers.*). Exposing them publicly let any caller forge a
+// user row from an arbitrary clerkId, or delete any account by clerkId.
 
 export const updateUser = mutation({
   args: {
@@ -218,19 +219,27 @@ export const updateUser = mutation({
     dailyReminder: v.optional(v.string()),
     trailBuddyType: v.optional(v.string()),
     trailBuddyName: v.optional(v.string()),
-    flintCurrency: v.optional(v.number()),
-    firstSessionBonusClaimed: v.optional(v.boolean()),
     environmentTheme: v.optional(v.string()),
+    // flintCurrency is deliberately NOT accepted here. Currency is awarded by
+    // focusSessions.end and spent by inventory.purchaseItem, both server-side.
+    // Letting the client patch its own balance made the shop free.
   },
   handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
     const { userId, ...updates } = args;
+
+    // The userId argument is legacy; a caller may only ever update itself.
+    if (userId !== user._id) {
+      throw new Error("Not authorized to update another user");
+    }
+
     // Filter out undefined values
     const cleanUpdates: Record<string, any> = {};
     for (const [key, value] of Object.entries(updates)) {
       if (value !== undefined) cleanUpdates[key] = value;
     }
     if (Object.keys(cleanUpdates).length > 0) {
-      await ctx.db.patch(userId, cleanUpdates);
+      await ctx.db.patch(user._id, cleanUpdates);
     }
   },
 });
@@ -336,19 +345,6 @@ export const _setSubscriptionTierFromWebhook = internalMutation({
       return;
     }
     await ctx.db.patch(userId, { subscriptionTier: newTier });
-  },
-});
-
-export const deleteUser = mutation({
-  args: { clerkId: v.string() },
-  handler: async (ctx, args) => {
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerkId", (q) => q.eq("clerkId", args.clerkId))
-      .unique();
-    if (user) {
-      await ctx.db.delete(user._id);
-    }
   },
 });
 

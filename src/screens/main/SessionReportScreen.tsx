@@ -16,6 +16,8 @@ import * as Haptics from "expo-haptics";
 import type { RootStackParamList } from "../../navigation/types";
 const { useUserAppData } = require("../../utils/userAppData");
 import { useBackgroundMusic } from "../../hooks/useBackgroundMusic";
+import { useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 import { useTheme } from "../../context/ThemeContext";
 import { StaggeredItem } from "../../components/premium/StaggeredList";
 import { ProductivityScoreRing } from "../../components/premium/ProductivityScoreRing";
@@ -44,12 +46,50 @@ interface SessionAchievement {
   color: string;
 }
 
+/** Presentation for the achievement categories the server can award. */
+const ACHIEVEMENT_ICONS: Record<string, MaterialIconName> = {
+  streaks: "local-fire-department",
+  focus: "timer",
+  sessions: "check-circle",
+  subjects: "layers",
+  rooms: "groups",
+  breaks: "local-cafe",
+};
+
+/** Shape returned by convex focusSessions.end / achievements.sync. */
+interface AwardedAchievement {
+  achievementType: string;
+  title: string;
+  description: string;
+  category: string;
+}
+
+const ACHIEVEMENT_COLORS: Record<string, string> = {
+  streaks: "#FF6B35",
+  focus: "#2196F3",
+  sessions: "#4CAF50",
+  subjects: "#9C27B0",
+  rooms: "#00BCD4",
+  breaks: "#FF9800",
+};
+
+function toSessionAchievement(a: AwardedAchievement): SessionAchievement {
+  return {
+    id: a.achievementType,
+    title: a.title,
+    description: a.description,
+    icon: ACHIEVEMENT_ICONS[a.category] ?? "emoji-events",
+    color: ACHIEVEMENT_COLORS[a.category] ?? "#FFD700",
+  };
+}
+
 const SessionReportScreen = () => {
   const { data: userData } = useUserAppData();
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute();
   const { theme, isDark } = useTheme();
+  const syncAchievements = useMutation(api.achievements.sync);
 
   const params = route.params as
     | {
@@ -64,6 +104,8 @@ const SessionReportScreen = () => {
         productivity: number;
         focusMode?: "basecamp" | "summit";
         completedTasksData?: CompletedTaskData[];
+        /** Awarded by focusSessions.end — the real, persisted badges. */
+        newAchievements?: AwardedAchievement[];
       }
     | undefined;
 
@@ -114,80 +156,46 @@ const SessionReportScreen = () => {
     return Math.min(Math.floor(score), maxScore);
   }, [params]);
 
-  // Check for new achievements
+  // Celebrate the achievements the SERVER actually awarded for this session.
+  //
+  // This screen used to invent badges from the ratings the user had just typed
+  // ("Focus Master" for giving yourself 5 stars) and never save any of them.
+  //
+  // focusSessions.end already awards and returns what was earned, so those come
+  // in through navigation params. sync() is only a BACKFILL for anything earned
+  // outside a session (a break, say) — on its own it would always return [],
+  // because end() had already claimed this session's badges a moment earlier.
   useEffect(() => {
-    const checkAchievements = async () => {
-      if (!params) return;
+    let cancelled = false;
 
-      const achievements: SessionAchievement[] = [];
+    const fromSession = (params?.newAchievements ?? []).map(
+      toSessionAchievement,
+    );
+    if (fromSession.length > 0) setNewAchievements(fromSession);
 
-      // Focus Master achievement
-      if (params.focusRating >= 5) {
-        achievements.push({
-          id: "focus_master",
-          title: "Focus Master",
-          description: "Achieved perfect focus rating",
-          icon: "psychology",
-          color: "#4CAF50",
+    syncAchievements({})
+      .then((awarded) => {
+        if (cancelled || !awarded || awarded.length === 0) return;
+        setNewAchievements((prev) => {
+          const seen = new Set(prev.map((a) => a.id));
+          const extra = awarded
+            .filter((a) => !seen.has(a.achievementType))
+            .map(toSessionAchievement);
+          return extra.length > 0 ? [...prev, ...extra] : prev;
         });
-      }
+      })
+      .catch(() => {
+        // A failed sync must not fake a badge — just show what we already have.
+      });
 
-      // Productivity Pro achievement
-      if (params.productivity >= 5) {
-        achievements.push({
-          id: "productivity_pro",
-          title: "Productivity Pro",
-          description: "Achieved maximum productivity",
-          icon: "trending-up",
-          color: "#2196F3",
-        });
-      }
-
-      // Session Completion achievement
-      if (params.taskCompleted) {
-        achievements.push({
-          id: "session_complete",
-          title: "Session Complete",
-          description: "Completed full focus session",
-          icon: "emoji-events",
-          color: "#FF9800",
-        });
-      }
-
-      // Note Taker achievement
-      if (params.notes && params.notes.trim().length > 20) {
-        achievements.push({
-          id: "note_taker",
-          title: "Thoughtful Learner",
-          description: "Added detailed session notes",
-          icon: "edit-note",
-          color: "#9C27B0",
-        });
-      }
-
-      // High Score achievement
-      if (calculateSessionScore >= 90) {
-        achievements.push({
-          id: "high_score",
-          title: "Excellence Achieved",
-          description: "Scored 90+ on session quality",
-          icon: "star",
-          color: "#FFD700",
-        });
-      }
-
-      setNewAchievements(achievements);
-
-      // TODO: Save achievements to Convex
-      // Achievement saving will use Convex mutations in a future update
-      if (achievements.length > 0) {
-        // Achievements earned (not saved yet)
-      }
+    return () => {
+      cancelled = true;
     };
+  }, [syncAchievements, params?.newAchievements]);
 
-    checkAchievements();
+  useEffect(() => {
     setSessionScore(calculateSessionScore);
-  }, [params, calculateSessionScore]);
+  }, [calculateSessionScore]);
 
   // Stop music on screen entry
   useEffect(() => {

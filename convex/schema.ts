@@ -56,6 +56,10 @@ export default defineSchema({
     // Presence tracking
     lastSeen: v.optional(v.number()), // Unix timestamp
     isOnline: v.optional(v.boolean()),
+    // Acquisition attribution, captured once. Without this we cannot tell an
+    // invited user from an organic one.
+    signupSource: v.optional(v.string()), // "invite" | "qr" | "organic" | campaign tag
+    referredByUserId: v.optional(v.id("users")),
   })
     .index("by_clerkId", ["clerkId"])
     .index("by_email", ["email"])
@@ -172,6 +176,9 @@ export default defineSchema({
     description: v.optional(v.string()),
     priority: v.optional(v.string()), // 'low' | 'medium' | 'high'
     status: v.optional(v.string()), // 'pending' | 'in_progress' | 'completed' | 'cancelled'
+    // The client has always called this "subject" (it drives the brain map and
+    // the pre-session subject picker); `category` is the legacy column name.
+    subject: v.optional(v.string()),
     category: v.optional(v.string()),
     estimatedMinutes: v.optional(v.number()),
     actualMinutes: v.optional(v.number()),
@@ -215,9 +222,23 @@ export default defineSchema({
     status: v.optional(v.string()), // 'active' | 'paused' | 'completed' | 'cancelled'
     subject: v.optional(v.string()), // Topic/subject for analytics tracking
     taskId: v.optional(v.id("tasks")), // Associated task if any
+
+    // Paused time must be excluded from the credited duration, or a user who
+    // pauses for two hours is paid for two hours of focus.
+    pausedAt: v.optional(v.number()), // epoch ms of the current pause, if paused
+    totalPausedSeconds: v.optional(v.number()), // accumulated across all pauses
+
+    /** One break may be banked per session (drives the break achievements). */
+    breakRecorded: v.optional(v.boolean()),
+
+    // Post-session reflection, captured on the session report.
+    rating: v.optional(v.number()), // 1-5 focus rating
+    productivityRating: v.optional(v.number()), // 1-5
+    notes: v.optional(v.string()),
   })
     .index("by_userId", ["userId"])
-    .index("by_userId_status", ["userId", "status"]),
+    .index("by_userId_status", ["userId", "status"])
+    .index("by_status", ["status"]),
 
   // ============================================================
   // STUDY ROOMS
@@ -335,6 +356,11 @@ export default defineSchema({
     sessionsCompleted: v.optional(v.number()),
     totalSessions: v.optional(v.number()),
     achievementsEarned: v.optional(v.number()),
+    // Anchors for the rolling windows. Without these, weeklyFocusTime and
+    // monthlyFocusTime only ever grow, so "this week" silently means "all time".
+    weekStartDate: v.optional(v.string()), // YYYY-MM-DD (Monday of the current week)
+    monthStartDate: v.optional(v.string()), // YYYY-MM (current month)
+    breaksTaken: v.optional(v.number()), // drives the "breaks" achievements
   }).index("by_userId", ["userId"]),
 
   // ============================================================
@@ -864,4 +890,27 @@ export default defineSchema({
   })
     .index("by_userId", ["userId"])
     .index("by_userId_status", ["userId", "status"]),
+
+  // ============================================================
+  // PRODUCT ANALYTICS
+  // ============================================================
+
+  // First-party product events. Deliberately a Convex table rather than a
+  // third-party SDK: the data we need for beta (funnel, activation, retention)
+  // is all first-party, it ships no extra binary, and it needs no ATT prompt.
+  events: defineTable({
+    userId: v.optional(v.id("users")), // absent for pre-signup events
+    name: v.string(), // e.g. "session_completed" — see src/analytics/events.ts
+    // Small, non-PII payload: ids, durations, enum-ish strings.
+    props: v.optional(v.any()),
+    // Acquisition attribution, captured once at signup and stamped on events.
+    source: v.optional(v.string()), // e.g. "invite", "qr", "organic"
+    platform: v.optional(v.string()), // "ios" | "android"
+    appVersion: v.optional(v.string()),
+    sessionId: v.optional(v.string()), // client-generated app-open id
+    ts: v.number(), // epoch ms (server-stamped)
+  })
+    .index("by_userId", ["userId"])
+    .index("by_name", ["name"])
+    .index("by_ts", ["ts"]),
 });

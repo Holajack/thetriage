@@ -38,6 +38,26 @@ export function tierRank(raw: string | undefined | null): number {
   return TIER_RANK[normalizeTier(raw)];
 }
 
+/**
+ * Study rooms a user may OWN at once. Mirrors getStudyRoomLimit in
+ * src/utils/tierGating.ts — the client hides the button, this enforces it.
+ */
+const STUDY_ROOM_LIMIT: Record<CanonicalTier, number> = {
+  free: 0,
+  basic: 0,
+  pro: 2,
+  elite: Number.POSITIVE_INFINITY,
+};
+
+export function getStudyRoomLimit(raw: string | undefined | null): number {
+  return STUDY_ROOM_LIMIT[normalizeTier(raw)];
+}
+
+/** Full community messaging (DMs beyond friends) is Pro and above. */
+export function hasFullMessaging(raw: string | undefined | null): boolean {
+  return tierRank(raw) >= TIER_RANK.pro;
+}
+
 export interface AiLimit {
   enabled: boolean;
   perDay: number;

@@ -687,9 +687,11 @@ export const PersonalInformationScreen = () => {
 
   const handleSave = async () => {
     try {
+      // Email is owned by Clerk and is not an accepted field on the profile
+      // mutation. Sending it made Convex reject the whole call, so the name and
+      // username could never be saved from this screen.
       await updateProfile({
         username: formData.username,
-        email: formData.email,
         full_name: formData.fullName,
       });
       setIsEditing(false);

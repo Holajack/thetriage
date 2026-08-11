@@ -21,6 +21,8 @@ import {
   useRoute,
   DrawerActions,
 } from "@react-navigation/native";
+import { useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
 import { getRandomQuote } from "../../data/motivationalQuotes";
@@ -64,6 +66,8 @@ export default function HomeScreen() {
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [taskTitle, setTaskTitle] = useState("");
   const [taskPriority, setTaskPriority] = useState("Medium");
+  const [isCreatingTask, setIsCreatingTask] = useState(false);
+  const createTask = useMutation(api.tasks.create);
 
   // Walkthrough state — hook handles AsyncStorage persistence & measurement
   const forceFromOnboarding = (route.params as any)?.showWalkthrough === true;
@@ -213,26 +217,36 @@ export default function HomeScreen() {
     }
   };
 
-  const handleCreateTask = () => {
-    if (!taskTitle.trim()) {
-      Alert.alert("Error", "Please enter a task title");
+  const handleCreateTask = async () => {
+    const title = taskTitle.trim();
+    if (!title) {
+      Alert.alert("Add a task", "Give your task a name first.");
       return;
     }
+    if (isCreatingTask) return;
 
-    // Here you would typically save the task to your backend/database
-    // Creating task
+    setIsCreatingTask(true);
+    try {
+      // Actually persist it. This used to show "Task created successfully!"
+      // without ever calling the backend, so the task vanished on reload.
+      await createTask({
+        title,
+        priority: taskPriority.toLowerCase(),
+      });
 
-    // For now, just show a success message
-    Alert.alert("Success", "Task created successfully!", [
-      {
-        text: "OK",
-        onPress: () => {
-          setTaskTitle("");
-          setTaskPriority("Medium");
-          setShowTaskModal(false);
-        },
-      },
-    ]);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setTaskTitle("");
+      setTaskPriority("Medium");
+      setShowTaskModal(false);
+    } catch {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        "Couldn't save that task",
+        "Check your connection and try again.",
+      );
+    } finally {
+      setIsCreatingTask(false);
+    }
   };
 
   return (
@@ -278,8 +292,16 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Main Content Container - No Scroll */}
-      <View style={styles.mainContent}>
+      {/* Main content. This used to be a fixed, non-scrolling column whose
+          intrinsic height exceeded the screen on every iPhone but the Pro Max,
+          so the Focus button collided with (and on an SE ran under) the bottom
+          nav. It scrolls now, and still centres when there is room to spare. */}
+      <ScrollView
+        style={styles.mainScroll}
+        contentContainerStyle={styles.mainContent}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
         {/* Top Content */}
         <View style={styles.topContent}>
           {/* Inspirational Quote - Entrance Animation */}
@@ -354,7 +376,7 @@ export default function HomeScreen() {
             <Text style={styles.focusButtonText}>Focus</Text>
           </Pressable>
         </Animated.View>
-      </View>
+      </ScrollView>
 
       {/* Bottom Navigation Bar - Positioned Up from Edge */}
       <View
@@ -424,7 +446,13 @@ export default function HomeScreen() {
               { backgroundColor: environmentColors.card },
             ]}
           >
-            <Ionicons name="add" size={28} color={environmentColors.primary} />
+            {/* This was a plus icon while the walkthrough told the user to look
+                for a trophy for the leaderboard. */}
+            <Ionicons
+              name="trophy"
+              size={26}
+              color={environmentColors.primary}
+            />
           </NavButton>
         </View>
       </View>
@@ -589,6 +617,9 @@ const NavButton: React.FC<{
 
 const { width } = Dimensions.get("window");
 
+/** Horizontal padding on the main content column. */
+const PAGE_PADDING = 20;
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -641,12 +672,17 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "bold",
   },
-  mainContent: {
+  mainScroll: {
     flex: 1,
-    paddingHorizontal: 20,
+  },
+  mainContent: {
+    flexGrow: 1,
+    paddingHorizontal: PAGE_PADDING,
     alignItems: "center",
-    justifyContent: "space-between", // Distribute space to push focus button down
-    paddingTop: 60,
+    justifyContent: "space-between",
+    paddingTop: 40,
+    // Clear the absolutely-positioned bottom nav.
+    paddingBottom: 140,
   },
   topContent: {
     alignItems: "center",
@@ -677,8 +713,13 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   centralImage: {
-    width: width * 0.9, // 90% of screen width - bigger image
-    height: 220, // Larger height for bigger image
+    // Sized from the CONTENT box, not the whole screen. `width * 0.9` was wider
+    // than the parent's content area (screen minus its 20pt padding each side),
+    // and the idle pulse scales it a further 2% — so the image pushed past its
+    // container and clipped at the edges on any phone narrower than ~402pt.
+    // The extra 24pt is headroom for the pulse/tap-bounce transform.
+    width: Math.min(width - PAGE_PADDING * 2 - 24, 350),
+    height: 220,
     maxWidth: 350,
   },
   mainFocusButton: {

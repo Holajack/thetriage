@@ -53,6 +53,8 @@ export type RootStackParamList = {
         duration?: number;
         autoProgress?: boolean;
         breakDuration?: number;
+        /** The focus session this break follows (achievements.recordBreak). */
+        sessionId?: string;
       }
     | undefined;
   StudySessionScreen:
@@ -87,6 +89,13 @@ export type RootStackParamList = {
         productivity: number;
         focusMode?: "basecamp" | "summit";
         completedTasksData?: any[];
+        /** Badges focusSessions.end actually awarded for this session. */
+        newAchievements?: {
+          achievementType: string;
+          title: string;
+          description: string;
+          category: string;
+        }[];
       }
     | undefined;
   SessionHistory: undefined;
@@ -102,7 +111,7 @@ export type RootStackParamList = {
   };
   PatrickSpeak: { initialMessage?: string } | undefined;
   MessageScreen: { contact: MessageContact } | undefined;
-  StudyRoomScreen: { room: any } | undefined;
+  StudyRoomScreen: { room?: any; roomCode?: string } | undefined;
   QuizPrompt?: undefined;
   HistoryPrompt?: undefined;
   EBooks?: undefined;
@@ -169,7 +178,7 @@ export type MainTabParamList = {
   Patrick: undefined;
   PatrickSpeak: { initialMessage?: string } | undefined;
   MessageScreen: { contact: MessageContact } | undefined;
-  StudyRoomScreen: { room: any } | undefined;
+  StudyRoomScreen: { room?: any; roomCode?: string } | undefined;
   SessionHistory: undefined;
   FocusPreparation: undefined;
   StudySessionScreen:

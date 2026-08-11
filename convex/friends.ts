@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query, mutation } from "./_generated/server";
+import { query, mutation, MutationCtx } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import {
   getCurrentUser,
@@ -110,8 +110,16 @@ export const listRequests = query({
 export const getRequestStatus = query({
   args: { requestId: v.id("friendRequests") },
   handler: async (ctx, args) => {
+    const user = await getCurrentUserOrNull(ctx);
+    if (!user) return null;
     const request = await ctx.db.get(args.requestId);
-    if (!request) return null;
+    // Only the two people involved may see a request's state.
+    if (
+      !request ||
+      (request.senderId !== user._id && request.recipientId !== user._id)
+    ) {
+      return null;
+    }
     return { status: request.status };
   },
 });
@@ -127,6 +135,36 @@ export const sendRequest = mutation({
       throw new Error("Cannot send friend request to yourself");
     }
 
+    const recipient = await ctx.db.get(args.recipientId);
+    if (!recipient) throw new Error("That person no longer exists");
+
+    if (await areFriends(ctx, user._id, args.recipientId)) {
+      throw new Error("You are already friends");
+    }
+
+    // Don't stack duplicate requests in either direction.
+    const mine = await ctx.db
+      .query("friendRequests")
+      .withIndex("by_senderId", (q) => q.eq("senderId", user._id))
+      .collect();
+    const outstanding = mine.find(
+      (r) => r.recipientId === args.recipientId && r.status === "pending",
+    );
+    if (outstanding) return outstanding._id;
+
+    // If THEY already asked US, accepting is the sane interpretation.
+    const theirs = await ctx.db
+      .query("friendRequests")
+      .withIndex("by_recipientId_status", (q) =>
+        q.eq("recipientId", user._id).eq("status", "pending"),
+      )
+      .collect();
+    const inbound = theirs.find((r) => r.senderId === args.recipientId);
+    if (inbound) {
+      await acceptRequestInternal(ctx, inbound._id, user._id);
+      return inbound._id;
+    }
+
     return await ctx.db.insert("friendRequests", {
       senderId: user._id,
       recipientId: args.recipientId,
@@ -136,36 +174,60 @@ export const sendRequest = mutation({
   },
 });
 
-export const acceptRequest = mutation({
-  args: { requestId: v.id("friendRequests") },
-  handler: async (ctx, args) => {
-    const request = await ctx.db.get(args.requestId);
-    if (!request) throw new Error("Request not found");
+/** Shared accept path. `actorId` must be the RECIPIENT of the request. */
+async function acceptRequestInternal(
+  ctx: MutationCtx,
+  requestId: Id<"friendRequests">,
+  actorId: Id<"users">,
+) {
+  const request = await ctx.db.get(requestId);
+  // Only the recipient may accept. Previously ANY user could accept ANY request
+  // — including their own outgoing one — and force a friendship on a stranger.
+  if (!request || request.recipientId !== actorId) {
+    throw new Error("Request not found");
+  }
+  if (request.status !== "pending") {
+    throw new Error("This request has already been answered");
+  }
 
-    // Update request status
-    await ctx.db.patch(args.requestId, {
-      status: "accepted",
-      respondedAt: new Date().toISOString(),
-    });
+  await ctx.db.patch(requestId, {
+    status: "accepted",
+    respondedAt: new Date().toISOString(),
+  });
 
-    // Create bidirectional friendship entries
-    // Entry 1: sender -> recipient
+  // Bidirectional, and only if not already present.
+  if (!(await areFriends(ctx, request.senderId, request.recipientId))) {
     await ctx.db.insert("friends", {
       userId: request.senderId,
       friendId: request.recipientId,
     });
-
-    // Entry 2: recipient -> sender (bidirectional)
     await ctx.db.insert("friends", {
       userId: request.recipientId,
       friendId: request.senderId,
     });
+  }
+}
+
+export const acceptRequest = mutation({
+  args: { requestId: v.id("friendRequests") },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    await acceptRequestInternal(ctx, args.requestId, user._id);
   },
 });
 
 export const declineRequest = mutation({
   args: { requestId: v.id("friendRequests") },
   handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    const request = await ctx.db.get(args.requestId);
+    // The recipient declines; the sender may withdraw. Nobody else touches it.
+    if (
+      !request ||
+      (request.recipientId !== user._id && request.senderId !== user._id)
+    ) {
+      throw new Error("Request not found");
+    }
     await ctx.db.patch(args.requestId, {
       status: "declined",
       respondedAt: new Date().toISOString(),

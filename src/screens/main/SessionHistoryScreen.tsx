@@ -131,6 +131,10 @@ const SessionHistoryScreen = () => {
 
     return rawSessions
       .filter((session) => {
+        // Only sessions that actually happened. Abandoned rows (app force-quit)
+        // and still-running ones used to show up here as 0m ghosts.
+        if (session.status !== "completed") return false;
+
         // Filter by date if threshold is set
         if (dateThreshold) {
           const sessionDate = new Date(session.startTime);

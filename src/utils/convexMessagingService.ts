@@ -209,7 +209,7 @@ export async function getConversations(): Promise<{
 export async function getUnreadMessageCount(): Promise<number> {
   try {
     const client = getConvexClient();
-    const count = await client.query((api as any).messages.getUnreadCount, {});
+    const count = await client.query(api.messages.getUnreadCount, {});
     return count ?? 0;
   } catch {
     return 0;

@@ -330,7 +330,7 @@ function buildInstructions(
   if (appAccess) {
     const lb = userCtx?.leaderboard;
     if (lb) {
-      const hours = Math.floor((lb.totalFocusTime || 0) / 3600);
+      const hours = Math.floor((lb.totalFocusTime || 0) / 60);
       statsBlock = `\n**Current Stats:** Level ${lb.level || 1}, ${hours}h total focus time, ${lb.currentStreak || 0}-day streak (longest: ${lb.longestStreak || 0})`;
     }
     const sessions = userCtx?.sessions;

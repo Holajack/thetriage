@@ -5,7 +5,7 @@
  */
 
 import { v } from "convex/values";
-import { mutation, internalMutation } from "./_generated/server";
+import { internalMutation } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { ALL_QUESTION_SETS, getOptionsForFormat } from "./quizQuestionData";
 
@@ -69,7 +69,7 @@ const SUB_DIMENSION_MAP: Record<string, Record<string, string>> = {
 };
 
 /** Load all questions for all categories */
-export const loadAllQuestions = mutation({
+export const loadAllQuestions = internalMutation({
   args: {},
   handler: async (ctx) => {
     const results: Record<string, number> = {};
@@ -182,7 +182,7 @@ export const loadAllQuestions = mutation({
 });
 
 /** Load questions for a specific category */
-export const loadQuestionsForCategory = mutation({
+export const loadQuestionsForCategory = internalMutation({
   args: { categorySlug: v.string() },
   handler: async (ctx, args) => {
     const categoryKey = Object.entries(CATEGORY_SLUG_MAP).find(
@@ -285,7 +285,7 @@ export const loadQuestionsForCategory = mutation({
 });
 
 /** Get question counts per category */
-export const getQuestionStats = mutation({
+export const getQuestionStats = internalMutation({
   args: {},
   handler: async (ctx) => {
     const categories = await ctx.db

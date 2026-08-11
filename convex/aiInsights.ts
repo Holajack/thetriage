@@ -54,6 +54,12 @@ export const create = mutation({
 export const markRead = mutation({
   args: { insightId: v.id("aiInsights") },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.insightId, { readAt: new Date().toISOString() });
+    // Previously patched any insight by id with no auth call at all.
+    const user = await getCurrentUser(ctx);
+    const insight = await ctx.db.get(args.insightId);
+    if (!insight || insight.userId !== user._id) {
+      throw new Error("Insight not found");
+    }
+    await ctx.db.patch(insight._id, { readAt: new Date().toISOString() });
   },
 });

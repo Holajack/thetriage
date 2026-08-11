@@ -14,6 +14,8 @@ import Animated, { FadeInUp, FadeIn } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
+import { track } from "../../analytics/analytics";
+import { AnalyticsEvent } from "../../analytics/events";
 import { useTheme } from "../../context/ThemeContext";
 import {
   Typography,

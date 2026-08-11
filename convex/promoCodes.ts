@@ -6,80 +6,50 @@ import { tierRank } from "./tiers";
 /**
  * Redeem a promo code. Grants tier upgrade, Flint, and trails based on code config.
  */
+interface PromoCodeConfig {
+  description: string;
+  tier: string;
+  flintAmount: number;
+  grantAllTrails: boolean;
+}
+
+/**
+ * Promo codes come from the PROMO_CODES environment variable (set it in the
+ * Convex dashboard), as JSON:
+ *
+ *   {"HW-8F3K-2QXV-2026": {"description":"Beta tester","tier":"elite",
+ *                          "flintAmount":3000,"grantAllTrails":true}}
+ *
+ * They used to be hard-coded English words — TRAILBLAZER, FOUNDER, BETATESTER,
+ * HIKEWISE — every one of which granted permanent Elite plus thousands of Flint
+ * to anyone who guessed it. In a public beta, someone types FOUNDER on day one.
+ *
+ * There is no fallback list on purpose: if the variable is unset, no code works.
+ */
+function loadPromoCodes(): Record<string, PromoCodeConfig> {
+  const raw = process.env.PROMO_CODES;
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as Record<string, PromoCodeConfig>;
+    const codes: Record<string, PromoCodeConfig> = {};
+    for (const [code, config] of Object.entries(parsed)) {
+      codes[code.trim().toUpperCase()] = config;
+    }
+    return codes;
+  } catch {
+    // A malformed variable must fail CLOSED, never open.
+    console.error("PROMO_CODES is not valid JSON — no promo codes are active.");
+    return {};
+  }
+}
+
 export const redeem = mutation({
   args: { code: v.string() },
   handler: async (ctx, args) => {
     const user = await getCurrentUser(ctx);
     const normalizedCode = args.code.trim().toUpperCase();
 
-    // Promo code definitions (hard-coded to avoid table read issues)
-    const CODES: Record<
-      string,
-      {
-        description: string;
-        tier: string;
-        flintAmount: number;
-        grantAllTrails: boolean;
-      }
-    > = {
-      TRAILBLAZER: {
-        description: "Elite access with all trails and 5000 Flint",
-        tier: "elite",
-        flintAmount: 5000,
-        grantAllTrails: true,
-      },
-      BETATESTER: {
-        description: "Elite tester access with trails and 3000 Flint",
-        tier: "elite",
-        flintAmount: 3000,
-        grantAllTrails: true,
-      },
-      PROTRAIL: {
-        description: "Pro access with all trails and 2000 Flint",
-        tier: "pro",
-        flintAmount: 2000,
-        grantAllTrails: true,
-      },
-      FLINT500: {
-        description: "500 bonus Flint currency",
-        tier: "free",
-        flintAmount: 500,
-        grantAllTrails: false,
-      },
-      // Team / partner testing codes — each grants full Elite + trails + Flint
-      PARTNER2026: {
-        description: "Partner Elite access with all trails and 5000 Flint",
-        tier: "elite",
-        flintAmount: 5000,
-        grantAllTrails: true,
-      },
-      TEAMTEST: {
-        description: "Team Elite access with all trails and 5000 Flint",
-        tier: "elite",
-        flintAmount: 5000,
-        grantAllTrails: true,
-      },
-      FOUNDER: {
-        description: "Founder Elite access with all trails and 10000 Flint",
-        tier: "elite",
-        flintAmount: 10000,
-        grantAllTrails: true,
-      },
-      EARLYBIRD: {
-        description: "Early bird Elite access with all trails and 5000 Flint",
-        tier: "elite",
-        flintAmount: 5000,
-        grantAllTrails: true,
-      },
-      HIKEWISE: {
-        description: "HikeWise insider access with all trails and 7500 Flint",
-        tier: "elite",
-        flintAmount: 7500,
-        grantAllTrails: true,
-      },
-    };
-
-    const codeConfig = CODES[normalizedCode];
+    const codeConfig = loadPromoCodes()[normalizedCode];
     if (!codeConfig) {
       return { success: false, error: "Invalid promo code" };
     }

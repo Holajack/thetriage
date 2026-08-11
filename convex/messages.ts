@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
-import { getCurrentUser, getCurrentUserOrNull } from "./users";
+import { getCurrentUser, getCurrentUserOrNull, areFriends } from "./users";
+import { hasFullMessaging } from "./tiers";
 
 export const listConversations = query({
   args: {},
@@ -35,7 +36,7 @@ export const listConversations = query({
     >();
 
     const allMessages = [...sent, ...received].sort(
-      (a, b) => b._creationTime - a._creationTime
+      (a, b) => b._creationTime - a._creationTime,
     );
 
     for (const msg of allMessages) {
@@ -75,14 +76,25 @@ export const getConversation = query({
     const conversation = [...sent, ...received]
       .filter(
         (msg) =>
-          (msg.senderId === user._id &&
-            msg.recipientId === args.otherUserId) ||
-          (msg.senderId === args.otherUserId &&
-            msg.recipientId === user._id)
+          (msg.senderId === user._id && msg.recipientId === args.otherUserId) ||
+          (msg.senderId === args.otherUserId && msg.recipientId === user._id),
       )
       .sort((a, b) => a._creationTime - b._creationTime);
 
     return conversation;
+  },
+});
+
+export const getUnreadCount = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getCurrentUserOrNull(ctx);
+    if (!user) return 0;
+    const received = await ctx.db
+      .query("messages")
+      .withIndex("by_recipientId", (q) => q.eq("recipientId", user._id))
+      .collect();
+    return received.filter((m) => !m.isRead).length;
   },
 });
 
@@ -94,10 +106,40 @@ export const send = mutation({
   },
   handler: async (ctx, args) => {
     const user = await getCurrentUser(ctx);
+
+    if (args.recipientId === user._id) {
+      throw new Error("You cannot message yourself");
+    }
+    const recipient = await ctx.db.get(args.recipientId);
+    if (!recipient) throw new Error("That person no longer exists");
+
+    // Who may you DM? Basic = friends only; Pro/Elite = anyone who allows it.
+    // This was enforced nowhere — any user could DM any other user by id.
+    const friends = await areFriends(ctx, user._id, args.recipientId);
+    if (!friends) {
+      if (!hasFullMessaging(user.subscriptionTier)) {
+        throw new Error(
+          "On your plan you can message friends. Add them as a friend, or upgrade to message anyone.",
+        );
+      }
+      // The recipient's own privacy setting still wins over the sender's tier.
+      const prefs = await ctx.db
+        .query("onboardingPreferences")
+        .withIndex("by_userId", (q) => q.eq("userId", args.recipientId))
+        .unique();
+      if (prefs?.allowDirectMessages === false) {
+        throw new Error("This person only accepts messages from friends");
+      }
+    }
+
+    const content = args.content.trim();
+    if (!content) throw new Error("Message is empty");
+    if (content.length > 2000) throw new Error("Message is too long");
+
     return await ctx.db.insert("messages", {
       senderId: user._id,
       recipientId: args.recipientId,
-      content: args.content,
+      content,
       messageType: args.messageType ?? "text",
       isRead: false,
     });
@@ -107,6 +149,13 @@ export const send = mutation({
 export const markRead = mutation({
   args: { messageId: v.id("messages") },
   handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    const message = await ctx.db.get(args.messageId);
+    // Only the recipient may mark a message read.
+    if (!message || message.recipientId !== user._id) {
+      throw new Error("Message not found");
+    }
+    if (message.isRead) return;
     await ctx.db.patch(args.messageId, { isRead: true });
   },
 });

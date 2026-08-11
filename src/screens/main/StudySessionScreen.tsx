@@ -58,6 +58,11 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import { useUser } from "@clerk/clerk-expo";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
+import { useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
+import { track } from "../../analytics/analytics";
+import { AnalyticsEvent } from "../../analytics/events";
 import { useConvexFocusSession, Task } from "../../hooks/useConvex";
 import { useBackgroundMusic } from "../../hooks/useBackgroundMusic";
 import {
@@ -518,6 +523,8 @@ export const StudySessionScreen = () => {
     resumeSession,
   } = useConvexFocusSession();
 
+  const saveReflection = useMutation(api.focusSessions.saveReflection);
+
   // Extract subjects from tasks
   useEffect(() => {
     if (userData?.tasks) {
@@ -832,18 +839,22 @@ export const StudySessionScreen = () => {
       setSessionStarted(false);
 
       const sessionResult = await endSession();
+      track(AnalyticsEvent.SESSION_COMPLETED, {
+        durationMinutes: sessionResult?.duration_minutes ?? 0,
+        flintEarned: sessionResult?.flint_earned ?? 0,
+        credited: sessionResult?.credited ?? false,
+        achievements: sessionResult?.new_achievements?.length ?? 0,
+      });
       setCompletedSessionData(sessionResult);
       setShowSessionCompleteModal(true);
-    } catch (error) {
-      const fallbackData = {
-        id: "fallback-" + Date.now(),
-        duration_seconds: initialDuration - timer,
-        created_at: new Date().toISOString(),
-        task_focused_on: currentTask?.title || "General Study",
-        completed_full_session: timer === 0,
-      };
-      setCompletedSessionData(fallbackData);
-      setShowSessionCompleteModal(true);
+    } catch {
+      // Do NOT invent a completed session here. The old fallback fabricated a
+      // fake id and duration and showed the success modal, so the user was told
+      // they had earned Flint for a session the backend never recorded.
+      Alert.alert(
+        "Couldn't save your session",
+        "We lost the connection before your session could be saved. Check your network — your progress for this one may not be recorded.",
+      );
     }
   };
 
@@ -914,13 +925,16 @@ export const StudySessionScreen = () => {
       if (entering) {
         updateTimerFromBackground(); // save timer position
         setIsPaused(true);
+        // Tell the backend, or the paused stretch gets credited as focus time.
+        pauseSession().catch(() => {});
       } else {
         startTimeRef.current = Date.now();
         setIsPaused(false);
+        resumeSession().catch(() => {});
       }
       return entering;
     });
-  }, [params?.focusMode]);
+  }, [params?.focusMode, pauseSession, resumeSession]);
 
   const doubleTapGesture = useMemo(() => {
     if (params?.focusMode !== "basecamp") return Gesture.Tap();
@@ -937,6 +951,8 @@ export const StudySessionScreen = () => {
     disableAutoAdvance();
 
     setIsPaused(true);
+    // The end-session dialog is a pause: don't credit the time spent deciding.
+    pauseSession().catch(() => {});
 
     // Now stop music (this is async but auto-advance is already disabled)
     await stopSessionMusic();
@@ -947,6 +963,7 @@ export const StudySessionScreen = () => {
   const handleContinueFocusing = async () => {
     setShowEndModal(false);
     setIsPaused(false);
+    resumeSession().catch(() => {});
 
     // Re-enable auto-advance and resume music if it was playing before
     enableAutoAdvance();
@@ -982,50 +999,45 @@ export const StudySessionScreen = () => {
       setSessionStarted(false);
 
       const sessionResult = await endSession();
+      track(AnalyticsEvent.SESSION_COMPLETED, {
+        durationMinutes: sessionResult?.duration_minutes ?? 0,
+        flintEarned: sessionResult?.flint_earned ?? 0,
+        credited: sessionResult?.credited ?? false,
+        endedEarly: true,
+      });
       setCompletedSessionData(sessionResult);
       setShowEndModal(false);
       setShowSessionCompleteModal(true);
-    } catch (error) {
-      const fallbackData = {
-        id: "fallback-" + Date.now(),
-        duration_seconds: initialDuration - timer,
-        created_at: new Date().toISOString(),
-        task_focused_on: currentTask?.title || "General Study",
-        completed_full_session: false,
-      };
-      setCompletedSessionData(fallbackData);
+    } catch {
       setShowEndModal(false);
-      setShowSessionCompleteModal(true);
+      Alert.alert(
+        "Couldn't save your session",
+        "We lost the connection before your session could be saved. Check your network — your progress for this one may not be recorded.",
+      );
     }
   };
 
   const handleSessionReportSubmit = async () => {
-    try {
-      // User is already authenticated via Clerk/Convex
-      if (user) {
-        const reportData = {
-          user_id: user.id,
-          session_id: completedSessionData?.id || null,
-          focus_rating: focusRating,
-          productivity_rating: productivityRating,
-          notes: sessionNotes,
-          task_worked_on: currentTask?.title || "No specific task",
-          subject:
-            currentTask?.subject ||
-            currentTask?.category ||
-            selectedSubject ||
-            "General Study",
-          session_duration: Math.floor((initialDuration - timer) / 60),
-          completed_full_session: timer === 0,
-          session_type: selectionMode || "auto",
-          created_at: new Date().toISOString(),
-        };
+    const sessionId = completedSessionData?.id;
+    if (!sessionId) {
+      handleSkipSessionReport();
+      return;
+    }
 
-        // TODO: Save session report to Convex
-        // Session reports will be migrated to Convex in a future phase
-      }
-    } catch (error) {
-      // Report submit failed silently
+    try {
+      // Actually save it. This used to build a reportData object and drop it on
+      // the floor behind a TODO, so every rating and note the user wrote was lost.
+      await saveReflection({
+        sessionId: sessionId as Id<"focusSessions">,
+        rating: focusRating || undefined,
+        productivityRating: productivityRating || undefined,
+        notes: sessionNotes.trim() || undefined,
+      });
+    } catch {
+      Alert.alert(
+        "Couldn't save your notes",
+        "Your session was recorded, but the rating and notes didn't save.",
+      );
     }
 
     handleSkipSessionReport();
@@ -1036,7 +1048,11 @@ export const StudySessionScreen = () => {
 
     // Collect current task session data
     const currentTaskSessionData = {
-      duration: Math.floor((initialDuration - timer) / 60),
+      // Prefer the server's credited minutes (paused time already excluded) so
+      // the report can't brag about time the user was never actually paid for.
+      duration:
+        completedSessionData?.duration_minutes ??
+        Math.floor((initialDuration - timer) / 60),
       task: currentTask?.title || "No specific task",
       focusRating: focusRating || 0,
       productivityRating: productivityRating || 0,
@@ -1069,6 +1085,8 @@ export const StudySessionScreen = () => {
       if (hasMoreTasks) {
         // Navigate to BreakTimerScreen with info about next task
         navigation.navigate("BreakTimerScreen", {
+          // The break is banked against this session (achievements.recordBreak).
+          sessionId: completedSessionData?.id,
           sessionData: currentTaskSessionData,
           focusMode: "summit",
           tasks: params.tasks,
@@ -1125,10 +1143,14 @@ export const StudySessionScreen = () => {
         sessionType: currentTaskSessionData.sessionType,
         subject: currentTaskSessionData.subject,
         plannedDuration: currentTaskSessionData.plannedDuration,
+        // The real, persisted badges this session earned (from focusSessions.end).
+        newAchievements: completedSessionData?.new_achievements ?? [],
       });
     } else {
       // Other modes - normal break flow
       navigation.navigate("BreakTimerScreen", {
+        // The break is banked against this session (achievements.recordBreak).
+        sessionId: completedSessionData?.id,
         sessionData: currentTaskSessionData,
         breakDuration: params?.breakDuration,
       });
@@ -2806,9 +2828,17 @@ export const StudySessionScreen = () => {
                         ]}
                       >
                         <MaterialIcons
-                          name="emoji-events"
+                          name={
+                            completedSessionData?.credited === false
+                              ? "schedule"
+                              : "emoji-events"
+                          }
                           size={32}
-                          color="#4CAF50"
+                          color={
+                            completedSessionData?.credited === false
+                              ? "#888"
+                              : "#4CAF50"
+                          }
                         />
                       </View>
                       <Text
@@ -2817,16 +2847,35 @@ export const StudySessionScreen = () => {
                           { fontSize: 20, marginBottom: 4 },
                         ]}
                       >
-                        Session Complete!
+                        {completedSessionData?.credited === false
+                          ? "Session Too Short"
+                          : "Session Complete!"}
                       </Text>
-                      <Text style={{ fontSize: 14, color: "#888" }}>
-                        {completedSessionData?.duration_seconds
-                          ? `${Math.floor(completedSessionData.duration_seconds / 60)}m focused`
-                          : `${Math.floor((initialDuration - timer) / 60)}m focused`}
-                        {completedSessionData?.task_focused_on
-                          ? ` on ${completedSessionData.task_focused_on}`
-                          : ""}
+                      <Text
+                        style={{
+                          fontSize: 14,
+                          color: "#888",
+                          textAlign: "center",
+                        }}
+                      >
+                        {completedSessionData?.credited === false
+                          ? "Under a minute of focus, so it didn't earn Flint — but it's saved to your history."
+                          : `${Math.floor((completedSessionData?.duration_seconds ?? 0) / 60)}m focused`}
                       </Text>
+                      {/* Flint is credited server-side; it used to be earned
+                          silently and never shown to the user at all. */}
+                      {(completedSessionData?.flint_earned ?? 0) > 0 && (
+                        <Text
+                          style={{
+                            fontSize: 15,
+                            fontWeight: "700",
+                            color: "#F59E0B",
+                            marginTop: 6,
+                          }}
+                        >
+                          +{completedSessionData.flint_earned} Flint earned
+                        </Text>
+                      )}
                     </View>
 
                     {/* Expandable Ratings & Notes */}

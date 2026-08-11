@@ -7,7 +7,15 @@ const crons = cronJobs();
 crons.daily(
   "nora-daily-notifications",
   { hourUTC: 14, minuteUTC: 0 },
-  internal.noraNotifications.generateNotifications
+  internal.noraNotifications.generateNotifications,
+);
+
+// Close out sessions the user abandoned (force-quit, phone died). Without this
+// they stay "active" forever and show up in history as 0m ghosts.
+crons.interval(
+  "reap-abandoned-sessions",
+  { hours: 1 },
+  internal.focusSessions.reapAbandonedSessions,
 );
 
 export default crons;

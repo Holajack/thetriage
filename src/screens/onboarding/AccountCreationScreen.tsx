@@ -229,7 +229,7 @@ export default function AccountCreationScreen() {
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Create Your Account</Text>
             <Text style={styles.headerSubtitle}>
-              Step 1 of 5 • Let's get your account set up.
+              Let&apos;s get your account set up — it takes about a minute.
             </Text>
           </Animated.View>
 

@@ -8,12 +8,14 @@
  * @module
  */
 
+import type * as achievementRules from "../achievementRules.js";
 import type * as achievements from "../achievements.js";
 import type * as aiInsights from "../aiInsights.js";
 import type * as aiShared from "../aiShared.js";
 import type * as appConfig from "../appConfig.js";
 import type * as crons from "../crons.js";
 import type * as ebooks from "../ebooks.js";
+import type * as events from "../events.js";
 import type * as focusSessions from "../focusSessions.js";
 import type * as friends from "../friends.js";
 import type * as http from "../http.js";
@@ -39,11 +41,13 @@ import type * as quizSessions from "../quizSessions.js";
 import type * as quizVisualization from "../quizVisualization.js";
 import type * as seedAdminUser from "../seedAdminUser.js";
 import type * as settings from "../settings.js";
+import type * as shopCatalog from "../shopCatalog.js";
 import type * as studyRooms from "../studyRooms.js";
 import type * as subjects from "../subjects.js";
 import type * as subtasks from "../subtasks.js";
 import type * as tasks from "../tasks.js";
 import type * as tiers from "../tiers.js";
+import type * as timeWindows from "../timeWindows.js";
 import type * as transcribe from "../transcribe.js";
 import type * as users from "../users.js";
 import type * as webhookHelpers from "../webhookHelpers.js";
@@ -55,12 +59,14 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  achievementRules: typeof achievementRules;
   achievements: typeof achievements;
   aiInsights: typeof aiInsights;
   aiShared: typeof aiShared;
   appConfig: typeof appConfig;
   crons: typeof crons;
   ebooks: typeof ebooks;
+  events: typeof events;
   focusSessions: typeof focusSessions;
   friends: typeof friends;
   http: typeof http;
@@ -86,11 +92,13 @@ declare const fullApi: ApiFromModules<{
   quizVisualization: typeof quizVisualization;
   seedAdminUser: typeof seedAdminUser;
   settings: typeof settings;
+  shopCatalog: typeof shopCatalog;
   studyRooms: typeof studyRooms;
   subjects: typeof subjects;
   subtasks: typeof subtasks;
   tasks: typeof tasks;
   tiers: typeof tiers;
+  timeWindows: typeof timeWindows;
   transcribe: typeof transcribe;
   users: typeof users;
   webhookHelpers: typeof webhookHelpers;

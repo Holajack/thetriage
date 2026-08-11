@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query, mutation } from "./_generated/server";
+import { query, mutation, internalMutation } from "./_generated/server";
 import { getCurrentUser, getCurrentUserOrNull } from "./users";
 
 export const get = query({
@@ -95,7 +95,10 @@ export const update = mutation({
   },
 });
 
-export const init = mutation({
+// Internal only: this took an arbitrary userId with no auth check, so any
+// caller could create rows for any user. New accounts are provisioned by the
+// Clerk webhook (webhookHelpers.initUserData) and initUser.initializeCurrentUser.
+export const init = internalMutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
     const existing = await ctx.db

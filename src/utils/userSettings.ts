@@ -55,12 +55,38 @@ export interface UserSettings {
 /**
  * Get user settings from database
  */
+/**
+ * Onboarding stores a focus-method id; FocusPreparationScreen compares against
+ * display names ("Deep Work", "Sprint"). Map between them in one place.
+ */
+function toWorkStyle(focusMethod?: string | null): string | undefined {
+  if (!focusMethod) return undefined;
+  switch (focusMethod.toLowerCase().replace(/[\s_-]/g, "")) {
+    case "deepwork":
+      return "Deep Work";
+    case "sprint":
+    case "sprintfocus":
+      return "Sprint";
+    case "extended":
+    case "extendedfocus":
+      return "Extended";
+    case "balanced":
+    case "balancedfocus":
+      return "Balanced";
+    default:
+      return undefined;
+  }
+}
+
 export async function getUserSettings(
   userId?: string,
 ): Promise<UserSettings | null> {
   try {
     const client = getConvexClient();
-    const settings = await client.query(api.settings.get, {});
+    const [settings, onboarding] = await Promise.all([
+      client.query(api.settings.get, {}),
+      client.query(api.onboarding.get, {}).catch(() => null),
+    ]);
 
     if (!settings) {
       // No settings found for current user
@@ -69,6 +95,11 @@ export async function getUserSettings(
 
     // Convert Convex camelCase to snake_case for backward compatibility
     return {
+      // The focus method the user picked during onboarding lives on the
+      // onboarding record, but FocusPreparationScreen reads `workStyle` from
+      // here — and nothing ever populated it, so every user silently got
+      // "Balanced" no matter what they chose.
+      workStyle: toWorkStyle(onboarding?.focusMethod),
       auto_play_sound: settings.autoPlaySound,
       sound_enabled: settings.soundEnabled,
       music_volume: settings.musicVolume,

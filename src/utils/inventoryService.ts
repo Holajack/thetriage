@@ -1,5 +1,6 @@
 import { api } from "../../convex/_generated/api";
 import { getConvexClient } from "./convexClient";
+import { humanizeConvexError } from "./convexError";
 
 export interface InventoryItem {
   id: string;
@@ -22,29 +23,30 @@ export interface EquippedItem {
 }
 
 /**
- * Add an item to user's inventory (backpack)
+ * Buy an item. The server checks the balance and deducts the Flint — passing
+ * cost: 0 here (as this used to) made every item in the shop free.
  */
-export async function addToInventory(
+export async function purchaseItem(
   itemId: string,
-  itemName: string,
-  itemCategory: "gear" | "shelter" | "trail",
-  itemIcon: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const client = getConvexClient();
-    await client.mutation(api.inventory.purchaseItem, {
-      itemId,
-      itemName,
-      itemCategory,
-      itemIcon,
-      cost: 0, // For free items, set cost to 0
-    });
+    // Only the id. The server owns the price — sending a cost from here is what
+    // made every item in the shop free.
+    await client.mutation(api.inventory.purchaseItem, { itemId });
     return { success: true };
   } catch (error: any) {
-    if (error.message?.includes("already owned")) {
+    const message: string = error?.message ?? "";
+    if (message.includes("already owned")) {
       return { success: false, error: "You already own this item!" };
     }
-    return { success: false, error: error.message };
+    if (message.includes("Insufficient")) {
+      return { success: false, error: "You don't have enough Flint yet." };
+    }
+    return {
+      success: false,
+      error: humanizeConvexError(error, "Purchase failed"),
+    };
   }
 }
 
@@ -53,18 +55,10 @@ export async function addToInventory(
  */
 export async function equipItem(
   itemId: string,
-  itemName: string,
-  itemCategory: "gear" | "shelter" | "trail",
-  itemIcon: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const client = getConvexClient();
-    await client.mutation(api.inventory.equipItem, {
-      itemId,
-      itemName,
-      itemCategory,
-      itemIcon,
-    });
+    await client.mutation(api.inventory.equipItem, { itemId });
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };

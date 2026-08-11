@@ -107,7 +107,7 @@ function buildSystemPrompt(userCtx: any): string {
   let statsBlock = "";
   const lb = userCtx?.leaderboard;
   if (lb) {
-    const hours = Math.floor((lb.totalFocusTime || 0) / 3600);
+    const hours = Math.floor((lb.totalFocusTime || 0) / 60);
     statsBlock = `\n- Level: ${lb.level || 1}
 - Total Focus Time: ${hours} hours
 - Current Streak: ${lb.currentStreak || 0} days

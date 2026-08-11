@@ -21,6 +21,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useUser } from "@clerk/clerk-expo";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
+import OnboardingProgress from "../../components/onboarding/OnboardingProgress";
 import { useTheme } from "../../context/ThemeContext";
 import Animated, { FadeIn, ZoomIn } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -205,6 +206,9 @@ export default function ProfileCreationScreen({
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
           >
+            <View style={styles.progressWrap}>
+              <OnboardingProgress step={2} />
+            </View>
             <Animated.View style={[styles.header, headerAnimation]}>
               <TouchableOpacity
                 onPress={() => navigation.goBack()}
@@ -592,5 +596,9 @@ const styles = StyleSheet.create({
   },
   progressDotCompleted: {
     backgroundColor: "rgba(76, 175, 80, 0.6)",
+  },
+  progressWrap: {
+    width: "100%",
+    marginBottom: 16,
   },
 });

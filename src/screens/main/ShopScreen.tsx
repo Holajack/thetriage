@@ -51,7 +51,7 @@ import {
   PremiumColors,
 } from "../../theme/premiumTheme";
 import {
-  addToInventory,
+  purchaseItem,
   equipItem,
   getUserInventory,
   getEquippedItems,
@@ -345,7 +345,7 @@ const ShopScreen = () => {
     useNavigation<NativeStackNavigationProp<MainTabParamList>>();
   const { theme } = useTheme();
   const { user } = useAuth();
-  const { profile, updateProfile } = useConvexProfile();
+  const { profile } = useConvexProfile();
   const [activeTab, setActiveTab] = useState<ShopTab>("shop");
   const [selectedCategory, setSelectedCategory] =
     useState<ShopCategory>("trail");
@@ -421,8 +421,15 @@ const ShopScreen = () => {
     // Free item — claim and equip directly
     if (item.cost === 0) {
       try {
-        await addToInventory(item.id, item.name, item.category, item.icon);
-        await equipItem(item.id, item.name, item.category, item.icon);
+        const claimed = await purchaseItem(item.id);
+        if (!claimed.success) {
+          Alert.alert(
+            "Couldn't claim item",
+            claimed.error ?? "Please try again.",
+          );
+          return;
+        }
+        await equipItem(item.id);
         await loadInventoryData();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert("Equipped!", `${item.name} is now equipped!`);
@@ -448,12 +455,7 @@ const ShopScreen = () => {
   };
 
   const handleEquipFromInventory = async (item: ShopItem) => {
-    const result = await equipItem(
-      item.id,
-      item.name,
-      item.category,
-      item.icon,
-    );
+    const result = await equipItem(item.id);
     if (result.success) {
       await loadInventoryData();
       Alert.alert("Equipped!", `${item.name} is now equipped!`);
@@ -469,39 +471,29 @@ const ShopScreen = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      // Deduct Flint
-      const newBalance = flintCurrency - selectedItem.cost;
-      await updateProfile({ flint_currency: newBalance });
+      // The server checks the balance and deducts the Flint. Deducting it here
+      // and telling the server the item was free is what made the shop free.
+      const result = await purchaseItem(selectedItem.id);
+      if (!result.success) {
+        setIsPurchasing(false);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        Alert.alert("Couldn't buy that", result.error ?? "Please try again.");
+        return;
+      }
 
-      // Add to inventory
-      await addToInventory(
-        selectedItem.id,
-        selectedItem.name,
-        selectedItem.category,
-        selectedItem.icon,
-      );
-
-      // Equip immediately
-      await equipItem(
-        selectedItem.id,
-        selectedItem.name,
-        selectedItem.category,
-        selectedItem.icon,
-      );
+      await equipItem(selectedItem.id);
 
       await loadInventoryData();
       setShowApplyModal(false);
       setIsPurchasing(false);
 
-      // Success haptic
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
       Alert.alert(
         "Equipped! 🎉",
-        `${selectedItem.name} has been purchased and equipped!\n\nFlint balance: ${newBalance.toFixed(1)}`,
+        `${selectedItem.name} has been purchased and equipped!`,
         [{ text: "Awesome!" }],
       );
-    } catch (error) {
+    } catch {
       setIsPurchasing(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert("Error", "Failed to purchase item. Please try again.");
@@ -515,31 +507,25 @@ const ShopScreen = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      // Deduct Flint
-      const newBalance = flintCurrency - selectedItem.cost;
-      await updateProfile({ flint_currency: newBalance });
-
-      // Add to inventory
-      await addToInventory(
-        selectedItem.id,
-        selectedItem.name,
-        selectedItem.category,
-        selectedItem.icon,
-      );
+      const result = await purchaseItem(selectedItem.id);
+      if (!result.success) {
+        setIsPurchasing(false);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        Alert.alert("Couldn't buy that", result.error ?? "Please try again.");
+        return;
+      }
 
       await loadInventoryData();
       setShowApplyModal(false);
       setIsPurchasing(false);
 
-      // Success haptic
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
       Alert.alert(
         "Added to Backpack! 🎒",
-        `${selectedItem.name} has been added to your backpack!\n\nFlint balance: ${newBalance.toFixed(1)}`,
+        `${selectedItem.name} has been added to your backpack!`,
         [{ text: "Great!" }],
       );
-    } catch (error) {
+    } catch {
       setIsPurchasing(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert("Error", "Failed to purchase item. Please try again.");

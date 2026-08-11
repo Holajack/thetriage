@@ -28,7 +28,10 @@
         "LSApplicationQueriesSchemes": ["music"],
         "ITSAppUsesNonExemptEncryption": false
       },
-      "associatedDomains": [],
+      "associatedDomains": [
+        "applinks:hikewise.app",
+        "applinks:www.hikewise.app"
+      ],
       "privacyManifests": {
         "NSPrivacyAccessedAPITypes": [
           {
@@ -84,7 +87,25 @@
     "android": {
       "package": "com.hikewise.app",
       "versionCode": 20,
-      "intentFilters": []
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "hikewise.app",
+              "pathPrefix": "/join"
+            },
+            {
+              "scheme": "https",
+              "host": "hikewise.app",
+              "pathPrefix": "/profile"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "extra": {
       "eas": {

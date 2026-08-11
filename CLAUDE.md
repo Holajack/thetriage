@@ -148,6 +148,19 @@ Start fresh with each project. Examples of what goes here:
   (tokenise, then compare whole words or prefixes) and weight subject nouns above study verbs.
 - **A tier gate must wait for the tier to load.** `useSubscriptionTier()` reports `free` until the
   Convex profile resolves; gate on `isLoading` or paying members see the upgrade wall flash.
+- **Never let the client send a price, a balance, or a point value.** `inventory.purchaseItem` took
+  `cost` as an argument, so the shop was free (`cost: 0`) and a negative cost _minted_ currency.
+  Server-owned catalogue (`convex/shopCatalog.ts`); the client sends only an `itemId`.
+- **An idempotency guard must check the state you want, not one state you don't.** `focusSessions.end`
+  guarded on `status === "completed"`, so "cancelled" and "abandoned" rows stayed payable — and the
+  stale-session reaper _manufactured_ those. Guard on "is it still OPEN", not "is it already done".
+- **When you add auth to a module, sweep every module.** subtasks/subjects/aiInsights had _no_ auth
+  call at all and were missed on the first pass. Enumerate the whole `convex/` surface, not just the
+  files named in the report.
+- **A "server-side" fix that still trusts a client-supplied value is not a fix** — it just moves where
+  the trust happens. Ask: what is the client still choosing?
+- Always re-verify your own fixes adversarially. The verification pass on this work found 7 blockers
+  in the fixes themselves, including one that made things strictly worse than before.
 - Verify a 3D/visual change by rendering it offline (replicate the shader math over the real mesh
   and write a PNG) rather than assuming a device build will look right.
 

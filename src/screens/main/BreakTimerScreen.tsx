@@ -16,6 +16,11 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
 import { useBackgroundMusic } from "../../hooks/useBackgroundMusic";
+import { useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
+import { track } from "../../analytics/analytics";
+import { AnalyticsEvent } from "../../analytics/events";
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
 import Animated, {
@@ -95,6 +100,7 @@ const BreakTimerScreen = () => {
   const route = useRoute();
   const { theme } = useTheme();
   const { user } = useAuth();
+  const recordBreak = useMutation(api.achievements.recordBreak);
   const equippedTrail = useEquippedTrail();
   const insets = useSafeAreaInsets();
   const [showSessionInfo, setShowSessionInfo] = useState(false);
@@ -119,6 +125,8 @@ const BreakTimerScreen = () => {
         duration?: number;
         autoProgress?: boolean;
         breakDuration?: number;
+        /** The focus session this break follows. */
+        sessionId?: string;
       }
     | undefined;
 
@@ -330,6 +338,19 @@ const BreakTimerScreen = () => {
   const handleBreakComplete = () => {
     // Soft haptic feedback for break end
     triggerHaptic("warning");
+
+    // Rest counts. This is what makes the "breaks" achievements reachable —
+    // nothing anywhere used to record that a break had happened.
+    // Banked against the session it followed — recordBreak needs a real,
+    // completed session the caller owns (it feeds leaderboard points).
+    if (params?.sessionId) {
+      recordBreak({
+        sessionId: params.sessionId as Id<"focusSessions">,
+      }).catch(() => {});
+    }
+    track(AnalyticsEvent.BREAK_COMPLETED, {
+      minutes: breakDurationMinutes,
+    });
 
     if (intervalRef.current) {
       clearInterval(intervalRef.current);

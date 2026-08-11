@@ -262,7 +262,13 @@ export default function LoginScreen() {
                   Back to Landing Page
                 </Text>
               </TouchableOpacity>
-              <Animated.View style={logoAnimation}>
+              {/* The pulse scales this box about its CENTRE. Left unset, the box
+                  is full-width, so each pulse dragged the left-aligned heading
+                  outward into (and past) the screen padding — the "Welcome Back
+                  is cut off on the left" bug. Shrink-wrapping the text and
+                  anchoring the transform to its left edge makes it grow rightward
+                  into free space instead. */}
+              <Animated.View style={[styles.headerPulse, logoAnimation]}>
                 <Text style={[styles.header, { color: textColor }]}>
                   Welcome Back
                 </Text>
@@ -406,6 +412,10 @@ const styles = StyleSheet.create({
   backText: {
     fontWeight: "600", // Bolder
     fontSize: 17, // Slightly larger
+  },
+  headerPulse: {
+    alignSelf: "flex-start", // shrink-wrap: the box is only as wide as the text
+    transformOrigin: "left center", // grow rightward, never into the left padding
   },
   header: {
     fontSize: 32, // Larger header

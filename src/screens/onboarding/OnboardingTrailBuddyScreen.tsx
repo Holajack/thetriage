@@ -25,6 +25,7 @@ import Animated, {
   useDerivedValue,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import OnboardingProgress from "../../components/onboarding/OnboardingProgress";
 import { useTheme } from "../../context/ThemeContext";
 import { useConvexProfile } from "../../hooks/useConvex";
 import NoraSpeechBubble from "../../components/onboarding/NoraSpeechBubble";
@@ -394,9 +395,12 @@ const OnboardingTrailBuddyScreen = () => {
           <Ionicons name="chevron-back" size={28} color="#FFFFFF" />
         </TouchableOpacity>
 
-        {/* Step Indicator */}
-        <Animated.View entering={FadeInDown.delay(100).duration(500)}>
-          <Text style={styles.stepIndicator}>Step 3 of 5</Text>
+        {/* Progress — credits the account they already made (endowed progress) */}
+        <Animated.View
+          entering={FadeInDown.delay(100).duration(500)}
+          style={styles.progressWrap}
+        >
+          <OnboardingProgress step={3} />
         </Animated.View>
 
         {/* Nora Speech Bubble */}
@@ -555,6 +559,11 @@ const styles = StyleSheet.create({
   buttonContainer: {
     marginTop: "auto",
     marginBottom: 20,
+  },
+  progressWrap: {
+    width: "100%",
+    paddingHorizontal: 24,
+    marginBottom: 12,
   },
 });
 

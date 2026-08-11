@@ -9,6 +9,8 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, NavigationProp } from "@react-navigation/native";
+import { track } from "../../analytics/analytics";
+import { AnalyticsEvent } from "../../analytics/events";
 import { useTheme } from "../../context/ThemeContext";
 import { useSubscriptionTier } from "../../hooks/useSubscriptionTier";
 import {
@@ -74,6 +76,10 @@ const BrainMappingScreen: React.FC = () => {
   useEffect(() => {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
+
+  useEffect(() => {
+    track(AnalyticsEvent.BRAIN_MAP_OPENED, { tier: currentTier });
+  }, [currentTier]);
 
   const brain = useMemo(
     () =>

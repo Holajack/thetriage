@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { query, mutation } from "./_generated/server";
+import { query, mutation, internalMutation } from "./_generated/server";
+import { localDayKey, weekStartKey } from "./timeWindows";
 import {
   getCurrentUser,
   getCurrentUserOrNull,
@@ -7,15 +8,46 @@ import {
   isFieldVisible,
 } from "./users";
 
+/**
+ * Zero the rolling windows at READ time.
+ *
+ * weeklyFocusTime / monthlyFocusTime only roll over when a session completes, so
+ * a user who stops studying keeps seeing last week's number under a "This Week"
+ * label forever. Comparing the stored anchor to today tells the truth without
+ * needing a cron.
+ */
+function withFreshWindows<
+  T extends {
+    weeklyFocusTime?: number;
+    monthlyFocusTime?: number;
+    weekStartDate?: string;
+    monthStartDate?: string;
+  },
+>(stats: T, timeZone: string | undefined): T {
+  const today = localDayKey(new Date(), timeZone);
+  const thisWeek = weekStartKey(today);
+  const thisMonth = today.slice(0, 7);
+
+  return {
+    ...stats,
+    weeklyFocusTime:
+      stats.weekStartDate === thisWeek ? (stats.weeklyFocusTime ?? 0) : 0,
+    monthlyFocusTime:
+      stats.monthStartDate === thisMonth ? (stats.monthlyFocusTime ?? 0) : 0,
+  };
+}
+
 export const getMyStats = query({
   args: {},
   handler: async (ctx) => {
     const user = await getCurrentUserOrNull(ctx);
     if (!user) return null;
-    return await ctx.db
+    const stats = await ctx.db
       .query("leaderboardStats")
       .withIndex("by_userId", (q) => q.eq("userId", user._id))
       .unique();
+    if (!stats) return null;
+    return withFreshWindows(stats, user.timeZone);
   },
 });
 
@@ -126,43 +158,15 @@ export const getUserRank = query({
   },
 });
 
-export const updateStats = mutation({
-  args: {
-    totalFocusTime: v.optional(v.number()),
-    weeklyFocusTime: v.optional(v.number()),
-    monthlyFocusTime: v.optional(v.number()),
-    level: v.optional(v.number()),
-    points: v.optional(v.number()),
-    currentStreak: v.optional(v.number()),
-    longestStreak: v.optional(v.number()),
-    sessionsCompleted: v.optional(v.number()),
-    totalSessions: v.optional(v.number()),
-    achievementsEarned: v.optional(v.number()),
-  },
-  handler: async (ctx, args) => {
-    const user = await getCurrentUser(ctx);
-    const existing = await ctx.db
-      .query("leaderboardStats")
-      .withIndex("by_userId", (q) => q.eq("userId", user._id))
-      .unique();
+// NOTE: there is deliberately no public `updateStats` mutation. It let any
+// client write its own points, level and streak straight onto the leaderboard.
+// Stats are derived server-side from completed sessions
+// (see focusSessions.end -> applySessionToStats).
 
-    const cleanUpdates: Record<string, any> = {};
-    for (const [key, value] of Object.entries(args)) {
-      if (value !== undefined) cleanUpdates[key] = value;
-    }
-
-    if (existing) {
-      await ctx.db.patch(existing._id, cleanUpdates);
-    } else {
-      await ctx.db.insert("leaderboardStats", {
-        userId: user._id,
-        ...cleanUpdates,
-      });
-    }
-  },
-});
-
-export const initStats = mutation({
+// Internal only: this took an arbitrary userId with no auth check, so any
+// caller could create rows for any user. New accounts are provisioned by the
+// Clerk webhook (webhookHelpers.initUserData) and initUser.initializeCurrentUser.
+export const initStats = internalMutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
     const existing = await ctx.db
