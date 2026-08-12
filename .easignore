@@ -4,6 +4,31 @@
 # EAS already ignores: node_modules, .git
 # This file targets everything else that isn't
 # needed for the native iOS/Android build.
+#
+# CRITICAL: unlike git, EAS does NOT merge this with .gitignore — if
+# .easignore exists, it is the ONLY ignore list EAS consults. Every secret
+# pattern below MUST be kept in sync with .gitignore or it uploads in the
+# next build archive regardless of what .gitignore says.
+# https://docs.expo.dev/build-reference/easignore/
+
+# ─── SECRETS — never upload (see .gitignore) ─────────
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.test
+.env/
+*.pem
+*.key
+*.p12
+*.keystore
+secrets/
+credentials/
+*.p8
+credentials.json
+token.json
+google-service-account.json
 
 # ─── DOCUMENTATION & MARKDOWN ────────────────
 *.md
