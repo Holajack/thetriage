@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
 import { createUserIfMissing } from "./users";
+import { ensureLeaderboardStats } from "./leaderboard";
 
 /**
  * Internal mutations used by the Clerk webhook handler.
@@ -70,26 +71,7 @@ export const initUserData = internalMutation({
     }
 
     // Initialize leaderboard stats
-    const existingStats = await ctx.db
-      .query("leaderboardStats")
-      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
-      .unique();
-
-    if (!existingStats) {
-      await ctx.db.insert("leaderboardStats", {
-        userId: args.userId,
-        totalFocusTime: 0,
-        weeklyFocusTime: 0,
-        monthlyFocusTime: 0,
-        level: 1,
-        points: 0,
-        currentStreak: 0,
-        longestStreak: 0,
-        sessionsCompleted: 0,
-        totalSessions: 0,
-        achievementsEarned: 0,
-      });
-    }
+    await ensureLeaderboardStats(ctx, args.userId);
 
     // Initialize learning metrics
     const existingMetrics = await ctx.db

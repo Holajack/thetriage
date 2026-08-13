@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { query, mutation, internalMutation } from "./_generated/server";
 import { getCurrentUser } from "./users";
 import { tierRank } from "./tiers";
+import type { Id } from "./_generated/dataModel";
 
 /**
  * Redeem a promo code. Grants tier upgrade, Flint, and trails based on code config.
@@ -14,17 +15,16 @@ interface PromoCodeConfig {
 }
 
 /**
- * Promo codes come from the PROMO_CODES environment variable (set it in the
- * Convex dashboard), as JSON:
+ * Fallback codes for when a code isn't in the `promoCodes` DB table. The
+ * primary source of truth is the DB table (seeded via `seedCodes` /
+ * `createCode`); this env var only covers codes that were never migrated
+ * into it. Set it in the Convex dashboard as JSON:
  *
  *   {"HW-8F3K-2QXV-2026": {"description":"Beta tester","tier":"elite",
  *                          "flintAmount":3000,"grantAllTrails":true}}
  *
- * They used to be hard-coded English words — TRAILBLAZER, FOUNDER, BETATESTER,
- * HIKEWISE — every one of which granted permanent Elite plus thousands of Flint
- * to anyone who guessed it. In a public beta, someone types FOUNDER on day one.
- *
- * There is no fallback list on purpose: if the variable is unset, no code works.
+ * If the variable is unset or malformed, this fallback simply contributes
+ * no codes — it never grants anything on its own.
  */
 function loadPromoCodes(): Record<string, PromoCodeConfig> {
   const raw = process.env.PROMO_CODES;
@@ -49,7 +49,47 @@ export const redeem = mutation({
     const user = await getCurrentUser(ctx);
     const normalizedCode = args.code.trim().toUpperCase();
 
-    const codeConfig = loadPromoCodes()[normalizedCode];
+    // The promoCodes DB table (populated by seedCodes/createCode) is the
+    // primary source of truth. The PROMO_CODES env var is kept only as a
+    // fallback for codes that were never migrated into the table.
+    const dbCode = await ctx.db
+      .query("promoCodes")
+      .withIndex("by_code", (q) => q.eq("code", normalizedCode))
+      .first();
+
+    let codeConfig: PromoCodeConfig | null = null;
+    let promoCodeId: Id<"promoCodes"> | undefined;
+
+    if (dbCode) {
+      if (!dbCode.isActive) {
+        return { success: false, error: "This promo code is no longer active" };
+      }
+      if (
+        dbCode.expiresAt &&
+        new Date(dbCode.expiresAt).getTime() < Date.now()
+      ) {
+        return { success: false, error: "This promo code has expired" };
+      }
+      if (
+        dbCode.maxRedemptions !== undefined &&
+        dbCode.currentRedemptions >= dbCode.maxRedemptions
+      ) {
+        return {
+          success: false,
+          error: "This promo code has reached its redemption limit",
+        };
+      }
+      codeConfig = {
+        description: dbCode.description,
+        tier: dbCode.tier,
+        flintAmount: dbCode.flintAmount,
+        grantAllTrails: dbCode.grantAllTrails,
+      };
+      promoCodeId = dbCode._id;
+    } else {
+      codeConfig = loadPromoCodes()[normalizedCode] ?? null;
+    }
+
     if (!codeConfig) {
       return { success: false, error: "Invalid promo code" };
     }
@@ -124,10 +164,17 @@ export const redeem = mutation({
       rewards.push("All trails unlocked");
     }
 
+    // Track redemption count against the DB code, if this came from the table
+    if (dbCode) {
+      await ctx.db.patch(dbCode._id, {
+        currentRedemptions: dbCode.currentRedemptions + 1,
+      });
+    }
+
     // Record redemption
     await ctx.db.insert("promoRedemptions", {
       userId: user._id,
-      promoCodeId: undefined,
+      promoCodeId,
       code: normalizedCode,
       redeemedAt: new Date().toISOString(),
     });

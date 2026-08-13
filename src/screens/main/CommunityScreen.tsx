@@ -25,6 +25,9 @@ import { useConvexStudyRooms } from "../../hooks/useConvex";
 import * as FriendService from "../../utils/convexFriendRequestService";
 import * as MessageService from "../../utils/convexMessagingService";
 import * as StudyRoomService from "../../utils/convexStudyRoomService";
+import { useQuery } from "convex/react";
+import { api } from "../../../convex/_generated/api";
+import { Id } from "../../../convex/_generated/dataModel";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
 import { track } from "../../analytics/analytics";
@@ -53,65 +56,6 @@ import { AnimationConfig } from "../../theme/premiumTheme";
 import { navigateHomeWithSlide } from "../../navigation/navHelpers";
 
 const TABS = ["Friends", "Messages", "Study Rooms"];
-const MOCK_FRIENDS = [
-  { id: "1", name: "Nikolai", joined: "3/18/2025" },
-  { id: "2", name: "Owner", joined: "3/17/2025" },
-];
-const MOCK_MESSAGES = [
-  {
-    id: "1",
-    name: "Nikolai",
-    avatar: "https://randomuser.me/api/portraits/men/1.jpg",
-    lastMessage: "You: Hlkf",
-    time: "about 1 month",
-    read: true,
-  },
-  {
-    id: "2",
-    name: "Owner",
-    avatar: "",
-    lastMessage: "You: rude",
-    time: "about 1 month",
-    read: true,
-  },
-];
-const MOCK_USERS = [
-  { id: "1", name: "LK", joined: "4/18/2025" },
-  { id: "2", name: "Jack", joined: "4/18/2025" },
-  { id: "3", name: "KadenJ141", joined: "3/25/2025" },
-  { id: "4", name: "A.Green", joined: "3/25/2025" },
-  { id: "5", name: "AMG723", joined: "3/24/2025" },
-  { id: "6", name: "Xstahmx", joined: "3/22/2025" },
-  { id: "7", name: "jahol", joined: "3/20/2025" },
-  { id: "8", name: "OliveBoi23", joined: "3/19/2025" },
-  { id: "9", name: "T_Whid", joined: "3/19/2025" },
-  { id: "10", name: "AnamariaCarey", joined: "3/19/2025" },
-  { id: "11", name: "marissailee", joined: "3/18/2025" },
-  { id: "12", name: "jackenH", joined: "3/18/2025" },
-  { id: "13", name: "JaxKa", joined: "3/18/2025" },
-  { id: "14", name: "Nikolai", joined: "3/18/2025" },
-  { id: "15", name: "jkzh", joined: "3/17/2025" },
-  { id: "16", name: "Jakzh", joined: "3/17/2025" },
-  { id: "17", name: "abjak", joined: "3/17/2025" },
-  { id: "18", name: "Owner", joined: "3/17/2025" },
-  { id: "19", name: "Katzh", joined: "3/17/2025" },
-  { id: "20", name: "Hollaj", joined: "3/17/2025" },
-];
-const MOCK_STUDY_ROOMS = [
-  {
-    id: "1",
-    title: "Market Minds",
-    live: true,
-    participants: 3,
-    topic: "Nikolai's project",
-    creator: "Hjack",
-    avatars: [
-      "https://randomuser.me/api/portraits/men/1.jpg",
-      "https://randomuser.me/api/portraits/men/2.jpg",
-      "", // fallback to initial
-    ],
-  },
-];
 
 interface User {
   id: string;
@@ -150,11 +94,28 @@ interface FriendRequest {
 }
 
 // Premium Animated Conversation Card Component
+interface ConversationPartner {
+  id: string;
+  full_name?: string;
+  username?: string;
+  avatar_url?: string;
+  email?: string;
+  status?: string;
+}
+
 interface AnimatedConversationCardProps {
-  item: any;
+  item: {
+    otherUserId: string;
+    lastMessage: {
+      senderId: string;
+      content: string;
+      _creationTime: number;
+    };
+    unreadCount: number;
+  };
   currentUserId: string | undefined;
   theme: any;
-  onPress: () => void;
+  onPress: (partner: ConversationPartner) => void;
   getStatusLabel: (status?: string) => string;
 }
 
@@ -170,10 +131,20 @@ const AnimatedConversationCard: React.FC<AnimatedConversationCardProps> = ({
     onPressIn,
     onPressOut,
   } = useButtonPressAnimation();
-  const partner = item.partner;
+  const partnerProfile = useQuery(api.users.getUser, {
+    userId: item.otherUserId as Id<"users">,
+  });
+  const partner: ConversationPartner = {
+    id: item.otherUserId,
+    full_name: partnerProfile?.fullName,
+    username: partnerProfile?.username,
+    avatar_url: partnerProfile?.avatarUrl,
+    email: partnerProfile?.username,
+    status: partnerProfile?.status,
+  };
   const lastMessage = item.lastMessage;
   const timeAgo = lastMessage
-    ? new Date(lastMessage.created_at).toLocaleString()
+    ? new Date(lastMessage._creationTime).toLocaleString()
     : "";
 
   return (
@@ -186,7 +157,7 @@ const AnimatedConversationCard: React.FC<AnimatedConversationCardProps> = ({
       onPressOut={onPressOut}
       onPress={() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        onPress();
+        onPress(partner);
       }}
     >
       <Animated.View
@@ -228,7 +199,7 @@ const AnimatedConversationCard: React.FC<AnimatedConversationCardProps> = ({
             style={[styles.lastMessage, { color: theme.text + "99" }]}
             numberOfLines={1}
           >
-            {lastMessage.sender_id === currentUserId ? "You: " : ""}
+            {lastMessage.senderId === currentUserId ? "You: " : ""}
             {lastMessage.content}
           </Text>
         </View>
@@ -478,9 +449,12 @@ const CommunityScreen = () => {
       // This will be handled via reactive queries when messages API is extended
       setUnreadMessageCount(0);
 
-      // Study room invitations - placeholder for future implementation
-      // This will be added to the StudyRoomService when invitations are implemented
-      setPendingStudyRoomInvitations([]);
+      // Load pending study room invitations
+      const studyRoomInvitationsResult =
+        await StudyRoomService.getPendingStudyRoomInvitations();
+      if (studyRoomInvitationsResult.success) {
+        setPendingStudyRoomInvitations(studyRoomInvitationsResult.data || []);
+      }
     } catch {
       // Error loading friends data
     }
@@ -824,63 +798,18 @@ const CommunityScreen = () => {
     }
   };
 
-  // Handle message navigation with real user data
-  const handleMessageUser = (user: User) => {
-    navigation.navigate("MessageScreen", {
-      contact: {
-        name: user.full_name || user.username || user.email,
-        avatar: user.avatar_url || "",
-        status: getStatusLabel(user.status),
-      },
-    });
-  };
-
   // Convex-based hooks for conversations and users
   function useConvexConversations(user: any) {
-    const [conversations, setConversations] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
-    useEffect(() => {
-      const fetchConvos = async () => {
-        setLoading(true);
-        if (!user) {
-          setConversations([]);
-          setLoading(false);
-          return;
-        }
-        try {
-          // Fetch real conversations from Convex
-          const result = await MessageService.getConversations();
-          if (result.success && result.data) {
-            // Transform to format expected by the UI (with partner object)
-            const transformed = result.data.map((conv: any) => ({
-              id: conv.participant.id,
-              partner: {
-                id: conv.participant.id,
-                full_name: conv.participant.full_name,
-                username: conv.participant.username,
-                avatar_url: conv.participant.avatar_url,
-                email: conv.participant.username, // fallback
-                status: "active",
-              },
-              lastMessage: {
-                content: conv.last_message?.content || "",
-                sender_id: conv.last_message?.sender_id,
-                created_at: conv.last_message?.created_at,
-              },
-              unreadCount: conv.unread_count,
-            }));
-            setConversations(transformed);
-          } else {
-            setConversations([]);
-          }
-        } catch {
-          setConversations([]);
-        }
-        setLoading(false);
-      };
-      fetchConvos();
-    }, [user]);
-    return { conversations, loading };
+    // Live Convex subscription: updates automatically as messages arrive,
+    // matching the reactive pattern used in MessageScreen.tsx.
+    const conversations = useQuery(
+      api.messages.listConversations,
+      user ? {} : "skip",
+    );
+    return {
+      conversations: conversations ?? [],
+      loading: conversations === undefined,
+    };
   }
 
   // Helper to format time ago
@@ -1199,6 +1128,26 @@ const CommunityScreen = () => {
                 >
                   <Text style={styles.badgeText}>
                     {incomingFriendRequests.length}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            )}
+            {/* Study Room Invitations Button */}
+            {pendingStudyRoomInvitations.length > 0 && (
+              <TouchableOpacity
+                style={styles.friendRequestButton}
+                onPress={() => setShowStudyRoomInvitations(true)}
+              >
+                <Ionicons
+                  name="notifications"
+                  size={20}
+                  color={theme.primary}
+                />
+                <View
+                  style={[styles.badge, { backgroundColor: theme.primary }]}
+                >
+                  <Text style={styles.badgeText}>
+                    {pendingStudyRoomInvitations.length}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -1648,32 +1597,28 @@ const CommunityScreen = () => {
             <AnimatedFlatList
               key={`messages-${focusKey}`}
               data={conversations}
-              keyExtractor={(item) => item.id}
+              keyExtractor={(item) => item.otherUserId}
               contentContainerStyle={{ paddingBottom: 24 }}
               delay="fast"
               direction="right"
-              refreshing={loading}
-              onRefresh={async () => {
-                setLoading(true);
-                await refreshData();
-                setLoading(false);
-              }}
+              refreshing={conversationsLoading}
+              onRefresh={refreshData}
               renderItem={({ item }) => (
                 <AnimatedConversationCard
                   item={item}
                   currentUserId={currentUser?.id}
                   theme={theme}
                   getStatusLabel={getStatusLabel}
-                  onPress={() => {
+                  onPress={(partner) => {
                     navigation.navigate("MessageScreen" as any, {
                       contact: {
-                        id: item.partner.id,
+                        id: partner.id,
                         name:
-                          item.partner.full_name ||
-                          item.partner.username ||
-                          item.partner.email,
-                        avatar: item.partner.avatar_url,
-                        status: getStatusLabel(item.partner.status),
+                          partner.full_name ||
+                          partner.username ||
+                          partner.email,
+                        avatar: partner.avatar_url,
+                        status: getStatusLabel(partner.status),
                       },
                     });
                   }}

@@ -46,6 +46,7 @@ import {
 import InteractiveWalkthrough from "../../components/InteractiveWalkthrough";
 import { useScreenWalkthrough } from "../../hooks/useScreenWalkthrough";
 import { HOME_STEPS } from "../../config/walkthroughSteps";
+import { useSubscriptionTier } from "../../hooks/useSubscriptionTier";
 
 // Import userAppData functions
 const userAppDataModule = require("../../utils/userAppData");
@@ -58,6 +59,7 @@ export default function HomeScreen() {
   const route = useRoute();
   const { theme } = useTheme(); // Use theme context directly
   const { user } = useAuth(); // Get user data for profile
+  const { hasNoraAccess } = useSubscriptionTier();
 
   const [inspiration, setInspiration] = useState<{
     quote: string;
@@ -207,7 +209,11 @@ export default function HomeScreen() {
         navigation.navigate("Settings" as never);
         break;
       case "nora":
-        navigation.navigate("NoraScreen" as never);
+        if (hasNoraAccess) {
+          navigation.navigate("NoraScreen" as never);
+        } else {
+          navigation.navigate("Subscription" as never);
+        }
         break;
       case "leaderboard":
         navigation.navigate("Leaderboard" as never);

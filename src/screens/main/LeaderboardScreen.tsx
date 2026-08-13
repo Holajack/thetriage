@@ -100,7 +100,11 @@ const LeaderboardScreen = () => {
     currentUserEntry || userData?.leaderboard || userData?.stats;
 
   // Session type counts for Deep Work / Balance / Sprint cards
+  // useQuery returns undefined while the query is in flight and only resolves to
+  // an array (possibly empty) once loaded — track that distinction so we don't
+  // flash an empty state mid-load.
   const allSessions = useQuery(api.focusSessions.list, {});
+  const isSessionsLoading = allSessions === undefined;
   const sessionTypeCounts = React.useMemo(() => {
     if (!allSessions) return { deep_work: 0, balanced: 0, sprint: 0 };
     return {
@@ -111,7 +115,8 @@ const LeaderboardScreen = () => {
     };
   }, [allSessions]);
 
-  // Aggregate time by subject for the donut chart
+  // Aggregate time by subject for the donut chart. No mock/fallback data —
+  // an empty or loading result renders an empty state instead of invented numbers.
   const subjectTimeData = React.useMemo(() => {
     const SUBJECT_COLORS = [
       "#4CAF50",
@@ -122,16 +127,8 @@ const LeaderboardScreen = () => {
       "#00BCD4",
     ];
     if (!allSessions || allSessions.length === 0) {
-      // Mock data when no sessions exist yet
-      return [
-        { name: "Math", minutes: 45, color: SUBJECT_COLORS[0] },
-        { name: "Biology", minutes: 30, color: SUBJECT_COLORS[1] },
-        { name: "Chemistry", minutes: 25, color: SUBJECT_COLORS[2] },
-        { name: "English", minutes: 20, color: SUBJECT_COLORS[3] },
-        { name: "History", minutes: 15, color: SUBJECT_COLORS[4] },
-      ];
+      return [];
     }
-    // Aggregate real data by subject
     const bySubject: Record<string, number> = {};
     allSessions.forEach((s) => {
       const subj = s.subject || "General";
@@ -148,11 +145,28 @@ const LeaderboardScreen = () => {
       }));
   }, [allSessions]);
 
+  const totalSubjectMinutes = React.useMemo(
+    () => subjectTimeData.reduce((sum, d) => sum + d.minutes, 0),
+    [subjectTimeData],
+  );
+  // Guard against a genuinely empty/zero dataset (e.g. sessions exist but all
+  // have zero duration) producing a NaN strokeDasharray in the donut chart.
+  const hasSubjectData = subjectTimeData.length > 0 && totalSubjectMinutes > 0;
+
   // Use Convex data directly - Friends tab shows only friends, Global shows everyone
   const currentLeaderboard =
     tab === "Friends"
       ? convexLeaderboard?.friendsLeaderboard || []
       : convexLeaderboard?.globalLeaderboard || [];
+
+  // leaderboard.getFriends always includes the viewer alongside real friends, so
+  // friendsLeaderboard.length is never 0 for a signed-in user — a length of
+  // exactly 1 means "only me" (no real friends). The Global tab has no such
+  // padding, so a plain length check is correct there.
+  const hasLeaderboardEntries =
+    tab === "Friends"
+      ? (convexLeaderboard?.friendsLeaderboard?.length ?? 0) > 1
+      : currentLeaderboard.length > 0;
 
   // General loading and error states
   const loading = leaderboardLoading;
@@ -728,7 +742,7 @@ const LeaderboardScreen = () => {
           </StaggeredItem>
 
           {/* Time by Subject Donut Chart */}
-          {subjectTimeData.length > 0 && (
+          {hasSubjectData ? (
             <StaggeredItem index={5} delay="normal" direction="up">
               <View
                 style={[
@@ -744,15 +758,11 @@ const LeaderboardScreen = () => {
                   <View style={styles.donutContainer}>
                     <Svg width={120} height={120} viewBox="0 0 120 120">
                       {(() => {
-                        const totalMinutes = subjectTimeData.reduce(
-                          (sum, d) => sum + d.minutes,
-                          0,
-                        );
                         const radius = 45;
                         const circumference = 2 * Math.PI * radius;
                         let cumulativeOffset = 0;
                         return subjectTimeData.map((item, i) => {
-                          const fraction = item.minutes / totalMinutes;
+                          const fraction = item.minutes / totalSubjectMinutes;
                           const dashLength = fraction * circumference;
                           const dashOffset = -cumulativeOffset;
                           cumulativeOffset += dashLength;
@@ -777,15 +787,7 @@ const LeaderboardScreen = () => {
                     </Svg>
                     <View style={styles.donutCenter}>
                       <Text style={[styles.donutTotal, { color: theme.text }]}>
-                        {Math.round(
-                          (subjectTimeData.reduce(
-                            (sum, d) => sum + d.minutes,
-                            0,
-                          ) /
-                            60) *
-                            10,
-                        ) / 10}
-                        h
+                        {Math.round((totalSubjectMinutes / 60) * 10) / 10}h
                       </Text>
                       <Text
                         style={[
@@ -828,7 +830,40 @@ const LeaderboardScreen = () => {
                 </View>
               </View>
             </StaggeredItem>
-          )}
+          ) : !isSessionsLoading ? (
+            <StaggeredItem index={5} delay="normal" direction="up">
+              <View
+                style={[
+                  styles.subjectChartContainer,
+                  styles.subjectChartEmpty,
+                  { backgroundColor: theme.card, borderColor: theme.border },
+                ]}
+              >
+                <Ionicons
+                  name="pie-chart-outline"
+                  size={32}
+                  color="#BDBDBD"
+                  style={{ marginBottom: 8 }}
+                />
+                <Text
+                  style={[
+                    styles.emptyLeaderboardText,
+                    { color: theme.primary },
+                  ]}
+                >
+                  No sessions yet
+                </Text>
+                <Text
+                  style={[
+                    styles.emptyLeaderboardSub,
+                    { color: theme.primary, marginBottom: 0 },
+                  ]}
+                >
+                  Complete a focus session to see your subject breakdown
+                </Text>
+              </View>
+            </StaggeredItem>
+          ) : null}
 
           {/* Enhanced Weekly Focus Goal */}
           <StaggeredItem index={6} delay="normal" direction="up">
@@ -1011,7 +1046,7 @@ const LeaderboardScreen = () => {
                 </Text>
               </TouchableOpacity>
             </View>
-          ) : currentLeaderboard && currentLeaderboard.length > 0 ? (
+          ) : hasLeaderboardEntries ? (
             <View style={styles.leaderboardContainer}>
               {currentLeaderboard.map((entry: Leaderboard, index: number) =>
                 renderLeaderboardEntry(entry, index),
@@ -1080,7 +1115,7 @@ const LeaderboardScreen = () => {
             </View>
           </View>
 
-          {currentActivity.length > 0 ? (
+          {hasLeaderboardEntries ? (
             <View style={styles.activityContainer}>
               {currentActivity.map((activity: any, index: number) => {
                 const isActivityElite = activity.subscription_tier === "elite";
@@ -1757,6 +1792,10 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     marginBottom: 16,
     borderWidth: 1,
+  },
+  subjectChartEmpty: {
+    alignItems: "center",
+    paddingVertical: 24,
   },
   subjectChartTitle: {
     fontSize: 16,

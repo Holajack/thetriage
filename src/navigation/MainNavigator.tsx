@@ -35,7 +35,6 @@ import ShopScreen from "../screens/main/ShopScreen";
 import SettingsScreen from "../screens/main/SettingsScreen";
 import { useSubscriptionTier } from "../hooks/useSubscriptionTier";
 import SubscriptionScreen from "../screens/main/SubscriptionScreen";
-import ProTrekkerScreen from "../screens/main/ProTrekkerScreen";
 import SessionHistoryScreen from "../screens/main/SessionHistoryScreen";
 import FocusPreparationScreen from "../screens/main/FocusPreparationScreen";
 import { StudySessionScreen } from "../screens/main/StudySessionScreen";
@@ -155,7 +154,6 @@ function ContentStack() {
         component={SubscriptionScreen}
       />
       <ContentStackNav.Screen name="QRScanner" component={QRScannerScreen} />
-      <ContentStackNav.Screen name="ProTrekker" component={ProTrekkerScreen} />
       <ContentStackNav.Screen name="EBooks" component={EBooksScreen} />
       <ContentStackNav.Screen
         name="Achievements"

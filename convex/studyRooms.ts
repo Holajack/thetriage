@@ -8,6 +8,7 @@ import {
   isFieldVisible,
 } from "./users";
 import { getStudyRoomLimit } from "./tiers";
+import { evaluateAchievements } from "./achievements";
 
 /**
  * Study rooms are a membership boundary, not a public bulletin board.
@@ -365,6 +366,9 @@ export const create = mutation({
       role: "owner",
     });
 
+    // Creating a room is a real membership event — it can unlock room_1/10/25.
+    await evaluateAchievements(ctx, user._id);
+
     return roomId;
   },
 });
@@ -414,6 +418,9 @@ export const join = mutation({
     }
 
     await syncParticipantCount(ctx, args.roomId);
+
+    // Joining is a real membership event — it can unlock room_1/10/25.
+    await evaluateAchievements(ctx, user._id);
   },
 });
 
@@ -455,6 +462,10 @@ export const joinByCode = mutation({
     }
 
     await syncParticipantCount(ctx, room._id);
+
+    // Joining is a real membership event — it can unlock room_1/10/25.
+    await evaluateAchievements(ctx, user._id);
+
     return room._id;
   },
 });

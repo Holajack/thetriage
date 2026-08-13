@@ -99,6 +99,7 @@ const SHOP_ITEMS: ShopItem[] = [
     cost: 300,
     category: "gear",
     icon: "🧣",
+    comingSoon: true,
   },
   {
     id: "hat",
@@ -107,6 +108,7 @@ const SHOP_ITEMS: ShopItem[] = [
     cost: 600,
     category: "gear",
     icon: "🎩",
+    comingSoon: true,
   },
   {
     id: "vest",
@@ -115,6 +117,7 @@ const SHOP_ITEMS: ShopItem[] = [
     cost: 900,
     category: "gear",
     icon: "🦺",
+    comingSoon: true,
   },
   {
     id: "sunglasses",
@@ -123,6 +126,7 @@ const SHOP_ITEMS: ShopItem[] = [
     cost: 1200,
     category: "gear",
     icon: "🕶️",
+    comingSoon: true,
   },
   {
     id: "backpack",
@@ -131,6 +135,7 @@ const SHOP_ITEMS: ShopItem[] = [
     cost: 1500,
     category: "gear",
     icon: "🎒",
+    comingSoon: true,
   },
   {
     id: "scarf",
@@ -139,6 +144,7 @@ const SHOP_ITEMS: ShopItem[] = [
     cost: 1800,
     category: "gear",
     icon: "🧵",
+    comingSoon: true,
   },
   {
     id: "boots",
@@ -147,6 +153,7 @@ const SHOP_ITEMS: ShopItem[] = [
     cost: 2400,
     category: "gear",
     icon: "🥾",
+    comingSoon: true,
   },
   {
     id: "compass",
@@ -155,6 +162,7 @@ const SHOP_ITEMS: ShopItem[] = [
     cost: 3000,
     category: "gear",
     icon: "🧭",
+    comingSoon: true,
   },
 
   // Shelters - 25-300 hours of focus (progressive goals)
@@ -165,6 +173,7 @@ const SHOP_ITEMS: ShopItem[] = [
     cost: 1500,
     category: "shelter",
     icon: "⛺",
+    comingSoon: true,
   },
   {
     id: "cabin",
@@ -173,6 +182,7 @@ const SHOP_ITEMS: ShopItem[] = [
     cost: 3000,
     category: "shelter",
     icon: "🛖",
+    comingSoon: true,
   },
   {
     id: "treehouse",
@@ -181,6 +191,7 @@ const SHOP_ITEMS: ShopItem[] = [
     cost: 6000,
     category: "shelter",
     icon: "🏠",
+    comingSoon: true,
   },
   {
     id: "igloo",
@@ -189,6 +200,7 @@ const SHOP_ITEMS: ShopItem[] = [
     cost: 9000,
     category: "shelter",
     icon: "🏔️",
+    comingSoon: true,
   },
   {
     id: "lighthouse",
@@ -197,6 +209,7 @@ const SHOP_ITEMS: ShopItem[] = [
     cost: 12000,
     category: "shelter",
     icon: "🗼",
+    comingSoon: true,
   },
   {
     id: "castle",
@@ -205,6 +218,7 @@ const SHOP_ITEMS: ShopItem[] = [
     cost: 18000,
     category: "shelter",
     icon: "🏰",
+    comingSoon: true,
   },
 
   // Trails - 15-375 hours of focus (progressive goals)

@@ -344,6 +344,26 @@ export const getEbook = query({
   },
 });
 
+// Client-usable view URL for a stored ebook, scoped to the requesting user's
+// own ebooks (same ownership check as `getEbook`). Convex storage URLs are
+// unguessable but not access-controlled on their own — never hand one out
+// without first checking `ebook.userId === user._id`.
+export const getViewUrl = query({
+  args: { ebookId: v.id("ebooks") },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    const ebook = await ctx.db.get(args.ebookId);
+    if (!ebook || ebook.userId !== user._id) {
+      throw new Error("Ebook not found");
+    }
+    const url = await ctx.storage.getUrl(ebook.storageId);
+    if (!url) {
+      throw new Error("Could not get a view URL for this ebook");
+    }
+    return { url, title: ebook.title };
+  },
+});
+
 export const _getEbookInternal = internalQuery({
   args: { ebookId: v.id("ebooks") },
   handler: async (ctx, args) => {

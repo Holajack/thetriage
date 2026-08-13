@@ -380,6 +380,15 @@ export const completeSession = mutation({
       recordedAt: new Date().toISOString(),
     });
 
+    // Extract Nora memories from this result (trait/strength/growth
+    // insights, noraMemory sync, recommendation triggers) so Nora can
+    // reference this quiz the next time the user chats with her.
+    await ctx.scheduler.runAfter(
+      0,
+      internal.quizNoraIntegration.extractQuizMemories,
+      { userId: user._id, resultId },
+    );
+
     // Fetch full result for frontend
     const fullResult = await ctx.db.get(resultId);
 

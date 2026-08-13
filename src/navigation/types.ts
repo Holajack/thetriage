@@ -213,7 +213,6 @@ export type MainTabParamList = {
   BrainMapping: undefined;
   Quizzes: undefined;
   SessionReport: undefined;
-  ProTrekker: undefined;
   Subscription: undefined;
   QRScanner: undefined;
   SoundSettings: undefined;

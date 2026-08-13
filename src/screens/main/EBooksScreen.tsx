@@ -17,8 +17,9 @@ import { useTheme } from "../../context/ThemeContext";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
 import * as Haptics from "expo-haptics";
-import { useMutation, useQuery } from "convex/react";
+import { useConvex, useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
+import { Id } from "../../../convex/_generated/dataModel";
 import { ShimmerLoader } from "../../components/premium/ShimmerLoader";
 import { AnimatedButton } from "../../components/premium/AnimatedButton";
 import { StaggeredItem } from "../../components/premium/StaggeredList";
@@ -36,6 +37,8 @@ interface UploadedBook {
   upload_date: string;
   file_path: string;
   storage_path: string;
+  status: string;
+  errorMessage?: string;
 }
 
 const EBooksScreen: React.FC = () => {
@@ -52,6 +55,7 @@ const EBooksScreen: React.FC = () => {
   const generateUploadUrl = useMutation(api.ebooks.generateUploadUrl);
   const registerUpload = useMutation(api.ebooks.registerUpload);
   const deleteEbookMutation = useMutation(api.ebooks.deleteEbook);
+  const convex = useConvex();
 
   // Map Convex rows to the screen's existing UploadedBook shape so the renderer
   // doesn't need to change.
@@ -62,6 +66,8 @@ const EBooksScreen: React.FC = () => {
     upload_date: e.uploadedAt ?? new Date().toISOString(),
     file_path: e.storageId,
     storage_path: e.storageId,
+    status: e.status ?? "processing",
+    errorMessage: e.errorMessage,
   }));
 
   /* ----------  Upload Function (Convex storage + OpenAI ingestion)  ---------- */
@@ -75,12 +81,14 @@ const EBooksScreen: React.FC = () => {
       if (result.canceled || !result.assets?.length) return;
 
       const file = result.assets[0];
-      const MAX_SIZE = 100 * 1024 * 1024; // 100MB for textbooks
+      // Keep in sync with MAX_EBOOK_BYTES in convex/ebooks.ts, which is the
+      // limit actually enforced against the real stored blob size.
+      const MAX_SIZE = 25 * 1024 * 1024; // 25MB
 
       if (file.size && file.size > MAX_SIZE) {
         Alert.alert(
           "File too large",
-          "Please choose a file smaller than 100 MB.",
+          "Please choose a file smaller than 25 MB.",
         );
         return;
       }
@@ -94,7 +102,10 @@ const EBooksScreen: React.FC = () => {
       const fileBlob = await fetch(file.uri).then((r) => r.blob());
       const uploadRes = await fetch(uploadUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/pdf" },
+        // Send the picked file's real mime type (not a hardcoded constant) so
+        // the server's Content-Type-based PDF check in registerUpload has a
+        // real signal to check instead of one the client always sends anyway.
+        headers: { "Content-Type": file.mimeType || "application/pdf" },
         body: fileBlob,
       });
       if (!uploadRes.ok) {
@@ -115,15 +126,13 @@ const EBooksScreen: React.FC = () => {
         "Your e-book is uploading. Nora will be able to reference it in chat once processing finishes.",
       );
     } catch (error: any) {
-      // Upload error
-      let errorMessage = "There was an error uploading your file.";
-      if (error?.message?.includes("Network request failed")) {
-        errorMessage =
-          "Network connection issue. Please check your internet connection and try again.";
-      } else if (error?.message?.includes("too large")) {
-        errorMessage =
-          "File is too large. Please choose a file smaller than 100MB.";
-      }
+      // Genuine client-side/network failures have no useful server message —
+      // everything else (too-large, quota, etc.) is already a specific,
+      // correct message thrown by the server, so surface it as-is instead of
+      // overwriting it with our own guess.
+      const errorMessage = error?.message?.includes("Network request failed")
+        ? "Network connection issue. Please check your internet connection and try again."
+        : error?.message || "There was an error uploading your file.";
       Alert.alert("Upload Failed", errorMessage);
     } finally {
       setLoading(false);
@@ -155,11 +164,18 @@ const EBooksScreen: React.FC = () => {
 
   /* ----------  View PDF Function  ---------- */
   const viewPDF = async (book: UploadedBook) => {
-    // TODO: View PDF from Convex file storage
-    Alert.alert(
-      "Feature Coming Soon",
-      "PDF viewing will be available in the next update!",
-    );
+    try {
+      const { url, title } = await convex.query(api.ebooks.getViewUrl, {
+        ebookId: book.id as Id<"ebooks">,
+      });
+      navigation.navigate("PDFViewer", {
+        url,
+        title: title ?? book.name,
+        bookData: book,
+      });
+    } catch (error: any) {
+      Alert.alert("Error", error?.message || "Could not open this PDF.");
+    }
   };
 
   /* ----------  Send to Nora Function  ---------- */
@@ -191,6 +207,19 @@ const EBooksScreen: React.FC = () => {
     } catch (error) {
       // Send to Nora error
     }
+  };
+
+  const statusLabel = (status: string, errorMessage?: string): string => {
+    if (status === "ready") return "Ready";
+    if (status === "failed")
+      return `Failed — ${errorMessage || "Processing error"}`;
+    return "Processing...";
+  };
+
+  const statusColor = (status: string, currentTheme: typeof theme): string => {
+    if (status === "ready") return currentTheme.success ?? "#22C55E";
+    if (status === "failed") return currentTheme.error ?? "#EF4444";
+    return currentTheme.warning ?? "#F59E0B";
   };
 
   const formatFileSize = (bytes: number): string => {
@@ -287,7 +316,7 @@ const EBooksScreen: React.FC = () => {
                         { color: theme.textSecondary },
                       ]}
                     >
-                      Tap to select PDF files (up to 100MB)
+                      Tap to select PDF files (up to 25MB)
                     </Text>
                   </>
                 )}
@@ -340,6 +369,15 @@ const EBooksScreen: React.FC = () => {
                 <Text style={[styles.meta, { color: theme.textSecondary }]}>
                   {formatFileSize(item.file_size)} •{" "}
                   {new Date(item.upload_date).toLocaleDateString()}
+                </Text>
+                <Text
+                  style={[
+                    styles.statusBadge,
+                    { color: statusColor(item.status, theme) },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {statusLabel(item.status, item.errorMessage)}
                 </Text>
               </View>
 
@@ -621,6 +659,11 @@ const styles = StyleSheet.create({
   },
   meta: {
     fontSize: 12,
+  },
+  statusBadge: {
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 4,
   },
   actionButtons: {
     flexDirection: "row",

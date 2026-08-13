@@ -51,6 +51,13 @@ interface ConvexQuizQuestion {
   isReversed?: boolean;
 }
 
+interface FailedAnswer {
+  sessionId: Id<"quizSessions">;
+  questionId: Id<"quizQuestions">;
+  selectedValue: number;
+  responseTimeMs: number;
+}
+
 interface InteractiveQuizProps {
   quizType: string;
   categorySlug?: string;
@@ -86,6 +93,8 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({
   const [sessionId, setSessionId] = useState<Id<"quizSessions"> | null>(null);
   const [useConvex, setUseConvex] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [failedAnswers, setFailedAnswers] = useState<FailedAnswer[]>([]);
+  const [isRetryingAnswers, setIsRetryingAnswers] = useState(false);
 
   // Convex mutations
   const startSessionMutation = useMutation(api.quizSessions.startSession);
@@ -256,6 +265,43 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({
     return (question as LegacyQuizQuestion).options;
   };
 
+  // Submits an answer to Convex, retrying once automatically. If the retry
+  // also fails, the answer is tracked in `failedAnswers` so the UI can show
+  // a visible banner and let the user retry manually — a `quizResponses`
+  // row that never gets written otherwise makes `completeSession` silently
+  // default that sub-dimension's score to 50 with no indication to the user.
+  const submitAnswerToConvex = useCallback(
+    async (answer: FailedAnswer, isRetryAttempt = false) => {
+      try {
+        await submitAnswerMutation(answer);
+        if (isRetryAttempt) {
+          setFailedAnswers((prev) =>
+            prev.filter((a) => a.questionId !== answer.questionId),
+          );
+        }
+      } catch (error) {
+        if (!isRetryAttempt) {
+          await submitAnswerToConvex(answer, true);
+          return;
+        }
+        setFailedAnswers((prev) => [
+          ...prev.filter((a) => a.questionId !== answer.questionId),
+          answer,
+        ]);
+      }
+    },
+    [submitAnswerMutation],
+  );
+
+  const retryFailedAnswers = useCallback(async () => {
+    if (failedAnswers.length === 0 || isRetryingAnswers) return;
+    setIsRetryingAnswers(true);
+    await Promise.all(
+      failedAnswers.map((answer) => submitAnswerToConvex(answer, true)),
+    );
+    setIsRetryingAnswers(false);
+  }, [failedAnswers, isRetryingAnswers, submitAnswerToConvex]);
+
   const handleAnswer = (optionIndex: number) => {
     if (!currentQuestion) return;
 
@@ -267,15 +313,15 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({
       [questionId]: optionIndex,
     }));
 
-    // Submit to Convex in the background — don't block UI advancement
+    // Submit to Convex in the background — don't block UI advancement.
+    // Failures are retried once and, if still failing, surfaced via the
+    // failedAnswers banner instead of being swallowed.
     if (useConvex && sessionId && "_id" in currentQuestion) {
-      submitAnswerMutation({
+      submitAnswerToConvex({
         sessionId,
         questionId: currentQuestion._id,
         selectedValue: optionIndex,
         responseTimeMs,
-      }).catch((error) => {
-        // Answer submission failed silently
       });
     }
 
@@ -297,6 +343,28 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({
   };
 
   const completeQuiz = async () => {
+    if (isSaving) return;
+
+    // Don't let the quiz silently finish with answers that never made it to
+    // Convex — those sub-dimensions would score as a default "middle" (50)
+    // with no indication anything went wrong. Give the user a chance to
+    // retry before we score around the gap.
+    if (useConvex && failedAnswers.length > 0) {
+      Alert.alert(
+        "Some answers didn't save",
+        `${failedAnswers.length} of your answers failed to save and would be scored as neutral if you finish now. Retry saving them first?`,
+        [
+          { text: "Finish Anyway", style: "destructive", onPress: finishQuiz },
+          { text: "Retry Saving", onPress: retryFailedAnswers },
+        ],
+      );
+      return;
+    }
+
+    await finishQuiz();
+  };
+
+  const finishQuiz = async () => {
     if (isSaving) return;
 
     setIsSaving(true);
@@ -678,6 +746,26 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({
         </Text>
       </View>
 
+      {/* Answer Save Error Banner */}
+      {failedAnswers.length > 0 && (
+        <View style={styles.errorBanner}>
+          <Ionicons name="warning-outline" size={18} color="#B71C1C" />
+          <Text style={styles.errorBannerText}>
+            {failedAnswers.length === 1
+              ? "1 answer didn't save."
+              : `${failedAnswers.length} answers didn't save.`}
+          </Text>
+          <TouchableOpacity
+            onPress={retryFailedAnswers}
+            disabled={isRetryingAnswers}
+          >
+            <Text style={styles.errorBannerRetry}>
+              {isRetryingAnswers ? "Retrying..." : "Retry"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Question */}
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={[styles.questionCard, { backgroundColor: theme.card }]}>
@@ -887,6 +975,28 @@ const styles = StyleSheet.create({
   progressText: {
     fontSize: 12,
     textAlign: "center",
+  },
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 20,
+    marginBottom: 12,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: "#FFEBEE",
+    borderWidth: 1,
+    borderColor: "#FFCDD2",
+  },
+  errorBannerText: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 13,
+    color: "#B71C1C",
+  },
+  errorBannerRetry: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#B71C1C",
   },
   content: {
     flex: 1,

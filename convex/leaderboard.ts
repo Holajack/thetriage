@@ -1,5 +1,11 @@
 import { v } from "convex/values";
-import { query, mutation, internalMutation } from "./_generated/server";
+import {
+  query,
+  mutation,
+  internalMutation,
+  MutationCtx,
+} from "./_generated/server";
+import { Id } from "./_generated/dataModel";
 import { localDayKey, weekStartKey } from "./timeWindows";
 import {
   getCurrentUser,
@@ -163,31 +169,49 @@ export const getUserRank = query({
 // Stats are derived server-side from completed sessions
 // (see focusSessions.end -> applySessionToStats).
 
+/**
+ * Shared provisioning logic for a brand-new leaderboardStats row.
+ *
+ * Called directly (same transaction, no scheduling latency) by the two
+ * account-provisioning entry points: webhookHelpers.initUserData (Clerk
+ * webhook) and initUser.initializeCurrentUser (client-triggered fallback).
+ * Idempotent — a no-op if the row already exists.
+ */
+export async function ensureLeaderboardStats(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+) {
+  const existing = await ctx.db
+    .query("leaderboardStats")
+    .withIndex("by_userId", (q) => q.eq("userId", userId))
+    .unique();
+
+  if (!existing) {
+    await ctx.db.insert("leaderboardStats", {
+      userId,
+      totalFocusTime: 0,
+      weeklyFocusTime: 0,
+      monthlyFocusTime: 0,
+      level: 1,
+      points: 0,
+      currentStreak: 0,
+      longestStreak: 0,
+      sessionsCompleted: 0,
+      totalSessions: 0,
+      achievementsEarned: 0,
+    });
+  }
+}
+
 // Internal only: this took an arbitrary userId with no auth check, so any
 // caller could create rows for any user. New accounts are provisioned by the
-// Clerk webhook (webhookHelpers.initUserData) and initUser.initializeCurrentUser.
+// Clerk webhook (webhookHelpers.initUserData) and initUser.initializeCurrentUser,
+// both of which call ensureLeaderboardStats directly rather than through this
+// mutation. This wrapper is kept for any other internal caller that needs to
+// cross a scheduling boundary.
 export const initStats = internalMutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("leaderboardStats")
-      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
-      .unique();
-
-    if (!existing) {
-      await ctx.db.insert("leaderboardStats", {
-        userId: args.userId,
-        totalFocusTime: 0,
-        weeklyFocusTime: 0,
-        monthlyFocusTime: 0,
-        level: 1,
-        points: 0,
-        currentStreak: 0,
-        longestStreak: 0,
-        sessionsCompleted: 0,
-        totalSessions: 0,
-        achievementsEarned: 0,
-      });
-    }
+    await ensureLeaderboardStats(ctx, args.userId);
   },
 });

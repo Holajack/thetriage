@@ -44,6 +44,7 @@ interface ChatMessage {
   content: string;
   sender: "user" | "patrick";
   timestamp: string;
+  isError?: boolean;
 }
 
 const QUICK_PROMPTS = [
@@ -53,6 +54,12 @@ const QUICK_PROMPTS = [
 ];
 
 const LOW_MESSAGE_WARNING_THRESHOLD = 15;
+
+// Must match PATRICK_LIMITS.basic.maxLen in convex/tiers.ts — the lowest
+// tier's limit, so every plan can type up to what the server will accept.
+// Convex server files aren't importable into RN client code, so this is
+// kept in sync by hand.
+const PATRICK_MAX_MESSAGE_LEN = 1500;
 
 export const PatrickSpeakScreen = ({
   route,
@@ -139,6 +146,12 @@ export const PatrickSpeakScreen = ({
       );
     }
 
+    // ACCESS_DENIED already gets a dedicated Alert above; every other
+    // error (MESSAGE_TOO_LONG, a caught exception, a generic failure)
+    // needs to look visibly different from a real Patrick reply.
+    const isErrorResponse =
+      Boolean(data.error) && data.error !== "ACCESS_DENIED";
+
     const patrickMsg: ChatMessage = {
       id: `local-${Date.now()}-p`,
       content:
@@ -146,6 +159,7 @@ export const PatrickSpeakScreen = ({
         "I'm having some technical difficulties right now. Please try again in a moment!",
       sender: "patrick",
       timestamp: new Date().toISOString(),
+      isError: isErrorResponse,
     };
     setChat((prev) => [...prev, patrickMsg]);
     if (data.success) {
@@ -155,6 +169,8 @@ export const PatrickSpeakScreen = ({
 
   const renderBubble = (msg: ChatMessage) => {
     const isUser = msg.sender === "user";
+    const isError = !isUser && msg.isError;
+    const errorColor = theme.error || "#EF4444";
     return (
       <View
         key={msg.id}
@@ -162,10 +178,31 @@ export const PatrickSpeakScreen = ({
           styles.bubble,
           isUser
             ? { alignSelf: "flex-end", backgroundColor: "#E8F5E9" }
-            : { alignSelf: "flex-start", backgroundColor: theme.card },
+            : isError
+              ? {
+                  alignSelf: "flex-start",
+                  backgroundColor: errorColor + "15",
+                  borderWidth: 1,
+                  borderColor: errorColor + "40",
+                }
+              : { alignSelf: "flex-start", backgroundColor: theme.card },
         ]}
       >
-        <Text style={{ color: theme.text, fontSize: 16, lineHeight: 23 }}>
+        {isError && (
+          <View style={styles.errorHeader}>
+            <Ionicons name="alert-circle" size={14} color={errorColor} />
+            <Text style={[styles.errorLabel, { color: errorColor }]}>
+              Message not sent
+            </Text>
+          </View>
+        )}
+        <Text
+          style={{
+            color: isError ? errorColor : theme.text,
+            fontSize: 16,
+            lineHeight: 23,
+          }}
+        >
           {msg.content}
         </Text>
         <Text
@@ -281,7 +318,7 @@ export const PatrickSpeakScreen = ({
               onSubmitEditing={() => handleSend()}
               returnKeyType="send"
               multiline
-              maxLength={3000}
+              maxLength={PATRICK_MAX_MESSAGE_LEN}
             />
             <AnimatedButton
               title=""
@@ -345,6 +382,16 @@ const styles = StyleSheet.create({
     color: "#BDBDBD",
     fontSize: 11,
     marginTop: 4,
+  },
+  errorHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 6,
+    gap: 4,
+  },
+  errorLabel: {
+    fontSize: 12,
+    fontWeight: "600",
   },
   thinkingWrap: {
     alignSelf: "flex-start",

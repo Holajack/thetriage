@@ -83,6 +83,53 @@ const BUDDY_COLORS: Record<string, string> = {
   lion: "#FFD700",
 };
 
+// Profile sub-screens reachable only from this row list — kept in the order
+// they're most useful to a student setting up their profile.
+type ProfileLinkRoute =
+  | "ProfileCustomization"
+  | "PersonalInformation"
+  | "Education"
+  | "LocationAndTime"
+  | "Preferences";
+
+const PROFILE_LINKS: {
+  route: ProfileLinkRoute;
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  subtitle: string;
+}[] = [
+  {
+    route: "ProfileCustomization",
+    icon: "color-palette-outline",
+    label: "Customize Profile",
+    subtitle: "Cover photo, bio, and highlights",
+  },
+  {
+    route: "PersonalInformation",
+    icon: "person-outline",
+    label: "Personal Information",
+    subtitle: "Name, contact, and account details",
+  },
+  {
+    route: "Education",
+    icon: "school-outline",
+    label: "Education",
+    subtitle: "University, major, and classes",
+  },
+  {
+    route: "LocationAndTime",
+    icon: "location-outline",
+    label: "Location and Time",
+    subtitle: "Timezone and study location",
+  },
+  {
+    route: "Preferences",
+    icon: "options-outline",
+    label: "Preferences",
+    subtitle: "How HikeWise works for you",
+  },
+];
+
 // Walking animation sprite component - uses reanimated for smooth UI-thread animation
 const BuddyWalkingSprite = ({
   buddyId,
@@ -933,6 +980,69 @@ const ProfileScreen = () => {
             </Text>
           </Pressable>
         </Animated.View>
+
+        {/* ===== SECTION: PROFILE SETTINGS ===== */}
+        <Animated.View entering={FadeIn.delay(450).duration(400)}>
+          <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
+            PROFILE SETTINGS
+          </Text>
+        </Animated.View>
+
+        <Animated.View entering={FadeInUp.delay(470).duration(400)}>
+          <View
+            style={[
+              styles.profileLinksCard,
+              glassStyles.subtleCard(isDark),
+              { backgroundColor: theme.card },
+            ]}
+          >
+            {PROFILE_LINKS.map((link, i) => (
+              <Pressable
+                key={link.route}
+                style={[
+                  styles.profileLinkRow,
+                  i !== PROFILE_LINKS.length - 1 && {
+                    borderBottomWidth: StyleSheet.hairlineWidth,
+                    borderBottomColor: theme.text + "12",
+                  },
+                ]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  navigation.navigate(link.route as any);
+                }}
+              >
+                <View
+                  style={[
+                    styles.profileLinkIcon,
+                    { backgroundColor: theme.primary + "15" },
+                  ]}
+                >
+                  <Ionicons name={link.icon} size={18} color={theme.primary} />
+                </View>
+                <View style={styles.profileLinkTextContainer}>
+                  <Text
+                    style={[styles.profileLinkLabel, { color: theme.text }]}
+                  >
+                    {link.label}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.profileLinkSubtitle,
+                      { color: theme.textSecondary },
+                    ]}
+                  >
+                    {link.subtitle}
+                  </Text>
+                </View>
+                <Ionicons
+                  name="chevron-forward"
+                  size={18}
+                  color={theme.textSecondary}
+                />
+              </Pressable>
+            ))}
+          </View>
+        </Animated.View>
       </ScrollView>
 
       {/* ===== EDIT PROFILE MODAL ===== */}
@@ -1385,7 +1495,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
   },
-
   // ===== LEVEL CARD =====
   levelCard: {
     marginHorizontal: 16,
@@ -1492,6 +1601,39 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "600",
     textAlign: "center",
+  },
+
+  // ===== PROFILE SETTINGS LINKS =====
+  profileLinksCard: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 14,
+    overflow: "hidden",
+  },
+  profileLinkRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  profileLinkIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  profileLinkTextContainer: {
+    flex: 1,
+  },
+  profileLinkLabel: {
+    fontSize: 15,
+    fontWeight: "600",
+    marginBottom: 1,
+  },
+  profileLinkSubtitle: {
+    fontSize: 12,
   },
 
   // ===== MODALS =====

@@ -8,6 +8,7 @@ import {
   Dimensions,
   Image,
   ImageSourcePropType,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -28,6 +29,8 @@ import * as Haptics from "expo-haptics";
 import OnboardingProgress from "../../components/onboarding/OnboardingProgress";
 import { useTheme } from "../../context/ThemeContext";
 import { useConvexProfile } from "../../hooks/useConvex";
+import { useSubscriptionTier } from "../../hooks/useSubscriptionTier";
+import { isBuddyLocked, DEFAULT_BUDDY } from "../../utils/tierGating";
 import NoraSpeechBubble from "../../components/onboarding/NoraSpeechBubble";
 import { AnimatedButton } from "../../components/premium/AnimatedButton";
 
@@ -122,6 +125,14 @@ const TRAIL_BUDDIES: TrailBuddy[] = [
     hasAnimation: true,
   },
 ];
+
+// The carousel must open on the real free-tier default, not an arbitrary
+// middle index — otherwise a user who taps Continue without scrolling walks
+// away with a tier-gated buddy they never unlocked.
+const DEFAULT_BUDDY_INDEX = Math.max(
+  TRAIL_BUDDIES.findIndex((b) => b.id === DEFAULT_BUDDY),
+  0,
+);
 
 const BUDDY_EMOJIS: Record<string, string> = {
   patrick: "🎒",
@@ -244,7 +255,7 @@ const BuddyItem = ({
     };
   });
 
-  const [selected, setSelected] = useState(index === 1);
+  const [selected, setSelected] = useState(index === DEFAULT_BUDDY_INDEX);
 
   useDerivedValue(() => {
     const centerOffset = scrollX.value / ITEM_WIDTH;
@@ -297,12 +308,13 @@ const OnboardingTrailBuddyScreen = () => {
   const navigation = useNavigation<any>();
   const { theme, isDark } = useTheme();
   const { updateProfile } = useConvexProfile();
+  const { currentTier } = useSubscriptionTier();
 
-  const [selectedIndex, setSelectedIndex] = useState(1); // Default to bear (middle)
+  const [selectedIndex, setSelectedIndex] = useState(DEFAULT_BUDDY_INDEX);
   const [buddyName, setBuddyName] = useState(DEFAULT_NAMES["patrick"]);
   const [saving, setSaving] = useState(false);
 
-  const scrollX = useSharedValue(ITEM_WIDTH);
+  const scrollX = useSharedValue(DEFAULT_BUDDY_INDEX * ITEM_WIDTH);
   const flatListRef = useRef<Animated.FlatList<TrailBuddy>>(null);
 
   // Update default name when selected buddy changes
@@ -337,17 +349,30 @@ const OnboardingTrailBuddyScreen = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSaving(true);
 
+    const selectedBuddy = TRAIL_BUDDIES[selectedIndex];
+    // The carousel lets a first-run user browse tier-gated buddies freely, but
+    // a paywall mid-onboarding is worse UX than in the main app — fall back
+    // to the real free default instead of blocking sign-up on an upsell.
+    const buddyIdToSave = isBuddyLocked(currentTier, selectedBuddy.id)
+      ? DEFAULT_BUDDY
+      : selectedBuddy.id;
+
     try {
-      const selectedBuddy = TRAIL_BUDDIES[selectedIndex];
       await updateProfile({
-        trailBuddyType: selectedBuddy.id,
-        trailBuddyName: buddyName.trim() || DEFAULT_NAMES[selectedBuddy.id],
+        trailBuddyType: buddyIdToSave,
+        trailBuddyName: buddyName.trim() || DEFAULT_NAMES[buddyIdToSave],
       });
 
       navigation.navigate("FocusSoundSetup" as any);
     } catch (error) {
-      // Error saving trail buddy
-      alert("Could not save your trail buddy. Please try again.");
+      // The base Convex user row may not be provisioned yet (async Clerk
+      // webhook race). Don't strand the user on a dead-end alert — the
+      // buddy can be set later from the main TrailBuddySelectionScreen.
+      Alert.alert(
+        "Could not save your trail buddy",
+        "You can pick it again later in Settings.",
+      );
+      navigation.navigate("FocusSoundSetup" as any);
     } finally {
       setSaving(false);
     }
@@ -429,7 +454,7 @@ const OnboardingTrailBuddyScreen = () => {
             onScroll={scrollHandler}
             scrollEventThrottle={16}
             getItemLayout={getItemLayout}
-            initialScrollIndex={1}
+            initialScrollIndex={DEFAULT_BUDDY_INDEX}
           />
         </View>
 

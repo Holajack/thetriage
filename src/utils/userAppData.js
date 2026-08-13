@@ -20,8 +20,6 @@ async function fetchUserAppData(userId = null) {
   try {
     const client = getClient();
 
-    console.log("📊 Fetching user app data from Convex");
-
     // Parallel fetch all user data via Convex queries
     const [
       profile,
@@ -76,7 +74,18 @@ async function fetchUserAppData(userId = null) {
     // Calculate derived data
     const today = new Date();
     const weekStart = new Date(today);
-    weekStart.setDate(today.getDate() - today.getDay());
+    // Monday-start week, matching the server's weekStartKey() convention in
+    // convex/timeWindows.ts (used by convex/focusSessions.ts's applySessionToStats).
+    // This uses the device's local timezone rather than the user's stored server-side
+    // timeZone (not readily available here), so it's an approximation — only the
+    // week-start-day convention is kept in sync with the server, not full tz parity.
+    const dayOfWeek = (today.getDay() + 6) % 7; // Monday = 0 ... Sunday = 6
+    weekStart.setDate(today.getDate() - dayOfWeek);
+
+    // Sessions shorter than this earn no credit server-side and are excluded from
+    // its weekly stat too (see MIN_CREDITED_SECONDS in convex/focusSessions.ts).
+    // Keep this value in sync with that constant.
+    const MIN_CREDITED_SECONDS = 60;
 
     // Calculate weekly focus time in minutes (durationSeconds is in seconds, convert to minutes)
     const weeklyFocusTime = safeSessions
@@ -84,7 +93,11 @@ async function fetchUserAppData(userId = null) {
         const sessionDate = new Date(
           session.startTime || session._creationTime,
         );
-        return sessionDate >= weekStart && session.status === "completed";
+        return (
+          sessionDate >= weekStart &&
+          session.status === "completed" &&
+          (session.durationSeconds || 0) >= MIN_CREDITED_SECONDS
+        );
       })
       .reduce(
         (total, session) => total + (session.durationSeconds || 0) / 60,
@@ -144,12 +157,6 @@ async function fetchUserAppData(userId = null) {
       });
     }
 
-    console.log("📊 User data compiled successfully:", {
-      tasksCount: safeTasks.length,
-      sessionsCount: safeSessions.length,
-      weeklyFocusTime,
-    });
-
     return {
       profile: safeProfile,
       onboarding: {
@@ -176,8 +183,7 @@ async function fetchUserAppData(userId = null) {
       activeSession:
         safeSessions.find((session) => session.status === "active") || null,
     };
-  } catch (error) {
-    console.error("Error fetching user app data:", error);
+  } catch {
     return getEmptyData();
   }
 }
@@ -197,7 +203,6 @@ function useUserAppData() {
       const userData = await fetchUserAppData();
       setData(userData);
     } catch (err) {
-      console.error("Error in useUserAppData:", err);
       setError(err.message);
       setData(getEmptyData());
     } finally {
@@ -292,8 +297,7 @@ async function getLeaderboardData() {
       friendsLeaderboard,
       globalLeaderboard,
     };
-  } catch (error) {
-    console.error("Error fetching leaderboard data:", error);
+  } catch {
     return {
       userEntry: null,
       friendsLeaderboard: [],

@@ -920,6 +920,10 @@ const NoraScreenNew: React.FC = () => {
     vectorStoreId: e.vectorStoreId,
     status: e.status,
   }));
+  // Only "ready" ebooks have actually finished ingestion and can be searched
+  // by Nora's file_search — a still-processing or failed book must never be
+  // silently selectable.
+  const readyPdfs = uploadedPdfs.filter((p) => p.status === "ready");
   const [selectedPdf, setSelectedPdf] = useState<any>(null);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [voiceAmplitude, setVoiceAmplitude] = useState(0);
@@ -2052,7 +2056,7 @@ const NoraScreenNew: React.FC = () => {
       <PDFPickerModal
         visible={showPdfPicker}
         onClose={() => setShowPdfPicker(false)}
-        pdfs={uploadedPdfs}
+        pdfs={readyPdfs}
         onSelect={setSelectedPdf}
         theme={theme}
       />

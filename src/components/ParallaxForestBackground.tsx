@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import {
   View,
   Image,
+  Text,
   StyleSheet,
   Dimensions,
   ImageSourcePropType,
@@ -33,6 +34,10 @@ const SPRITESHEET_WIDTH = FRAME_WIDTH * TOTAL_FRAMES; // 5600px
 
 // Use spritesheets instead of individual frames (only 5 images vs 140)
 const BUDDY_SPRITESHEETS: Record<string, ImageSourcePropType> = {
+  // TODO: swap in dedicated Patrick spritesheet once art is delivered. Fox sheet is a
+  // placeholder — matches OnboardingTrailBuddyScreen.tsx's BUDDY_SPRITESHEETS so onboarding
+  // and real sessions show the same (placeholder) animal for the default free-tier buddy.
+  patrick: require("../../assets/trail-buddies/fox_walking_optimized.webp"),
   fox: require("../../assets/trail-buddies/fox_walking_optimized.webp"),
   deer: require("../../assets/trail-buddies/deer_walking_optimized.webp"),
   wolf: require("../../assets/trail-buddies/wolf_walking_optimized.webp"),
@@ -43,6 +48,8 @@ const BUDDY_SPRITESHEETS: Record<string, ImageSourcePropType> = {
 
 // Resting spritesheets — same format (28 frames, 200x200 each, 5600x200 total)
 const BUDDY_RESTING_SPRITESHEETS: Record<string, ImageSourcePropType> = {
+  // TODO: swap in dedicated Patrick spritesheet once art is delivered. Fox sheet is a placeholder.
+  patrick: require("../../assets/trail-buddies/fox_resting_optimized.webp"),
   fox: require("../../assets/trail-buddies/fox_resting_optimized.webp"),
   deer: require("../../assets/trail-buddies/deer_resting_optimized.webp"),
   wolf: require("../../assets/trail-buddies/wolf_resting_optimized.webp"),
@@ -295,7 +302,6 @@ export const ParallaxForestBackground: React.FC<
     () => getTrailAssets(trailType, animationMode),
     [trailType, animationMode],
   );
-
   if (!isActive) {
     return null;
   }

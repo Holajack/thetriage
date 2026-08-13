@@ -108,7 +108,7 @@ const TRAIL_ASSETS: Record<TrailId, TrailEnvironment> = {
   },
 };
 
-export const DEFAULT_TRAIL: TrailId = "jungle";
+export const DEFAULT_TRAIL: TrailId = "forest";
 
 /** Set of trail IDs that have actual assets and are purchasable */
 const AVAILABLE_TRAIL_IDS: Set<string> = new Set(Object.keys(TRAIL_ASSETS));

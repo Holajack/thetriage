@@ -12,6 +12,7 @@ import {
   Linking,
   Share,
   ActivityIndicator,
+  TextInput,
 } from "react-native";
 import Constants from "expo-constants";
 import { Ionicons } from "@expo/vector-icons";
@@ -19,6 +20,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import type { MainTabParamList } from "../../navigation/types";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
+import { useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 import { useConvexProfile } from "../../hooks/useConvex";
 import { useSubscriptionTier } from "../../hooks/useSubscriptionTier";
 import { useTheme, themePalettes } from "../../context/ThemeContext";
@@ -365,6 +368,47 @@ const SettingsScreen = () => {
     );
   };
 
+  const redeemPromoCode = useMutation(api.promoCodes.redeem);
+  const [showRedeemModal, setShowRedeemModal] = useState(false);
+  const [redeemCodeInput, setRedeemCodeInput] = useState("");
+  const [isRedeeming, setIsRedeeming] = useState(false);
+
+  const closeRedeemModal = () => {
+    setShowRedeemModal(false);
+    setRedeemCodeInput("");
+  };
+
+  const handleRedeemCode = async () => {
+    const code = redeemCodeInput.trim();
+    if (!code) return;
+
+    setIsRedeeming(true);
+    try {
+      const result = await redeemPromoCode({ code });
+      if (result.success) {
+        closeRedeemModal();
+        const rewards = result.rewards ?? [];
+        Alert.alert(
+          "Code Redeemed",
+          rewards.length > 0
+            ? `${result.description}\n\n${rewards.join(", ")}`
+            : (result.description ?? "Your code was redeemed successfully."),
+        );
+      } else {
+        Alert.alert("Redemption Failed", result.error ?? "Invalid promo code");
+      }
+    } catch (error) {
+      Alert.alert(
+        "Redemption Failed",
+        error instanceof Error
+          ? error.message
+          : "Something went wrong. Please try again.",
+      );
+    } finally {
+      setIsRedeeming(false);
+    }
+  };
+
   const handleSignOut = () => {
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
       { text: "Cancel", style: "cancel" },
@@ -548,34 +592,36 @@ const SettingsScreen = () => {
         style={{ flex: 1 }}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* DEV: 9-layer parallax trail preview */}
-        <TouchableOpacity
-          onPress={() => navigation.navigate("NineLayerPreview" as any)}
-          activeOpacity={0.9}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: `${theme.primary}22`,
-            borderColor: theme.primary,
-            borderWidth: 1,
-            borderRadius: 14,
-            paddingVertical: 14,
-            marginBottom: 16,
-          }}
-        >
-          <Ionicons
-            name="image-outline"
-            size={20}
-            color={theme.primary}
-            style={{ marginRight: 8 }}
-          />
-          <Text
-            style={{ color: theme.primary, fontWeight: "700", fontSize: 15 }}
+        {/* DEV: 9-layer parallax trail preview — internal QA tool, never shown in a release/TestFlight build */}
+        {__DEV__ && (
+          <TouchableOpacity
+            onPress={() => navigation.navigate("NineLayerPreview" as any)}
+            activeOpacity={0.9}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: `${theme.primary}22`,
+              borderColor: theme.primary,
+              borderWidth: 1,
+              borderRadius: 14,
+              paddingVertical: 14,
+              marginBottom: 16,
+            }}
           >
-            Trail Preview (9-layer)
-          </Text>
-        </TouchableOpacity>
+            <Ionicons
+              name="image-outline"
+              size={20}
+              color={theme.primary}
+              style={{ marginRight: 8 }}
+            />
+            <Text
+              style={{ color: theme.primary, fontWeight: "700", fontSize: 15 }}
+            >
+              Trail Preview (9-layer)
+            </Text>
+          </TouchableOpacity>
+        )}
 
         {/* Tier Card — celebrates Elite users, upsells everyone else */}
         <StaggeredItem index={0}>
@@ -769,6 +815,12 @@ const SettingsScreen = () => {
               icon="lock-closed-outline"
               label="Privacy Settings"
               onPress={() => navigation.navigate("Privacy")}
+            />
+            <SettingsRow
+              icon="pricetag-outline"
+              label="Redeem Code"
+              description="Have a promo code?"
+              onPress={() => setShowRedeemModal(true)}
             />
             <SettingsRow
               icon="download-outline"
@@ -994,6 +1046,68 @@ const SettingsScreen = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Redeem Code Modal */}
+      <Modal
+        visible={showRedeemModal}
+        transparent
+        animationType="fade"
+        onRequestClose={closeRedeemModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalBox, modalBoxStyle]}>
+            <Text style={[styles.modalTitle, { color: theme.primary }]}>
+              Redeem Code
+            </Text>
+            <TextInput
+              value={redeemCodeInput}
+              onChangeText={setRedeemCodeInput}
+              placeholder="Enter promo code"
+              placeholderTextColor={secondaryTextColor}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              editable={!isRedeeming}
+              onSubmitEditing={handleRedeemCode}
+              style={[
+                styles.redeemInput,
+                {
+                  color: theme.text,
+                  borderColor: theme.border ?? (isDark ? "#2F2F2F" : "#E0E0E0"),
+                },
+              ]}
+            />
+            <TouchableOpacity
+              style={[styles.modalOption, isRedeeming && { opacity: 0.6 }]}
+              onPress={handleRedeemCode}
+              disabled={isRedeeming || !redeemCodeInput.trim()}
+            >
+              {isRedeeming ? (
+                <ActivityIndicator size="small" color={theme.primary} />
+              ) : (
+                <Text
+                  style={[
+                    styles.modalOptionText,
+                    { color: theme.primary, fontWeight: "700" },
+                  ]}
+                >
+                  Redeem
+                </Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.modalCancel}
+              onPress={closeRedeemModal}
+              disabled={isRedeeming}
+            >
+              <Text
+                style={[styles.modalCancelText, { color: secondaryTextColor }]}
+              >
+                Cancel
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1133,6 +1247,14 @@ const styles = StyleSheet.create({
   modalOption: {
     paddingVertical: Spacing.sm + 2,
     alignItems: "center",
+  },
+  redeemInput: {
+    ...Typography.body,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.sm + 4,
+    paddingVertical: Spacing.sm,
+    marginBottom: Spacing.xs,
   },
   modalOptionText: {
     ...Typography.body,

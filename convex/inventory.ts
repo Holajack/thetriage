@@ -40,6 +40,8 @@ export const purchaseItem = mutation({
 
     const item = getShopItem(args.itemId);
     if (!item) throw new Error("That item doesn't exist");
+    if (item.available === false)
+      throw new Error("This item isn't available yet");
 
     const existing = await ctx.db
       .query("userInventory")

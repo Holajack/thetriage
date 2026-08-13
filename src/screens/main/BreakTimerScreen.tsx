@@ -502,7 +502,7 @@ const BreakTimerScreen = () => {
     <View style={styles.fullScreenContainer}>
       {/* Full Screen Background - Show trail buddy resting during break */}
       <ParallaxForestBackground
-        trailType={"jungle"} // TODO: revert to {equippedTrail} after jungle rest scene is finalized
+        trailType={equippedTrail}
         trailBuddyType={user?.trailBuddyType || "bear"}
         showTrailBuddy={true}
         animationMode="resting"

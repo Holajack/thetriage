@@ -10,6 +10,7 @@
  */
 import { mutation } from "./_generated/server";
 import { getCurrentUserOrNull } from "./users";
+import { ensureLeaderboardStats } from "./leaderboard";
 
 export const initializeCurrentUser = mutation({
   args: {},
@@ -66,26 +67,7 @@ export const initializeCurrentUser = mutation({
     }
 
     // Initialize leaderboard stats
-    const existingStats = await ctx.db
-      .query("leaderboardStats")
-      .withIndex("by_userId", (q) => q.eq("userId", userId))
-      .unique();
-
-    if (!existingStats) {
-      await ctx.db.insert("leaderboardStats", {
-        userId,
-        totalFocusTime: 0,
-        weeklyFocusTime: 0,
-        monthlyFocusTime: 0,
-        level: 1,
-        points: 0,
-        currentStreak: 0,
-        longestStreak: 0,
-        sessionsCompleted: 0,
-        totalSessions: 0,
-        achievementsEarned: 0,
-      });
-    }
+    await ensureLeaderboardStats(ctx, userId);
 
     // Initialize learning metrics
     const existingMetrics = await ctx.db

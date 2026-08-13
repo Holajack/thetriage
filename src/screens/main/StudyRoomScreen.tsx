@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -23,6 +23,9 @@ import { RootStackParamList } from "../../navigation/types";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import * as StudyRoomService from "../../utils/convexStudyRoomService";
 import * as FriendService from "../../utils/convexFriendRequestService";
+import { useQuery } from "convex/react";
+import { api } from "../../../convex/_generated/api";
+import { Id } from "../../../convex/_generated/dataModel";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import Animated, {
@@ -54,11 +57,8 @@ const StudyRoomScreen = () => {
       room?: StudyRoomService.StudyRoom;
       roomCode?: string;
     }) ?? {};
-  const [messages, setMessages] = useState<StudyRoomService.StudyRoomMessage[]>(
-    [],
-  );
   const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [joiningByCode, setJoiningByCode] = useState(false);
   const [sending, setSending] = useState(false);
   const [roomData, setRoomData] = useState<StudyRoomService.StudyRoom | null>(
     room || null,
@@ -81,12 +81,12 @@ const StudyRoomScreen = () => {
 
     let cancelled = false;
     (async () => {
-      setLoading(true);
+      setJoiningByCode(true);
       const joined = await StudyRoomService.joinStudyRoomByCode(roomCode);
       if (cancelled) return;
 
       if (!joined.success || !joined.data) {
-        setLoading(false);
+        setJoiningByCode(false);
         Alert.alert(
           "Couldn't open that room",
           joined.error ?? "This invite may have expired.",
@@ -95,7 +95,7 @@ const StudyRoomScreen = () => {
         return;
       }
       setRoomData(joined.data);
-      setLoading(false);
+      setJoiningByCode(false);
     })();
 
     return () => {
@@ -103,50 +103,41 @@ const StudyRoomScreen = () => {
     };
   }, [roomCode, roomData, user?.id, navigation]);
 
-  // Load messages and set up polling for real-time updates
-  useEffect(() => {
-    if (!roomData?.id || !user?.id) return;
+  // Live Convex subscription for the room's chat — replaces the old 3s
+  // setInterval polling loop so new messages arrive with no added latency.
+  const messagesQuery = useQuery(
+    api.studyRooms.getMessages,
+    roomData?.id && user?.id
+      ? { roomId: roomData.id as Id<"studyRooms"> }
+      : "skip",
+  );
+  const messagesLoading = joiningByCode || messagesQuery === undefined;
 
-    const loadMessages = async () => {
-      setLoading(true);
-      try {
-        const result = await StudyRoomService.getStudyRoomMessages(roomData.id);
-        if (result.success) {
-          setMessages(result.data || []);
-        }
-      } catch {
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadMessages();
-
-    // Poll for new messages every 3 seconds for real-time updates
-    const pollInterval = setInterval(async () => {
-      try {
-        const result = await StudyRoomService.getStudyRoomMessages(roomData.id);
-        if (result.success) {
-          setMessages((prevMessages) => {
-            const newMessages = result.data || [];
-            // Only update if there are new messages to avoid unnecessary re-renders
-            if (newMessages.length !== prevMessages.length) {
-              // Scroll to bottom if new messages
-              setTimeout(() => {
-                flatListRef.current?.scrollToEnd({ animated: true });
-              }, 100);
-              return newMessages;
-            }
-            return prevMessages;
-          });
-        }
-      } catch {}
-    }, 3000);
-
-    return () => {
-      clearInterval(pollInterval);
-    };
-  }, [roomData?.id, user?.id]);
+  const messages: StudyRoomService.StudyRoomMessage[] = useMemo(() => {
+    if (!messagesQuery) return [];
+    return messagesQuery.map((m) => ({
+      id: m._id,
+      room_id: m.roomId,
+      sender_id: m.senderId,
+      content: m.content,
+      message_type: (m.messageType ?? "text") as
+        | "text"
+        | "system"
+        | "join"
+        | "leave",
+      created_at: m._creationTime
+        ? new Date(m._creationTime).toISOString()
+        : "",
+      sender: m.sender
+        ? {
+            id: m.sender._id,
+            username: m.sender.username,
+            full_name: m.sender.fullName,
+            avatar_url: m.sender.avatarUrl,
+          }
+        : undefined,
+    }));
+  }, [messagesQuery]);
 
   // Load friends for invitations
   useEffect(() => {
@@ -636,7 +627,7 @@ const StudyRoomScreen = () => {
             { marginBottom: 70 + insets.bottom },
           ]}
         >
-          {loading ? (
+          {messagesLoading ? (
             <View style={styles.loadingContainer}>
               <ShimmerLoader variant="circle" size={48} />
               <Text style={[styles.loadingText, { color: theme.primary }]}>
