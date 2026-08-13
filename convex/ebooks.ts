@@ -19,6 +19,15 @@ import { normalizeTier } from "./tiers";
  *      file to OpenAI and attaches it to a per-user vector store.
  */
 
+// Reasonable per-file cap for beta: bigger PDFs mean real added OpenAI
+// ingestion cost (Elite file_search) for marginal benefit as a study aid.
+const MAX_EBOOK_BYTES = 25 * 1024 * 1024; // 25MB
+
+// Reasonable per-user cap for beta: every registered ebook can trigger a
+// real, uncapped OpenAI ingestion call for Elite users, so the number of
+// ebooks a single account can hold needs a ceiling.
+const MAX_EBOOKS_PER_USER = 8;
+
 // Step 1 — generate a one-shot upload URL. Returns a string the client posts to.
 export const generateUploadUrl = mutation({
   args: {},
@@ -37,10 +46,66 @@ export const registerUpload = mutation({
   },
   handler: async (ctx, args) => {
     const user = await getCurrentUser(ctx);
+
+    // Reject registration and clean up the blob the client already uploaded
+    // (via generateUploadUrl) rather than leaving an unowned file sitting in
+    // Convex storage forever.
+    const reject = async (message: string): Promise<never> => {
+      try {
+        await ctx.storage.delete(args.storageId);
+      } catch {
+        // Best-effort cleanup of the now-orphaned Convex blob
+      }
+      throw new Error(message);
+    };
+
+    // Per-user quota — every registered ebook schedules a real, uncapped
+    // OpenAI ingestion call for Elite users below, so this must be bounded.
+    const existingCount = (
+      await ctx.db
+        .query("ebooks")
+        .withIndex("by_userId", (q) => q.eq("userId", user._id))
+        .collect()
+    ).length;
+    if (existingCount >= MAX_EBOOKS_PER_USER) {
+      await reject(
+        `You've reached the ${MAX_EBOOKS_PER_USER}-ebook limit. Delete one to upload another.`,
+      );
+    }
+
+    // Resolve the storage id to its system record so we can read the ACTUAL
+    // stored size and content-type — never trust the client-reported
+    // fileSize/type, both of which are trivially spoofable.
+    const storageId = ctx.db.system.normalizeId("_storage", args.storageId);
+    if (!storageId) {
+      await reject("Invalid upload reference.");
+      return; // unreachable — reject() always throws
+    }
+    const meta = await ctx.db.system.get(storageId);
+    if (!meta) {
+      await reject("Uploaded file could not be found in storage.");
+      return; // unreachable — reject() always throws
+    }
+
+    // Defense-in-depth MIME check. Convex records the Content-Type header
+    // the client's upload POST sent, so this catches non-PDF uploads even
+    // though the client already restricts the file picker to PDFs.
+    if (meta.contentType && meta.contentType !== "application/pdf") {
+      await reject("Only PDF files are supported.");
+    }
+
+    // Reject oversized files using the REAL stored size, not the
+    // client-reported `args.fileSize`.
+    if (meta.size > MAX_EBOOK_BYTES) {
+      await reject(
+        `File is too large (${(meta.size / (1024 * 1024)).toFixed(1)}MB). Max is ${MAX_EBOOK_BYTES / (1024 * 1024)}MB.`,
+      );
+    }
+
     const ebookId = await ctx.db.insert("ebooks", {
       userId: user._id,
       title: args.title,
-      fileSize: args.fileSize,
+      fileSize: meta.size,
       storageId: args.storageId,
       status: "processing",
       uploadedAt: new Date().toISOString(),
@@ -72,13 +137,88 @@ export const deleteEbook = mutation({
     const book = await ctx.db.get(args.ebookId);
     if (!book || book.userId !== user._id) throw new Error("Not authorized");
 
-    // Best-effort cleanup of Convex-stored bytes; OpenAI cleanup happens elsewhere.
+    // Best-effort cleanup of Convex-stored bytes.
     try {
       await ctx.storage.delete(book.storageId);
     } catch {
       // Best-effort storage cleanup
     }
     await ctx.db.delete(args.ebookId);
+
+    // Best-effort cleanup of the OpenAI-side vector store + file, if this
+    // ebook ever went through ingestEbook (Elite only — see ingestEbook).
+    // Scheduled as an action because deleting from OpenAI needs an external
+    // HTTP call; a failed OpenAI-side delete is logged, not thrown, so it
+    // never blocks or rolls back the Convex-side deletion above, which has
+    // already completed by the time this runs.
+    if (book.openaiFileId || book.vectorStoreId) {
+      await ctx.scheduler.runAfter(0, internal.ebooks._cleanupOpenAIResources, {
+        openaiFileId: book.openaiFileId,
+        vectorStoreId: book.vectorStoreId,
+      });
+    }
+  },
+});
+
+/**
+ * Best-effort cleanup of OpenAI-side resources after an ebook row has
+ * already been deleted from Convex. Scheduled (fire-and-forget) from
+ * `deleteEbook`. Uses the same base URL / auth header / OpenAI-Beta header
+ * pattern as the ingestion calls in `ingestEbook`. Each delete is wrapped in
+ * its own try/catch: a failure here is logged and does not throw, since
+ * there is nothing left to roll back and no retry queue for beta scope.
+ */
+export const _cleanupOpenAIResources = internalAction({
+  args: {
+    openaiFileId: v.optional(v.string()),
+    vectorStoreId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) return;
+
+    if (args.vectorStoreId) {
+      try {
+        const res = await fetch(
+          `https://api.openai.com/v1/vector_stores/${args.vectorStoreId}`,
+          {
+            method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "OpenAI-Beta": "assistants=v2",
+            },
+          },
+        );
+        if (!res.ok) {
+          console.error(
+            `[ebooks] Failed to delete OpenAI vector store ${args.vectorStoreId}: ${res.status} ${await res.text()}`,
+          );
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error("[ebooks] Error deleting OpenAI vector store:", message);
+      }
+    }
+
+    if (args.openaiFileId) {
+      try {
+        const res = await fetch(
+          `https://api.openai.com/v1/files/${args.openaiFileId}`,
+          {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${apiKey}` },
+          },
+        );
+        if (!res.ok) {
+          console.error(
+            `[ebooks] Failed to delete OpenAI file ${args.openaiFileId}: ${res.status} ${await res.text()}`,
+          );
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error("[ebooks] Error deleting OpenAI file:", message);
+      }
+    }
   },
 });
 
@@ -211,5 +351,32 @@ export const _getEbookInternal = internalQuery({
     if (!ebook) return null;
     const owner = await ctx.db.get(ebook.userId);
     return { ebook, ownerTier: owner?.subscriptionTier };
+  },
+});
+
+/**
+ * Internal: resolve one of the CALLER'S OWN ready ebooks for Nora's
+ * file_search, scoped by userId (same ownership boundary as `getEbook`'s
+ * `ebook.userId !== user._id` check). Never derived from a client-supplied
+ * vectorStoreId. When `storageId` is given (the client already has this via
+ * pdfContext.file_path), it selects that specific ebook; otherwise falls
+ * back to the user's first ready ebook.
+ */
+export const _getReadyEbookForUser = internalQuery({
+  args: {
+    userId: v.id("users"),
+    storageId: v.optional(v.string()),
+  },
+  handler: async (ctx, { userId, storageId }) => {
+    const readyEbooks = await ctx.db
+      .query("ebooks")
+      .withIndex("by_userId_status", (q) =>
+        q.eq("userId", userId).eq("status", "ready"),
+      )
+      .collect();
+    if (storageId) {
+      return readyEbooks.find((e) => e.storageId === storageId) ?? null;
+    }
+    return readyEbooks[0] ?? null;
   },
 });

@@ -318,11 +318,23 @@ function buildInstructions(
   thinkingMode: string,
   quizInsights: any[],
 ): string {
-  const userName = userCtx?.user?.fullName?.split(" ")[0] || "there";
-  const focusMethod = userCtx?.onboarding?.focusMethod || "Balanced Focus";
-  const weeklyGoal = userCtx?.onboarding?.weeklyFocusGoal || 5;
-  const university = userCtx?.user?.university || "your university";
-  const major = userCtx?.user?.major || "your studies";
+  // Student Profile fields are app data -- gated behind the same appAccess
+  // toggle as the App Data / memories / quiz-insight blocks below. When the
+  // student has App Access & Memory OFF, Nora gets only generic defaults
+  // here, matching the Settings promise that Nora stops reading app data.
+  const userName = appAccess
+    ? userCtx?.user?.fullName?.split(" ")[0] || "there"
+    : "there";
+  const focusMethod = appAccess
+    ? userCtx?.onboarding?.focusMethod || "Balanced Focus"
+    : "Balanced Focus";
+  const weeklyGoal = appAccess ? userCtx?.onboarding?.weeklyFocusGoal || 5 : 5;
+  const university = appAccess
+    ? userCtx?.user?.university || "your university"
+    : "your university";
+  const major = appAccess
+    ? userCtx?.user?.major || "your studies"
+    : "your studies";
 
   // Build stats summary (only when the user allows app access)
   let statsBlock = "";
@@ -344,14 +356,11 @@ function buildInstructions(
     }
   }
 
-  let instructions = `You are Nora, an advanced AI study companion inside HikeWise — the academic success platform. You have deep knowledge of each student's academic journey and provide personalized, actionable study support.
+  const studentProfileBlock = appAccess
+    ? `\n\n**Student Profile:**\n- Name: ${userName}\n- Study Method: ${focusMethod}\n- Weekly Focus Goal: ${weeklyGoal} hours\n- University: ${university}\n- Major: ${major}${statsBlock}${sessionBlock}`
+    : "";
 
-**Student Profile:**
-- Name: ${userName}
-- Study Method: ${focusMethod}
-- Weekly Focus Goal: ${weeklyGoal} hours
-- University: ${university}
-- Major: ${major}${statsBlock}${sessionBlock}
+  let instructions = `You are Nora, an advanced AI study companion inside HikeWise — the academic success platform. You have deep knowledge of each student's academic journey and provide personalized, actionable study support.${studentProfileBlock}
 
 **Your Capabilities (available based on mode):**
 1. **Web Search** (Research & Deep modes) — Search the internet for current information, research papers, study resources, and facts. When available, use it to cite real sources and provide up-to-date data.
@@ -559,6 +568,9 @@ export const sendMessage = action({
         v.null(),
       ),
     ),
+    // Accepted for backward compatibility with existing clients, but never
+    // trusted directly -- see the ownership-checked lookup via
+    // ebooks._getReadyEbookForUser below.
     vectorStoreId: v.optional(v.string()),
   },
   handler: async (
@@ -601,9 +613,12 @@ export const sendMessage = action({
       };
     }
 
-    // 3. Rate limit / tier check (Nora is Elite-only — see tiers.ts)
-    const rateLimit: any = await ctx.runQuery(
-      internal.aiShared._checkRateLimit,
+    // 3. Rate limit / tier check + atomic reservation (Nora is Elite-only —
+    // see tiers.ts). This is a mutation, not a query: it reserves the slot
+    // immediately so concurrent requests can't all pass the check before
+    // any of them increments the count (see _reserveUsage in aiShared.ts).
+    const rateLimit: any = await ctx.runMutation(
+      internal.aiShared._reserveUsage,
       {
         userId,
         aiType: "nora",
@@ -629,9 +644,24 @@ export const sendMessage = action({
       };
     }
 
-    // 5. Session management -- create if needed
+    // 5. Session management -- a client-supplied sessionId must belong to
+    // the authenticated caller before it's used for any read/write (same
+    // ownership-check pattern as noraSessions.generateSessionTitle, via
+    // _getSessionOwner). Prevents a leaked/guessed sessionId from being used
+    // to inject messages into or read someone else's Nora conversation.
     let sessionId = args.sessionId;
-    if (!sessionId) {
+    if (sessionId) {
+      const ownerId: Id<"users"> | null = await ctx.runQuery(
+        internal.noraSessions._getSessionOwner,
+        { sessionId },
+      );
+      if (!ownerId || ownerId !== userId) {
+        return {
+          error: "SESSION_NOT_FOUND",
+          response: "That conversation could not be found.",
+        };
+      }
+    } else {
       sessionId = await ctx.runMutation(internal.noraSessions._createSession, {
         userId,
         title: "New Chat",
@@ -727,12 +757,24 @@ export const sendMessage = action({
       }
       // Quick mode: no tools — fast response from Nora's own knowledge
 
-      // Add file_search if a vector store is configured (any mode)
-      if (args.vectorStoreId) {
-        tools.push({
-          type: "file_search",
-          vector_store_ids: [args.vectorStoreId],
-        });
+      // Add file_search for the caller's OWN ready ebook (any mode). Never
+      // trust a client-supplied vectorStoreId directly -- it's resolved
+      // server-side from the ebooks table, scoped to the authenticated
+      // user, using the same ownership pattern as ebooks.getEbook
+      // (`ebook.userId !== user._id`). The client identifies which ebook by
+      // its storage path (already sent via pdfContext.file_path); a raw
+      // vectorStoreId from the client is ignored.
+      if (args.pdfContext?.file_path) {
+        const ownedEbook: any = await ctx.runQuery(
+          internal.ebooks._getReadyEbookForUser,
+          { userId, storageId: args.pdfContext.file_path },
+        );
+        if (ownedEbook?.vectorStoreId) {
+          tools.push({
+            type: "file_search",
+            vector_store_ids: [ownedEbook.vectorStoreId],
+          });
+        }
       }
 
       // Build instructions with app data, memories, quiz insights, and mode context
