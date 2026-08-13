@@ -7,25 +7,60 @@
  * since Convex actions cannot receive raw file uploads (FormData).
  */
 import { v } from "convex/values";
-import { action, internalQuery } from "./_generated/server";
+import { action, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { normalizeTier } from "./tiers";
 
 // Whisper is priced per audio-minute, not per token; this caps runaway use.
 const DAILY_TRANSCRIPTION_LIMIT = 200;
 
-/** Today's transcription count for a user. */
-export const _getTodayCount = internalQuery({
+// 10MB of base64 text decodes to ~7.5MB of raw audio — generous for a
+// several-minute voice message at typical compressed (m4a/aac) bitrates,
+// but bounds the payload before we atob()-decode and forward it to OpenAI.
+const MAX_AUDIO_BASE64_LENGTH = 10 * 1024 * 1024;
+
+/**
+ * Atomically check-and-reserve today's transcription slot in one mutation.
+ * A separate read-only count check followed by _logUsage after the OpenAI
+ * call (the old shape here) lets concurrent requests all read the same
+ * "under limit" count before any of them commits an increment — the same
+ * race _reserveUsage closes for Nora/Patrick in aiShared.ts. This must be
+ * called before the Whisper request goes out, not after.
+ */
+export const _reserveTranscription = internalMutation({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId }) => {
     const today = new Date().toISOString().slice(0, 10);
-    const usage = await ctx.db
+    const existing = await ctx.db
       .query("aiUsageTracking")
       .withIndex("by_userId_aiType_date", (q) =>
         q.eq("userId", userId).eq("aiType", "whisper").eq("date", today),
       )
       .unique();
-    return usage?.messagesSent ?? 0;
+
+    const sent = existing?.messagesSent ?? 0;
+    if (sent >= DAILY_TRANSCRIPTION_LIMIT) {
+      return { allowed: false };
+    }
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        messagesSent: sent + 1,
+        lastMessageAt: new Date().toISOString(),
+      });
+    } else {
+      await ctx.db.insert("aiUsageTracking", {
+        userId,
+        aiType: "whisper",
+        date: today,
+        messagesSent: 1,
+        tokensUsed: 0,
+        costEstimate: 0,
+        lastMessageAt: new Date().toISOString(),
+      });
+    }
+
+    return { allowed: true };
   },
 });
 
@@ -43,6 +78,16 @@ export const transcribe = action({
     durationSeconds: v.optional(v.number()), // client-reported, for cost tracking only
   },
   handler: async (ctx, args) => {
+    // 0. Reject oversized payloads before doing anything else — base64
+    // length correlates directly with decoded byte size, so this bounds
+    // the audio blob without needing to atob()-decode it first.
+    if (args.audioBase64.length > MAX_AUDIO_BASE64_LENGTH) {
+      return {
+        error: "Audio file is too large. Please keep recordings shorter.",
+        text: null,
+      };
+    }
+
     // 1. Authenticate + tier gate (voice input belongs to Nora / Elite)
     const currentUser: any = await ctx.runQuery(
       internal.aiShared._getCurrentUser,
@@ -58,12 +103,13 @@ export const transcribe = action({
       };
     }
 
-    // 2. Daily cap
-    const todayCount: number = await ctx.runQuery(
-      internal.transcribe._getTodayCount,
+    // 2. Daily cap — atomic check-and-reserve (must happen before the
+    // Whisper call, not after, to close the concurrent-request race).
+    const reservation: { allowed: boolean } = await ctx.runMutation(
+      internal.transcribe._reserveTranscription,
       { userId: currentUser._id },
     );
-    if (todayCount >= DAILY_TRANSCRIPTION_LIMIT) {
+    if (!reservation.allowed) {
       return {
         error: "Daily voice limit reached. Try again tomorrow.",
         text: null,

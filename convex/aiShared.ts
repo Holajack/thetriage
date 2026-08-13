@@ -89,8 +89,22 @@ export const _getAppContext = internalQuery({
   },
 });
 
-/** Check the daily rate limit for an AI. Tier rules come from tiers.ts. */
-export const _checkRateLimit = internalQuery({
+/**
+ * Atomically check the daily rate limit for an AI AND reserve a slot in the
+ * same transaction. This MUST be an internalMutation (not a query) and MUST
+ * be called before the OpenAI request goes out: a read-only check followed
+ * by a separate "log usage" mutation after the network call lets N
+ * concurrent requests all read the same "under limit" count before any of
+ * them commits their increment, letting the real cap be exceeded. Reading
+ * and incrementing here, inside one Convex mutation execution, closes that
+ * race — Convex serializes/conflict-checks a mutation's reads and writes as
+ * a single transaction.
+ *
+ * If the caller's OpenAI request subsequently fails, the reservation is
+ * intentionally NOT rolled back (see _logUsage) — a fixed small quota of
+ * "wasted" attempts is a safer and simpler tradeoff than reopening the race.
+ */
+export const _reserveUsage = internalMutation({
   args: {
     userId: v.id("users"),
     aiType: v.union(v.literal("nora"), v.literal("patrick")),
@@ -111,14 +125,14 @@ export const _checkRateLimit = internalQuery({
     }
 
     const today = new Date().toISOString().slice(0, 10);
-    const usage = await ctx.db
+    const existing = await ctx.db
       .query("aiUsageTracking")
       .withIndex("by_userId_aiType_date", (q) =>
         q.eq("userId", userId).eq("aiType", aiType).eq("date", today),
       )
       .unique();
 
-    const sent = usage?.messagesSent ?? 0;
+    const sent = existing?.messagesSent ?? 0;
     if (sent >= limit.perDay) {
       const name = aiType === "nora" ? "Nora" : "Patrick";
       const upsell =
@@ -134,6 +148,25 @@ export const _checkRateLimit = internalQuery({
       };
     }
 
+    // Reserve the slot now, in the same transaction as the read above —
+    // this is the increment that actually enforces the cap.
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        messagesSent: sent + 1,
+        lastMessageAt: new Date().toISOString(),
+      });
+    } else {
+      await ctx.db.insert("aiUsageTracking", {
+        userId,
+        aiType,
+        date: today,
+        messagesSent: 1,
+        tokensUsed: 0,
+        costEstimate: 0,
+        lastMessageAt: new Date().toISOString(),
+      });
+    }
+
     return {
       allowed: true,
       tier,
@@ -144,7 +177,15 @@ export const _checkRateLimit = internalQuery({
   },
 });
 
-/** Record a sent message + token usage against today's bucket. */
+/**
+ * Record actual token usage + cost against today's bucket, once the OpenAI
+ * call has completed. The message-count increment itself already happened
+ * atomically in _reserveUsage (or the equivalent reserve step in
+ * transcribe.ts) before the call was made — this only adds the token/cost
+ * totals that are known after the fact, so it does NOT touch messagesSent
+ * on the existing-row path. The insert fallback is defensive only (it
+ * should not be reachable in the normal reserve → call → log flow).
+ */
 export const _logUsage = internalMutation({
   args: {
     userId: v.id("users"),
@@ -163,7 +204,6 @@ export const _logUsage = internalMutation({
 
     if (existing) {
       await ctx.db.patch(existing._id, {
-        messagesSent: (existing.messagesSent ?? 0) + 1,
         tokensUsed: (existing.tokensUsed ?? 0) + tokensUsed,
         costEstimate: (existing.costEstimate ?? 0) + costEstimate,
         lastMessageAt: new Date().toISOString(),

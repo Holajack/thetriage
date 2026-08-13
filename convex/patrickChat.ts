@@ -209,9 +209,13 @@ export const sendMessage = action({
     }
     const userId = currentUser._id as Id<"users">;
 
-    // 2. Rate limit / tier check (Patrick: Basic and above — see tiers.ts)
-    const rateLimit: any = await ctx.runQuery(
-      internal.aiShared._checkRateLimit,
+    // 2. Rate limit / tier check + atomic reservation (Patrick: Basic and
+    // above — see tiers.ts). This is a mutation, not a query: it reserves
+    // the slot immediately so concurrent requests can't all pass the check
+    // before any of them increments the count (see _reserveUsage in
+    // aiShared.ts).
+    const rateLimit: any = await ctx.runMutation(
+      internal.aiShared._reserveUsage,
       {
         userId,
         aiType: "patrick",
