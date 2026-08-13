@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query, mutation } from "./_generated/server";
+import { internalQuery, mutation } from "./_generated/server";
 import { getCurrentUserOrNull } from "./users";
 
 /**
@@ -14,9 +14,22 @@ import { getCurrentUserOrNull } from "./users";
 
 const MAX_EVENTS_PER_CALL = 50;
 
+// Ceiling on how many rows a single analytics read will scan, regardless of
+// the requested window. Keeps a mistakenly (or maliciously) huge `sinceDays`
+// from turning a dashboard read into a full-table dump.
+const MAX_EVENTS_PER_QUERY = 20000;
+
+// Primitive-only props: keeps analytics payloads small, non-PII, and safe to
+// insert without a schema change (the `events.props` table field stays
+// `v.any()` in schema.ts; this is what actually gates what a caller can send).
+const eventProps = v.record(
+  v.string(),
+  v.union(v.string(), v.number(), v.boolean(), v.null()),
+);
+
 const eventInput = v.object({
   name: v.string(),
-  props: v.optional(v.any()),
+  props: v.optional(eventProps),
   platform: v.optional(v.string()),
   appVersion: v.optional(v.string()),
   sessionId: v.optional(v.string()),
@@ -57,9 +70,13 @@ export const track = mutation({
 
 /**
  * Beta funnel: how far each cohort of testers actually got.
- * Read this from the Convex dashboard during the beta.
+ * Read this from the Convex dashboard during the beta (internal-only: this
+ * table has no user-facing consumer, and it must not be a public query —
+ * an unauthenticated caller could otherwise dump the whole analytics table
+ * via `.collect()`). Same internal-only pattern as the admin operations in
+ * promoCodes.ts / seedAdminUser.ts.
  */
-export const funnel = query({
+export const funnel = internalQuery({
   args: { sinceDays: v.optional(v.number()) },
   handler: async (ctx, args) => {
     const since = Date.now() - (args.sinceDays ?? 30) * 24 * 60 * 60 * 1000;
@@ -67,7 +84,7 @@ export const funnel = query({
     const events = await ctx.db
       .query("events")
       .withIndex("by_ts", (q) => q.gte("ts", since))
-      .collect();
+      .take(MAX_EVENTS_PER_QUERY);
 
     const usersFor = (name: string) =>
       new Set(
@@ -101,15 +118,18 @@ export const funnel = query({
   },
 });
 
-/** Raw counts per event name — a quick "is anything firing?" check. */
-export const countsByName = query({
+/**
+ * Raw counts per event name — a quick "is anything firing?" check.
+ * Internal-only, same reasoning as `funnel` above.
+ */
+export const countsByName = internalQuery({
   args: { sinceDays: v.optional(v.number()) },
   handler: async (ctx, args) => {
     const since = Date.now() - (args.sinceDays ?? 7) * 24 * 60 * 60 * 1000;
     const events = await ctx.db
       .query("events")
       .withIndex("by_ts", (q) => q.gte("ts", since))
-      .collect();
+      .take(MAX_EVENTS_PER_QUERY);
 
     const counts: Record<string, number> = {};
     for (const e of events) counts[e.name] = (counts[e.name] ?? 0) + 1;

@@ -17,13 +17,28 @@ import type { AnalyticsEventName, AnalyticsProps } from "./events";
 const FLUSH_INTERVAL_MS = 10_000;
 const MAX_BUFFER = 40;
 
+/** Non-PII primitive props, as accepted by the `events.track` mutation. */
+type SanitizedProps = Record<string, string | number | boolean | null>;
+
 interface QueuedEvent {
   name: string;
-  props?: AnalyticsProps;
+  props?: SanitizedProps;
   platform: string;
   appVersion?: string;
   sessionId: string;
   clientTs: number;
+}
+
+/** Drop `undefined` values — callers pass optional fields, but the server's
+ * validator (and Convex values generally) has no concept of `undefined`,
+ * only `null` or a missing key. */
+function sanitizeProps(props?: AnalyticsProps): SanitizedProps | undefined {
+  if (!props) return undefined;
+  const clean: SanitizedProps = {};
+  for (const [key, value] of Object.entries(props)) {
+    if (value !== undefined) clean[key] = value;
+  }
+  return clean;
 }
 
 // One id per app-open, so events can be grouped into a usage session.
@@ -73,7 +88,7 @@ export function track(name: AnalyticsEventName, props?: AnalyticsProps): void {
   try {
     buffer.push({
       name,
-      props,
+      props: sanitizeProps(props),
       platform: Platform.OS,
       appVersion,
       sessionId: appOpenId,

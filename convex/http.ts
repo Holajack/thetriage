@@ -200,7 +200,38 @@ http.route({
       }
     }
 
-    if (tier === null) {
+    // Idempotency / ordering guard for the event-payload fallback below.
+    // RevenueCat webhook delivery is at-least-once and NOT guaranteed to be
+    // in order, so a replayed or out-of-order delivery could otherwise stomp
+    // a newer tier with stale data from an older event. We only need this
+    // for the fallback: the live-fetch path above always asks RevenueCat for
+    // the subscriber's CURRENT entitlements, so it's correct regardless of
+    // delivery order. `appConfig` is a generic key/value table (see
+    // convex/appConfig.ts) reused here — keyed per RevenueCat app_user_id —
+    // to remember the timestamp of the last event we actually applied,
+    // without requiring a schema change for a dedicated events table.
+    const eventTimestampMs =
+      typeof event.event_timestamp_ms === "number"
+        ? event.event_timestamp_ms
+        : undefined;
+    const lastEventKey = `revenuecat_last_event_ts:${event.app_user_id}`;
+    let isStaleFallback = false;
+    if (tier === null && eventTimestampMs !== undefined) {
+      const lastProcessedRaw: string = await ctx.runQuery(
+        internal.appConfig.get,
+        { key: lastEventKey },
+      );
+      const lastProcessed = lastProcessedRaw ? Number(lastProcessedRaw) : 0;
+      isStaleFallback = lastProcessed > eventTimestampMs;
+      if (isStaleFallback) {
+        console.warn(
+          "[revenuecat-webhook] ignoring stale/out-of-order event for",
+          event.app_user_id,
+        );
+      }
+    }
+
+    if (tier === null && !isStaleFallback) {
       // Event-based fallback. EXPIRATION means the entitlement lapsed;
       // everything else carries the entitlements the event applies to.
       if (event.type === "EXPIRATION") {
@@ -215,6 +246,12 @@ http.route({
         await ctx.runMutation(internal.users._setSubscriptionTierFromWebhook, {
           userIdString: String(candidate),
           subscriptionTier: tier,
+        });
+      }
+      if (eventTimestampMs !== undefined) {
+        await ctx.runMutation(internal.appConfig.set, {
+          key: lastEventKey,
+          value: String(eventTimestampMs),
         });
       }
     }
