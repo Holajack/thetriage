@@ -127,8 +127,7 @@
         {
           "userTrackingPermission": "This allows HikeWise to provide personalized study recommendations and improve the app experience"
         }
-      ],
-      "./plugins/withMusicKit"
+      ]
     ],
     "owner": "hollaj"
   }
