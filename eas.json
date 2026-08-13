@@ -42,7 +42,7 @@
       "ios": {
         "ascAppId": "6756673693",
         "appleTeamId": "7YMK4D784T",
-        "ascApiKeyPath": "~/credentials/AuthKey_HKFQXFLWA5.p8",
+        "ascApiKeyPath": "${ASC_KEY_PATH}",
         "ascApiKeyIssuerId": "${ASC_ISSUER_ID}",
         "ascApiKeyId": "${ASC_KEY_ID}"
       },
@@ -57,7 +57,7 @@
       "ios": {
         "ascAppId": "6756673693",
         "appleTeamId": "7YMK4D784T",
-        "ascApiKeyPath": "~/credentials/AuthKey_HKFQXFLWA5.p8",
+        "ascApiKeyPath": "${ASC_KEY_PATH}",
         "ascApiKeyIssuerId": "${ASC_ISSUER_ID}",
         "ascApiKeyId": "${ASC_KEY_ID}"
       },
@@ -71,7 +71,7 @@
       "ios": {
         "ascAppId": "6756673693",
         "appleTeamId": "7YMK4D784T",
-        "ascApiKeyPath": "~/credentials/AuthKey_HKFQXFLWA5.p8",
+        "ascApiKeyPath": "${ASC_KEY_PATH}",
         "ascApiKeyIssuerId": "${ASC_ISSUER_ID}",
         "ascApiKeyId": "${ASC_KEY_ID}"
       },
