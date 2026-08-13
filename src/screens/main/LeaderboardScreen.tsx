@@ -105,15 +105,26 @@ const LeaderboardScreen = () => {
   // flash an empty state mid-load.
   const allSessions = useQuery(api.focusSessions.list, {});
   const isSessionsLoading = allSessions === undefined;
+  // focusSessions.list returns every status ('active' | 'paused' | 'completed'
+  // | 'cancelled') — a session left open (app backgrounded/killed mid-timer)
+  // never gets a terminal status and would otherwise be counted here forever.
+  // Match the completed-only filter already used for this same data in
+  // AnalyticsScreen.tsx and weeklyGoalNotifications.ts.
+  const completedSessions = React.useMemo(
+    () => (allSessions ?? []).filter((s) => s.status === "completed"),
+    [allSessions],
+  );
   const sessionTypeCounts = React.useMemo(() => {
     if (!allSessions) return { deep_work: 0, balanced: 0, sprint: 0 };
     return {
-      deep_work: allSessions.filter((s) => s.sessionType === "deep_work")
+      deep_work: completedSessions.filter((s) => s.sessionType === "deep_work")
         .length,
-      balanced: allSessions.filter((s) => s.sessionType === "balanced").length,
-      sprint: allSessions.filter((s) => s.sessionType === "sprint").length,
+      balanced: completedSessions.filter((s) => s.sessionType === "balanced")
+        .length,
+      sprint: completedSessions.filter((s) => s.sessionType === "sprint")
+        .length,
     };
-  }, [allSessions]);
+  }, [allSessions, completedSessions]);
 
   // Aggregate time by subject for the donut chart. No mock/fallback data —
   // an empty or loading result renders an empty state instead of invented numbers.

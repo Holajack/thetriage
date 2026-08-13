@@ -727,12 +727,14 @@ const SettingsScreen = () => {
             <SettingsRow
               icon="locate-outline"
               label="Main Goal"
+              description="Why you're using HikeWise"
               value={mainGoal}
               onPress={() => setShowMainGoalModal(true)}
             />
             <SettingsRow
               icon="time-outline"
               label="Work Style"
+              description="How your focus sessions are timed"
               value={workStyle}
               onPress={() => setShowWorkStyleModal(true)}
             />

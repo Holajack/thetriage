@@ -769,7 +769,6 @@ const DeckRow: React.FC<{
   const [expanded, setExpanded] = useState(false);
   const t = BUDDY_THEME[category.buddy];
   const earnedCount = category.awards.filter((a) => a.earned).length;
-  const totalCount = category.awards.length;
   const newest =
     category.awards.find((a) => a.isNew) ||
     [...category.awards].reverse().find((a) => a.earned) ||
@@ -810,7 +809,7 @@ const DeckRow: React.FC<{
             style={[styles.deckCountPill, { backgroundColor: t.g1 + "40" }]}
           >
             <Text style={[styles.deckCountText, { color: t.accent }]}>
-              {earnedCount}/{totalCount}
+              {earnedCount > 0 ? `${earnedCount} unlocked` : "Not started"}
             </Text>
           </View>
         </View>

@@ -23,7 +23,7 @@ const getMusicPreferences = async (
 
     // Priority order: onboarding > user profile > default
     const soundPreference =
-      onboarding?.focusMethod || user?.soundPreference || "Lo-Fi";
+      onboarding?.soundPreference || user?.soundPreference || "Lo-Fi";
     const autoPlaySound =
       settings?.autoPlaySound || settings?.soundEnabled || false;
     const musicVolume = settings?.musicVolume || 0.7;
@@ -67,10 +67,15 @@ export const saveMusicPreferences = async (
       await client.mutation(api.settings.update, settingsUpdate);
     }
 
-    // Update onboarding preferences if sound_preference changed
+    // Update onboarding preferences if sound_preference changed.
+    // NOTE: this must use the `soundPreference` field, not `focusMethod` —
+    // `focusMethod` is the Work Style field (Balanced/Sprint/Deep Work) set by
+    // SettingsScreen's Work Style control. Writing sound here into
+    // `focusMethod` used to silently overwrite the user's work style every
+    // time they changed their sound preference.
     if (preferences.sound_preference) {
       await client.mutation(api.onboarding.update, {
-        focusMethod: preferences.sound_preference,
+        soundPreference: preferences.sound_preference,
       });
     }
 
@@ -89,10 +94,11 @@ export const saveMusicPreferences = async (
 };
 
 // Helper function to get just the sound preference string
+// NOTE: `onboarding.focusMethod` is a different setting (Work Style), not
+// sound — do not fall back to it here.
 export const getSoundPreference = (userData: any): string => {
   return (
     userData?.onboarding?.soundPreference ||
-    userData?.onboarding?.focusMethod ||
     userData?.profile?.soundPreference ||
     "Lo-Fi"
   );
@@ -107,9 +113,7 @@ export const getAutoPlaySetting = (userData: any): boolean => {
   // Otherwise default ON so music auto-plays on entering a focus session,
   // unless the user explicitly chose "Silence".
   const preference =
-    userData?.onboarding?.soundPreference ||
-    userData?.onboarding?.focusMethod ||
-    userData?.profile?.soundPreference;
+    userData?.onboarding?.soundPreference || userData?.profile?.soundPreference;
   return preference !== "Silence";
 };
 

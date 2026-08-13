@@ -49,8 +49,7 @@ const TOTAL_FRAMES = 28;
 
 // Use spritesheets instead of individual frames (only 5 images vs 140)
 const BUDDY_SPRITESHEETS: Record<string, ImageSourcePropType> = {
-  // TODO: swap in dedicated Patrick spritesheet once art is delivered. Fox is a placeholder.
-  patrick: require("../../../assets/trail-buddies/fox_walking_optimized.webp"),
+  patrick: require("../../../assets/trail-buddies/patrick_walking_optimized.webp"),
   fox: require("../../../assets/trail-buddies/fox_walking_optimized.webp"),
   deer: require("../../../assets/trail-buddies/deer_walking_optimized.webp"),
   wolf: require("../../../assets/trail-buddies/wolf_walking_optimized.webp"),

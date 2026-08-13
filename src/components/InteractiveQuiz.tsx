@@ -133,18 +133,31 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({
 
       // Restore answers from existing responses
       const restoredAnswers: { [key: string]: number } = {};
-      let firstUnansweredIndex = existingSessionData.questions.length;
+      let firstUnansweredIndex = -1;
 
       existingSessionData.questions.forEach((q: any, index: number) => {
         if (q.response) {
           restoredAnswers[q._id] = q.response.selectedValue;
-        } else if (index < firstUnansweredIndex) {
+        } else if (firstUnansweredIndex === -1) {
           firstUnansweredIndex = index;
         }
       });
 
+      // Every question already has a response — the previous attempt to finish
+      // this session didn't reach `completeSession` (e.g. the app closed right
+      // after the last answer saved). Land on the last question instead of one
+      // past the end of the array: `quizQuestions[quizQuestions.length]` is
+      // undefined, and rendering it crashes the screen, leaving the user with
+      // no way to retake or finish — they can only abandon and lose every
+      // answer. Landing on the last question restores its answer too, so the
+      // "Complete Quiz" button is visible immediately and they can retry.
+      const resumeIndex =
+        firstUnansweredIndex === -1
+          ? Math.max(0, existingSessionData.questions.length - 1)
+          : firstUnansweredIndex;
+
       setAnswers(restoredAnswers);
-      setCurrentQuestionIndex(firstUnansweredIndex);
+      setCurrentQuestionIndex(resumeIndex);
       setIsInitializing(false);
       return;
     }
@@ -307,32 +320,54 @@ const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({
 
     const questionId = getQuestionId(currentQuestion);
     const responseTimeMs = Date.now() - questionStartTime.getTime();
+    const isLastQuestion = currentQuestionIndex === quizQuestions.length - 1;
 
     setAnswers((prev) => ({
       ...prev,
       [questionId]: optionIndex,
     }));
 
-    // Submit to Convex in the background — don't block UI advancement.
-    // Failures are retried once and, if still failing, surfaced via the
-    // failedAnswers banner instead of being swallowed.
+    // The Convex option's `value` is the actual score this answer represents.
+    // Legacy questions have no separate value field, so their array index IS
+    // the score — but for Convex questions the index is only the row's
+    // position in the rendered list, not necessarily its scored value. They
+    // happen to coincide for every option set seeded today, but scoring off
+    // the wrong number the moment that stops being true would be a silent,
+    // hard-to-notice accuracy bug, so submit the real value.
+    const selectedValue =
+      "_id" in currentQuestion
+        ? (currentQuestion.options[optionIndex]?.value ?? optionIndex)
+        : optionIndex;
+
+    // Submit to Convex. Mid-quiz this stays in the background so answering
+    // never blocks UI advancement — failures are retried once and, if still
+    // failing, surfaced via the failedAnswers banner instead of being
+    // swallowed. On the LAST question, `completeQuiz` reads the response
+    // count straight back from Convex, so firing it before this write lands
+    // would score the final answer as never-submitted. Await it there so
+    // completion always sees every response.
+    let submitPromise: Promise<void> | null = null;
     if (useConvex && sessionId && "_id" in currentQuestion) {
-      submitAnswerToConvex({
+      submitPromise = submitAnswerToConvex({
         sessionId,
         questionId: currentQuestion._id,
-        selectedValue: optionIndex,
+        selectedValue,
         responseTimeMs,
       });
     }
 
+    if (isLastQuestion) {
+      (async () => {
+        if (submitPromise) await submitPromise;
+        setTimeout(() => completeQuiz(), 300);
+      })();
+      return;
+    }
+
     // Auto-advance after brief selection feedback
     setTimeout(() => {
-      if (currentQuestionIndex < quizQuestions.length - 1) {
-        setCurrentQuestionIndex((prev) => prev + 1);
-        setQuestionStartTime(new Date());
-      } else {
-        completeQuiz();
-      }
+      setCurrentQuestionIndex((prev) => prev + 1);
+      setQuestionStartTime(new Date());
     }, 300);
   };
 

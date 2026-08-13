@@ -27,6 +27,7 @@ import { glassStyles } from "../../components/premium/LiquidGlass";
 import { Typography, Spacing, PremiumColors } from "../../theme/premiumTheme";
 import Animated, { FadeIn, FadeInUp } from "react-native-reanimated";
 import { useFocusAnimationKey } from "../../utils/animationUtils";
+import { useSubscriptionTier } from "../../hooks/useSubscriptionTier";
 
 const BUCKET = "e-books";
 
@@ -46,6 +47,7 @@ const EBooksScreen: React.FC = () => {
   const { theme } = useTheme();
   const isDark = theme.isDark;
   const focusKey = useFocusAnimationKey();
+  const { hasNoraAccess } = useSubscriptionTier();
 
   const [loading, setLoading] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
@@ -179,34 +181,44 @@ const EBooksScreen: React.FC = () => {
   };
 
   /* ----------  Send to Nora Function  ---------- */
-  const sendToNora = async (book: UploadedBook) => {
-    try {
+  const sendToNora = (book: UploadedBook) => {
+    if (!hasNoraAccess) {
       Alert.alert(
-        "Send to Nora",
-        `Send "${book.name}" to Nora for study assistance?`,
+        "Nora can read this e-book",
+        "Nora AI on the Elite plan can analyze your uploaded PDFs — study guides, practice questions, and summaries.",
         [
-          { text: "Cancel", style: "cancel" },
+          { text: "Not Now", style: "cancel" },
           {
-            text: "Send",
-            onPress: async () => {
-              try {
-                // TODO: Send PDF to Nora from Convex file storage
-                Alert.alert(
-                  "Feature Coming Soon",
-                  "Sending PDFs to Nora will be available in the next update!",
-                );
-                setLoading(false);
-              } catch (error) {
-                // Error sending to Nora
-                setLoading(false);
-              }
-            },
+            text: "View Plans",
+            onPress: () => navigation.navigate("Subscription"),
           },
         ],
       );
-    } catch (error) {
-      // Send to Nora error
+      return;
     }
+    if (book.status !== "ready") {
+      Alert.alert(
+        "Still Processing",
+        `"${book.name}" is still processing. Nora will be able to reference it once it's ready.`,
+      );
+      return;
+    }
+    Alert.alert(
+      "Send to Nora",
+      `Send "${book.name}" to Nora for study assistance?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Send",
+          onPress: () => {
+            navigation.navigate("NoraScreen", {
+              initialPdfTitle: book.name,
+              initialMessage: `Help me study from "${book.name}".`,
+            });
+          },
+        },
+      ],
+    );
   };
 
   const statusLabel = (status: string, errorMessage?: string): string => {

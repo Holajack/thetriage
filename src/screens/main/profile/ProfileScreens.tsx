@@ -8,8 +8,6 @@ import {
   Alert,
   Platform,
   KeyboardAvoidingView,
-  Image,
-  ActivityIndicator,
   ScrollView,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
@@ -17,11 +15,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useConvexProfile } from "../../../hooks/useConvex";
 import * as Localization from "expo-localization";
-import Slider from "@react-native-community/slider";
 import DropDownPicker from "react-native-dropdown-picker";
 import { useAuth } from "../../../context/AuthContext";
 import { useTheme } from "../../../context/ThemeContext";
-import * as ImagePicker from "expo-image-picker";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Typography, Spacing } from "../../../theme/premiumTheme";
 import { StaggeredItem } from "../../../components/premium/StaggeredList";
@@ -39,7 +35,7 @@ const PRIVACY_OPTIONS = [
 export const ProfileCustomizationScreen = () => {
   const navigation = useNavigation();
   const { theme } = useTheme();
-  const { profile, updateProfile, uploadProfileImage } = useConvexProfile();
+  const { profile, updateProfile } = useConvexProfile();
   const { signOut, refreshUserData } = useAuth();
   const { refetch } = useUserAppData();
   const [formData, setFormData] = useState({
@@ -53,8 +49,6 @@ export const ProfileCustomizationScreen = () => {
     locationVisibility: "none",
     classesVisibility: "none",
   });
-  const [avatar, setAvatar] = useState<string | null>(null);
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -91,7 +85,6 @@ export const ProfileCustomizationScreen = () => {
         locationVisibility: profile.locationVisibility || "none",
         classesVisibility: profile.classesVisibility || "none",
       });
-      setAvatar(profile.avatar_url || null);
     }
   }, [profile]);
 
@@ -123,90 +116,6 @@ export const ProfileCustomizationScreen = () => {
 
   const handleInputChange = (key: keyof typeof formData, value: string) => {
     setFormData((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const handlePickImage = async () => {
-    try {
-      const permission =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert(
-          "Permission required",
-          "Please allow access to your photos to update your profile image.",
-        );
-        return;
-      }
-
-      // iOS 14+ "Limited" access: let the user reselect which photos the app can see
-      // before opening the picker, so the picker actually respects the limited subset.
-      const isLimited =
-        Platform.OS === "ios" &&
-        ((permission as any).accessPrivileges === "limited" ||
-          (permission as any).status === "limited");
-      if (isLimited) {
-        await new Promise<void>((resolve) => {
-          Alert.alert(
-            "Limited Photo Access",
-            'You\'ve granted access to selected photos only. Tap "Select Photos" to choose which photos HikeWise can see, or tap "Use Current Selection" to pick from those you already shared.',
-            [
-              {
-                text: "Select Photos",
-                onPress: async () => {
-                  try {
-                    await (
-                      ImagePicker as any
-                    ).presentLimitedLibraryPickerAsync?.();
-                  } catch (e) {
-                    // presentLimitedLibraryPickerAsync failed
-                  }
-                  resolve();
-                },
-              },
-              { text: "Use Current Selection", onPress: () => resolve() },
-            ],
-            { cancelable: false },
-          );
-        });
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.85,
-      });
-
-      if (result.canceled || !result.assets || result.assets.length === 0) {
-        return;
-      }
-
-      setUploadingPhoto(true);
-      const uri = result.assets[0].uri;
-      const { publicUrl } = await uploadProfileImage(uri);
-      await updateProfile({ avatar_url: publicUrl });
-      setAvatar(publicUrl);
-      if (typeof refetch === "function") {
-        try {
-          await refetch();
-        } catch (refetchError) {
-          // Failed to refetch user data
-        }
-      }
-      try {
-        await refreshUserData();
-      } catch (refreshError) {
-        // Failed to refresh auth context user
-      }
-      Alert.alert("Success", "Profile photo updated successfully.");
-    } catch (error: any) {
-      // Profile photo update error
-      Alert.alert(
-        "Error",
-        "We could not update your profile photo. Please try again.",
-      );
-    } finally {
-      setUploadingPhoto(false);
-    }
   };
 
   const handleSave = async () => {
@@ -277,49 +186,6 @@ export const ProfileCustomizationScreen = () => {
           enableOnAndroid={true}
           extraScrollHeight={80}
         >
-          <View style={styles.avatarSection}>
-            <TouchableOpacity
-              style={[
-                styles.avatarTouch,
-                { borderColor: theme.primary + "55" },
-                uploadingPhoto && { opacity: 0.7 },
-              ]}
-              onPress={handlePickImage}
-              activeOpacity={0.85}
-              disabled={uploadingPhoto}
-            >
-              {avatar ? (
-                <Image
-                  source={{ uri: avatar }}
-                  style={styles.avatarImageLarge}
-                />
-              ) : (
-                <View
-                  style={[
-                    styles.avatarPlaceholder,
-                    { backgroundColor: theme.primary + "22" },
-                  ]}
-                >
-                  <Ionicons name="person" size={52} color={theme.primary} />
-                </View>
-              )}
-              <View
-                style={[styles.avatarEditBadge, { backgroundColor: cardColor }]}
-              >
-                {uploadingPhoto ? (
-                  <ActivityIndicator size="small" color={theme.primary} />
-                ) : (
-                  <Ionicons name="camera" size={18} color={theme.primary} />
-                )}
-              </View>
-            </TouchableOpacity>
-            <Text
-              style={[styles.avatarHelpText, { color: secondaryTextColor }]}
-            >
-              Tap to update your profile photo.
-            </Text>
-          </View>
-
           <View style={styles.formSection}>
             <Text style={[styles.sectionHeading, { color: theme.primary }]}>
               Profile Details
@@ -327,7 +193,7 @@ export const ProfileCustomizationScreen = () => {
 
             <View style={styles.fieldContainer}>
               <Text style={[styles.label, { color: theme.text }]}>
-                Display Name
+                Full Name
               </Text>
               <TextInput
                 style={[
@@ -340,7 +206,7 @@ export const ProfileCustomizationScreen = () => {
                 ]}
                 value={formData.fullName}
                 onChangeText={(text) => handleInputChange("fullName", text)}
-                placeholder="Add your display name"
+                placeholder="Add your full name"
                 placeholderTextColor={secondaryTextColor}
                 autoCapitalize="words"
               />
@@ -618,11 +484,11 @@ export const ProfileCustomizationScreen = () => {
             style={[
               styles.saveButtonLarge,
               { backgroundColor: theme.primary },
-              (saving || uploadingPhoto) && styles.saveButtonDisabled,
+              saving && styles.saveButtonDisabled,
             ]}
             onPress={handleSave}
             activeOpacity={0.9}
-            disabled={saving || uploadingPhoto}
+            disabled={saving}
           >
             <Text style={styles.saveButtonText}>
               {saving ? "Saving..." : "Save Changes"}
@@ -811,23 +677,23 @@ export const PersonalInformationScreen = () => {
               style={[
                 styles.input,
                 {
-                  backgroundColor: formBackground,
-                  borderColor: fieldBorderColor,
-                  color: textColor,
-                },
-                !isEditing && {
                   backgroundColor: disabledBackground,
+                  borderColor: fieldBorderColor,
                   color: secondaryText,
                 },
               ]}
               value={formData.email}
-              onChangeText={(text) => setFormData({ ...formData, email: text })}
-              editable={isEditing}
+              editable={false}
               placeholder="Enter your email"
               keyboardType="email-address"
               autoCapitalize="none"
               placeholderTextColor={secondaryText}
             />
+            <Text
+              style={[styles.infoText, { color: secondaryText, marginTop: 4 }]}
+            >
+              Managed in Settings under Email & Password.
+            </Text>
           </View>
           <View style={styles.fieldContainer}>
             <Text style={[styles.label, { color: textColor }]}>Full Name</Text>
@@ -1474,16 +1340,6 @@ const privacyStyles = StyleSheet.create({
   },
 });
 
-const MAIN_GOAL_OPTIONS = [
-  { label: "Deep Work", value: "Deep Work" },
-  { label: "Study", value: "Study" },
-  { label: "Accountability", value: "Accountability" },
-];
-const WORK_STYLE_OPTIONS = [
-  { label: "Deep Work", value: "Deep Work" },
-  { label: "Balanced", value: "Balanced" },
-  { label: "Sprints", value: "Sprints" },
-];
 const ENVIRONMENT_OPTIONS = [
   { label: "Home", value: "Home" },
   { label: "Office", value: "Office" },
@@ -1491,15 +1347,13 @@ const ENVIRONMENT_OPTIONS = [
   { label: "Coffee Shop", value: "Coffee Shop" },
   { label: "Park/Outdoors", value: "Park/Outdoors" },
 ];
-const SOUND_OPTIONS = [
-  { label: "Lo-Fi", value: "Lo-Fi" },
-  { label: "Jazz", value: "Jazz" },
-  { label: "Ambient", value: "Ambient" },
-  { label: "Nature", value: "Nature" },
-  { label: "Classical", value: "Classical" },
-  { label: "Silence", value: "Silence" },
-];
 
+// Main Goal, Work Style, Weekly Focus Goal, and Sound Preference are edited
+// in Settings > Focus & Study and Settings > Sound — this screen used to
+// duplicate all four with a separate (and inconsistent) set of option values,
+// and its reads from `onboarding` never actually picked up the saved value
+// for any of them, so it silently showed defaults on every load. Environment
+// is the only preference that's unique to Profile.
 export const PreferencesScreen = () => {
   const { onboarding, updateOnboarding } = useAuth();
   const { theme } = useTheme();
@@ -1521,89 +1375,24 @@ export const PreferencesScreen = () => {
     });
   }, [navigation]);
 
-  // Dropdown state for each field
-  const [mainGoalOpen, setMainGoalOpen] = useState(false);
-  const [workStyleOpen, setWorkStyleOpen] = useState(false);
   const [environmentOpen, setEnvironmentOpen] = useState(false);
-  const [soundOpen, setSoundOpen] = useState(false);
 
   const [formData, setFormData] = useState({
-    weeklyFocusGoal: onboarding?.weekly_focus_goal || 10,
-    mainGoal: onboarding?.user_goal || "Deep Work",
-    workStyle: onboarding?.work_style || "Deep Work",
     environment: onboarding?.learning_environment || "Home",
-    soundPreference: onboarding?.sound_preference || "Lo-Fi",
   });
 
   useEffect(() => {
     if (onboarding) {
       setFormData({
-        weeklyFocusGoal: onboarding.weekly_focus_goal || 10,
-        mainGoal: onboarding.user_goal || "Deep Work",
-        workStyle: onboarding.work_style || "Deep Work",
         environment: onboarding.learning_environment || "Home",
-        soundPreference: onboarding.sound_preference || "Lo-Fi",
       });
     }
   }, [onboarding]);
 
-  // Only one dropdown open at a time
-  const onMainGoalOpen = useCallback(() => {
-    setWorkStyleOpen(false);
-    setEnvironmentOpen(false);
-    setSoundOpen(false);
-  }, []);
-  const onWorkStyleOpen = useCallback(() => {
-    setMainGoalOpen(false);
-    setEnvironmentOpen(false);
-    setSoundOpen(false);
-  }, []);
-  const onEnvironmentOpen = useCallback(() => {
-    setMainGoalOpen(false);
-    setWorkStyleOpen(false);
-    setSoundOpen(false);
-  }, []);
-  const onSoundOpen = useCallback(() => {
-    setMainGoalOpen(false);
-    setWorkStyleOpen(false);
-    setEnvironmentOpen(false);
-  }, []);
-
   const handleSave = async () => {
-    // Check if weekly focus goal is over 60 hours and show warning
-    if (formData.weeklyFocusGoal > 60) {
-      Alert.alert(
-        "Big Goal!",
-        "Are you sure you want to focus that many hours? It might make it harder to earn rewards and move up the leaderboard. But if you do it, you can earn bigger rewards!",
-        [
-          {
-            text: "Cancel",
-            style: "cancel",
-          },
-          {
-            text: "Yes, I'm Sure",
-            onPress: async () => {
-              // Proceed with saving
-              await savePreferences();
-            },
-          },
-        ],
-      );
-    } else {
-      // Goal is 60 or under, save directly
-      await savePreferences();
-    }
-  };
-
-  // Helper function to save preferences
-  const savePreferences = async () => {
     try {
       await updateOnboarding({
-        weekly_focus_goal: formData.weeklyFocusGoal,
-        user_goal: formData.mainGoal,
-        work_style: formData.workStyle,
         learning_environment: formData.environment,
-        sound_preference: formData.soundPreference,
       });
       setIsEditing(false);
       Alert.alert("Success", "Your preferences have been updated.");
@@ -1615,11 +1404,7 @@ export const PreferencesScreen = () => {
   const handleCancel = () => {
     if (onboarding) {
       setFormData({
-        weeklyFocusGoal: onboarding.weekly_focus_goal || 10,
-        mainGoal: onboarding.user_goal || "Deep Work",
-        workStyle: onboarding.work_style || "Deep Work",
         environment: onboarding.learning_environment || "Home",
-        soundPreference: onboarding.sound_preference || "Lo-Fi",
       });
     }
     setIsEditing(false);
@@ -1667,89 +1452,13 @@ export const PreferencesScreen = () => {
         </View>
         <View style={styles.content}>
           <View style={styles.fieldContainer}>
-            <Text style={styles.labelBold}>Weekly Focus Goal</Text>
+            <Text style={styles.labelBold}>Study Environment</Text>
             <Text style={styles.subtext}>
-              How many hours would you like to focus this week?
+              Where you usually study — helps tailor tips to your setting.
             </Text>
-            <Slider
-              style={styles.slider}
-              minimumValue={1}
-              maximumValue={80}
-              step={1}
-              value={formData.weeklyFocusGoal}
-              onValueChange={(value) =>
-                setFormData({ ...formData, weeklyFocusGoal: value })
-              }
-              minimumTrackTintColor="#4CAF50"
-              maximumTrackTintColor="#E0E0E0"
-              disabled={!isEditing}
-            />
-            <Text style={styles.sliderValue}>
-              {formData.weeklyFocusGoal} hours
-            </Text>
-          </View>
-          <View style={styles.fieldContainer}>
-            <Text style={styles.labelBold}>Main Goal</Text>
-            <DropDownPicker
-              open={mainGoalOpen}
-              setOpen={setMainGoalOpen}
-              onOpen={onMainGoalOpen}
-              value={formData.mainGoal || ""}
-              setValue={(cb) =>
-                setFormData((f) => ({
-                  ...f,
-                  mainGoal: typeof cb === "function" ? cb(f.mainGoal) : cb,
-                }))
-              }
-              items={MAIN_GOAL_OPTIONS}
-              disabled={!isEditing}
-              style={styles.dropdown}
-              dropDownContainerStyle={[
-                styles.dropdownContainer,
-                { zIndex: 4000, elevation: 4000 },
-              ]}
-              zIndex={4000}
-              zIndexInverse={1000}
-              listMode="SCROLLVIEW"
-              onChangeValue={(val) =>
-                setFormData((f) => ({ ...f, mainGoal: val || "" }))
-              }
-            />
-          </View>
-          <View style={styles.fieldContainer}>
-            <Text style={styles.labelBold}>Work Style</Text>
-            <DropDownPicker
-              open={workStyleOpen}
-              setOpen={setWorkStyleOpen}
-              onOpen={onWorkStyleOpen}
-              value={formData.workStyle || ""}
-              setValue={(cb) =>
-                setFormData((f) => ({
-                  ...f,
-                  workStyle: typeof cb === "function" ? cb(f.workStyle) : cb,
-                }))
-              }
-              items={WORK_STYLE_OPTIONS}
-              disabled={!isEditing}
-              style={styles.dropdown}
-              dropDownContainerStyle={[
-                styles.dropdownContainer,
-                { zIndex: 3000, elevation: 3000 },
-              ]}
-              zIndex={3000}
-              zIndexInverse={2000}
-              listMode="SCROLLVIEW"
-              onChangeValue={(val) =>
-                setFormData((f) => ({ ...f, workStyle: val || "" }))
-              }
-            />
-          </View>
-          <View style={styles.fieldContainer}>
-            <Text style={styles.labelBold}>Environment</Text>
             <DropDownPicker
               open={environmentOpen}
               setOpen={setEnvironmentOpen}
-              onOpen={onEnvironmentOpen}
               value={formData.environment || ""}
               setValue={(cb) =>
                 setFormData((f) => ({
@@ -1761,47 +1470,17 @@ export const PreferencesScreen = () => {
               items={ENVIRONMENT_OPTIONS}
               disabled={!isEditing}
               style={styles.dropdown}
-              dropDownContainerStyle={[
-                styles.dropdownContainer,
-                { zIndex: 2000, elevation: 2000 },
-              ]}
-              zIndex={2000}
-              zIndexInverse={3000}
+              dropDownContainerStyle={styles.dropdownContainer}
               listMode="SCROLLVIEW"
               onChangeValue={(val) =>
                 setFormData((f) => ({ ...f, environment: val || "" }))
               }
             />
           </View>
-          <View style={styles.fieldContainer}>
-            <Text style={styles.labelBold}>Sound Preference</Text>
-            <DropDownPicker
-              open={soundOpen}
-              setOpen={setSoundOpen}
-              onOpen={onSoundOpen}
-              value={formData.soundPreference || ""}
-              setValue={(cb) =>
-                setFormData((f) => ({
-                  ...f,
-                  soundPreference:
-                    typeof cb === "function" ? cb(f.soundPreference) : cb,
-                }))
-              }
-              items={SOUND_OPTIONS}
-              disabled={!isEditing}
-              style={styles.dropdown}
-              dropDownContainerStyle={[
-                styles.dropdownContainer,
-                { zIndex: 1000, elevation: 1000 },
-              ]}
-              zIndex={1000}
-              zIndexInverse={4000}
-              listMode="SCROLLVIEW"
-              onChangeValue={(val) =>
-                setFormData((f) => ({ ...f, soundPreference: val || "" }))
-              }
-            />
-          </View>
+          <Text style={styles.infoText}>
+            Sound, main goal, work style, and weekly focus goal live in
+            Settings, under Focus & Study and Sound.
+          </Text>
         </View>
       </KeyboardAwareScrollView>
     </KeyboardAvoidingView>
@@ -1816,45 +1495,6 @@ const styles = StyleSheet.create({
   customizationSafeArea: {
     flex: 1,
     backgroundColor: "#fff",
-  },
-  avatarSection: {
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  avatarTouch: {
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    borderWidth: 2,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-  avatarImageLarge: {
-    width: "100%",
-    height: "100%",
-  },
-  avatarPlaceholder: {
-    width: "100%",
-    height: "100%",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarEditBadge: {
-    position: "absolute",
-    bottom: 10,
-    right: 10,
-    borderRadius: 14,
-    padding: 6,
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
-  },
-  avatarHelpText: {
-    fontSize: 14,
-    color: "#666",
-    marginTop: 12,
-    textAlign: "center",
-    lineHeight: 20,
   },
   formSection: {
     marginTop: 12,

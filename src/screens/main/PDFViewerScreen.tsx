@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -32,6 +32,14 @@ const PDFViewerScreen = () => {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  // A PDF WebView (native rendering on iOS, the Google Docs gview iframe on
+  // Android) fires onLoadStart/onLoadEnd repeatedly after the document is
+  // already visible — internal page navigation, lazy-loaded pages, gview's
+  // own iframe reloads. Without this guard, each one re-triggers the
+  // full-screen loading overlay over content that's already rendered,
+  // which is exactly the "glitchy" flicker reported from device testing.
+  // Only the FIRST load cycle should show the overlay.
+  const hasLoadedOnce = useRef(false);
 
   const handleShare = async () => {
     try {
@@ -168,19 +176,28 @@ const PDFViewerScreen = () => {
                 : `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(url)}`,
           }}
           style={styles.webview}
-          onLoadStart={() => setLoading(true)}
-          onLoadEnd={() => setLoading(false)}
+          onLoadStart={() => {
+            if (!hasLoadedOnce.current) setLoading(true);
+          }}
+          onLoadEnd={() => {
+            hasLoadedOnce.current = true;
+            setLoading(false);
+          }}
           onError={(syntheticEvent) => {
             // WebView error
             setLoading(false);
             setError(true);
           }}
           onHttpError={(syntheticEvent) => {
-            // WebView HTTP error
+            // Only the top-level document failing is a real "can't load
+            // this PDF" — a sub-resource 404 inside an already-rendered
+            // document (e.g. gview's own analytics/asset requests on
+            // Android) isn't fatal and shouldn't kick the user to the
+            // error screen once content is already visible.
+            if (hasLoadedOnce.current) return;
             setLoading(false);
             setError(true);
           }}
-          startInLoadingState
           scalesPageToFit={Platform.OS === "android"}
           javaScriptEnabled
           domStorageEnabled

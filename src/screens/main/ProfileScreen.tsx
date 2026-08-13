@@ -24,6 +24,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { UnifiedHeader } from "../../components/UnifiedHeader";
 import { FlintIcon } from "../../components/FlintIcon";
 import * as ImagePicker from "expo-image-picker";
+import * as MediaLibrary from "expo-media-library";
 import { useConvexProfile } from "../../hooks/useConvex";
 import { getUserBadges } from "../../utils/achievementManager";
 import { Badge } from "../../data/achievements";
@@ -53,6 +54,7 @@ import { navigateHomeWithSlide } from "../../navigation/navHelpers";
 
 // Trail buddy portrait images (first frame of each animation)
 const TRAIL_BUDDY_IMAGES: Record<string, ImageSourcePropType> = {
+  patrick: require("../../../assets/trail-buddies/patrick-frames/patrick_frame_00.webp"),
   fox: require("../../../assets/trail-buddies/fox-frames/fox_frame_00.webp"),
   bear: require("../../../assets/trail-buddies/bear-frames/bear_frame_00.webp"),
   deer: require("../../../assets/trail-buddies/deer-frames/deer_frame_00.webp"),
@@ -63,6 +65,7 @@ const TRAIL_BUDDY_IMAGES: Record<string, ImageSourcePropType> = {
 
 // Spritesheet configuration for walking animation
 const BUDDY_SPRITESHEETS: Record<string, ImageSourcePropType> = {
+  patrick: require("../../../assets/trail-buddies/patrick_walking_optimized.webp"),
   fox: require("../../../assets/trail-buddies/fox_walking_optimized.webp"),
   deer: require("../../../assets/trail-buddies/deer_walking_optimized.webp"),
   wolf: require("../../../assets/trail-buddies/wolf_walking_optimized.webp"),
@@ -75,6 +78,7 @@ const SPRITE_FRAME_HEIGHT = 200;
 const SPRITE_TOTAL_FRAMES = 28;
 
 const BUDDY_COLORS: Record<string, string> = {
+  patrick: "#FF7043",
   fox: "#FF6B35",
   bear: "#8B4513",
   deer: "#C4A484",
@@ -321,7 +325,7 @@ const ProfileScreen = () => {
         ((permission as any).accessPrivileges === "limited" ||
           (permission as any).status === "limited");
       if (isLimited) {
-        await new Promise<void>((resolve) => {
+        const shouldContinue = await new Promise<boolean>((resolve) => {
           Alert.alert(
             "Limited Photo Access",
             'You\'ve granted access to selected photos only. Tap "Select Photos" to choose which photos HikeWise can see, or tap "Use Current Selection" to pick from those you already shared.',
@@ -330,20 +334,30 @@ const ProfileScreen = () => {
                 text: "Select Photos",
                 onPress: async () => {
                   try {
-                    await (
-                      ImagePicker as any
-                    ).presentLimitedLibraryPickerAsync?.();
-                  } catch (e) {
-                    // presentLimitedLibraryPickerAsync failed
+                    await MediaLibrary.presentPermissionsPickerAsync();
+                  } catch (mediaLibraryError) {
+                    Alert.alert(
+                      "Error",
+                      "Could not open the photo picker. Please try again.",
+                    );
+                  } finally {
+                    resolve(true);
                   }
-                  resolve();
                 },
               },
-              { text: "Use Current Selection", onPress: () => resolve() },
+              { text: "Use Current Selection", onPress: () => resolve(true) },
+              {
+                text: "Cancel",
+                style: "cancel",
+                onPress: () => resolve(false),
+              },
             ],
-            { cancelable: false },
+            { cancelable: true, onDismiss: () => resolve(false) },
           );
         });
+        if (!shouldContinue) {
+          return;
+        }
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({

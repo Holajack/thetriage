@@ -322,6 +322,20 @@ export const ingestEbook = internalAction({
         status: "ready",
       });
 
+      // 5. Extract a summary into Nora's long-term memory so she knows about
+      // this ebook even before the student ever attaches it in a chat turn
+      // (same idea as quizNoraIntegration.extractQuizMemories, scheduled
+      // after quiz completion — see convex/quizSessions.ts). Best-effort:
+      // this never blocks or rolls back ingestion — the ebook is already
+      // fully usable via file_search regardless of whether this summary
+      // extraction succeeds.
+      await ctx.scheduler.runAfter(0, internal.ebooks._extractEbookMemory, {
+        ebookId: args.ebookId,
+        userId: ebook.userId,
+        title: ebook.title,
+        vectorStoreId,
+      });
+
       return { success: true };
     } catch (err: any) {
       await ctx.runMutation(internal.ebooks._setEbookOpenAIIds, {
@@ -330,6 +344,74 @@ export const ingestEbook = internalAction({
         errorMessage: err?.message || String(err),
       });
       return { success: false, error: err?.message || String(err) };
+    }
+  },
+});
+
+/**
+ * Summarize a freshly-ingested ebook into Nora's long-term memory
+ * (noraMemory), so she can reference what a student has uploaded even in a
+ * conversation where the PDF isn't explicitly attached. Mirrors the
+ * quiz-completion → extractQuizMemories pattern, but the source data here is
+ * unstructured PDF text rather than a structured quiz result, so it needs an
+ * actual summarization call grounded on the document via file_search (same
+ * Responses API used for chat in noraChat.ts).
+ *
+ * Scheduled once, right after ingestEbook finishes (Elite tier only — see
+ * ingestEbook). Failures are logged, not thrown: a missing summary never
+ * blocks the ebook from being usable, since Nora can still search it live.
+ */
+export const _extractEbookMemory = internalAction({
+  args: {
+    ebookId: v.id("ebooks"),
+    userId: v.id("users"),
+    title: v.string(),
+    vectorStoreId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const apiKey =
+      process.env.OPENAI_API_KEY_NEW_NORA || process.env.OPENAI_API_KEY;
+    if (!apiKey) return;
+
+    try {
+      const res = await fetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          instructions:
+            "You summarize an uploaded study document for an AI tutor's long-term memory. Use file_search to read the attached document, then respond with ONLY a 2-3 sentence summary of its subject and key topics — no preamble, no citations, no markdown.",
+          input: `Summarize this document: "${args.title}"`,
+          tools: [
+            { type: "file_search", vector_store_ids: [args.vectorStoreId] },
+          ],
+        }),
+      });
+
+      if (!res.ok) {
+        console.error(
+          `[ebooks] memory extraction call failed: ${res.status} ${await res.text()}`,
+        );
+        return;
+      }
+
+      const data = await res.json();
+      const summary: string = (data.output_text || "").trim();
+      if (!summary) return;
+
+      await ctx.runMutation(internal.noraMemory._upsertMemory, {
+        userId: args.userId,
+        category: "academic",
+        key: `ebook_${args.ebookId}`,
+        value: `Uploaded "${args.title}": ${summary}`,
+        confidence: 0.9,
+        source: "ebook",
+      });
+    } catch (e: any) {
+      console.error("[ebooks] memory extraction failed:", e?.message || e);
     }
   },
 });

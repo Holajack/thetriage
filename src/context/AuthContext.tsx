@@ -214,6 +214,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           major: convexOnboarding.major,
           location: convexOnboarding.location,
           timezone: convexOnboarding.timezone,
+          learning_environment: convexOnboarding.learningEnvironment,
           completed_at: convexOnboarding.completedAt,
         }
       : null;
