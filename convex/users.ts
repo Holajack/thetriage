@@ -125,13 +125,26 @@ export function applyProfileVisibility<
 }
 
 /**
- * Strip account-identifying fields from a user document before it leaves the
- * server for anyone other than the owner. clerkId is an auth handle and email
- * is PII — neither has any business on another user's profile card.
+ * Project a user document down to the fields safe to show a NON-SELF viewer.
+ * This is an ALLOWLIST, not a blocklist — it used to only strip clerkId/email,
+ * so subscriptionTier, stripeCustomerId, flintCurrency, lastSeen, isOnline,
+ * trailBuddyType, dailyReminder, and every other field passed straight through
+ * to ANY caller, including a fully unauthenticated one. Add a field here only
+ * if it's genuinely meant to appear on someone else's profile card. Client
+ * consumers of getUser/getByClerkId/getByUsername only ever read username,
+ * fullName, avatarUrl, university, major (verified against every call site).
  */
-function stripSensitiveFields(user: Doc<"users">) {
-  const { clerkId: _clerkId, email: _email, ...safe } = user;
-  return safe;
+export function stripSensitiveFields(user: Doc<"users">) {
+  return {
+    _id: user._id,
+    _creationTime: user._creationTime,
+    username: user.username,
+    fullName: user.fullName,
+    avatarUrl: user.avatarUrl,
+    university: user.university,
+    major: user.major,
+    status: user.status,
+  };
 }
 
 /** Resolve the viewer relationship to a target and apply profile visibility. */
@@ -309,14 +322,14 @@ export const updateMySubscription = mutation({
       return;
     }
 
-    // Once the RevenueCat server webhook is configured (REVENUECAT_WEBHOOK_TOKEN
-    // set in the Convex dashboard), it is the only trusted source for UPGRADES —
-    // a client-side call can no longer grant itself a paid tier. Client sync is
-    // still allowed to downgrade (subscription lapsed) or re-assert the same tier.
-    if (
-      process.env.REVENUECAT_WEBHOOK_TOKEN &&
-      tierRank(newTier) > tierRank(currentTier)
-    ) {
+    // Upgrades are NEVER trusted from the client — only the RevenueCat server
+    // webhook (_setSubscriptionTierFromWebhook below) may grant a paid tier.
+    // This used to be conditional on REVENUECAT_WEBHOOK_TOKEN being configured,
+    // which meant an unset or misnamed env var silently let any signed-in user
+    // grant themselves Elite through this mutation. Fail closed unconditionally.
+    // Client sync is still allowed to downgrade (subscription lapsed) or
+    // re-assert the same tier.
+    if (tierRank(newTier) > tierRank(currentTier)) {
       return;
     }
 
@@ -374,6 +387,10 @@ export const setOffline = mutation({
 export const getUserPresence = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
+    // Presence (isOnline/lastSeen) is not meaningful to expose to a fully
+    // anonymous caller — this used to have zero auth check at all.
+    await getCurrentUser(ctx);
+
     const user = await ctx.db.get(args.userId);
     if (!user) return null;
 
@@ -413,14 +430,28 @@ export const searchUsers = query({
       return username.includes(searchTerm) || fullName.includes(searchTerm);
     });
 
-    // Limit to 20 results and return safe user data (no sensitive fields)
-    return results.slice(0, 20).map((user) => ({
-      _id: user._id,
-      username: user.username,
-      fullName: user.fullName,
-      avatarUrl: user.avatarUrl,
-      university: user.university,
-      status: user.status,
-    }));
+    // Limit to 20 results and apply per-field visibility — search is an
+    // "everyone" read, so a friends-only/private name must not leak here even
+    // though it was used to MATCH the search term.
+    const limited = results.slice(0, 20);
+    return await Promise.all(
+      limited.map(async (user) => {
+        const isFriend = currentUser
+          ? await areFriends(ctx, currentUser._id, user._id)
+          : false;
+        return {
+          _id: user._id,
+          username: user.username,
+          fullName: isFieldVisible(user.fullNameVisibility, false, isFriend)
+            ? user.fullName
+            : undefined,
+          avatarUrl: user.avatarUrl,
+          university: isFieldVisible(user.universityVisibility, false, isFriend)
+            ? user.university
+            : undefined,
+          status: user.status,
+        };
+      }),
+    );
   },
 });
