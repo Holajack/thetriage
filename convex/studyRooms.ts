@@ -1,7 +1,12 @@
 import { v } from "convex/values";
 import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
-import { getCurrentUser, getCurrentUserOrNull } from "./users";
+import {
+  getCurrentUser,
+  getCurrentUserOrNull,
+  areFriends,
+  isFieldVisible,
+} from "./users";
 import { getStudyRoomLimit } from "./tiers";
 
 /**
@@ -10,13 +15,25 @@ import { getStudyRoomLimit } from "./tiers";
  * room; every write proves membership (or ownership, for moderation).
  */
 
-/** The only user fields another member is allowed to see. */
-function publicMember(user: Doc<"users"> | null) {
+/**
+ * The only user fields another member is allowed to see. fullName still
+ * respects the owner's fullNameVisibility (self > friend > everyone), the
+ * same relationship logic leaderboard.ts's getGlobal/getFriends use.
+ */
+async function publicMember(
+  ctx: QueryCtx,
+  user: Doc<"users"> | null,
+  viewerId: Id<"users"> | null,
+) {
   if (!user) return null;
+  const isSelf = viewerId === user._id;
+  const isFriend = viewerId ? await areFriends(ctx, viewerId, user._id) : false;
   return {
     _id: user._id,
     username: user.username,
-    fullName: user.fullName,
+    fullName: isFieldVisible(user.fullNameVisibility, isSelf, isFriend)
+      ? user.fullName
+      : undefined,
     avatarUrl: user.avatarUrl,
     // Deliberately NOT clerkId or email.
   };
@@ -183,6 +200,7 @@ export const getParticipants = query({
     const room = await readableRoom(ctx, args.roomId);
     if (!room) return [];
 
+    const viewer = await getCurrentUserOrNull(ctx);
     const participants = await ctx.db
       .query("studyRoomParticipants")
       .withIndex("by_roomId", (q) => q.eq("roomId", args.roomId))
@@ -190,7 +208,14 @@ export const getParticipants = query({
 
     const enriched = [];
     for (const p of participants) {
-      enriched.push({ ...p, user: publicMember(await ctx.db.get(p.userId)) });
+      enriched.push({
+        ...p,
+        user: await publicMember(
+          ctx,
+          await ctx.db.get(p.userId),
+          viewer?._id ?? null,
+        ),
+      });
     }
     return enriched;
   },
@@ -213,7 +238,7 @@ export const getMessages = query({
     for (const m of messages) {
       enriched.push({
         ...m,
-        sender: publicMember(await ctx.db.get(m.senderId)),
+        sender: await publicMember(ctx, await ctx.db.get(m.senderId), user._id),
       });
     }
     return enriched;
@@ -242,7 +267,11 @@ export const getPendingInvitations = query({
       enriched.push({
         ...inv,
         room: { _id: room._id, name: room.name, subject: room.subject },
-        sender: publicMember(await ctx.db.get(inv.senderId)),
+        sender: await publicMember(
+          ctx,
+          await ctx.db.get(inv.senderId),
+          user._id,
+        ),
       });
     }
     return enriched;

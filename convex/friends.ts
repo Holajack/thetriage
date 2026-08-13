@@ -7,6 +7,7 @@ import {
   areFriends,
   isFieldVisible,
   applyProfileVisibility,
+  stripSensitiveFields,
 } from "./users";
 
 export const listFriends = query({
@@ -31,10 +32,16 @@ export const listFriends = query({
     for (const f of reverseFriendships) friendIds.add(f.userId);
 
     // Fetch friend profiles (viewer is a friend, so only "none" fields hide).
+    // Visibility redaction alone isn't enough — email/clerkId/subscription
+    // fields are never friend-visible, only self-visible, so strip them too.
     const friends = [];
     for (const fId of friendIds) {
       const friend = await ctx.db.get(fId as Id<"users">);
-      if (friend) friends.push(applyProfileVisibility(friend, false, true));
+      if (friend) {
+        friends.push(
+          stripSensitiveFields(applyProfileVisibility(friend, false, true)),
+        );
+      }
     }
     return friends;
   },
