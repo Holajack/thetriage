@@ -5,6 +5,18 @@ import { AnalyticsEvent } from "../analytics/events";
 import { Id } from "../../convex/_generated/dataModel";
 import { useCallback, useMemo, useRef, useState } from "react";
 
+/**
+ * Ending a session with no active session in memory (e.g. the app relaunched
+ * mid-session, or the server already closed it). This is a state problem, not
+ * a connectivity problem — callers must not describe it as a network failure.
+ */
+export class NoActiveSessionError extends Error {
+  constructor() {
+    super("No active session to end");
+    this.name = "NoActiveSessionError";
+  }
+}
+
 // Re-export types for backward compatibility
 export interface Task {
   id: string;
@@ -509,7 +521,7 @@ export const useConvexFocusSession = () => {
     // the success modal against an empty result — "Session Complete! 0m focused"
     // — which is the same fabricated success this rewrite exists to remove.
     if (!currentSession) {
-      throw new Error("No active session to end");
+      throw new NoActiveSessionError();
     }
 
     const sessionId = (currentSession.id ||
