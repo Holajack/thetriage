@@ -63,7 +63,11 @@ import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { track } from "../../analytics/analytics";
 import { AnalyticsEvent } from "../../analytics/events";
-import { useConvexFocusSession, Task } from "../../hooks/useConvex";
+import {
+  useConvexFocusSession,
+  Task,
+  NoActiveSessionError,
+} from "../../hooks/useConvex";
 import { useBackgroundMusic } from "../../hooks/useBackgroundMusic";
 import {
   getSoundPreference,
@@ -98,6 +102,24 @@ import { useScreenWalkthrough } from "../../hooks/useScreenWalkthrough";
 import { STUDY_SESSION_STEPS } from "../../config/walkthroughSteps";
 import { useConvexProfile } from "../../hooks/useConvex";
 const { useUserAppData } = require("../../utils/userAppData");
+
+// The end-of-session failure alert must diagnose honestly: a missing in-memory
+// session (app relaunched mid-session, or the server already closed it) is not
+// a connectivity problem. Blaming the network for it sent beta testers chasing
+// a connection issue that didn't exist.
+const showEndSessionError = (error: unknown) => {
+  if (error instanceof NoActiveSessionError) {
+    Alert.alert(
+      "Session already closed",
+      "This session wasn't open anymore, which can happen if the app restarted during it. Time the server already recorded is safe; this screen just can't show the final numbers.",
+    );
+    return;
+  }
+  Alert.alert(
+    "Couldn't save your session",
+    "We lost the connection before your session could be saved. Check your network — your progress for this one may not be recorded.",
+  );
+};
 
 // Work Style Focus Durations (in seconds)
 const getWorkStyleDuration = (focusMethod?: string) => {
@@ -847,14 +869,11 @@ export const StudySessionScreen = () => {
       });
       setCompletedSessionData(sessionResult);
       setShowSessionCompleteModal(true);
-    } catch {
+    } catch (error) {
       // Do NOT invent a completed session here. The old fallback fabricated a
       // fake id and duration and showed the success modal, so the user was told
       // they had earned Flint for a session the backend never recorded.
-      Alert.alert(
-        "Couldn't save your session",
-        "We lost the connection before your session could be saved. Check your network — your progress for this one may not be recorded.",
-      );
+      showEndSessionError(error);
     }
   };
 
@@ -1008,12 +1027,9 @@ export const StudySessionScreen = () => {
       setCompletedSessionData(sessionResult);
       setShowEndModal(false);
       setShowSessionCompleteModal(true);
-    } catch {
+    } catch (error) {
       setShowEndModal(false);
-      Alert.alert(
-        "Couldn't save your session",
-        "We lost the connection before your session could be saved. Check your network — your progress for this one may not be recorded.",
-      );
+      showEndSessionError(error);
     }
   };
 
