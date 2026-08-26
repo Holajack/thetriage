@@ -8,6 +8,8 @@ import {
   Dimensions,
   Alert,
   ImageSourcePropType,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -476,113 +478,121 @@ const TrailBuddySelectionScreen = () => {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.background }]}
     >
-      {/* Back Button */}
-      <TouchableOpacity
-        style={styles.backButton}
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          navigation.goBack();
-        }}
+      {/* Lift the name input above the keyboard — it sits at the bottom of the
+          screen, so without this the keyboard covers the field and the typed
+          name can't be seen (beta feedback: can't verify spelling). */}
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
-        <Ionicons name="chevron-back" size={28} color={theme.text} />
-      </TouchableOpacity>
-
-      {/* Title Section */}
-      <Animated.View
-        entering={FadeInDown.delay(100).duration(500)}
-        style={styles.titleSection}
-      >
-        <Text style={[styles.title, { color: theme.text }]}>
-          Choose A Trail Buddy
-        </Text>
-        <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-          You can change anytime
-        </Text>
-      </Animated.View>
-
-      {/* Parallax Buddy Carousel */}
-      <View style={styles.carouselContainer}>
-        <Animated.FlatList
-          ref={flatListRef}
-          data={TRAIL_BUDDIES}
-          renderItem={renderBuddy}
-          keyExtractor={(item) => item.id}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          snapToInterval={ITEM_WIDTH}
-          decelerationRate="fast"
-          contentContainerStyle={styles.carouselContent}
-          onScroll={scrollHandler}
-          scrollEventThrottle={16}
-          getItemLayout={getItemLayout}
-          initialScrollIndex={getInitialIndex()}
-        />
-      </View>
-
-      {/* Selected Buddy Info */}
-      <View style={styles.buddyInfoSection}>
-        <Text
-          style={[
-            styles.buddyInfoName,
-            { color: TRAIL_BUDDIES[selectedIndex]?.color || theme.text },
-          ]}
-        >
-          {TRAIL_BUDDIES[selectedIndex]?.name}
-        </Text>
-        <Text style={[styles.buddyInfoDesc, { color: theme.textSecondary }]}>
-          {TRAIL_BUDDIES[selectedIndex]?.description}
-        </Text>
-        {TRAIL_BUDDIES[selectedIndex] &&
-          isBuddyLocked(tier, TRAIL_BUDDIES[selectedIndex].id) && (
-            <View style={styles.eliteBadge}>
-              <Ionicons name="lock-closed" size={14} color="#FFD700" />
-              <Text style={styles.eliteBadgeText}>
-                {TRAIL_BUDDIES[selectedIndex].id === "lion"
-                  ? "ELITE ONLY"
-                  : "PRO OR ELITE"}
-              </Text>
-            </View>
-          )}
-      </View>
-
-      {/* Name Input */}
-      <Animated.View
-        entering={FadeInDown.delay(300).duration(500)}
-        style={styles.inputSection}
-      >
-        <TextInput
-          style={[
-            styles.nameInput,
-            {
-              color: theme.text,
-              borderBottomColor: theme.textSecondary + "50",
-            },
-          ]}
-          placeholder="Give a name"
-          placeholderTextColor={theme.textSecondary + "80"}
-          value={buddyName}
-          onChangeText={setBuddyName}
-          autoCapitalize="words"
-          maxLength={20}
-        />
-      </Animated.View>
-
-      {/* Start Button */}
-      <Animated.View
-        entering={FadeInDown.delay(400).duration(500)}
-        style={styles.buttonSection}
-      >
+        {/* Back Button */}
         <TouchableOpacity
-          style={[styles.startButton, { backgroundColor: theme.primary }]}
-          onPress={handleStart}
-          disabled={saving}
-          activeOpacity={0.8}
+          style={styles.backButton}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            navigation.goBack();
+          }}
         >
-          <Text style={styles.startButtonText}>
-            {saving ? "Saving..." : "Start"}
-          </Text>
+          <Ionicons name="chevron-back" size={28} color={theme.text} />
         </TouchableOpacity>
-      </Animated.View>
+
+        {/* Title Section */}
+        <Animated.View
+          entering={FadeInDown.delay(100).duration(500)}
+          style={styles.titleSection}
+        >
+          <Text style={[styles.title, { color: theme.text }]}>
+            Choose A Trail Buddy
+          </Text>
+          <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
+            You can change anytime
+          </Text>
+        </Animated.View>
+
+        {/* Parallax Buddy Carousel */}
+        <View style={styles.carouselContainer}>
+          <Animated.FlatList
+            ref={flatListRef}
+            data={TRAIL_BUDDIES}
+            renderItem={renderBuddy}
+            keyExtractor={(item) => item.id}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            snapToInterval={ITEM_WIDTH}
+            decelerationRate="fast"
+            contentContainerStyle={styles.carouselContent}
+            onScroll={scrollHandler}
+            scrollEventThrottle={16}
+            getItemLayout={getItemLayout}
+            initialScrollIndex={getInitialIndex()}
+          />
+        </View>
+
+        {/* Selected Buddy Info */}
+        <View style={styles.buddyInfoSection}>
+          <Text
+            style={[
+              styles.buddyInfoName,
+              { color: TRAIL_BUDDIES[selectedIndex]?.color || theme.text },
+            ]}
+          >
+            {TRAIL_BUDDIES[selectedIndex]?.name}
+          </Text>
+          <Text style={[styles.buddyInfoDesc, { color: theme.textSecondary }]}>
+            {TRAIL_BUDDIES[selectedIndex]?.description}
+          </Text>
+          {TRAIL_BUDDIES[selectedIndex] &&
+            isBuddyLocked(tier, TRAIL_BUDDIES[selectedIndex].id) && (
+              <View style={styles.eliteBadge}>
+                <Ionicons name="lock-closed" size={14} color="#FFD700" />
+                <Text style={styles.eliteBadgeText}>
+                  {TRAIL_BUDDIES[selectedIndex].id === "lion"
+                    ? "ELITE ONLY"
+                    : "PRO OR ELITE"}
+                </Text>
+              </View>
+            )}
+        </View>
+
+        {/* Name Input */}
+        <Animated.View
+          entering={FadeInDown.delay(300).duration(500)}
+          style={styles.inputSection}
+        >
+          <TextInput
+            style={[
+              styles.nameInput,
+              {
+                color: theme.text,
+                borderBottomColor: theme.textSecondary + "50",
+              },
+            ]}
+            placeholder="Give a name"
+            placeholderTextColor={theme.textSecondary + "80"}
+            value={buddyName}
+            onChangeText={setBuddyName}
+            autoCapitalize="words"
+            maxLength={20}
+          />
+        </Animated.View>
+
+        {/* Start Button */}
+        <Animated.View
+          entering={FadeInDown.delay(400).duration(500)}
+          style={styles.buttonSection}
+        >
+          <TouchableOpacity
+            style={[styles.startButton, { backgroundColor: theme.primary }]}
+            onPress={handleStart}
+            disabled={saving}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.startButtonText}>
+              {saving ? "Saving..." : "Start"}
+            </Text>
+          </TouchableOpacity>
+        </Animated.View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
