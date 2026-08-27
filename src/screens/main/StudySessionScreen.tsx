@@ -1628,6 +1628,8 @@ export const StudySessionScreen = () => {
                         styles.musicButton,
                         { backgroundColor: environmentColors.primary },
                       ]}
+                      accessibilityRole="button"
+                      accessibilityLabel="Focus sounds"
                       onPress={() => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                         openMusicModal();
@@ -1650,6 +1652,9 @@ export const StudySessionScreen = () => {
                           styles.endSessionButton,
                           { backgroundColor: environmentColors.primary },
                         ]}
+                        accessibilityRole="button"
+                        accessibilityLabel="End session"
+                        accessibilityHint="Press and hold to end this session and return home"
                         onPressIn={handleLongPressStart}
                         onPressOut={handleLongPressEnd}
                         onPress={() => {
@@ -1666,6 +1671,9 @@ export const StudySessionScreen = () => {
                           color={environmentColors.card}
                         />
                       </TouchableOpacity>
+                      <Text style={styles.endSessionButtonLabel}>
+                        Hold to end
+                      </Text>
                     </View>
                   </View>
 
@@ -1675,6 +1683,8 @@ export const StudySessionScreen = () => {
                       styles.taskInfoIcon,
                       { backgroundColor: environmentColors.primary },
                     ]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Task details"
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                       setShowTaskInfo(true);
@@ -1718,6 +1728,8 @@ export const StudySessionScreen = () => {
                           styles.musicButton,
                           { backgroundColor: environmentColors.primary },
                         ]}
+                        accessibilityRole="button"
+                        accessibilityLabel="Focus sounds"
                         onPress={() => {
                           Haptics.impactAsync(
                             Haptics.ImpactFeedbackStyle.Medium,
@@ -1758,6 +1770,9 @@ export const StudySessionScreen = () => {
                           styles.endSessionButton,
                           { backgroundColor: environmentColors.primary },
                         ]}
+                        accessibilityRole="button"
+                        accessibilityLabel="End session"
+                        accessibilityHint="Press and hold to end this session and return home"
                         onPressIn={handleLongPressStart}
                         onPressOut={handleLongPressEnd}
                         onPress={() => {
@@ -1774,6 +1789,9 @@ export const StudySessionScreen = () => {
                           color={environmentColors.card}
                         />
                       </TouchableOpacity>
+                      <Text style={styles.endSessionButtonLabel}>
+                        Hold to end
+                      </Text>
                     </View>
                   </View>
 
@@ -1783,6 +1801,8 @@ export const StudySessionScreen = () => {
                       styles.taskInfoIcon,
                       { backgroundColor: environmentColors.primary },
                     ]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Task details"
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                       setShowTaskInfo(true);
@@ -3557,6 +3577,20 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 5,
+  },
+  // Sits under the X without changing the top bar's layout, so the way out of
+  // a session is readable without tapping first.
+  endSessionButtonLabel: {
+    position: "absolute",
+    top: 54,
+    width: 90,
+    textAlign: "center",
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#FFFFFF",
+    textShadowColor: "rgba(0, 0, 0, 0.55)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   // Centered liquid glass popup overlay
   liquidGlassOverlay: {
