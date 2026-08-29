@@ -45,8 +45,6 @@ const BUDDY_SPRITESHEETS: Record<string, ImageSourcePropType> = {
 
 // Resting spritesheets — same format (28 frames, 200x200 each, 5600x200 total)
 const BUDDY_RESTING_SPRITESHEETS: Record<string, ImageSourcePropType> = {
-  // No dedicated idle/resting animation exists yet for Patrick — reusing the
-  // walking cycle here (rather than another animal) until one is generated.
   patrick: require("../../assets/trail-buddies/patrick_resting_optimized.webp"),
   fox: require("../../assets/trail-buddies/fox_resting_optimized.webp"),
   deer: require("../../assets/trail-buddies/deer_resting_optimized.webp"),
@@ -55,6 +53,14 @@ const BUDDY_RESTING_SPRITESHEETS: Record<string, ImageSourcePropType> = {
   bear: require("../../assets/trail-buddies/bear_resting_optimized.webp"),
   lion: require("../../assets/trail-buddies/lion_walking_optimized.webp"),
 };
+
+// Bear, fox, wolf and deer have real lying-down sleep cycles. Patrick's and
+// Nora's "resting" sheets are upright walk cycles, and the lion has no resting
+// sheet at all — so for those three we hold a single standing frame instead of
+// playing the cycle. A buddy that keeps walking through a screen that says
+// "Resting" reads as a bug (a tester reported exactly that). Remove a buddy
+// from this set as soon as genuine resting art ships for it.
+const BUDDIES_WITHOUT_RESTING_ART = new Set(["patrick", "nora", "lion"]);
 
 // Parallax layer speeds (duration for full screen scroll)
 const PATH_SCROLL_DURATION = 6000; // Slower path - synced with walking animation
@@ -104,7 +110,19 @@ const TrailBuddySprite = ({
   const displaySize =
     mode === "resting" ? REST_DISPLAY_SIZE : WALK_DISPLAY_SIZE;
 
+  // Only hold still when this buddy's resting sheet is really a walk cycle;
+  // unknown buddy types fall back to the bear, which has proper resting art.
+  const holdStill =
+    mode === "resting" &&
+    !!spritesheets[buddyType] &&
+    BUDDIES_WITHOUT_RESTING_ART.has(buddyType);
+
   useEffect(() => {
+    if (holdStill) {
+      setCurrentFrame(0);
+      return;
+    }
+
     // Normal: Walking 70ms (~2s), Resting 140ms (~4s)
     // Reduce motion: Walking 280ms (~8s gentle), Resting 300ms (~8.4s very slow)
     const FRAME_DURATION = reduceMotion
@@ -119,7 +137,7 @@ const TrailBuddySprite = ({
     }, FRAME_DURATION);
 
     return () => clearInterval(interval);
-  }, [mode, reduceMotion]);
+  }, [mode, reduceMotion, holdStill]);
 
   // Calculate the offset to show the current frame (scaled to display size)
   const displayScale = displaySize / FRAME_HEIGHT;
