@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { getCurrentUser, getCurrentUserOrNull, areFriends } from "./users";
 import { hasFullMessaging } from "./tiers";
+import { isProtectedMinor } from "./age";
 
 export const listConversations = query({
   args: {},
@@ -115,8 +116,15 @@ export const send = mutation({
 
     // Who may you DM? Basic = friends only; Pro/Elite = anyone who allows it.
     // This was enforced nowhere — any user could DM any other user by id.
+    // Teen accounts (and accounts with no confirmed age) message friends only,
+    // in both directions, whatever plan either side is on.
     const friends = await areFriends(ctx, user._id, args.recipientId);
     if (!friends) {
+      if (isProtectedMinor(user) || isProtectedMinor(recipient)) {
+        throw new Error(
+          "Teen accounts can only message friends. Add them as a friend first.",
+        );
+      }
       if (!hasFullMessaging(user.subscriptionTier)) {
         throw new Error(
           "On your plan you can message friends. Add them as a friend, or upgrade to message anyone.",

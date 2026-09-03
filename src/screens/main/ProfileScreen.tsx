@@ -29,6 +29,9 @@ import { useConvexProfile } from "../../hooks/useConvex";
 import { getUserBadges } from "../../utils/achievementManager";
 import { Badge } from "../../data/achievements";
 import QRCode from "react-native-qrcode-svg";
+import { useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
+import { buildProfileQr } from "../../utils/profileQr";
 import Animated, {
   FadeIn,
   FadeInUp,
@@ -190,7 +193,7 @@ const BuddyWalkingSprite = ({
 const ProfileScreen = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<MainTabParamList>>();
-  const { user } = useAuth();
+  const { user, ageBand } = useAuth();
   const { data: userData, refetch } = useUserAppData();
   const { theme, isDark } = useTheme();
   const {
@@ -204,6 +207,26 @@ const ProfileScreen = () => {
   const [saving, setSaving] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
+  const createInviteCode = useMutation(api.friends.createInviteCode);
+  const [inviteCode, setInviteCode] = useState<string | undefined>(undefined);
+
+  // A teen account can only be friended through its QR code, so the code
+  // carries a live invite. Adults' codes stay plain.
+  useEffect(() => {
+    if (!showQRModal || ageBand === "adult") return;
+    let cancelled = false;
+    createInviteCode().then(
+      (result) => {
+        if (!cancelled) setInviteCode(result.code);
+      },
+      () => {
+        if (!cancelled) setInviteCode(undefined);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [showQRModal, ageBand, createInviteCode]);
   const [editedName, setEditedName] = useState("");
   const [editedUsername, setEditedUsername] = useState("");
   const [editedUniversity, setEditedUniversity] = useState("");
@@ -1235,11 +1258,11 @@ const ProfileScreen = () => {
 
             <View style={styles.qrCodeContainer}>
               <QRCode
-                value={JSON.stringify({
+                value={buildProfileQr({
                   userId: user?.id,
                   username: profile?.username,
                   fullName: profile?.full_name,
-                  profileUrl: `hikewise://profile/${user?.id}`,
+                  inviteCode,
                 })}
                 size={250}
                 backgroundColor="white"

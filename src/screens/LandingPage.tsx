@@ -222,7 +222,7 @@ const LandingPage: React.FC = () => {
       }).start(() => {
         setHasSeenLanding(true);
         // Navigate directly to onboarding flow — starts with account creation
-        navigation.navigate("Onboarding", { screen: "AccountCreation" });
+        navigation.navigate("Onboarding", { screen: "AgeGate" });
       });
     });
   };

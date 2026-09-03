@@ -9,6 +9,13 @@ import {
 } from "./users";
 import { getStudyRoomLimit } from "./tiers";
 import { evaluateAchievements } from "./achievements";
+import {
+  clampVisibilityForMinors,
+  isAvatarVisible,
+  isProtectedMinor,
+  roomAudienceFor,
+} from "./age";
+import { randomCode } from "./codes";
 
 /**
  * Study rooms are a membership boundary, not a public bulletin board.
@@ -29,13 +36,16 @@ async function publicMember(
   if (!user) return null;
   const isSelf = viewerId === user._id;
   const isFriend = viewerId ? await areFriends(ctx, viewerId, user._id) : false;
+  const visibility = clampVisibilityForMinors(user);
   return {
     _id: user._id,
     username: user.username,
-    fullName: isFieldVisible(user.fullNameVisibility, isSelf, isFriend)
+    fullName: isFieldVisible(visibility.fullNameVisibility, isSelf, isFriend)
       ? user.fullName
       : undefined,
-    avatarUrl: user.avatarUrl,
+    avatarUrl: isAvatarVisible(user, isSelf, isFriend)
+      ? user.avatarUrl
+      : undefined,
     // Deliberately NOT clerkId or email.
   };
 }
@@ -141,9 +151,13 @@ export const list = query({
       .withIndex("by_isActive", (q) => q.eq("isActive", true))
       .collect();
 
+    // Public rooms are browsed by age group. Rooms you are in always show.
+    const audience = roomAudienceFor(user);
     const visible: Doc<"studyRooms">[] = [];
     for (const room of rooms) {
-      if (room.isPublic || (await isMember(ctx, room._id, user._id))) {
+      const openToMe =
+        room.isPublic === true && (room.audience ?? "adult") === audience;
+      if (openToMe || (await isMember(ctx, room._id, user._id))) {
         visible.push(room);
       }
     }
@@ -283,19 +297,9 @@ export const getPendingInvitations = query({
 // Mutations
 // ============================================================
 
-function generateRoomCode(): string {
-  // Ambiguous glyphs (0/O, 1/I) removed — codes get read aloud and typed in.
-  const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-  let code = "";
-  for (let i = 0; i < 6; i++) {
-    code += alphabet[Math.floor(Math.random() * alphabet.length)];
-  }
-  return code;
-}
-
 async function uniqueRoomCode(ctx: MutationCtx): Promise<string> {
   for (let attempt = 0; attempt < 10; attempt++) {
-    const code = generateRoomCode();
+    const code = randomCode(6);
     const clash = await ctx.db
       .query("studyRooms")
       .withIndex("by_roomCode", (q) => q.eq("roomCode", code))
@@ -349,6 +353,7 @@ export const create = mutation({
       description: args.description,
       ownerId: user._id,
       isPublic: args.isPublic ?? true,
+      audience: roomAudienceFor(user),
       maxParticipants,
       currentParticipants: 1,
       roomCode: await uniqueRoomCode(ctx),
@@ -393,6 +398,9 @@ export const join = mutation({
         .first();
       const invited = invite && (invite.status ?? "pending") !== "declined";
       if (!invited) throw new Error("This room is private");
+    }
+    if (room.isPublic && (room.audience ?? "adult") !== roomAudienceFor(user)) {
+      throw new Error("This room is for a different age group");
     }
 
     // Capacity is enforced here, not merely displayed.
@@ -619,6 +627,14 @@ export const sendInvitation = mutation({
     }
     const recipient = await ctx.db.get(args.recipientId);
     if (!recipient) throw new Error("That person no longer exists");
+
+    // Teens are invited by friends only; a stranger cannot pull them into a room.
+    if (
+      isProtectedMinor(recipient) &&
+      !(await areFriends(ctx, user._id, recipient._id))
+    ) {
+      throw new Error("You can only invite friends to a room");
+    }
 
     if (await isMember(ctx, room._id, args.recipientId)) {
       throw new Error("They are already in this room");

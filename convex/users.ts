@@ -8,6 +8,13 @@ import {
 } from "./_generated/server";
 import { Id, Doc } from "./_generated/dataModel";
 import { normalizeTier, tierRank } from "./tiers";
+import {
+  ageBandFromBirth,
+  clampVisibilityForMinors,
+  isAvatarVisible,
+  isProtectedMinor,
+  isValidBirthMonthYear,
+} from "./age";
 
 /** Defaults applied to every newly created user record.
  * New accounts are "free" until a subscription is active — the 7-day free
@@ -158,8 +165,16 @@ async function readUserWithVisibility(
   const isFriend = viewer
     ? await areFriends(ctx, viewer._id, target._id)
     : false;
-  const visible = applyProfileVisibility(target, isSelf, isFriend);
-  return isSelf ? visible : stripSensitiveFields(visible);
+  const visible = applyProfileVisibility(
+    clampVisibilityForMinors(target),
+    isSelf,
+    isFriend,
+  );
+  if (isSelf) return visible;
+  const stripped = stripSensitiveFields(visible);
+  return isAvatarVisible(target, isSelf, isFriend)
+    ? stripped
+    : { ...stripped, avatarUrl: undefined };
 }
 
 // --- Queries ---
@@ -251,9 +266,48 @@ export const updateUser = mutation({
     for (const [key, value] of Object.entries(updates)) {
       if (value !== undefined) cleanUpdates[key] = value;
     }
+    dropLocationForMinors(user, cleanUpdates);
     if (Object.keys(cleanUpdates).length > 0) {
       await ctx.db.patch(user._id, cleanUpdates);
     }
+  },
+});
+
+/** Teen accounts have no location field; a stale client sending one is ignored. */
+function dropLocationForMinors(
+  user: Doc<"users">,
+  updates: Record<string, unknown>,
+) {
+  if ("location" in updates && isProtectedMinor(user)) {
+    delete updates.location;
+  }
+}
+
+/**
+ * Birth month and year, written exactly once. Under the minimum age nothing is
+ * stored: the client removes the account instead (COPPA: keep no data we know
+ * belongs to a child).
+ */
+export const setBirthMonthYear = mutation({
+  args: { birthYear: v.number(), birthMonth: v.number() },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    if (user.birthYear !== undefined) {
+      throw new Error(
+        "Your birth date is already on file. Contact support to change it.",
+      );
+    }
+    if (!isValidBirthMonthYear(args.birthYear, args.birthMonth)) {
+      throw new Error("Enter a real month and year");
+    }
+    const band = ageBandFromBirth(args.birthYear, args.birthMonth);
+    if (band === "under14") return { band };
+    await ctx.db.patch(user._id, {
+      birthYear: args.birthYear,
+      birthMonth: args.birthMonth,
+      ageConfirmedAt: new Date().toISOString(),
+    });
+    return { band };
   },
 });
 
@@ -299,6 +353,7 @@ export const updateProfile = mutation({
     for (const [key, value] of Object.entries(args)) {
       if (value !== undefined) cleanUpdates[key] = value;
     }
+    dropLocationForMinors(user, cleanUpdates);
     if (Object.keys(cleanUpdates).length > 0) {
       await ctx.db.patch(user._id, cleanUpdates);
     }
@@ -416,6 +471,9 @@ export const searchUsers = query({
     if (searchTerm.length < 2) {
       return [];
     }
+    // Teens are never listed, and a teen account does not search at all:
+    // friends are added in person, by QR code or invite link.
+    if (currentUser && isProtectedMinor(currentUser)) return [];
 
     // Get all users and filter by username or fullName
     const allUsers = await ctx.db.query("users").collect();
@@ -423,6 +481,7 @@ export const searchUsers = query({
     const results = allUsers.filter((user) => {
       // Don't include current user in search results
       if (currentUser && user._id === currentUser._id) return false;
+      if (isProtectedMinor(user)) return false;
 
       const username = (user.username ?? "").toLowerCase();
       const fullName = (user.fullName ?? "").toLowerCase();

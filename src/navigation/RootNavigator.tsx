@@ -28,6 +28,7 @@ import { PatrickSpeakScreen } from "../screens/main/PatrickScreen";
 import LandingPage from "../screens/LandingPage";
 import SessionHistoryScreen from "../screens/main/SessionHistoryScreen";
 import NineLayerPreviewScreen from "../screens/main/NineLayerPreviewScreen";
+import AgeCheckScreen from "../screens/main/AgeCheckScreen";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -36,8 +37,13 @@ export const RootNavigator = () => {
   const { isLoaded: isClerkLoaded, isSignedIn: clerkSignedIn } = useClerkAuth();
 
   // Use legacy AuthContext for onboarding state and fallback auth (will be migrated to Convex in Phase 4)
-  const { hasCompletedOnboarding, justLoggedIn, clearJustLoggedIn, user } =
-    useAuth();
+  const {
+    hasCompletedOnboarding,
+    justLoggedIn,
+    clearJustLoggedIn,
+    user,
+    needsAgeCheck,
+  } = useAuth();
 
   // Fall back to legacy auth if Clerk isn't providing sign-in state
   const isSignedIn = clerkSignedIn ?? user !== null;
@@ -89,10 +95,14 @@ export const RootNavigator = () => {
           }),
         );
       } else {
+        // A signed-in account skips the age gate here; accounts with no age
+        // on file are caught by the AgeCheck overlay below instead.
         navigationRef.current.dispatch(
           CommonActions.reset({
             index: 0,
-            routes: [{ name: "Onboarding" }],
+            routes: [
+              { name: "Onboarding", params: { screen: "AccountCreation" } },
+            ],
           }),
         );
       }
@@ -193,6 +203,11 @@ export const RootNavigator = () => {
   // The LandingPage will handle its own animations
   if (isInitialLoading) {
     return null; // Minimal flash - Clerk loads very fast
+  }
+
+  // Nothing in the app is reachable until the account has an age on file.
+  if (needsAgeCheck) {
+    return <AgeCheckScreen />;
   }
 
   return (

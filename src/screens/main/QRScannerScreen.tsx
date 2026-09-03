@@ -19,11 +19,13 @@ import {
   sendQRFriendRequest,
   waitForQRAcceptance,
 } from "../../utils/qrAcceptanceService";
+import { parseProfileQr } from "../../utils/profileQr";
 import { getUserProfile } from "../../utils/convexFriendRequestService";
 import { ShimmerLoader } from "../../components/premium/ShimmerLoader";
 
 interface ScannedUser {
   userId: string;
+  inviteCode?: string;
   username: string;
   fullName: string;
   avatarUrl?: string;
@@ -72,26 +74,9 @@ const QRScannerScreen = () => {
     setIsFromGallery(false); // Camera scan, not gallery
 
     try {
-      let userId: string | null = null;
+      const payload = parseProfileQr(data);
 
-      // Try to parse as JSON first (our QR code format)
-      try {
-        const qrData = JSON.parse(data);
-        userId = qrData.userId;
-      } catch (jsonError) {
-        // If JSON parse fails, check if it's a deep link URL
-        if (data.startsWith("hikewise://profile/")) {
-          userId = data.replace("hikewise://profile/", "");
-        } else if (data.includes("profile/")) {
-          // Handle other URL formats
-          const match = data.match(/profile\/([a-zA-Z0-9-]+)/);
-          if (match) {
-            userId = match[1];
-          }
-        }
-      }
-
-      if (!userId) {
+      if (!payload) {
         Alert.alert(
           "Invalid QR Code",
           "This QR code does not contain valid user information.",
@@ -101,7 +86,7 @@ const QRScannerScreen = () => {
       }
 
       // Fetch user profile
-      await fetchUserProfile(userId);
+      await fetchUserProfile(payload.userId, payload.inviteCode);
     } catch (error) {
       Alert.alert("Error", "Could not process this QR code. Please try again.");
       setScanned(false);
@@ -141,7 +126,7 @@ const QRScannerScreen = () => {
     }
   };
 
-  const fetchUserProfile = async (userId: string) => {
+  const fetchUserProfile = async (userId: string, inviteCode?: string) => {
     setLoading(true);
     try {
       // Fetch profile using Convex service
@@ -158,6 +143,7 @@ const QRScannerScreen = () => {
 
       setScannedUser({
         userId: profileData.id || profileData.user_id,
+        inviteCode,
         username: profileData.username || "user",
         fullName: profileData.full_name || "User",
         avatarUrl: profileData.avatar_url,
@@ -182,6 +168,7 @@ const QRScannerScreen = () => {
       const result = await sendQRFriendRequest(
         scannedUser.userId,
         isFromGallery,
+        scannedUser.inviteCode,
       );
 
       if (!result.success) {

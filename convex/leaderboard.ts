@@ -1,3 +1,4 @@
+import { clampVisibilityForMinors, isAvatarVisible } from "./age";
 import { v } from "convex/values";
 import {
   query,
@@ -71,12 +72,18 @@ export const getGlobal = query({
     for (const stat of limited) {
       const user = await ctx.db.get(stat.userId);
       let showName = false;
+      let showAvatar = false;
       if (user) {
         const isSelf = viewer?._id === user._id;
         const isFriend = viewer
           ? await areFriends(ctx, viewer._id, user._id)
           : false;
-        showName = isFieldVisible(user.fullNameVisibility, isSelf, isFriend);
+        showName = isFieldVisible(
+          clampVisibilityForMinors(user).fullNameVisibility,
+          isSelf,
+          isFriend,
+        );
+        showAvatar = isAvatarVisible(user, isSelf, isFriend);
       }
       enriched.push({
         ...stat,
@@ -85,7 +92,8 @@ export const getGlobal = query({
               _id: user._id,
               username: user.username,
               fullName: showName ? user.fullName : undefined,
-              avatarUrl: user.avatarUrl,
+              avatarUrl: showAvatar ? user.avatarUrl : undefined,
+              trailBuddyType: user.trailBuddyType,
             }
           : null,
       });
