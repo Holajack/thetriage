@@ -10,9 +10,11 @@
 
 import type * as achievementRules from "../achievementRules.js";
 import type * as achievements from "../achievements.js";
+import type * as age from "../age.js";
 import type * as aiInsights from "../aiInsights.js";
 import type * as aiShared from "../aiShared.js";
 import type * as appConfig from "../appConfig.js";
+import type * as codes from "../codes.js";
 import type * as crons from "../crons.js";
 import type * as ebooks from "../ebooks.js";
 import type * as events from "../events.js";
@@ -61,9 +63,11 @@ import type {
 declare const fullApi: ApiFromModules<{
   achievementRules: typeof achievementRules;
   achievements: typeof achievements;
+  age: typeof age;
   aiInsights: typeof aiInsights;
   aiShared: typeof aiShared;
   appConfig: typeof appConfig;
+  codes: typeof codes;
   crons: typeof crons;
   ebooks: typeof ebooks;
   events: typeof events;

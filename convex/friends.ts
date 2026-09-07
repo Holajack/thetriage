@@ -1,6 +1,8 @@
 import { v } from "convex/values";
-import { query, mutation, MutationCtx } from "./_generated/server";
+import { query, mutation, MutationCtx, QueryCtx } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
+import { ageBandOf, isProtectedMinor } from "./age";
+import { randomCode } from "./codes";
 import {
   getCurrentUser,
   getCurrentUserOrNull,
@@ -131,10 +133,66 @@ export const getRequestStatus = query({
   },
 });
 
+const INVITE_CODE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+async function isLiveInviteCode(
+  ctx: QueryCtx,
+  ownerId: Id<"users">,
+  code: string,
+): Promise<boolean> {
+  const invite = await ctx.db
+    .query("friendInviteCodes")
+    .withIndex("by_code", (q) => q.eq("code", code))
+    .unique();
+  return Boolean(
+    invite && invite.userId === ownerId && invite.expiresAt > Date.now(),
+  );
+}
+
+async function uniqueInviteCode(ctx: MutationCtx): Promise<string> {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const code = randomCode(10);
+    const clash = await ctx.db
+      .query("friendInviteCodes")
+      .withIndex("by_code", (q) => q.eq("code", code))
+      .unique();
+    if (!clash) return code;
+  }
+  throw new Error("Could not allocate an invite code, please try again");
+}
+
+/** The code behind the caller's QR code and invite link. Reused while live. */
+export const createInviteCode = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getCurrentUser(ctx);
+    const now = Date.now();
+    const mine = await ctx.db
+      .query("friendInviteCodes")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const invite of mine) {
+      if (invite.expiresAt > now) {
+        return { code: invite.code, expiresAt: invite.expiresAt };
+      }
+      await ctx.db.delete(invite._id);
+    }
+    const expiresAt = now + INVITE_CODE_TTL_MS;
+    const code = await uniqueInviteCode(ctx);
+    await ctx.db.insert("friendInviteCodes", {
+      userId: user._id,
+      code,
+      expiresAt,
+    });
+    return { code, expiresAt };
+  },
+});
+
 export const sendRequest = mutation({
   args: {
     recipientId: v.id("users"),
     message: v.optional(v.string()),
+    inviteCode: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const user = await getCurrentUser(ctx);
@@ -147,6 +205,18 @@ export const sendRequest = mutation({
 
     if (await areFriends(ctx, user._id, args.recipientId)) {
       throw new Error("You are already friends");
+    }
+
+    // Only another teen may friend a teen directly. Anyone else (an adult, or
+    // an account with no age on file) needs a code the teen handed out: their
+    // QR code or invite link. Search never surfaces teens.
+    if (ageBandOf(user) !== "teen" && isProtectedMinor(recipient)) {
+      const code = args.inviteCode?.trim().toUpperCase();
+      if (!code || !(await isLiveInviteCode(ctx, recipient._id, code))) {
+        throw new Error(
+          "This person accepts friend requests through their QR code or invite link only",
+        );
+      }
     }
 
     // Don't stack duplicate requests in either direction.

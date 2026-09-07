@@ -17,6 +17,8 @@ import {
   identifyUser as rcIdentifyUser,
   logOutRevenueCat,
 } from "../services/revenuecat";
+import { ageBandOf, type AgeBand } from "../../convex/age";
+import { clearPendingBirth, readPendingBirth } from "../utils/ageGate";
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -44,6 +46,8 @@ interface AuthContextType {
   isRecentLogin: () => Promise<boolean>;
   setLastLoginTime: () => Promise<void>;
   isOffline: boolean;
+  ageBand: AgeBand;
+  needsAgeCheck: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -140,6 +144,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const initializeUserMutation = useMutation(
     api.initUser.initializeCurrentUser,
   );
+  const setBirthMonthYearMutation = useMutation(api.users.setBirthMonthYear);
 
   // Local state
   const [justLoggedIn, setJustLoggedIn] = useState(false);
@@ -149,6 +154,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isOffline, setIsOffline] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
+  // null until AsyncStorage has been read; then whether the age gate left a
+  // birth month and year waiting to be written to the new account.
+  const [hasPendingBirth, setHasPendingBirth] = useState<boolean | null>(null);
 
   // Derived authentication state (always true in test mode)
   const isAuthenticated = isTestMode ? true : (isSignedIn ?? false);
@@ -494,6 +502,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     initializeUser();
   }, [isSignedIn, clerkLoaded, convexUser]);
 
+  // Apply the birth month and year captured at the age gate once the account
+  // exists. If the write fails, the in-app age check takes over.
+  useEffect(() => {
+    if (isTestMode || !convexUser || hasPendingBirth !== true) return;
+    let cancelled = false;
+    const settle = () => {
+      if (!cancelled) setHasPendingBirth(false);
+    };
+    const apply = async () => {
+      if (convexUser.birthYear === undefined) {
+        const pending = await readPendingBirth();
+        if (pending) await setBirthMonthYearMutation(pending);
+      }
+      await clearPendingBirth();
+    };
+    apply().then(settle, settle);
+    return () => {
+      cancelled = true;
+    };
+  }, [convexUser, hasPendingBirth, setBirthMonthYearMutation]);
+
   // Update hasCompletedOnboarding when onboarding data changes
   // Guard with value comparison to prevent unnecessary state updates
   // In test mode, onboarding is always complete
@@ -515,6 +544,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       await loadHasSeenLanding();
       await loadHasSeenSplashAnimation();
       await checkNetworkConnectivity();
+      const pending = await readPendingBirth().catch(() => null);
+      setHasPendingBirth(pending !== null);
       setIsInitializing(false);
     };
 
@@ -543,6 +574,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     ? isInitializing
     : isInitializing || !clerkLoaded;
 
+  const ageBand: AgeBand = isTestMode
+    ? "adult"
+    : convexUser
+      ? ageBandOf(convexUser)
+      : "unknown";
+  // A signed-in account with no age on file, and nothing waiting to be
+  // written, answers the age check before anything else.
+  const needsAgeCheck =
+    !isTestMode &&
+    isAuthenticated &&
+    Boolean(convexUser) &&
+    convexUser?.birthYear === undefined &&
+    hasPendingBirth === false;
+
   const value = useMemo(
     () => ({
       isAuthenticated,
@@ -566,6 +611,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       isRecentLogin,
       setLastLoginTime,
       isOffline,
+      ageBand,
+      needsAgeCheck,
     }),
     [
       isAuthenticated,
@@ -582,6 +629,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       isRecentLogin,
       setLastLoginTime,
       isOffline,
+      ageBand,
+      needsAgeCheck,
       setHasSeenLanding,
       setHasSeenSplashAnimation,
       refreshUserData,

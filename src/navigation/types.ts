@@ -11,6 +11,7 @@ export type AuthStackParamList = {
 };
 
 export type OnboardingStackParamList = {
+  AgeGate: undefined;
   AccountCreation: undefined;
   EmailVerification: {
     email: string;

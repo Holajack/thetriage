@@ -414,7 +414,7 @@ const CommunityScreen = () => {
   const fadedPrimary = theme.primary + "22"; // 13% opacity hex fallback
 
   // Get current user from auth context
-  const { user } = useAuth();
+  const { user, ageBand } = useAuth();
 
   useEffect(() => {
     setCurrentUser(user ?? null);
@@ -1354,12 +1354,16 @@ const CommunityScreen = () => {
                   color={theme.text + "33"}
                 />
                 <Text style={[styles.emptyText, { color: theme.text }]}>
-                  No users found
+                  {ageBand === "adult"
+                    ? "No users found"
+                    : "Search is off for teen accounts"}
                 </Text>
                 <Text
                   style={[styles.emptySubtext, { color: theme.text + "99" }]}
                 >
-                  Try searching for a different username or name
+                  {ageBand === "adult"
+                    ? "Try searching for a different username or name"
+                    : "Add friends in person: scan their QR code, or share yours."}
                 </Text>
               </View>
               <TouchableOpacity

@@ -25,6 +25,7 @@ export interface QRScanNotification {
 export async function sendQRFriendRequest(
   recipientId: string,
   isGalleryUpload: boolean = false,
+  inviteCode?: string,
 ): Promise<{
   success: boolean;
   error?: string;
@@ -32,8 +33,9 @@ export async function sendQRFriendRequest(
   requiresWait?: boolean;
 }> {
   try {
-    // Send friend request without message (column doesn't exist)
-    const result = await sendFriendRequest(recipientId);
+    // The invite code (carried by a teen's QR code) is what lets an adult
+    // send the request at all; there is no message column.
+    const result = await sendFriendRequest(recipientId, undefined, inviteCode);
 
     if (!result.success) {
       return result;

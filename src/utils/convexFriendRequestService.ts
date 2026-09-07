@@ -47,12 +47,14 @@ export interface Friend {
 export async function sendFriendRequest(
   recipientId: string,
   message?: string,
+  inviteCode?: string,
 ): Promise<{ success: boolean; error?: string; data?: FriendRequest }> {
   try {
     const client = getConvexClient();
     const requestId = await client.mutation(api.friends.sendRequest, {
       recipientId: recipientId as Id<"users">,
       message,
+      inviteCode,
     });
     return {
       success: true,

@@ -60,6 +60,10 @@ export default defineSchema({
     // invited user from an organic one.
     signupSource: v.optional(v.string()), // "invite" | "qr" | "organic" | campaign tag
     referredByUserId: v.optional(v.id("users")),
+    // Age policy (see age.ts): month and year only, written once at signup.
+    birthYear: v.optional(v.number()),
+    birthMonth: v.optional(v.number()),
+    ageConfirmedAt: v.optional(v.string()),
   })
     .index("by_clerkId", ["clerkId"])
     .index("by_email", ["email"])
@@ -256,6 +260,9 @@ export default defineSchema({
     sessionDuration: v.optional(v.number()),
     breakDuration: v.optional(v.number()),
     isActive: v.optional(v.boolean()),
+    // Public rooms are browsed by age group: teens see teen rooms, adults see
+    // adult rooms. Missing = adult (rooms created before the age policy).
+    audience: v.optional(v.union(v.literal("teen"), v.literal("adult"))),
   })
     .index("by_ownerId", ["ownerId"])
     .index("by_roomCode", ["roomCode"])
@@ -313,6 +320,17 @@ export default defineSchema({
     .index("by_senderId", ["senderId"])
     .index("by_recipientId", ["recipientId"])
     .index("by_recipientId_status", ["recipientId", "status"]),
+
+  // Bearer codes a user hands out (QR code, invite link) so an adult may send
+  // them a friend request. Teens never appear in search, so this is the one
+  // door in, and the teen is the one who opens it.
+  friendInviteCodes: defineTable({
+    userId: v.id("users"),
+    code: v.string(),
+    expiresAt: v.number(), // Unix ms
+  })
+    .index("by_code", ["code"])
+    .index("by_userId", ["userId"]),
 
   // ============================================================
   // DIRECT MESSAGES
